@@ -2,128 +2,9 @@
 {% block content %}
 {% load custom_filters %}
 
-<style>
-        :root {
-            --primary-color: #2563eb;
-            --secondary-color: #f59e0b;
-            --accent-color: #10b981;
-        }
+{% load static %}
 
-        .navbar-brand {
-            font-weight: bold;
-            font-size: 1.5rem;
-            color: var(--primary-color) !important;
-        }
-
-        .hero-section {
-            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
-            color: white;
-            padding: 80px 0;
-        }
-
-        .category-card {
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-            border: none;
-            border-radius: 15px;
-        }
-
-        .category-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-        }
-
-        .product-card {
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-            border: none;
-            border-radius: 15px;
-            overflow: hidden;
-        }
-
-        .product-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
-        }
-
-        .product-image {
-            height: 200px;
-            object-fit: cover;
-            background: #f8f9fa;
-        }
-
-        .price-tag {
-            color: var(--accent-color);
-            font-weight: bold;
-            font-size: 1.2rem;
-        }
-
-        .original-price {
-            text-decoration: line-through;
-            color: #6c757d;
-            font-size: 0.9rem;
-        }
-
-        .btn-primary {
-            background-color: var(--primary-color);
-            border-color: var(--primary-color);
-            border-radius: 25px;
-            padding: 10px 25px;
-        }
-
-        .btn-outline-primary {
-            color: var(--primary-color);
-            border-color: var(--primary-color);
-            border-radius: 25px;
-            padding: 10px 25px;
-        }
-
-        .search-bar {
-            border-radius: 25px;
-            border: 2px solid #e9ecef;
-            padding: 12px 20px;
-        }
-
-        .search-bar:focus {
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.25);
-        }
-
-        .footer {
-            background-color: #1f2937;
-            color: white;
-        }
-
-        .stats-section {
-            background: linear-gradient(45deg, #f8f9fa, #e9ecef);
-        }
-
-        .stat-item {
-            text-align: center;
-            padding: 20px;
-        }
-
-        .stat-number {
-            font-size: 2.5rem;
-            font-weight: bold;
-            color: var(--primary-color);
-        }
-
-        .badge-sale {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            background-color: var(--secondary-color);
-            color: white;
-            padding: 5px 10px;
-            border-radius: 15px;
-            font-size: 0.8rem;
-        }
-
-        .category-icon {
-            font-size: 3rem;
-            color: var(--primary-color);
-            margin-bottom: 15px;
-        }
-    </style>
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
 <!-- Hero Section -->
 <section class="hero-section text-white py-5" style="background: linear-gradient(135deg, #2563eb, #f59e0b);">
     <div class="container">
@@ -169,7 +50,7 @@
                     <div class="d-flex justify-content-center gap-4">
                         {% for product in chunk %}
                         <div class="text-center">
-                            <a href="#" class="d-inline-block">
+                            <a href="{% url 'marketplace:product_detail' product.id %}" class="d-inline-block">
                                 <img src="{{ product.image.url }}" class="img-fluid" alt="{{ product.name }}" style="height: 100px; width: 100px; object-fit: cover; border-radius: 8px;">
                             </a>
                             <div class="mt-2" style="font-size: 0.8rem;">{{ product.name }}</div>
@@ -190,7 +71,6 @@
         </div>
     </div>
 </section>
-
 
 <!-- Categories Section -->
 <section id="categories" class="py-5">
@@ -231,38 +111,40 @@
 
         <div class="row g-4">
             {% for product in featured_products %}
-            <div class="col-lg-3 col-md-6">
-                <div class="card product-card h-100">
-                    <div class="position-relative">
-                        <img src="{{ product.image.url }}" class="card-img-top product-image" alt="{{ product.name }}">
-                        {% if product.discount %}
-                            <span class="badge-sale">{{ product.discount }}% OFF</span>
-                        {% endif %}
-                    </div>
-                    <div class="card-body">
-                        <h5 class="card-title">{{ product.name }}</h5>
-                        <p class="card-text text-muted">{{ product.description|truncatewords:12 }}</p>
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <span class="price-tag">${{ product.price }}</span>
-                                {% if product.original_price %}
-                                    <span class="original-price ms-2">${{ product.original_price }}</span>
-                                {% endif %}
-                            </div>
-                            <div class="rating">
-                                <i class="fas fa-star text-warning"></i>
-                                <i class="fas fa-star text-warning"></i>
-                                <i class="fas fa-star text-warning"></i>
-                                <i class="fas fa-star text-warning"></i>
-                                <i class="fas fa-star-half-alt text-warning"></i>
+           <div class="col-lg-3 col-md-6">
+                    <div class="card product-card h-100">
+                        <div class="position-relative">
+                            <a href="{% url 'marketplace:product_detail' product.id %}">
+                                <img src="{{ product.image.url }}" class="card-img-top product-image" alt="{{ product.name }}">
+                            </a>
+                            {% if product.discount %}
+                                <span class="badge-sale">{{ product.discount }}% OFF</span>
+                            {% endif %}
+                        </div>
+                        <div class="card-body">
+                            <h5 class="card-title">{{ product.name }}</h5>
+                            <p class="card-text text-muted">{{ product.description|truncatewords:12 }}</p>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <span class="price-tag">${{ product.price }}</span>
+                                    {% if product.original_price %}
+                                        <span class="original-price ms-2">${{ product.original_price }}</span>
+                                    {% endif %}
+                                </div>
+                                <div class="rating">
+                                    <i class="fas fa-star text-warning"></i>
+                                    <i class="fas fa-star text-warning"></i>
+                                    <i class="fas fa-star text-warning"></i>
+                                    <i class="fas fa-star text-warning"></i>
+                                    <i class="fas fa-star-half-alt text-warning"></i>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    <div class="card-footer bg-transparent">
-                        <button class="btn btn-primary w-100">Add to Cart</button>
+                        <div class="card-footer bg-transparent">
+                            <button class="btn btn-primary w-100">Add to Cart</button>
+                        </div>
                     </div>
                 </div>
-            </div>
             {% empty %}
             <p class="text-center">No featured products available.</p>
             {% endfor %}
@@ -273,7 +155,6 @@
         </div>
     </div>
 </section>
-
 
 <!-- Quick View Modal -->
 <div class="modal fade" id="quickViewModal" tabindex="-1">
@@ -320,217 +201,7 @@
     </div>
 </div>
 
-<script>
-// Search functionality - works with both header and mobile search
-function filterProducts() {
-    // Get search term from header search or mobile search
-    const headerSearch = document.querySelector('.navbar .search-bar');
-    const mobileSearch = document.getElementById('mobileSearchInput');
-    const searchTerm = (headerSearch?.value || mobileSearch?.value || '').toLowerCase();
-
-    const products = document.querySelectorAll('.product-item');
-    let visibleCount = 0;
-
-    products.forEach(product => {
-        const productName = product.dataset.name;
-        const productDescription = product.querySelector('.card-text').textContent.toLowerCase();
-
-        if (productName.includes(searchTerm) || productDescription.includes(searchTerm)) {
-            product.style.display = 'block';
-            visibleCount++;
-            // Highlight search term
-            const titleElement = product.querySelector('.card-title');
-            titleElement.innerHTML = highlightText(titleElement.textContent, searchTerm);
-        } else {
-            product.style.display = 'none';
-        }
-    });
-
-    // Update product count
-    const countElement = document.querySelector('.container h2 + p');
-    if (countElement) {
-        countElement.textContent = `${visibleCount} product${visibleCount !== 1 ? 's' : ''} found`;
-    }
-}
-
-// Connect header search to filter function
-document.addEventListener('DOMContentLoaded', function() {
-    // Connect header search
-    const headerSearch = document.querySelector('.navbar .search-bar');
-    if (headerSearch) {
-        headerSearch.addEventListener('input', function() {
-            if (this.value.length >= 2 || this.value.length === 0) {
-                filterProducts();
-            }
-        });
-
-        // Connect header search button
-        const headerSearchBtn = document.querySelector('.navbar .btn-primary');
-        if (headerSearchBtn) {
-            headerSearchBtn.addEventListener('click', filterProducts);
-        }
-    }
-
-    // Connect mobile search
-    const mobileSearch = document.getElementById('mobileSearchInput');
-    if (mobileSearch) {
-        mobileSearch.addEventListener('input', function() {
-            if (this.value.length >= 2 || this.value.length === 0) {
-                filterProducts();
-            }
-        });
-    }
-
-    // Enable Bootstrap tooltips
-    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[title]'));
-    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
-    });
-});
-
-// Highlight search text
-function highlightText(text, searchTerm) {
-    if (!searchTerm) return text;
-    const regex = new RegExp(`(${searchTerm})`, 'gi');
-    return text.replace(regex, '<span class="highlight">$1</span>');
-}
-
-// Sort functionality
-function sortProducts(sortType) {
-    const container = document.getElementById('productsContainer');
-    const products = Array.from(container.querySelectorAll('.product-item'));
-
-    products.sort((a, b) => {
-        switch(sortType) {
-            case 'price-low':
-                return parseFloat(a.dataset.price) - parseFloat(b.dataset.price);
-            case 'price-high':
-                return parseFloat(b.dataset.price) - parseFloat(a.dataset.price);
-            case 'name':
-                return a.dataset.name.localeCompare(b.dataset.name);
-            default:
-                return 0;
-        }
-    });
-
-    // Re-append sorted products
-    products.forEach(product => container.appendChild(product));
-}
-
-// View mode toggle
-function setViewMode(mode) {
-    const container = document.getElementById('productsContainer');
-    const gridBtn = document.getElementById('gridView');
-    const listBtn = document.getElementById('listView');
-
-    if (mode === 'list') {
-        container.classList.add('list-view');
-        listBtn.classList.add('active');
-        gridBtn.classList.remove('active');
-    } else {
-        container.classList.remove('list-view');
-        gridBtn.classList.add('active');
-        listBtn.classList.remove('active');
-    }
-}
-
-// Quick view modal
-function quickView(name, description, price, image) {
-    document.getElementById('modalProductName').textContent = name;
-    document.getElementById('modalProductDescription').textContent = description;
-    document.getElementById('modalProductPrice').textContent = '$' + price;
-    document.getElementById('modalProductImage').src = image;
-
-    const modal = new bootstrap.Modal(document.getElementById('quickViewModal'));
-    modal.show();
-}
-
-// Add to cart functionality
-function addToCart(productId, productName, productPrice) {
-    // Add loading state
-    event.target.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Adding...';
-    event.target.disabled = true;
-
-    // Simulate API call
-    setTimeout(() => {
-        // Reset button
-        event.target.innerHTML = '<i class="fas fa-check me-1"></i>Added!';
-        event.target.classList.remove('btn-primary');
-        event.target.classList.add('btn-success');
-
-        // Show success toast
-        showToast(`${productName} added to cart!`);
-
-        // Reset button after 2 seconds
-        setTimeout(() => {
-            event.target.innerHTML = '<i class="fas fa-cart-plus me-1"></i>Add to Cart';
-            event.target.classList.remove('btn-success');
-            event.target.classList.add('btn-primary');
-            event.target.disabled = false;
-        }, 2000);
-
-        // Here you would make an actual AJAX call to your Django backend
-        // fetch('/add-to-cart/', {
-        //     method: 'POST',
-        //     headers: {
-        //         'Content-Type': 'application/json',
-        //         'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
-        //     },
-        //     body: JSON.stringify({
-        //         'product_id': productId,
-        //         'quantity': 1
-        //     })
-        // })
-    }, 1000);
-}
-
-// Add to wishlist
-function addToWishlist(productId) {
-    const heartIcon = event.target.querySelector('i') || event.target;
-    heartIcon.classList.toggle('far');
-    heartIcon.classList.toggle('fas');
-    heartIcon.classList.toggle('text-danger');
-
-    showToast('Added to wishlist!');
-}
-
-// Show toast notification
-function showToast(message) {
-    document.getElementById('toastMessage').textContent = message;
-    const toast = new bootstrap.Toast(document.getElementById('successToast'));
-    toast.show();
-}
-
-// Load more products (for pagination)
-function loadMoreProducts() {
-    const loadBtn = document.getElementById('loadMoreBtn');
-    loadBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Loading...';
-    loadBtn.disabled = true;
-
-    // Simulate loading
-    setTimeout(() => {
-        loadBtn.innerHTML = 'Load More Products';
-        loadBtn.disabled = false;
-        // Here you would load more products via AJAX
-    }, 2000);
-}
-
-// Real-time search
-document.getElementById('searchInput').addEventListener('input', function() {
-    const searchTerm = this.value.toLowerCase();
-    if (searchTerm.length >= 2 || searchTerm.length === 0) {
-        filterProducts();
-    }
-});
-
-// Initialize tooltips
-document.addEventListener('DOMContentLoaded', function() {
-    // Enable Bootstrap tooltips
-    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[title]'));
-    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
-    });
-});
+<script src="{% static 'js/main.js' %}">
 </script>
 
 {% endblock %}

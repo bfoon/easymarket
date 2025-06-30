@@ -1,4 +1,4 @@
-from django.shortcuts import render
+from django.shortcuts import render, get_object_or_404
 from .models import Category, Product
 # Create your views here!
 
@@ -14,3 +14,15 @@ def product_list(request):
                       'trending_products': trending_products,
                       'products': products
                    })
+
+
+def product_detail(request, product_id):
+    product = get_object_or_404(Product, id=product_id)
+    product_images = product.images.all()
+    recommended_items = Product.objects.filter(is_featured=True).exclude(id=product.id)[:4]
+
+    return render(request, 'marketplace/product_detail.html', {
+        'product': product,
+        'product_images': product_images,
+        'recommended_items': recommended_items,
+    })

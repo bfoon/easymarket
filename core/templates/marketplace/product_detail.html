@@ -1,0 +1,788 @@
+{% extends 'base.html' %}
+{% block title %}{{ product.name }} - EasyMarket{% endblock %}
+{% load static %}
+
+{% block content %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+
+<style>
+    .product-breadcrumb {
+        background: #f8f9fa;
+        padding: 15px 0;
+        border-bottom: 1px solid #e9ecef;
+    }
+
+    .breadcrumb-item a {
+        color: #007bff;
+        text-decoration: none;
+    }
+
+    .product-gallery {
+        position: sticky;
+        top: 20px;
+    }
+
+    .main-image-container {
+        position: relative;
+        border: 2px solid #e9ecef;
+        border-radius: 12px;
+        overflow: hidden;
+        background: #fff;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+
+    #mainProductImage {
+        width: 100%;
+        height: 450px;
+        object-fit: contain;
+        background: #fafafa;
+    }
+
+    .zoom-indicator {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: rgba(0,0,0,0.7);
+        color: white;
+        padding: 5px 10px;
+        border-radius: 15px;
+        font-size: 12px;
+    }
+
+    .thumbnail-gallery {
+        display: flex;
+        gap: 8px;
+        overflow-x: auto;
+        padding: 10px 0;
+        margin-top: 15px;
+    }
+
+    .thumbnail-item {
+        flex-shrink: 0;
+        width: 70px;
+        height: 70px;
+        border: 2px solid transparent;
+        border-radius: 8px;
+        overflow: hidden;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .thumbnail-item:hover,
+    .thumbnail-item.active {
+        border-color: #ff6b35;
+        transform: scale(1.05);
+    }
+
+    .thumbnail-item img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .product-info {
+        padding-left: 30px;
+    }
+
+    .product-title {
+        font-size: 1.8rem;
+        font-weight: 600;
+        color: #1a1a1a;
+        line-height: 1.3;
+        margin-bottom: 15px;
+    }
+
+    .rating-section {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 20px;
+    }
+
+    .stars {
+        color: #ffa500;
+    }
+
+    .rating-text {
+        color: #007bff;
+        cursor: pointer;
+    }
+
+    .price-section {
+        background: linear-gradient(135deg, #fff5f5 0%, #fff 100%);
+        border: 1px solid #ffe6e6;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 25px;
+    }
+
+    .current-price {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #e47911;
+        margin-right: 15px;
+    }
+
+    .original-price {
+        font-size: 1.2rem;
+        color: #666;
+        text-decoration: line-through;
+        margin-right: 10px;
+    }
+
+    .discount-badge {
+        background: #ff4444;
+        color: white;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+
+    .feature-list {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 25px;
+    }
+
+    .feature-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 0;
+        border-bottom: 1px solid #e9ecef;
+    }
+
+    .feature-item:last-child {
+        border-bottom: none;
+    }
+
+    .feature-icon {
+        width: 20px;
+        text-align: center;
+    }
+
+    .quantity-selector {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        margin-bottom: 25px;
+    }
+
+    .quantity-input {
+        display: flex;
+        align-items: center;
+        border: 2px solid #e9ecef;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+
+    .quantity-btn {
+        background: #f8f9fa;
+        border: none;
+        padding: 10px 15px;
+        cursor: pointer;
+        font-weight: 600;
+    }
+
+    .quantity-btn:hover {
+        background: #e9ecef;
+    }
+
+    .quantity-value {
+        padding: 10px 20px;
+        border: none;
+        text-align: center;
+        font-weight: 600;
+        min-width: 60px;
+    }
+
+    .action-buttons {
+        display: flex;
+        gap: 15px;
+        margin-bottom: 30px;
+    }
+
+    .btn-add-cart {
+        background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
+        border: none;
+        color: white;
+        padding: 15px 30px;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 1.1rem;
+        flex: 1;
+        transition: all 0.3s ease;
+    }
+
+    .btn-add-cart:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(255, 107, 53, 0.3);
+        color: white;
+    }
+
+    .btn-buy-now {
+        background: #28a745;
+        border: none;
+        color: white;
+        padding: 15px 30px;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 1.1rem;
+        flex: 1;
+        transition: all 0.3s ease;
+    }
+
+    .btn-buy-now:hover {
+        background: #218838;
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(40, 167, 69, 0.3);
+        color: white;
+    }
+
+    .btn-wishlist {
+        background: white;
+        border: 2px solid #e9ecef;
+        color: #6c757d;
+        padding: 15px;
+        border-radius: 8px;
+        transition: all 0.3s ease;
+    }
+
+    .btn-wishlist:hover {
+        border-color: #ff6b35;
+        color: #ff6b35;
+    }
+
+    .shipping-info {
+        background: #e8f5e8;
+        border: 1px solid #c3e6c3;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 25px;
+    }
+
+    .shipping-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 10px;
+    }
+
+    .shipping-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .seller-info {
+        background: white;
+        border: 1px solid #e9ecef;
+        border-radius: 8px;
+        padding: 20px;
+    }
+
+    .recommendations-section {
+        background: #f8f9fa;
+        padding: 50px 0;
+        margin-top: 50px;
+    }
+
+    .section-title {
+        font-size: 1.8rem;
+        font-weight: 600;
+        color: #1a1a1a;
+        margin-bottom: 30px;
+        position: relative;
+        padding-left: 20px;
+    }
+
+    .section-title::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 4px;
+        height: 30px;
+        background: #ff6b35;
+        border-radius: 2px;
+    }
+
+    .product-card {
+        border: none;
+        border-radius: 12px;
+        overflow: hidden;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        height: 100%;
+    }
+
+    .product-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+
+    .product-image {
+        height: 200px;
+        object-fit: cover;
+        transition: transform 0.3s ease;
+    }
+
+    .product-card:hover .product-image {
+        transform: scale(1.05);
+    }
+
+    .card-body {
+        padding: 20px;
+    }
+
+    .card-title {
+        font-weight: 600;
+        color: #1a1a1a;
+        margin-bottom: 10px;
+        font-size: 1rem;
+        line-height: 1.3;
+    }
+
+    .product-price {
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: #e47911;
+    }
+
+    .video-container {
+        border-radius: 12px;
+        overflow: hidden;
+        margin-top: 20px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+
+    @media (max-width: 768px) {
+        .product-info {
+            padding-left: 0;
+            margin-top: 30px;
+        }
+
+        .action-buttons {
+            flex-direction: column;
+        }
+
+        .current-price {
+            font-size: 1.5rem;
+        }
+
+        .product-title {
+            font-size: 1.5rem;
+        }
+    }
+</style>
+
+<!-- Breadcrumb -->
+<section class="product-breadcrumb">
+    <div class="container">
+                        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-0">
+                <li class="breadcrumb-item"><a href="{% url 'marketplace:product_list' %}">Home</a></li>
+                {% if product.category %}
+                <li class="breadcrumb-item"><a href="#">{{ product.category.name }}</a></li>
+                {% endif %}
+                <li class="breadcrumb-item active" aria-current="page">{{ product.name }}</li>
+            </ol>
+        </nav>
+    </div>
+</section>
+
+<!-- Main Product Section -->
+<section class="container my-5">
+    <div class="row">
+        <!-- Product Gallery -->
+        <div class="col-lg-5 col-md-6">
+            <div class="product-gallery">
+                <div class="main-image-container">
+                    <img src="{{ product.image.url }}" alt="{{ product.name }}" id="mainProductImage">
+                    <div class="zoom-indicator">
+                        <i class="fas fa-search-plus"></i> Hover to zoom
+                    </div>
+                </div>
+
+                {% if product.images.all %}
+                <div class="thumbnail-gallery">
+                    <div class="thumbnail-item active" onclick="changeMainImage(this, '{{ product.image.url }}')">
+                        <img src="{{ product.image.url }}" alt="Main image">
+                    </div>
+                    {% for img in product.images.all %}
+                    <div class="thumbnail-item" onclick="changeMainImage(this, '{{ img.image.url }}')">
+                        <img src="{{ img.image.url }}" alt="Product image">
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                {% if product.video %}
+                <div class="video-container">
+                    <video controls class="w-100" style="max-height: 300px;">
+                        <source src="{{ product.video.url }}" type="video/mp4">
+                        Your browser does not support the video tag.
+                    </video>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Product Information -->
+        <div class="col-lg-7 col-md-6">
+            <div class="product-info">
+                <h1 class="product-title">{{ product.name }}</h1>
+
+                <div class="rating-section">
+                    <div class="stars">
+                        <i class="fas fa-star"></i>
+                        <i class="fas fa-star"></i>
+                        <i class="fas fa-star"></i>
+                        <i class="fas fa-star"></i>
+                        <i class="far fa-star"></i>
+                    </div>
+                    <span class="rating-text">4.2 (125 reviews)</span>
+                    <span class="text-muted">|</span>
+                    <span class="text-muted">250+ sold</span>
+                </div>
+
+                <div class="price-section">
+                    <div class="d-flex align-items-center flex-wrap">
+                        <span class="current-price">${{ product.price }}</span>
+                        {% if product.original_price %}
+                            <span class="original-price">${{ product.original_price }}</span>
+                            <span class="discount-badge">
+                                {% widthratio product.original_price product.price 100 as discount_ratio %}
+                                {% widthratio discount_ratio 1 1 as discount_percent %}
+                                {{ discount_percent|floatformat:0|add:"-100"|slice:"1:" }}% OFF
+                            </span>
+                        {% endif %}
+                    </div>
+                    <small class="text-muted">Inclusive of all taxes</small>
+                </div>
+
+                <div class="feature-list">
+                    <div class="feature-item">
+                        <i class="fas fa-check-circle text-success feature-icon"></i>
+                        <span><strong>In Stock:</strong> Ready to ship</span>
+                    </div>
+                    <div class="feature-item">
+                        <i class="fas fa-shield-alt text-success feature-icon"></i>
+                        <span><strong>Secure Payment:</strong> 100% secure transactions</span>
+                    </div>
+                    <div class="feature-item">
+                        <i class="fas fa-truck text-success feature-icon"></i>
+                        <span><strong>Fast Delivery:</strong> 2-3 business days</span>
+                    </div>
+                    <div class="feature-item">
+                        <i class="fas fa-undo-alt text-success feature-icon"></i>
+                        <span><strong>Easy Returns:</strong> 30-day return policy</span>
+                    </div>
+                </div>
+
+                <div class="quantity-selector">
+                    <strong>Quantity:</strong>
+                    <div class="quantity-input">
+                        <button type="button" class="quantity-btn" onclick="changeQuantity(-1)">-</button>
+                        <input type="number" class="quantity-value" id="quantity" value="1" min="1" max="10">
+                        <button type="button" class="quantity-btn" onclick="changeQuantity(1)">+</button>
+                    </div>
+                    <span class="text-muted">(10 available)</span>
+                </div>
+
+                <div class="action-buttons">
+                    <button class="btn btn-add-cart" onclick="addToCart()">
+                        <i class="fas fa-cart-plus me-2"></i> Add to Cart
+                    </button>
+                    <button class="btn btn-buy-now">
+                        <i class="fas fa-bolt me-2"></i> Buy Now
+                    </button>
+                    <button class="btn btn-wishlist" onclick="toggleWishlist()">
+                        <i class="far fa-heart"></i>
+                    </button>
+                </div>
+
+                <div class="shipping-info">
+                    <h6 class="mb-3"><i class="fas fa-shipping-fast me-2"></i> Shipping Information</h6>
+                    {% if user.is_authenticated %}
+                        <div class="shipping-item">
+                            <i class="fas fa-map-marker-alt text-primary"></i>
+                            <div class="flex-grow-1">
+                                <strong>Deliver to:</strong>
+                                <span id="delivery-address">
+                                    {% if user.profile.address %}
+                                        {{ user.profile.address }}
+                                    {% else %}
+                                        Please add your delivery address
+                                    {% endif %}
+                                </span>
+                                <button class="btn btn-link btn-sm p-0 ms-2" onclick="toggleAddressInput()">
+                                    <i class="fas fa-edit"></i> Change
+                                </button>
+                            </div>
+                        </div>
+                        <div class="shipping-item d-none" id="address-input-section">
+                            <i class="fas fa-map-marker-alt text-primary"></i>
+                            <div class="flex-grow-1">
+                                <input type="text" class="form-control form-control-sm" id="new-address" placeholder="Enter delivery address">
+                                <div class="mt-2">
+                                    <button class="btn btn-primary btn-sm me-2" onclick="updateAddress()">Update</button>
+                                    <button class="btn btn-secondary btn-sm" onclick="cancelAddressEdit()">Cancel</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="shipping-item">
+                            <i class="fas fa-clock text-primary"></i>
+                            <span><strong>Estimated Delivery:</strong> <span id="delivery-date">Tomorrow</span></span>
+                        </div>
+                        <div class="shipping-item">
+                            <i class="fas fa-dollar-sign text-primary"></i>
+                            <span><strong>Shipping Cost:</strong> Free shipping on orders over $50</span>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-3">
+                            <i class="fas fa-user-lock fa-2x text-muted mb-2"></i>
+                            <p class="text-muted mb-3">Please log in to see shipping information</p>
+                            <div class="d-flex gap-2 justify-content-center">
+                                <a href="#" class="btn btn-primary btn-sm">
+                                    <i class="fas fa-sign-in-alt me-1"></i> Login
+                                </a>
+                                <a href="#" class="btn btn-outline-primary btn-sm">
+                                    <i class="fas fa-user-plus me-1"></i> Sign Up
+                                </a>
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="seller-info">
+                    <h6 class="mb-3"><i class="fas fa-store me-2"></i> Seller Information</h6>
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <strong>{{ product.seller.get_full_name|default:product.seller.username }}</strong>
+                            <div class="text-muted small">4.8/5.0 seller rating</div>
+                        </div>
+                        <button class="btn btn-outline-primary btn-sm">Visit Store</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Product Description -->
+    <div class="row mt-5">
+        <div class="col-12">
+            <div class="bg-white p-4 rounded border">
+                <h5 class="mb-3">Product Description</h5>
+                <p class="text-muted">{{ product.description }}</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Recommended Items -->
+<section class="recommendations-section">
+    <div class="container">
+        <h3 class="section-title">Recommended for You</h3>
+        <div class="row g-4">
+            {% for item in recommended_items %}
+            <div class="col-xl-3 col-lg-4 col-md-6 col-sm-6">
+                <div class="card product-card">
+                    <a href="{% url 'marketplace:product_detail' item.id %}" class="text-decoration-none">
+                        <div class="position-relative">
+                            <img src="{{ item.image.url }}" class="card-img-top product-image" alt="{{ item.name }}">
+                            {% if item.is_featured %}
+                            <span class="position-absolute top-0 start-0 badge bg-warning text-dark m-2">
+                                <i class="fas fa-star me-1"></i>Featured
+                            </span>
+                            {% endif %}
+                            {% if item.original_price %}
+                            <span class="position-absolute top-0 end-0 badge bg-danger m-2">
+                                {% widthratio item.original_price item.price 100 as discount_ratio %}
+                                {% widthratio discount_ratio 1 1 as discount_percent %}
+                                {{ discount_percent|floatformat:0|add:"-100"|slice:"1:" }}% OFF
+                            </span>
+                            {% endif %}
+                        </div>
+                        <div class="card-body">
+                            <h6 class="card-title">{{ item.name }}</h6>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="product-price">${{ item.price }}</div>
+                                {% if item.original_price %}
+                                <small class="text-muted text-decoration-line-through">${{ item.original_price }}</small>
+                                {% endif %}
+                            </div>
+                            <div class="mt-2">
+                                <small class="text-muted">
+                                    <i class="fas fa-star text-warning"></i>
+                                    4.2 (89 reviews)
+                                </small>
+                            </div>
+                            <div class="mt-1">
+                                <small class="text-primary">
+                                    <i class="fas fa-tag me-1"></i>{{ item.category.name }}
+                                </small>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+            </div>
+            {% empty %}
+            <div class="col-12">
+                <div class="text-center py-5">
+                    <i class="fas fa-box-open fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted mb-2">No recommended items available</h5>
+                    <p class="text-muted">
+                        {% if product.category %}
+                            No featured products found in the {{ product.category.name }} category.
+                        {% else %}
+                            No featured products available at the moment.
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Show more button if there are more items -->
+        {% if recommended_items|length >= 8 %}
+        <div class="text-center mt-4">
+            <button class="btn btn-outline-primary btn-lg px-4">
+                <i class="fas fa-plus me-2"></i>View More Similar Products
+            </button>
+        </div>
+        {% endif %}
+    </div>
+</section>
+
+<script>
+function toggleAddressInput() {
+    const addressSection = document.getElementById('address-input-section');
+    const deliveryAddress = document.getElementById('delivery-address');
+    const currentAddress = deliveryAddress.textContent.trim();
+
+    if (!currentAddress.includes('Please add your delivery address')) {
+        document.getElementById('new-address').value = currentAddress;
+    }
+
+    addressSection.classList.remove('d-none');
+    deliveryAddress.parentElement.classList.add('d-none');
+}
+
+function cancelAddressEdit() {
+    const addressSection = document.getElementById('address-input-section');
+    const deliveryAddress = document.getElementById('delivery-address');
+
+    addressSection.classList.add('d-none');
+    deliveryAddress.parentElement.classList.remove('d-none');
+    document.getElementById('new-address').value = '';
+}
+
+function updateAddress() {
+    const newAddress = document.getElementById('new-address').value.trim();
+    if (!newAddress) {
+        alert('Please enter a valid address');
+        return;
+    }
+
+    // Update the display
+    document.getElementById('delivery-address').textContent = newAddress;
+
+    // Here you would typically make an AJAX call to update the user's address
+    // Example:
+    // fetch('/update-address/', {
+    //     method: 'POST',
+    //     headers: {
+    //         'Content-Type': 'application/json',
+    //         'X-CSRFToken': getCookie('csrftoken')
+    //     },
+    //     body: JSON.stringify({ address: newAddress })
+    // });
+
+    cancelAddressEdit();
+    alert('Address updated successfully!');
+}
+
+function calculateDeliveryDate() {
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+
+    const options = {
+        weekday: 'short',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+    };
+
+    const deliveryDateElement = document.getElementById('delivery-date');
+    if (deliveryDateElement) {
+        deliveryDateElement.textContent = tomorrow.toLocaleDateString('en-US', options);
+    }
+}
+
+// Calculate delivery date when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    calculateDeliveryDate();
+});
+
+function changeMainImage(thumbnail, imageUrl) {
+    document.getElementById('mainProductImage').src = imageUrl;
+
+    // Update active thumbnail
+    document.querySelectorAll('.thumbnail-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    thumbnail.classList.add('active');
+}
+
+function changeQuantity(delta) {
+    const quantityInput = document.getElementById('quantity');
+    let currentValue = parseInt(quantityInput.value);
+    let newValue = currentValue + delta;
+
+    if (newValue >= 1 && newValue <= 10) {
+        quantityInput.value = newValue;
+    }
+}
+
+function addToCart() {
+    const quantity = document.getElementById('quantity').value;
+    // Add your cart functionality here
+    alert(`Added ${quantity} item(s) to cart!`);
+}
+
+function toggleWishlist() {
+    const wishlistBtn = document.querySelector('.btn-wishlist i');
+    if (wishlistBtn.classList.contains('far')) {
+        wishlistBtn.classList.remove('far');
+        wishlistBtn.classList.add('fas');
+        wishlistBtn.style.color = '#ff6b35';
+    } else {
+        wishlistBtn.classList.remove('fas');
+        wishlistBtn.classList.add('far');
+        wishlistBtn.style.color = '';
+    }
+}
+
+// Image zoom effect
+document.getElementById('mainProductImage').addEventListener('mousemove', function(e) {
+    const rect = this.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    const xPercent = (x / rect.width) * 100;
+    const yPercent = (y / rect.height) * 100;
+
+    this.style.transformOrigin = `${xPercent}% ${yPercent}%`;
+    this.style.transform = 'scale(1.5)';
+});
+
+document.getElementById('mainProductImage').addEventListener('mouseleave', function() {
+    this.style.transform = 'scale(1)';
+});
+</script>
+
+<script src="{% static 'js/main.js' %}"></script>
+{% endblock %}
