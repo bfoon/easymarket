@@ -20,6 +20,8 @@ class Product(models.Model):
     is_trending = models.BooleanField(default=False)
     original_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
     video = models.FileField(upload_to='product_videos/', blank=True, null=True)
+    sold_count = models.PositiveIntegerField(default=0)
+
     def __str__(self):
         return self.name
 

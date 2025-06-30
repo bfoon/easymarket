@@ -78,14 +78,17 @@ function changeMainImage(thumbnail, imageUrl) {
     thumbnail.classList.add('active');
 }
 
-function changeQuantity(delta) {
+function changeQuantity(amount) {
     const quantityInput = document.getElementById('quantity');
-    let currentValue = parseInt(quantityInput.value);
-    let newValue = currentValue + delta;
+    const min = parseInt(quantityInput.min);
+    const max = parseInt(quantityInput.max);
+    let value = parseInt(quantityInput.value);
 
-    if (newValue >= 1 && newValue <= 10) {
-        quantityInput.value = newValue;
-    }
+    value += amount;
+    if (value < min) value = min;
+    if (value > max) value = max;
+
+    quantityInput.value = value;
 }
 
 function addToCart() {

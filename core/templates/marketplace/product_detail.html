@@ -73,7 +73,14 @@
                     </div>
                     <span class="rating-text">4.2 (125 reviews)</span>
                     <span class="text-muted">|</span>
-                    <span class="text-muted">250+ sold</span>
+                   <span class="text-muted">
+                    {% if product.sold_count >= 250 %}
+                        250+ sold
+                    {% else %}
+                        {{ product.sold_count }} sold
+                    {% endif %}
+                </span>
+
                 </div>
 
                 <div class="price-section">
@@ -89,12 +96,16 @@
                         {% endif %}
                     </div>
                     <small class="text-muted">Inclusive of all taxes</small>
-                </div>
-
+                                </div>
                 <div class="feature-list">
                     <div class="feature-item">
+                        {% if product.stock.quantity > 0 %}
                         <i class="fas fa-check-circle text-success feature-icon"></i>
                         <span><strong>In Stock:</strong> Ready to ship</span>
+                        {% else %}
+                        <i class="fas fa-times-circle text-danger feature-icon"></i>
+                        <span><strong>Out of Stock:</strong> Currently unavailable</span>
+                        {% endif %}
                     </div>
                     <div class="feature-item">
                         <i class="fas fa-shield-alt text-success feature-icon"></i>
@@ -110,21 +121,25 @@
                     </div>
                 </div>
 
-                <div class="quantity-selector">
+                {% if product.stock.quantity > 0 %}
+                <div class="quantity-selector mt-3">
                     <strong>Quantity:</strong>
                     <div class="quantity-input">
                         <button type="button" class="quantity-btn" onclick="changeQuantity(-1)">-</button>
-                        <input type="number" class="quantity-value" id="quantity" value="1" min="1" max="10">
+                        <input type="number" class="quantity-value" id="quantity" value="1" min="1" max="{{ product.stock.quantity }}">
                         <button type="button" class="quantity-btn" onclick="changeQuantity(1)">+</button>
                     </div>
-                    <span class="text-muted">(10 available)</span>
+                    <span class="text-muted">({{ product.stock.quantity }} available)</span>
                 </div>
+                {% else %}
+                <p class="text-danger mt-3">This product is currently out of stock.</p>
+                {% endif %}
 
-                <div class="action-buttons">
-                    <button class="btn btn-add-cart" onclick="addToCart()">
+                <div class="action-buttons mt-3">
+                    <button class="btn btn-add-cart" onclick="addToCart()" {% if product.stock.quantity == 0 %}disabled{% endif %}>
                         <i class="fas fa-cart-plus me-2"></i> Add to Cart
                     </button>
-                    <button class="btn btn-buy-now">
+                    <button class="btn btn-buy-now" {% if product.stock.quantity == 0 %}disabled{% endif %}>
                         <i class="fas fa-bolt me-2"></i> Buy Now
                     </button>
                     <button class="btn btn-wishlist" onclick="toggleWishlist()">
