@@ -23,8 +23,13 @@ class Product(models.Model):
     video = models.FileField(upload_to='product_videos/', blank=True, null=True)
     sold_count = models.PositiveIntegerField(default=0)
 
+    # New timestamp fields
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
     def __str__(self):
         return self.name
+
 
 class ProductImage(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='images')

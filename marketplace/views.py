@@ -10,8 +10,16 @@ def all_products(request):
     category_products = []
 
     for category in categories:
-        products = Product.objects.filter(category=category)[:8]  # Show first 8 products per category
+        products = Product.objects.filter(category=category).order_by('?')[:8]  # Random order
+
         if products:
+            # Find the actual latest product by created_at
+            latest_product = Product.objects.filter(category=category).order_by('-created_at').first()
+
+            products = list(products)
+            for product in products:
+                product.is_new = (product.id == latest_product.id)
+
             category_products.append({
                 'category': category,
                 'products': products
@@ -20,6 +28,7 @@ def all_products(request):
     return render(request, 'marketplace/all_products.html', {
         'category_products': category_products
     })
+
 
 def product_list(request):
     categories = Category.objects.all()[:6]
