@@ -5,12 +5,27 @@ import re
 
 from marketplace.models import Product, ProductView, Category
 
+def all_products(request):
+    categories = Category.objects.all()
+    category_products = []
+
+    for category in categories:
+        products = Product.objects.filter(category=category)[:8]  # Show first 8 products per category
+        if products:
+            category_products.append({
+                'category': category,
+                'products': products
+            })
+
+    return render(request, 'marketplace/all_products.html', {
+        'category_products': category_products
+    })
 
 def product_list(request):
-    categories = Category.objects.all()
+    categories = Category.objects.all()[:6]
     products = Product.objects.all()
-    featured_products = Product.objects.filter(is_featured=True)[:8]
-    trending_products = Product.objects.filter(is_trending=True)[:8]
+    featured_products = Product.objects.filter(is_featured=True)[:6]
+    trending_products = Product.objects.filter(is_trending=True)
 
     recently_viewed = []
     similar_items = []

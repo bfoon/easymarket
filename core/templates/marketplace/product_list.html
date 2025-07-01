@@ -59,22 +59,33 @@
             </a>
         </div>
 
-        <!-- Horizontal Scroll Style (Amazon Inspired) -->
-        <div class="d-flex overflow-auto gap-3 pb-2" style="scroll-behavior: smooth; scrollbar-width: none; -ms-overflow-style: none;">
-            {% for product in trending_products %}
-            <div class="flex-shrink-0 text-center bg-white shadow-sm p-2 rounded" style="width: 110px; border: 1px solid #e3e3e3;">
-                <a href="{% url 'marketplace:product_detail' product.id %}" class="d-block mb-2">
-                    <img src="{{ product.image.url }}" class="img-fluid" alt="{{ product.name }}" style="height: 80px; width: 80px; object-fit: cover; margin: auto;">
-                </a>
-                <div class="small text-dark fw-semibold" style="font-size: 0.75rem; min-height: 2rem;">
-                    {{ product.name|truncatechars:20 }}
+        <div class="position-relative">
+            <!-- Scroll Buttons -->
+            <button class="btn btn-light btn-sm position-absolute top-50 start-0 translate-middle-y shadow-sm" id="trendingLeft" style="z-index: 1;">
+                <i class="fas fa-chevron-left"></i>
+            </button>
+            <button class="btn btn-light btn-sm position-absolute top-50 end-0 translate-middle-y shadow-sm" id="trendingRight" style="z-index: 1;">
+                <i class="fas fa-chevron-right"></i>
+            </button>
+
+            <!-- Scrollable Container -->
+            <div class="d-flex overflow-auto gap-3 pb-2 px-4" id="trendingContainer" style="scroll-behavior: smooth; scrollbar-width: none; -ms-overflow-style: none;">
+                {% for product in trending_products %}
+                <div class="flex-shrink-0 text-center bg-white shadow-sm p-2 rounded" style="width: 110px; border: 1px solid #e3e3e3;">
+                    <a href="{% url 'marketplace:product_detail' product.id %}" class="d-block mb-2">
+                        <img src="{{ product.image.url }}" class="img-fluid" alt="{{ product.name }}" style="height: 80px; width: 80px; object-fit: cover; margin: auto;">
+                    </a>
+                    <div class="small text-dark fw-semibold" style="font-size: 0.75rem; min-height: 2rem;">
+                        {{ product.name|truncatechars:20 }}
+                    </div>
+                    <div class="text-danger fw-bold small mt-1">${{ product.price }}</div>
                 </div>
-                <div class="text-danger fw-bold small mt-1">${{ product.price }}</div>
+                {% endfor %}
             </div>
-            {% endfor %}
         </div>
     </div>
 </section>
+
 <!-- Categories Section - Compact Grid -->
 <section id="categories" class="py-4">
     <div class="container">
@@ -139,7 +150,19 @@
                         {% if product.discount %}
                         <span class="badge bg-danger position-absolute top-0 end-0 m-2 shadow-sm">-{{ product.discount }}%</span>
                         {% endif %}
-                        <span class="badge bg-success position-absolute top-0 start-0 m-2 shadow-sm">Choice</span>
+                        <span class="position-absolute top-0 start-0 m-2 shadow-sm px-2 py-1" style="
+                            background: rgba(255, 69, 0, 0.85);  /* Flame orange-red with opacity */
+                            color: white;
+                            font-size: 0.75rem;
+                            border-radius: 4px;
+                            backdrop-filter: blur(2px);
+                            display: flex;
+                            align-items: center;
+                            gap: 4px;
+                        ">
+                            <i class="fas fa-fire"></i> Hot Pick
+                        </span>
+
                     </div>
 
                     <!-- Product Details -->
@@ -385,6 +408,23 @@
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const container = document.getElementById('trendingContainer');
+    const btnLeft = document.getElementById('trendingLeft');
+    const btnRight = document.getElementById('trendingRight');
+
+    btnLeft.addEventListener('click', () => {
+        container.scrollBy({ left: -200, behavior: 'smooth' });
+    });
+
+    btnRight.addEventListener('click', () => {
+        container.scrollBy({ left: 200, behavior: 'smooth' });
+    });
+});
+</script>
+
 
 <script>
 // Enhanced Add to Cart function
