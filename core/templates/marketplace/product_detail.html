@@ -3,13 +3,13 @@
 {% load static %}
 
 {% block content %}
-<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
-<link rel="stylesheet" type="text/css" href="{% static 'css/product_detail.css' %}">
+<link rel="stylesheet" href="{% static 'css/main.css' %}">
+<link rel="stylesheet" href="{% static 'css/product_detail.css' %}">
 
 <!-- Breadcrumb -->
-<section class="product-breadcrumb">
+<section class="product-breadcrumb py-2 bg-light border-bottom">
     <div class="container">
-                        <nav aria-label="breadcrumb">
+        <nav aria-label="breadcrumb">
             <ol class="breadcrumb mb-0">
                 <li class="breadcrumb-item"><a href="{% url 'marketplace:product_list' %}">Home</a></li>
                 {% if product.category %}
@@ -21,35 +21,37 @@
     </div>
 </section>
 
-<!-- Main Product Section -->
+<!-- Product Details Section -->
 <section class="container my-5">
-    <div class="row">
+    <div class="row g-4">
+
         <!-- Product Gallery -->
-        <div class="col-lg-5 col-md-6">
-            <div class="product-gallery">
-                <div class="main-image-container">
-                    <img src="{{ product.image.url }}" alt="{{ product.name }}" id="mainProductImage">
+        <div class="col-lg-5">
+            <div class="product-gallery shadow-sm p-3 bg-white rounded">
+
+                <div class="main-image-container position-relative mb-3">
+                    <img src="{{ product.image.url }}" alt="{{ product.name }}" class="img-fluid w-100 rounded" id="mainProductImage">
                     <div class="zoom-indicator">
                         <i class="fas fa-search-plus"></i> Hover to zoom
                     </div>
                 </div>
 
                 {% if product.images.all %}
-                <div class="thumbnail-gallery">
+                <div class="d-flex flex-wrap gap-2 thumbnail-gallery">
                     <div class="thumbnail-item active" onclick="changeMainImage(this, '{{ product.image.url }}')">
-                        <img src="{{ product.image.url }}" alt="Main image">
+                        <img src="{{ product.image.url }}" alt="Main image" class="img-thumbnail">
                     </div>
                     {% for img in product.images.all %}
                     <div class="thumbnail-item" onclick="changeMainImage(this, '{{ img.image.url }}')">
-                        <img src="{{ img.image.url }}" alt="Product image">
+                        <img src="{{ img.image.url }}" alt="Product image" class="img-thumbnail">
                     </div>
                     {% endfor %}
                 </div>
                 {% endif %}
 
                 {% if product.video %}
-                <div class="video-container">
-                    <video controls class="w-100" style="max-height: 300px;">
+                <div class="video-container mt-3">
+                    <video controls class="w-100 rounded">
                         <source src="{{ product.video.url }}" type="video/mp4">
                         Your browser does not support the video tag.
                     </video>
@@ -58,247 +60,192 @@
             </div>
         </div>
 
-        <!-- Product Information -->
-        <div class="col-lg-7 col-md-6">
+        <!-- Product Info -->
+        <div class="col-lg-7">
             <div class="product-info">
-                <h1 class="product-title">{{ product.name }}</h1>
 
-                <div class="rating-section">
-                    <div class="stars">
-                        <i class="fas fa-star"></i>
-                        <i class="fas fa-star"></i>
-                        <i class="fas fa-star"></i>
-                        <i class="fas fa-star"></i>
-                        <i class="far fa-star"></i>
+                <h1 class="product-title fw-bold mb-3">{{ product.name }}</h1>
+
+                <!-- Rating -->
+                <div class="d-flex align-items-center mb-3">
+                    <div class="text-warning me-2">
+                        <i class="fas fa-star"></i> <i class="fas fa-star"></i> <i class="fas fa-star"></i>
+                        <i class="fas fa-star"></i> <i class="far fa-star"></i>
                     </div>
-                    <span class="rating-text">4.2 (125 reviews)</span>
+                    <span class="me-2 text-muted">4.2 (125 reviews)</span>
                     <span class="text-muted">|</span>
-                   <span class="text-muted">
-                    {% if product.sold_count >= 250 %}
-                        250+ sold
-                    {% else %}
-                        {{ product.sold_count }} sold
+                    <span class="ms-2 text-muted">{{ product.sold_count|default:"0" }} sold</span>
+                </div>
+
+                <!-- Price Section -->
+                <div class="price-section mb-3">
+                    <span class="current-price h4 fw-bold text-danger">${{ product.price }}</span>
+                    {% if product.original_price %}
+                    <span class="ms-2 text-muted text-decoration-line-through">${{ product.original_price }}</span>
+                    <span class="badge bg-success ms-2">
+                        {% widthratio product.original_price product.price 100 as discount_ratio %}
+                        {% widthratio discount_ratio 1 1 as discount_percent %}
+                        {{ discount_percent|floatformat:0|add:"-100"|slice:"1:" }}% OFF
+                    </span>
                     {% endif %}
-                </span>
-
                 </div>
 
-                <div class="price-section">
-                    <div class="d-flex align-items-center flex-wrap">
-                        <span class="current-price">${{ product.price }}</span>
-                        {% if product.original_price %}
-                            <span class="original-price">${{ product.original_price }}</span>
-                            <span class="discount-badge">
-                                {% widthratio product.original_price product.price 100 as discount_ratio %}
-                                {% widthratio discount_ratio 1 1 as discount_percent %}
-                                {{ discount_percent|floatformat:0|add:"-100"|slice:"1:" }}% OFF
-                            </span>
-                        {% endif %}
-                    </div>
-                    <small class="text-muted">Inclusive of all taxes</small>
-                                </div>
-                <div class="feature-list">
-                    <div class="feature-item">
+                <!-- Stock and Features -->
+                <ul class="list-unstyled mb-4">
+                    <li class="mb-2">
                         {% if product.stock.quantity > 0 %}
-                        <i class="fas fa-check-circle text-success feature-icon"></i>
-                        <span><strong>In Stock:</strong> Ready to ship</span>
+                        <i class="fas fa-check-circle text-success"></i> In Stock - Ready to Ship
                         {% else %}
-                        <i class="fas fa-times-circle text-danger feature-icon"></i>
-                        <span><strong>Out of Stock:</strong> Currently unavailable</span>
+                        <i class="fas fa-times-circle text-danger"></i> Out of Stock
                         {% endif %}
-                    </div>
-                    <div class="feature-item">
-                        <i class="fas fa-shield-alt text-success feature-icon"></i>
-                        <span><strong>Secure Payment:</strong> 100% secure transactions</span>
-                    </div>
-                    <div class="feature-item">
-                        <i class="fas fa-truck text-success feature-icon"></i>
-                        <span><strong>Fast Delivery:</strong> 2-3 business days</span>
-                    </div>
-                    <div class="feature-item">
-                        <i class="fas fa-undo-alt text-success feature-icon"></i>
-                        <span><strong>Easy Returns:</strong> 30-day return policy</span>
-                    </div>
-                </div>
+                    </li>
+                    <li class="mb-2"><i class="fas fa-shield-alt text-success"></i> Secure Payment</li>
+                    <li class="mb-2"><i class="fas fa-truck text-success"></i> Fast Delivery (2-3 Days)</li>
+                    <li class="mb-2"><i class="fas fa-undo-alt text-success"></i> 30-Day Return Policy</li>
+                </ul>
 
+                <!-- Quantity Selector -->
                 {% if product.stock.quantity > 0 %}
-                <div class="quantity-selector mt-3">
-                    <strong>Quantity:</strong>
-                    <div class="quantity-input">
-                        <button type="button" class="quantity-btn" onclick="changeQuantity(-1)">-</button>
-                        <input type="number" class="quantity-value" id="quantity" value="1" min="1" max="{{ product.stock.quantity }}">
-                        <button type="button" class="quantity-btn" onclick="changeQuantity(1)">+</button>
+                <div class="d-flex align-items-center mb-3">
+                    <label class="me-2">Quantity:</label>
+                    <div class="input-group" style="width: 120px;">
+                        <button class="btn btn-outline-secondary" type="button" onclick="changeQuantity(-1)">-</button>
+                        <input type="number" class="form-control text-center" id="quantity" value="1" min="1" max="{{ product.stock.quantity }}">
+                        <button class="btn btn-outline-secondary" type="button" onclick="changeQuantity(1)">+</button>
                     </div>
-                    <span class="text-muted">({{ product.stock.quantity }} available)</span>
                 </div>
-                {% else %}
-                <p class="text-danger mt-3">This product is currently out of stock.</p>
                 {% endif %}
 
-                <div class="action-buttons mt-3">
-                    <button class="btn btn-add-cart" onclick="addToCart()" {% if product.stock.quantity == 0 %}disabled{% endif %}>
-                        <i class="fas fa-cart-plus me-2"></i> Add to Cart
+                <!-- Action Buttons -->
+                <div class="d-flex flex-wrap gap-2 mb-4">
+                    <button class="btn btn-primary" onclick="addToCart()" {% if product.stock.quantity == 0 %}disabled{% endif %}>
+                        <i class="fas fa-cart-plus me-1"></i> Add to Cart
                     </button>
-                    <button class="btn btn-buy-now" {% if product.stock.quantity == 0 %}disabled{% endif %}>
-                        <i class="fas fa-bolt me-2"></i> Buy Now
+                    <button class="btn btn-warning" {% if product.stock.quantity == 0 %}disabled{% endif %}>
+                        <i class="fas fa-bolt me-1"></i> Buy Now
                     </button>
-                    <button class="btn btn-wishlist" onclick="toggleWishlist()">
+                    <button class="btn btn-outline-secondary" onclick="toggleWishlist()">
                         <i class="far fa-heart"></i>
                     </button>
                 </div>
 
-                <div class="shipping-info">
-                    <h6 class="mb-3"><i class="fas fa-shipping-fast me-2"></i> Shipping Information</h6>
-                    {% if user.is_authenticated %}
-                        <div class="shipping-item">
-                            <i class="fas fa-map-marker-alt text-primary"></i>
-                            <div class="flex-grow-1">
-                                <strong>Deliver to:</strong>
-                                <span id="delivery-address">
-                                    {% if user.profile.address %}
-                                        {{ user.profile.address }}
-                                    {% else %}
-                                        Please add your delivery address
-                                    {% endif %}
-                                </span>
-                                <button class="btn btn-link btn-sm p-0 ms-2" onclick="toggleAddressInput()">
-                                    <i class="fas fa-edit"></i> Change
-                                </button>
-                            </div>
-                        </div>
-                        <div class="shipping-item d-none" id="address-input-section">
-                            <i class="fas fa-map-marker-alt text-primary"></i>
-                            <div class="flex-grow-1">
-                                <input type="text" class="form-control form-control-sm" id="new-address" placeholder="Enter delivery address">
-                                <div class="mt-2">
-                                    <button class="btn btn-primary btn-sm me-2" onclick="updateAddress()">Update</button>
-                                    <button class="btn btn-secondary btn-sm" onclick="cancelAddressEdit()">Cancel</button>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="shipping-item">
-                            <i class="fas fa-clock text-primary"></i>
-                            <span><strong>Estimated Delivery:</strong> <span id="delivery-date">Tomorrow</span></span>
-                        </div>
-                        <div class="shipping-item">
-                            <i class="fas fa-dollar-sign text-primary"></i>
-                            <span><strong>Shipping Cost:</strong> Free shipping on orders over $50</span>
-                        </div>
-                    {% else %}
-                        <div class="text-center py-3">
-                            <i class="fas fa-user-lock fa-2x text-muted mb-2"></i>
-                            <p class="text-muted mb-3">Please log in to see shipping information</p>
-                            <div class="d-flex gap-2 justify-content-center">
-                                <a href="#" class="btn btn-primary btn-sm">
-                                    <i class="fas fa-sign-in-alt me-1"></i> Login
-                                </a>
-                                <a href="#" class="btn btn-outline-primary btn-sm">
-                                    <i class="fas fa-user-plus me-1"></i> Sign Up
-                                </a>
-                            </div>
-                        </div>
-                    {% endif %}
+                <!-- Shipping Info -->
+                {% if user.is_authenticated %}
+                <div class="shipping-info mb-4">
+                    <p><i class="fas fa-map-marker-alt text-primary me-1"></i> Deliver to:
+                    {{ user.profile.address|default:"Please add your delivery address" }}
+                    <button class="btn btn-link btn-sm ms-2 p-0" onclick="toggleAddressInput()">
+                        <i class="fas fa-edit"></i> Change
+                    </button></p>
+                    <p><i class="fas fa-clock text-primary me-1"></i> Estimated Delivery: Tomorrow</p>
+                    <p><i class="fas fa-dollar-sign text-primary me-1"></i> Free Shipping on orders over $50</p>
                 </div>
+                {% else %}
+                <div class="alert alert-light text-center">
+                    <i class="fas fa-user-lock fa-2x mb-2"></i>
+                    <p class="mb-2">Please <a href="#">Login</a> to see shipping options</p>
+                </div>
+                {% endif %}
 
-                <div class="seller-info">
-                    <h6 class="mb-3"><i class="fas fa-store me-2"></i> Seller Information</h6>
-                    <div class="d-flex align-items-center justify-content-between">
-                        <div>
-                            <strong>{{ product.seller.get_full_name|default:product.seller.username }}</strong>
-                            <div class="text-muted small">4.8/5.0 seller rating</div>
-                        </div>
-                        <button class="btn btn-outline-primary btn-sm">Visit Store</button>
-                    </div>
+                <!-- Seller Info -->
+                <div class="seller-info border-top pt-3 mt-3">
+                    <h6><i class="fas fa-store me-2"></i> Seller: {{ product.seller.get_full_name|default:product.seller.username }}</h6>
+                    <p class="text-muted small">Seller Rating: 4.8/5.0</p>
+                    <a href="#" class="btn btn-outline-primary btn-sm">Visit Store</a>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Product Description -->
-    <div class="row mt-5">
-        <div class="col-12">
-            <div class="bg-white p-4 rounded border">
-                <h5 class="mb-3">Product Description</h5>
-                <p class="text-muted">{{ product.description }}</p>
+     <!-- Description -->
+        <div class="row mt-5">
+            <div class="col-12">
+                <div class="bg-white shadow-sm p-4 rounded">
+                    <h5 class="fw-bold mb-3">Product Description</h5>
+                    <p class="text-muted">{{ product.description }}</p>
+                </div>
             </div>
         </div>
-    </div>
-</section>
 
-<!-- Recommended Items -->
-<section class="recommendations-section">
-    <div class="container">
-        <h3 class="section-title">Recommended for You</h3>
+        <!-- Specifications Section -->
+        {% if product.specifications %}
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="bg-white shadow-sm p-4 rounded">
+                    <h5 class="fw-bold mb-3">Specifications</h5>
+                    <table class="table table-bordered table-striped mb-0">
+                        <tbody>
+                            {% for key, value in product.specifications.items %}
+                            <tr>
+                                <th style="width: 30%;">{{ key|capfirst }}</th>
+                                <td>{{ value }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </section>
+<section class="container my-5">
+        <!-- Section Header -->
+        <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+            <h3 class="fw-bold mb-0">Recommended for You</h3>
+            <a href="{% url 'marketplace:product_list' %}" class="btn btn-outline-primary btn-sm">
+                View All Products
+            </a>
+        </div>
+
+        <!-- Recommended Products Grid -->
         <div class="row g-4">
             {% for item in recommended_items %}
             <div class="col-xl-3 col-lg-4 col-md-6 col-sm-6">
-                <div class="card product-card">
-                    <a href="{% url 'marketplace:product_detail' item.id %}" class="text-decoration-none">
-                        <div class="position-relative">
-                            <img src="{{ item.image.url }}" class="card-img-top product-image" alt="{{ item.name }}">
-                            {% if item.is_featured %}
-                            <span class="position-absolute top-0 start-0 badge bg-warning text-dark m-2">
-                                <i class="fas fa-star me-1"></i>Featured
-                            </span>
-                            {% endif %}
-                            {% if item.original_price %}
-                            <span class="position-absolute top-0 end-0 badge bg-danger m-2">
-                                {% widthratio item.original_price item.price 100 as discount_ratio %}
-                                {% widthratio discount_ratio 1 1 as discount_percent %}
-                                {{ discount_percent|floatformat:0|add:"-100"|slice:"1:" }}% OFF
-                            </span>
-                            {% endif %}
-                        </div>
-                        <div class="card-body">
-                            <h6 class="card-title">{{ item.name }}</h6>
-                            <div class="d-flex align-items-center gap-2">
-                                <div class="product-price">${{ item.price }}</div>
-                                {% if item.original_price %}
-                                <small class="text-muted text-decoration-line-through">${{ item.original_price }}</small>
-                                {% endif %}
-                            </div>
-                            <div class="mt-2">
-                                <small class="text-muted">
-                                    <i class="fas fa-star text-warning"></i>
-                                    4.2 (89 reviews)
-                                </small>
-                            </div>
-                            <div class="mt-1">
-                                <small class="text-primary">
-                                    <i class="fas fa-tag me-1"></i>{{ item.category.name }}
-                                </small>
-                            </div>
-                        </div>
+                <div class="card h-100 shadow-sm border-0">
+
+                    <!-- Product Image -->
+                    <a href="{% url 'marketplace:product_detail' item.id %}" class="d-block">
+                        <img src="{{ item.image.url }}" class="card-img-top product-image" alt="{{ item.name }}">
                     </a>
+
+                    <div class="card-body d-flex flex-column justify-content-between">
+
+                        <!-- Product Title -->
+                        <h6 class="card-title mb-2" style="min-height: 2.5rem;">
+                            {{ item.name|truncatechars:40 }}
+                        </h6>
+
+                        <!-- Price -->
+                        <div class="mb-2">
+                            <span class="fw-bold text-danger">${{ item.price }}</span>
+                            {% if item.original_price %}
+                            <small class="text-muted text-decoration-line-through ms-1">${{ item.original_price }}</small>
+                            {% endif %}
+                        </div>
+
+                        <!-- Rating -->
+                        <small class="text-muted d-block mb-2">
+                            <i class="fas fa-star text-warning"></i> 4.2 (89 reviews)
+                        </small>
+
+                        <!-- Category -->
+                        <small class="text-primary d-block">
+                            <i class="fas fa-tag me-1"></i> {{ item.category.name }}
+                        </small>
+                    </div>
                 </div>
             </div>
             {% empty %}
-            <div class="col-12">
-                <div class="text-center py-5">
-                    <i class="fas fa-box-open fa-3x text-muted mb-3"></i>
-                    <h5 class="text-muted mb-2">No recommended items available</h5>
-                    <p class="text-muted">
-                        {% if product.category %}
-                            No featured products found in the {{ product.category.name }} category.
-                        {% else %}
-                            No featured products available at the moment.
-                        {% endif %}
-                    </p>
-                </div>
+            <div class="col-12 text-center py-5">
+                <i class="fas fa-box-open fa-3x text-muted mb-3"></i>
+                <h5 class="text-muted">No recommended items available</h5>
             </div>
             {% endfor %}
         </div>
 
-        <!-- Show more button if there are more items -->
-        {% if recommended_items|length >= 8 %}
-        <div class="text-center mt-4">
-            <button class="btn btn-outline-primary btn-lg px-4">
-                <i class="fas fa-plus me-2"></i>View More Similar Products
-            </button>
-        </div>
-        {% endif %}
     </div>
 </section>
+
 
 <script src="{% static 'js/main.js' %}"></script>
 <script src="{% static 'js/product_detail.js' %}"></script>
