@@ -5,44 +5,39 @@
 {% load static %}
 
 <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
-
+<link rel="stylesheet" type="text/css" href="{% static 'css/all_products.css' %}">
 <!-- Hero Section -->
-<section class="hero-section text-white py-4" style="background: linear-gradient(135deg, #232f3e 0%, #37475a 100%); border-bottom: 3px solid #ff9900;">
+<section class="hero-section text-white py-4" style="border-bottom: 3px solid var(--amazon-orange);">
     <div class="container">
-        <div class="row align-items-center">
+        <div class="row align-items-center hero-content">
             <div class="col-lg-9">
-                <h1 class="fw-bold mb-2" style="font-size: 2rem; text-shadow: 2px 2px 4px rgba(0,0,0,0.3);">SHOP SMART. PAY LESS. GET MORE.</h1>
-                <p class="mb-3" style="font-size: 1rem; opacity: 0.9;">Billionaire Taste. Everyday Price. Because Blending In Was Never the Plan.</p>
-
-                <!-- Trust Signals -->
-                <div class="d-flex flex-wrap gap-4">
-                    <div class="d-flex align-items-center" style="color: #cccccc; font-size: 0.85rem;">
-                        <i class="fas fa-shipping-fast me-2" style="color: #ff9900;"></i>
-                        <span><strong>FREE</strong> Shipping</span>
+                <h1 class="fw-bold mb-2">SHOP SMART. PAY LESS. GET MORE.</h1>
+                <p class="mb-3 opacity-90">Billionaire Taste. Everyday Price. Because Blending In Was Never the Plan.</p>
+                <div class="d-flex flex-wrap hero-features">
+                    <div class="hero-feature d-flex align-items-center text-white-50">
+                        <i class="fas fa-shipping-fast me-2 text-warning"></i> FREE Shipping
                     </div>
-                    <div class="d-flex align-items-center" style="color: #cccccc; font-size: 0.85rem;">
-                        <i class="fas fa-shield-alt me-2" style="color: #ff9900;"></i>
-                        <span><strong>100%</strong> Secure</span>
+                    <div class="hero-feature d-flex align-items-center text-white-50">
+                        <i class="fas fa-shield-alt me-2 text-warning"></i> 100% Secure
                     </div>
-                    <div class="d-flex align-items-center" style="color: #cccccc; font-size: 0.85rem;">
-                        <i class="fas fa-undo me-2" style="color: #ff9900;"></i>
-                        <span><strong>30-Day</strong> Returns</span>
+                    <div class="hero-feature d-flex align-items-center text-white-50">
+                        <i class="fas fa-undo me-2 text-warning"></i> 30-Day Returns
                     </div>
-                    <div class="d-flex align-items-center" style="color: #cccccc; font-size: 0.85rem;">
-                        <i class="fas fa-clock me-2" style="color: #ff9900;"></i>
-                        <span><strong>24/7</strong> Support</span>
+                    <div class="hero-feature d-flex align-items-center text-white-50">
+                        <i class="fas fa-clock me-2 text-warning"></i> 24/7 Support
                     </div>
                 </div>
             </div>
             <div class="col-lg-3 text-center">
-                <div style="background: rgba(255,153,0,0.1); padding: 20px; border-radius: 8px;">
-                    <i class="fas fa-bolt" style="font-size: 3rem; color: #ff9900; opacity: 0.8;"></i>
-                    <div class="mt-2" style="color: #ff9900; font-weight: 700; font-size: 0.9rem;">LIKE A BOSS</div>
+                <div class="hero-badge p-3 rounded-3">
+                    <i class="fas fa-bolt fa-3x text-warning"></i>
+                    <div class="mt-2 fw-bold text-warning">SHOP LIKE A BOSS</div>
                 </div>
             </div>
         </div>
     </div>
 </section>
+
 
 <!-- Trending Products Carousel - Amazon Inspired -->
 <section class="py-4" style="background-color: #f8f9fa; border-bottom: 1px solid #eaeded;">
@@ -132,7 +127,7 @@
                 </h2>
                 <p class="text-muted small mb-0">Snag these limited-time offers while they last</p>
             </div>
-            <a href="{% url 'marketplace:product_list' %}" class="btn btn-primary btn-sm px-3">
+            <a href="{% url 'marketplace:hot_picks' %}" class="btn btn-primary btn-sm px-3">
                 View All Deals <i class="fas fa-arrow-right ms-1"></i>
             </a>
         </div>
@@ -198,9 +193,12 @@
                         </div>
 
                         <!-- Action Button -->
-                        <button class="btn btn-outline-primary w-100 btn-sm" onclick="addToCart({{ product.id }})">
-                            <i class="fas fa-cart-plus me-1"></i> Add to Cart
-                        </button>
+                        <button class="btn btn-outline-primary w-100 btn-sm" onclick="addToCart({{ product.id }}, this)">
+    <i class="fas fa-cart-plus me-1"></i> Add to Cart
+</button>
+
+
+
                     </div>
                 </div>
             </div>
@@ -408,8 +406,85 @@
         </div>
     </div>
 </div>
+<script src="{% static 'js/main.js' %}"></script>
+<script>
+
+    // Add to cart functionality with real AJAX call
+function addToCart(productId, button) {
+    if (!button) return;
+
+    // Add loading state
+    button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Adding...';
+    button.disabled = true;
+
+    fetch(`/add-to-cart/${productId}/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCSRFToken(),
+            'Accept': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            button.innerHTML = '<i class="fas fa-check me-1"></i> Added!';
+            button.classList.remove('btn-outline-primary');
+            button.classList.add('btn-success');
+
+            showToast('Product added to cart successfully!');
+
+            setTimeout(() => {
+                button.innerHTML = '<i class="fas fa-cart-plus me-1"></i> Add to Cart';
+                button.classList.remove('btn-success');
+                button.classList.add('btn-outline-primary');
+                button.disabled = false;
+            }, 2000);
+        } else {
+            showToast('Failed to add to cart.', 'danger');
+            resetButton(button);
+        }
+    })
+    .catch(() => {
+        showToast('Error adding to cart.', 'danger');
+        resetButton(button);
+    });
+}
+
+function getCSRFToken() {
+    return document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+}
+
+
+function resetButton(button) {
+    button.innerHTML = '<i class="fas fa-cart-plus me-1"></i> Add to Cart';
+    button.disabled = false;
+}
+
+function showToast(message, type = 'success') {
+    const toast = document.createElement('div');
+    toast.className = `alert alert-${type} position-fixed`;
+    toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 200px;';
+    toast.innerHTML = `
+        <div class="d-flex align-items-center">
+            <i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'} me-2"></i>
+            ${message}
+            <button type="button" class="btn-close ms-auto" onclick="this.parentElement.parentElement.remove()"></button>
+        </div>
+    `;
+    document.body.appendChild(toast);
+
+    setTimeout(() => {
+        if (toast.parentElement) {
+            toast.remove();
+        }
+    }, 3000);
+}
+
+</script>
 
 <script>
+
+
 document.addEventListener('DOMContentLoaded', function () {
     const container = document.getElementById('trendingContainer');
     const btnLeft = document.getElementById('trendingLeft');
@@ -426,30 +501,6 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
 
 
-<script>
-// Enhanced Add to Cart function
-function addToCart(productId) {
-    // Add your AJAX logic here
-    console.log('Adding product to cart:', productId);
 
-    // Show success toast
-    document.getElementById('toastMessage').textContent = 'Item added to cart!';
-    var toast = new bootstrap.Toast(document.getElementById('successToast'));
-    toast.show();
-}
-
-// Quick view functionality
-function quickView(productId, name, image, description, price) {
-    document.getElementById('modalProductName').textContent = name;
-    document.getElementById('modalProductImage').src = image;
-    document.getElementById('modalProductDescription').textContent = description;
-    document.getElementById('modalProductPrice').textContent = '$' + price;
-
-    var modal = new bootstrap.Modal(document.getElementById('quickViewModal'));
-    modal.show();
-}
-</script>
-
-<script src="{% static 'js/main.js' %}"></script>
 
 {% endblock %}

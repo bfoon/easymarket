@@ -1,6 +1,8 @@
-from django.shortcuts import render, get_object_or_404
-from .models import Category, Product, ProductView
+from django.shortcuts import render, get_object_or_404, redirect
+from .models import Category, Product, ProductView, CartItem, Cart
 import re
+from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse
 # Create your views here!
 
 from marketplace.models import Product, ProductView, Category
@@ -96,4 +98,90 @@ def product_detail(request, product_id):
         'specifications': cleaned_specs,
         'short_description': short_description,
         'description_truncated': description_truncated,
+    })
+
+def hot_picks(request):
+    categories = Category.objects.all()
+    hot_products_by_category = []
+
+    for category in categories:
+        products = Product.objects.filter(category=category, is_trending=True).order_by('-created_at')[:8]
+
+        if products:
+            products = list(products)
+            latest_product = Product.objects.filter(category=category).order_by('-created_at').first()
+
+            for product in products:
+                # Mark latest product as 'new'
+                product.is_new = product.id == latest_product.id
+
+                # Calculate discount percentage if applicable
+                if product.original_price and product.original_price > product.price:
+                    discount = ((product.original_price - product.price) / product.original_price) * 100
+                    product.discount_percentage = round(discount)
+                else:
+                    product.discount_percentage = None
+
+            hot_products_by_category.append({
+                'category': category,
+                'products': products
+            })
+
+    return render(request, 'marketplace/hot_picks.html', {
+        'hot_products_by_category': hot_products_by_category
+    })
+
+@csrf_exempt
+def add_to_cart(request, product_id):
+    product = get_object_or_404(Product, id=product_id)
+
+    if request.user.is_authenticated:
+        cart, created = Cart.objects.get_or_create(user=request.user)
+        cart_item, created = CartItem.objects.get_or_create(cart=cart, product=product)
+
+        if not created:
+            cart_item.quantity += 1
+        else:
+            cart_item.quantity = 1
+
+        cart_item.save()
+    else:
+        cart = request.session.get('cart', {})
+
+        if str(product_id) in cart:
+            cart[str(product_id)]['quantity'] += 1
+        else:
+            cart[str(product_id)] = {'quantity': 1}
+
+        request.session['cart'] = cart
+
+    return JsonResponse({'success': True, 'message': 'Added to cart successfully!'})
+
+def cart_view(request):
+    cart_items = []
+    total_price = 0
+
+    if request.user.is_authenticated:
+        cart = Cart.objects.filter(user=request.user).first()
+        if cart:
+            cart_items = cart.items.select_related('product')
+            total_price = sum(item.product.price * item.quantity for item in cart_items)
+    else:
+        session_cart = request.session.get('cart', {})
+        product_ids = session_cart.keys()
+        products = Product.objects.filter(id__in=product_ids)
+
+        for product in products:
+            quantity = session_cart[str(product.id)]['quantity']
+            subtotal = product.price * quantity
+            cart_items.append({
+                'product': product,
+                'quantity': quantity,
+                'subtotal': subtotal
+            })
+            total_price += subtotal
+
+    return render(request, 'marketplace/cart.html', {
+        'cart_items': cart_items,
+        'total_price': total_price,
     })

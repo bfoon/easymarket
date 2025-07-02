@@ -1,163 +1,114 @@
-document.addEventListener('DOMContentLoaded', function () {
-    // Product scroll functionality
-    const sections = document.querySelectorAll('.products-container');
+// Enhanced scroll functionality for category carousels
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle scroll buttons for all category carousels
+    const scrollButtons = document.querySelectorAll('.scroll-left, .scroll-right');
 
-    sections.forEach(section => {
-        const parent = section.closest('.position-relative');
-        const leftBtn = parent.querySelector('.scroll-left');
-        const rightBtn = parent.querySelector('.scroll-right');
+    scrollButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const targetId = this.getAttribute('data-target');
+            const container = document.getElementById(targetId);
 
-        // Scroll amount based on card width + gap
-        const scrollAmount = 200;
+            if (container) {
+                const scrollAmount = 220; // Width of product card + gap
+                const isScrollLeft = this.classList.contains('scroll-left');
 
-        leftBtn.addEventListener('click', () => {
-            section.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
-        });
-
-        rightBtn.addEventListener('click', () => {
-            section.scrollBy({ left: scrollAmount, behavior: 'smooth' });
-        });
-
-        // Hide/show scroll buttons based on scroll position
-        function updateScrollButtons() {
-            const isAtStart = section.scrollLeft <= 0;
-            const isAtEnd = section.scrollLeft >= section.scrollWidth - section.clientWidth;
-
-            leftBtn.style.opacity = isAtStart ? '0.5' : '1';
-            rightBtn.style.opacity = isAtEnd ? '0.5' : '1';
-            leftBtn.disabled = isAtStart;
-            rightBtn.disabled = isAtEnd;
-        }
-
-        section.addEventListener('scroll', updateScrollButtons);
-        updateScrollButtons(); // Initial state
-    });
-
-    // Product card hover effects
-    const productCards = document.querySelectorAll('.product-card');
-    productCards.forEach(card => {
-        card.addEventListener('mouseenter', function() {
-            this.style.transform = 'translateY(-5px)';
-        });
-
-        card.addEventListener('mouseleave', function() {
-            this.style.transform = 'translateY(0)';
+                container.scrollBy({
+                    left: isScrollLeft ? -scrollAmount : scrollAmount,
+                    behavior: 'smooth'
+                });
+            }
         });
     });
 
-    // Hide scrollbar in products container
-    const style = document.createElement('style');
-    style.textContent = `
-        .products-container::-webkit-scrollbar {
-            display: none;
-        }
-    `;
-    document.head.appendChild(style);
+    // Show/hide scroll buttons based on scroll position and content
+    const productContainers = document.querySelectorAll('.products-container');
+
+    productContainers.forEach(container => {
+        const categoryBlock = container.closest('.category-block');
+        if (!categoryBlock) return;
+
+        const leftBtn = categoryBlock.querySelector('.scroll-left');
+        const rightBtn = categoryBlock.querySelector('.scroll-right');
+
+        // Initial check
+        updateScrollButtons(container, leftBtn, rightBtn);
+
+        // Update on scroll
+        container.addEventListener('scroll', () => {
+            updateScrollButtons(container, leftBtn, rightBtn);
+        });
+
+        // Update on resize
+        window.addEventListener('resize', () => {
+            updateScrollButtons(container, leftBtn, rightBtn);
+        });
+    });
 });
 
-// Enhanced add to cart function with feedback
-function addToCart(productId) {
-    // Show loading state
-    const button = event.target.closest('button');
-    const originalText = button.innerHTML;
-    button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Adding...';
-    button.disabled = true;
+function updateScrollButtons(container, leftBtn, rightBtn) {
+    if (!container || !leftBtn || !rightBtn) return;
 
-    // Simulate API call (replace with your actual implementation)
-    fetch(`/marketplace/add-to-cart/${productId}/`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
-        },
-        body: JSON.stringify({
-            product_id: productId,
-            quantity: 1
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            // Success feedback
-            button.innerHTML = '<i class="fas fa-check me-2"></i>Added!';
-            button.classList.remove('btn-primary');
-            button.classList.add('btn-success');
+    const scrollLeft = container.scrollLeft;
+    const scrollWidth = container.scrollWidth;
+    const clientWidth = container.clientWidth;
+    const isScrollable = scrollWidth > clientWidth;
 
-            // Show toast notification (if you have a toast system)
-            showToast('Product added to cart successfully!', 'success');
-
-            // Reset button after 2 seconds
-            setTimeout(() => {
-                button.innerHTML = originalText;
-                button.classList.remove('btn-success');
-                button.classList.add('btn-primary');
-                button.disabled = false;
-            }, 2000);
-        } else {
-            throw new Error(data.message || 'Failed to add to cart');
-        }
-    })
-    .catch(error => {
-        // Error feedback
-        button.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>Error';
-        button.classList.remove('btn-primary');
-        button.classList.add('btn-danger');
-
-        showToast('Failed to add product to cart', 'error');
-
-        // Reset button after 2 seconds
-        setTimeout(() => {
-            button.innerHTML = originalText;
-            button.classList.remove('btn-danger');
-            button.classList.add('btn-primary');
-            button.disabled = false;
-        }, 2000);
-    });
-}
-
-// Enhanced add to wishlist function
-function addToWishlist(productId) {
-    const button = event.target.closest('button');
-    const icon = button.querySelector('i');
-
-    // Toggle wishlist state
-    if (icon.classList.contains('far')) {
-        icon.classList.remove('far');
-        icon.classList.add('fas');
-        button.classList.remove('btn-outline-secondary');
-        button.classList.add('btn-outline-danger');
-        showToast('Added to wishlist!', 'success');
-    } else {
-        icon.classList.remove('fas');
-        icon.classList.add('far');
-        button.classList.remove('btn-outline-danger');
-        button.classList.add('btn-outline-secondary');
-        showToast('Removed from wishlist', 'info');
+    // Hide buttons if content doesn't scroll
+    if (!isScrollable) {
+        leftBtn.style.display = 'none';
+        rightBtn.style.display = 'none';
+        return;
     }
 
-    // Here you would make an actual API call to update the wishlist
-    // fetch(`/marketplace/toggle-wishlist/${productId}/`, {...})
+    leftBtn.style.display = 'block';
+    rightBtn.style.display = 'block';
+
+    // Update button states
+    leftBtn.style.opacity = scrollLeft <= 5 ? '0.5' : '1';
+    leftBtn.style.pointerEvents = scrollLeft <= 5 ? 'none' : 'auto';
+
+    rightBtn.style.opacity = scrollLeft >= (scrollWidth - clientWidth - 5) ? '0.5' : '1';
+    rightBtn.style.pointerEvents = scrollLeft >= (scrollWidth - clientWidth - 5) ? 'none' : 'auto';
 }
 
-// Simple toast notification function
-function showToast(message, type = 'info') {
-    const toast = document.createElement('div');
-    toast.className = `alert alert-${type === 'error' ? 'danger' : type} position-fixed`;
-    toast.style.cssText = 'top: 20px; right: 20px; z-index: 1060; min-width: 300px;';
-    toast.innerHTML = `
-        <div class="d-flex align-items-center">
-            <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'} me-2"></i>
-            ${message}
-            <button type="button" class="btn-close ms-auto" onclick="this.parentElement.parentElement.remove()"></button>
-        </div>
-    `;
+// Add to Cart functionality
+function addToCart(productId) {
+    const button = event.target.closest('button');
+    if (!button) return;
 
-    document.body.appendChild(toast);
+    const originalHTML = button.innerHTML;
+    button.innerHTML = '<i class="fas fa-check me-1"></i> Added!';
+    button.style.backgroundColor = 'var(--success-green)';
+    button.style.borderColor = 'var(--success-green)';
 
-    // Auto remove after 3 seconds
+    // Here you would make an AJAX call to add the product to cart
+    console.log('Adding product to cart:', productId);
+
     setTimeout(() => {
-        if (toast.parentElement) {
-            toast.remove();
-        }
-    }, 3000);
+        button.innerHTML = originalHTML;
+        button.style.backgroundColor = '';
+        button.style.borderColor = '';
+    }, 2000);
+}
+
+// Add to Wishlist functionality
+function addToWishlist(productId) {
+    const button = event.target.closest('button');
+    if (!button) return;
+
+    const icon = button.querySelector('i');
+    const originalHTML = button.innerHTML;
+
+    button.innerHTML = '<i class="fas fa-heart me-1"></i> Added!';
+    button.style.color = 'var(--warning-red)';
+    button.style.borderColor = 'var(--warning-red)';
+
+    // Here you would make an AJAX call to add the product to wishlist
+    console.log('Adding product to wishlist:', productId);
+
+    setTimeout(() => {
+        button.innerHTML = originalHTML;
+        button.style.color = '';
+        button.style.borderColor = '';
+    }, 2000);
 }

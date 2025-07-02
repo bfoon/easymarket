@@ -3,19 +3,62 @@
 {% load static %}
 
 {% block content %}
+
 <link rel="stylesheet" href="{% static 'css/main.css' %}">
 <link rel="stylesheet" href="{% static 'css/product_detail.css' %}">
-
-<!-- Breadcrumb -->
-<section class="product-breadcrumb py-2 bg-light border-bottom">
+<!-- Amazon-Style Breadcrumb -->
+<section class="amazon-breadcrumb py-2 bg-light border-bottom">
     <div class="container">
         <nav aria-label="breadcrumb">
             <ol class="breadcrumb mb-0">
-                <li class="breadcrumb-item"><a href="{% url 'marketplace:product_list' %}">Home</a></li>
-                {% if product.category %}
-                <li class="breadcrumb-item"><a href="#">{{ product.category.name }}</a></li>
+
+                <!-- Home -->
+                <li class="breadcrumb-item">
+                    <a href="{% url 'marketplace:product_list' %}">
+                        <i class="fas fa-home me-1"></i> Home
+                    </a>
+                </li>
+
+                <!-- Parent Category (if exists) -->
+                {% if product.category and product.category.parent %}
+                <li class="breadcrumb-item">
+                    <a href="{% url 'marketplace:category_detail' product.category.parent.slug %}">
+                        {{ product.category.parent.name }}
+                    </a>
+                </li>
                 {% endif %}
-                <li class="breadcrumb-item active" aria-current="page">{{ product.name }}</li>
+
+                <!-- Current Category -->
+                {% if product.category %}
+                <li class="breadcrumb-item">
+                    <a href="#">
+                        {{ product.category.name }}
+                    </a>
+                </li>
+                {% endif %}
+
+                <!-- Subcategory (if exists) -->
+                {% if product.subcategory %}
+                <li class="breadcrumb-item">
+                    <a href="{% url 'marketplace:subcategory_detail' product.subcategory.slug %}">
+                        {{ product.subcategory.name }}
+                    </a>
+                </li>
+                {% endif %}
+
+                <!-- Brand (if exists) -->
+                {% if product.brand %}
+                <li class="breadcrumb-item">
+                    <a href="{% url 'marketplace:brand_detail' product.brand.slug %}">
+                        {{ product.brand.name }}
+                    </a>
+                </li>
+                {% endif %}
+
+                <!-- Current Product Name -->
+                <li class="breadcrumb-item active" aria-current="page">
+                    {{ product.name|truncatechars:40 }}
+                </li>
             </ol>
         </nav>
     </div>

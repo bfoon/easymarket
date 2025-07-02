@@ -122,43 +122,75 @@ function quickView(name, description, price, image) {
     modal.show();
 }
 
-// Add to cart functionality
-function addToCart(productId, productName, productPrice) {
+// Add to cart functionality with real AJAX call
+function addToCart(productId, button) {
+    if (!button) return;
+
     // Add loading state
-    event.target.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Adding...';
-    event.target.disabled = true;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Adding...';
+    button.disabled = true;
 
-    // Simulate API call
+    fetch(`/add-to-cart/${productId}/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCSRFToken(),
+            'Accept': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            button.innerHTML = '<i class="fas fa-check me-1"></i> Added!';
+            button.classList.remove('btn-outline-primary');
+            button.classList.add('btn-success');
+
+            showToast('Product added to cart successfully!');
+
+            setTimeout(() => {
+                button.innerHTML = '<i class="fas fa-cart-plus me-1"></i> Add to Cart';
+                button.classList.remove('btn-success');
+                button.classList.add('btn-outline-primary');
+                button.disabled = false;
+            }, 2000);
+        } else {
+            showToast('Failed to add to cart.', 'danger');
+            resetButton(button);
+        }
+    })
+    .catch(() => {
+        showToast('Error adding to cart.', 'danger');
+        resetButton(button);
+    });
+}
+
+
+function resetButton(button) {
+    button.innerHTML = '<i class="fas fa-cart-plus me-1"></i> Add to Cart';
+    button.disabled = false;
+}
+
+function showToast(message, type = 'success') {
+    const toast = document.createElement('div');
+    toast.className = `alert alert-${type} position-fixed`;
+    toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 200px;';
+    toast.innerHTML = `
+        <div class="d-flex align-items-center">
+            <i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'} me-2"></i>
+            ${message}
+            <button type="button" class="btn-close ms-auto" onclick="this.parentElement.parentElement.remove()"></button>
+        </div>
+    `;
+    document.body.appendChild(toast);
+
     setTimeout(() => {
-        // Reset button
-        event.target.innerHTML = '<i class="fas fa-check me-1"></i>Added!';
-        event.target.classList.remove('btn-primary');
-        event.target.classList.add('btn-success');
+        if (toast.parentElement) {
+            toast.remove();
+        }
+    }, 3000);
+}
 
-        // Show success toast
-        showToast(`${productName} added to cart!`);
-
-        // Reset button after 2 seconds
-        setTimeout(() => {
-            event.target.innerHTML = '<i class="fas fa-cart-plus me-1"></i>Add to Cart';
-            event.target.classList.remove('btn-success');
-            event.target.classList.add('btn-primary');
-            event.target.disabled = false;
-        }, 2000);
-
-        // Here you would make an actual AJAX call to your Django backend
-        // fetch('/add-to-cart/', {
-        //     method: 'POST',
-        //     headers: {
-        //         'Content-Type': 'application/json',
-        //         'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
-        //     },
-        //     body: JSON.stringify({
-        //         'product_id': productId,
-        //         'quantity': 1
-        //     })
-        // })
-    }, 1000);
+function getCSRFToken() {
+    return document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
 }
 
 // Add to wishlist
@@ -171,12 +203,6 @@ function addToWishlist(productId) {
     showToast('Added to wishlist!');
 }
 
-// Show toast notification
-function showToast(message) {
-    document.getElementById('toastMessage').textContent = message;
-    const toast = new bootstrap.Toast(document.getElementById('successToast'));
-    toast.show();
-}
 
 // Load more products (for pagination)
 function loadMoreProducts() {
