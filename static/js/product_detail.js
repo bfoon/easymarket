@@ -91,25 +91,6 @@ function changeQuantity(amount) {
     quantityInput.value = value;
 }
 
-function addToCart() {
-    const quantity = document.getElementById('quantity').value;
-    // Add your cart functionality here
-    alert(`Added ${quantity} item(s) to cart!`);
-}
-
-function toggleWishlist() {
-    const wishlistBtn = document.querySelector('.btn-wishlist i');
-    if (wishlistBtn.classList.contains('far')) {
-        wishlistBtn.classList.remove('far');
-        wishlistBtn.classList.add('fas');
-        wishlistBtn.style.color = '#ff6b35';
-    } else {
-        wishlistBtn.classList.remove('fas');
-        wishlistBtn.classList.add('far');
-        wishlistBtn.style.color = '';
-    }
-}
-
 // Image zoom effect
 document.getElementById('mainProductImage').addEventListener('mousemove', function(e) {
     const rect = this.getBoundingClientRect();

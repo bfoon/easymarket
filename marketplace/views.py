@@ -31,7 +31,6 @@ def all_products(request):
         'category_products': category_products
     })
 
-
 def product_list(request):
     categories = Category.objects.all()[:6]
     products = Product.objects.all()
@@ -41,14 +40,21 @@ def product_list(request):
     recently_viewed = []
     similar_items = []
 
+    # Handle logged-in user
     if request.user.is_authenticated:
         recently_viewed = Product.objects.filter(productview__user=request.user).distinct().order_by(
             '-productview__viewed_at')[:8]
 
-        if recently_viewed.exists():
-            last_viewed_product = recently_viewed.first()
-            similar_items = Product.objects.filter(category=last_viewed_product.category).exclude(
-                id=last_viewed_product.id)[:8]
+    # Handle anonymous user via session
+    else:
+        session_recently_viewed = request.session.get('recently_viewed', [])
+        recently_viewed = Product.objects.filter(id__in=session_recently_viewed)
+
+    # Similar items logic
+    if recently_viewed:
+        last_viewed_product = recently_viewed.first() if request.user.is_authenticated else recently_viewed.first()
+        similar_items = Product.objects.filter(category=last_viewed_product.category).exclude(
+            id=last_viewed_product.id)[:8]
 
     return render(request, 'marketplace/product_list.html', {
         'categories': categories,
@@ -59,37 +65,43 @@ def product_list(request):
         'similar_items': similar_items,
     })
 
-
 def product_detail(request, product_id):
     product = get_object_or_404(Product, id=product_id)
     product_images = product.images.all()
 
-    # Record user view
+    # Record view
     if request.user.is_authenticated:
         ProductView.objects.get_or_create(user=request.user, product=product)
+    else:
+        recently_viewed = request.session.get('recently_viewed', [])
+        if product.id not in recently_viewed:
+            recently_viewed.insert(0, product.id)
+            if len(recently_viewed) > 10:
+                recently_viewed = recently_viewed[:10]
+            request.session['recently_viewed'] = recently_viewed
 
-    # Recommend similar items (same category, excluding current product)
+    # Recommend similar items
     recommended_items = Product.objects.filter(category=product.category).exclude(id=product.id)[:4]
 
-    # Process Specifications
+    # Clean specifications
     cleaned_specs = []
-    for line in product.specifications.splitlines():
-        if ':' in line:
-            raw_key, value = line.split(':', 1)
-            clean_key = re.sub(r'^[^a-zA-Z0-9]*(.*?)[^a-zA-Z0-9]*$', r'\1', raw_key).strip()
-            cleaned_specs.append((clean_key, value.strip()))
+    if product.specifications:
+        for line in product.specifications.splitlines():
+            if ':' in line:
+                raw_key, value = line.split(':', 1)
+                clean_key = re.sub(r'^[^a-zA-Z0-9]*(.*?)[^a-zA-Z0-9]*$', r'\1', raw_key).strip()
+                cleaned_specs.append((clean_key, value.strip()))
 
-    # Process Description for truncation
+    # Truncate description
     description_text = product.description or ""
     short_description = description_text[:800]
+    description_truncated = len(description_text) > 800
 
-    if len(description_text) > 800:
-        last_newline = short_description.rfind('\n')
-        if last_newline != -1:
-            short_description = short_description[:last_newline]
-        description_truncated = True
-    else:
-        description_truncated = False
+    # Prevent cutting mid-word if truncated
+    if description_truncated:
+        last_space = short_description.rfind(' ')
+        if last_space != -1:
+            short_description = short_description[:last_space]
 
     return render(request, 'marketplace/product_detail.html', {
         'product': product,

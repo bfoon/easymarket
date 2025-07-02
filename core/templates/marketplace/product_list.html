@@ -194,8 +194,8 @@
 
                         <!-- Action Button -->
                         <button class="btn btn-outline-primary w-100 btn-sm" onclick="addToCart({{ product.id }}, this)">
-    <i class="fas fa-cart-plus me-1"></i> Add to Cart
-</button>
+                            <i class="fas fa-cart-plus me-1"></i> Add to Cart
+                        </button>
 
 
 
@@ -393,94 +393,8 @@
     </div>
 </div>
 
-<!-- Success Toast - Amazon Style -->
-<div class="toast-container position-fixed bottom-0 end-0 p-3">
-    <div id="successToast" class="toast" role="alert" style="border: none; border-radius: 8px;">
-        <div class="toast-header" style="background-color: #067d62; color: white; border-radius: 8px 8px 0 0;">
-            <i class="fas fa-check-circle me-2"></i>
-            <strong class="me-auto">Added to Cart</strong>
-            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
-        </div>
-        <div class="toast-body" id="toastMessage" style="background-color: white; color: #232f3e; border-radius: 0 0 8px 8px;">
-            Product added to cart successfully!
-        </div>
-    </div>
-</div>
+
 <script src="{% static 'js/main.js' %}"></script>
-<script>
-
-    // Add to cart functionality with real AJAX call
-function addToCart(productId, button) {
-    if (!button) return;
-
-    // Add loading state
-    button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Adding...';
-    button.disabled = true;
-
-    fetch(`/add-to-cart/${productId}/`, {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': getCSRFToken(),
-            'Accept': 'application/json'
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            button.innerHTML = '<i class="fas fa-check me-1"></i> Added!';
-            button.classList.remove('btn-outline-primary');
-            button.classList.add('btn-success');
-
-            showToast('Product added to cart successfully!');
-
-            setTimeout(() => {
-                button.innerHTML = '<i class="fas fa-cart-plus me-1"></i> Add to Cart';
-                button.classList.remove('btn-success');
-                button.classList.add('btn-outline-primary');
-                button.disabled = false;
-            }, 2000);
-        } else {
-            showToast('Failed to add to cart.', 'danger');
-            resetButton(button);
-        }
-    })
-    .catch(() => {
-        showToast('Error adding to cart.', 'danger');
-        resetButton(button);
-    });
-}
-
-function getCSRFToken() {
-    return document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
-}
-
-
-function resetButton(button) {
-    button.innerHTML = '<i class="fas fa-cart-plus me-1"></i> Add to Cart';
-    button.disabled = false;
-}
-
-function showToast(message, type = 'success') {
-    const toast = document.createElement('div');
-    toast.className = `alert alert-${type} position-fixed`;
-    toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 200px;';
-    toast.innerHTML = `
-        <div class="d-flex align-items-center">
-            <i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'} me-2"></i>
-            ${message}
-            <button type="button" class="btn-close ms-auto" onclick="this.parentElement.parentElement.remove()"></button>
-        </div>
-    `;
-    document.body.appendChild(toast);
-
-    setTimeout(() => {
-        if (toast.parentElement) {
-            toast.remove();
-        }
-    }, 3000);
-}
-
-</script>
 
 <script>
 
