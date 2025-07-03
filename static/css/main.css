@@ -1,268 +1,415 @@
-{% extends 'base.html' %}
-{% load static %}
-
-{% block content %}
-<section class="py-4">
-    <div class="container">
-        <!-- Breadcrumb -->
-        <nav aria-label="breadcrumb" class="mb-4">
-            <ol class="breadcrumb">
-                <li class="breadcrumb-item">
-                    <a href="{% url 'marketplace:product_list' %}">
-                        <i class="fas fa-home me-1"></i> Home
-                    </a>
-                </li>
-                <li class="breadcrumb-item active" aria-current="page">
-                    {{ category.name }}
-                </li>
-            </ol>
-        </nav>
-
-        <!-- Category Header with Stats -->
-        <div class="row align-items-center mb-4">
-            <div class="col-md-8">
-                <h2 class="h3 fw-bold mb-2">
-                    <i class="fas fa-tags text-primary me-2"></i> {{ category.name }}
-                </h2>
-                {% if products %}
-                <p class="text-muted small mb-0">
-                    <i class="fas fa-info-circle me-1"></i>
-                    {{ products|length }} product{{ products|length|pluralize }} found
-                </p>
-                {% endif %}
-            </div>
-            <div class="col-md-4 text-md-end">
-                <!-- Sort Options -->
-                <div class="dropdown">
-                    <button class="btn btn-outline-primary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                        <i class="fas fa-sort me-1"></i> Sort by
-                    </button>
-                    <ul class="dropdown-menu">
-                        <li><a class="dropdown-item" href="?sort=name">Name A-Z</a></li>
-                        <li><a class="dropdown-item" href="?sort=-name">Name Z-A</a></li>
-                        <li><a class="dropdown-item" href="?sort=price">Price: Low to High</a></li>
-                        <li><a class="dropdown-item" href="?sort=-price">Price: High to Low</a></li>
-                        <li><a class="dropdown-item" href="?sort=-created_at">Newest First</a></li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-
-        {% if products %}
-        <!-- Products Grid -->
-        <div class="row g-3">
-            {% for product in products %}
-            <div class="col-6 col-md-4 col-lg-3">
-                <div class="product-card position-relative">
-                    <!-- Product Badges -->
-                    {% if product.is_new %}
-                    <span class="badge-new">New</span>
-                    {% endif %}
-                    
-                    {% if product.discount_percentage %}
-                    <span class="badge-sale">{{ product.discount_percentage }}% OFF</span>
-                    {% endif %}
-                    
-                    {% if product.is_featured %}
-                    <span class="badge-choice">Editor's Choice</span>
-                    {% endif %}
-
-                    <!-- Product Image -->
-                    <a href="{% url 'marketplace:product_detail' product.id %}" class="d-block">
-                        {% if product.image %}
-                        <img src="{{ product.image.url }}" 
-                             class="product-image" 
-                             alt="{{ product.name }}"
-                             loading="lazy">
-                        {% else %}
-                        <div class="product-image d-flex align-items-center justify-content-center bg-light">
-                            <i class="fas fa-image text-muted" style="font-size: 2rem;"></i>
-                        </div>
-                        {% endif %}
-                    </a>
-
-                    <!-- Product Details -->
-                    <div class="card-body">
-                        <h5 class="card-title">
-                            <a href="{% url 'marketplace:product_detail' product.id %}" class="text-decoration-none">
-                                {{ product.name|truncatechars:40 }}
-                            </a>
-                        </h5>
-
-                        <!-- Rating (if available) -->
-                        {% if product.average_rating %}
-                        <div class="rating mb-2">
-                            {% for i in "12345"|make_list %}
-                                {% if forloop.counter <= product.average_rating %}
-                                <i class="fas fa-star"></i>
-                                {% else %}
-                                <i class="far fa-star"></i>
-                                {% endif %}
-                            {% endfor %}
-                            <span class="rating-count">({{ product.review_count }})</span>
-                        </div>
-                        {% endif %}
-
-                        <!-- Price -->
-                        <div class="price-container">
-                            <span class="price-tag">${{ product.price }}</span>
-                            {% if product.original_price and product.original_price != product.price %}
-                            <span class="original-price">${{ product.original_price }}</span>
-                            {% endif %}
-                        </div>
-
-                        <!-- Add to Cart Button -->
-                        <button class="btn-cart" 
-                                data-product-id="{{ product.id }}"
-                                onclick="addToCart({{ product.id }})">
-                            <i class="fas fa-shopping-cart me-1"></i> Add to Cart
-                        </button>
-                    </div>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-
-        <!-- Pagination -->
-        {% if is_paginated %}
-        <nav aria-label="Product pagination" class="mt-5">
-            <ul class="pagination justify-content-center">
-                {% if page_obj.has_previous %}
-                <li class="page-item">
-                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}">
-                        <i class="fas fa-chevron-left"></i>
-                    </a>
-                </li>
-                {% endif %}
-
-                {% for num in page_obj.paginator.page_range %}
-                {% if page_obj.number == num %}
-                <li class="page-item active">
-                    <span class="page-link">{{ num }}</span>
-                </li>
-                {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
-                <li class="page-item">
-                    <a class="page-link" href="?page={{ num }}">{{ num }}</a>
-                </li>
-                {% endif %}
-                {% endfor %}
-
-                {% if page_obj.has_next %}
-                <li class="page-item">
-                    <a class="page-link" href="?page={{ page_obj.next_page_number }}">
-                        <i class="fas fa-chevron-right"></i>
-                    </a>
-                </li>
-                {% endif %}
-            </ul>
-        </nav>
-        {% endif %}
-
-        {% else %}
-        <!-- Empty State -->
-        <div class="text-center py-5">
-            <div class="mb-4">
-                <i class="fas fa-box-open text-muted" style="font-size: 4rem; opacity: 0.5;"></i>
-            </div>
-            <h4 class="text-muted mb-3">No products found in {{ category.name }}</h4>
-            <p class="text-muted mb-4">
-                We're working hard to stock this category.<br>
-                Check back soon for exciting new products!
-            </p>
-            <a href="{% url 'marketplace:product_list' %}" class="btn btn-primary">
-                <i class="fas fa-arrow-left me-2"></i>Browse All Products
-            </a>
-        </div>
-        {% endif %}
-
-        <!-- Related Categories -->
-        {% if related_categories %}
-        <div class="mt-5">
-            <h5 class="fw-bold mb-3">
-                <i class="fas fa-layer-group me-2"></i>Related Categories
-            </h5>
-            <div class="row g-3">
-                {% for related_category in related_categories %}
-                <div class="col-6 col-md-4 col-lg-3">
-                    <a href="{% url 'marketplace:category_detail' related_category.id %}" class="text-decoration-none">
-                        <div class="category-card">
-                            <div class="category-icon">
-                                <i class="fas fa-{{ related_category.icon|default:'tag' }}"></i>
-                            </div>
-                            <h5>{{ related_category.name }}</h5>
-                        </div>
-                    </a>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-        {% endif %}
-    </div>
-</section>
-
-<!-- Add to Cart JavaScript -->
-<script>
-function addToCart(productId) {
-    // Get CSRF token
-    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-    
-    fetch(`/marketplace/add-to-cart/${productId}/`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': csrfToken,
-        },
-        body: JSON.stringify({
-            'product_id': productId,
-            'quantity': 1
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            // Show success message
-            showNotification('Product added to cart!', 'success');
-            
-            // Update cart count if you have a cart counter
-            updateCartCount();
-        } else {
-            showNotification('Error adding product to cart', 'error');
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        showNotification('Error adding product to cart', 'error');
-    });
+:root {
+    --amazon-orange: #ff9900;
+    --amazon-dark-blue: #232f3e;
+    --amazon-light-blue: #37475a;
+    --amazon-accent: #007185;
+    --warning-red: #b12704;
+    --success-green: #067d62;
+    --neutral-gray: #565959;
+    --light-gray: #eaeded;
+    --white: #ffffff;
+}
+#trendingContainer::-webkit-scrollbar {
+    display: none;
 }
 
-function showNotification(message, type) {
-    // Create notification element
-    const notification = document.createElement('div');
-    notification.className = `alert alert-${type === 'success' ? 'success' : 'danger'} alert-dismissible fade show position-fixed`;
-    notification.style.cssText = 'top: 20px; right: 20px; z-index: 1050; min-width: 300px;';
-    notification.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
-    
-    document.body.appendChild(notification);
-    
-    // Auto-remove after 3 seconds
-    setTimeout(() => {
-        notification.remove();
-    }, 3000);
+/* Navigation - Amazon-inspired header */
+.navbar-brand {
+    font-weight: 700;
+    font-size: 1.5rem;
+    color: var(--amazon-dark-blue) !important;
+    letter-spacing: -0.5px;
+    text-transform: none;
+    font-family: 'Amazon Ember', Arial, sans-serif;
 }
 
-function updateCartCount() {
-    // Update cart count badge if it exists
-    const cartCount = document.querySelector('.cart-count');
-    if (cartCount) {
-        fetch('/marketplace/cart/count/')
-            .then(response => response.json())
-            .then(data => {
-                cartCount.textContent = data.count;
-            });
+.navbar {
+    background-color: var(--amazon-dark-blue) !important;
+    border-bottom: 3px solid var(--amazon-orange);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.navbar .navbar-brand {
+    color: var(--white) !important;
+}
+
+.navbar .nav-link {
+    color: var(--white) !important;
+    font-weight: 600;
+    font-size: 0.9rem;
+    padding: 0.8rem 1rem !important;
+    border-radius: 4px;
+    transition: background-color 0.2s ease;
+}
+
+.navbar .nav-link:hover {
+    background-color: var(--amazon-light-blue);
+    color: var(--amazon-orange) !important;
+}
+
+/* Hero Section - More commanding */
+.hero-section {
+    background: linear-gradient(135deg, var(--amazon-dark-blue) 0%, var(--amazon-light-blue) 100%);
+    color: white;
+    padding: 60px 0;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.hero-section::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(255,255,255,0.03)" stroke-width="1"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>');
+}
+
+.hero-section h1 {
+    font-size: 2.2rem;
+    font-weight: 700;
+    margin-bottom: 0.8rem;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+}
+
+.hero-section p {
+    font-size: 1rem;
+    font-weight: 400;
+    opacity: 0.9;
+}
+
+/* Search Bar - Amazon style */
+.search-bar {
+    border-radius: 4px;
+    border: 2px solid var(--amazon-orange);
+    padding: 8px 12px;
+    font-size: 0.9rem;
+    box-shadow: none;
+    transition: border-color 0.2s ease;
+}
+
+.search-bar:focus {
+    border-color: var(--amazon-accent);
+    box-shadow: 0 0 5px rgba(0, 113, 133, 0.3);
+    outline: none;
+}
+
+/* Category Cards - Smaller, more compact */
+.category-card {
+    transition: all 0.2s ease;
+    border: 1px solid var(--light-gray);
+    border-radius: 8px;
+    background: white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    padding: 1rem;
+    height: 120px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.category-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    border-color: var(--amazon-orange);
+}
+
+.category-icon {
+    font-size: 2rem;
+    color: var(--amazon-accent);
+    margin-bottom: 8px;
+}
+
+.category-card h5 {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--amazon-dark-blue);
+    margin: 0;
+    text-align: center;
+}
+
+/* Product Cards - Compact Amazon style */
+.product-card {
+    transition: all 0.2s ease;
+    border: 1px solid var(--light-gray);
+    border-radius: 8px;
+    overflow: hidden;
+    background: white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    height: 280px;
+    display: flex;
+    flex-direction: column;
+}
+
+.product-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+    border-color: var(--amazon-orange);
+}
+
+.product-image {
+    height: 140px;
+    width: 100%;
+    object-fit: cover;
+    background: #f8f9fa;
+    border-bottom: 1px solid var(--light-gray);
+}
+
+.product-card .card-body {
+    padding: 0.8rem;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.product-card .card-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--amazon-dark-blue);
+    margin-bottom: 0.5rem;
+    line-height: 1.2;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* Pricing - Amazon style */
+.price-tag {
+    color: var(--warning-red);
+    font-weight: 700;
+    font-size: 1.1rem;
+    margin-bottom: 0.25rem;
+}
+
+.original-price {
+    text-decoration: line-through;
+    color: var(--neutral-gray);
+    font-size: 0.8rem;
+    margin-left: 0.3rem;
+}
+
+.price-container {
+    display: flex;
+    align-items: baseline;
+    margin-bottom: 0.5rem;
+}
+
+/* Buttons - Amazon inspired */
+.btn-primary {
+    background-color: var(--amazon-orange);
+    border-color: var(--amazon-orange);
+    border-radius: 20px;
+    padding: 6px 16px;
+    font-weight: 600;
+    font-size: 0.8rem;
+    letter-spacing: 0.3px;
+    transition: all 0.2s ease;
+    text-transform: none;
+}
+
+.btn-primary:hover {
+    background-color: #e88900;
+    border-color: #e88900;
+    transform: translateY(-1px);
+}
+
+.btn-outline-primary {
+    color: var(--amazon-accent);
+    border-color: var(--amazon-accent);
+    border-radius: 20px;
+    padding: 6px 16px;
+    font-weight: 600;
+    font-size: 0.8rem;
+    letter-spacing: 0.3px;
+    transition: all 0.2s ease;
+    text-transform: none;
+}
+
+.btn-outline-primary:hover {
+    background-color: var(--amazon-accent);
+    color: white;
+    transform: translateY(-1px);
+}
+
+/* Add to Cart - Commanding style */
+.btn-cart {
+    background-color: var(--amazon-orange);
+    border: none;
+    color: white;
+    font-weight: 700;
+    font-size: 0.8rem;
+    padding: 8px 12px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: all 0.2s ease;
+    width: 100%;
+}
+
+.btn-cart:hover {
+    background-color: #e88900;
+    transform: translateY(-1px);
+    box-shadow: 0 3px 8px rgba(0,0,0,0.2);
+}
+/* Scroll Buttons */
+.scroll-btn {
+     background-color: var(--amazon-orange);
+     border: none;
+     color: white;
+     width: 40px;
+     height: 40px;
+     border-radius: 50%;
+     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+     transition: all 0.2s ease;
+     z-index: 10;
+}
+
+.scroll-btn:hover {
+     background-color: #e88900;
+     transform: scale(1.1);
+     color: white;
+}
+
+.badge-new {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    background-color: #CC0C39; /* Amazon-style red */
+    color: white;
+    padding: 4px 10px;
+    border-radius: 20px; /* Makes it a pill */
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    z-index: 10;
+}
+
+/* Footer - Amazon dark theme */
+.footer {
+    background-color: var(--amazon-dark-blue);
+    color: white;
+    padding: 30px 0;
+    border-top: 3px solid var(--amazon-orange);
+}
+
+.footer h6 {
+    color: var(--amazon-orange);
+    font-weight: 700;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.footer a {
+    color: #cccccc;
+    font-size: 0.85rem;
+    transition: color 0.2s ease;
+}
+
+.footer a:hover {
+    color: var(--amazon-orange);
+}
+
+/* Stats Section - More authoritative */
+.stats-section {
+    background: linear-gradient(45deg, #f8f9fa, var(--light-gray));
+    padding: 40px 0;
+    border-top: 2px solid var(--amazon-orange);
+}
+
+.stat-item {
+    text-align: center;
+    padding: 15px;
+}
+
+.stat-number {
+    font-size: 2.2rem;
+    font-weight: 900;
+    color: var(--amazon-accent);
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+}
+
+.stat-label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--neutral-gray);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Sale Badge - Amazon style */
+.badge-sale {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background-color: var(--warning-red);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 3px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+/* Choice Badge - "Amazon's Choice" style */
+.badge-choice {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    background-color: var(--amazon-orange);
+    color: var(--amazon-dark-blue);
+    padding: 3px 6px;
+    border-radius: 3px;
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.2px;
+}
+
+/* Ratings - Amazon style stars */
+.rating {
+    color: var(--amazon-orange);
+    font-size: 0.8rem;
+    margin-bottom: 0.5rem;
+}
+
+.rating-count {
+    color: var(--amazon-accent);
+    font-size: 0.75rem;
+    margin-left: 0.3rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .product-card {
+        height: 250px;
+    }
+
+    .product-image {
+        height: 120px;
+    }
+
+    .category-card {
+        height: 100px;
+    }
+
+    .category-icon {
+        font-size: 1.5rem;
+    }
+
+    .hero-section {
+        padding: 40px 0;
+    }
+
+    .hero-section h1 {
+        font-size: 1.8rem;
     }
 }
-</script>
-{% endblock %}
