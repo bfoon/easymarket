@@ -117,7 +117,7 @@ def hot_picks(request):
     hot_products_by_category = []
 
     for category in categories:
-        products = Product.objects.filter(category=category, is_trending=True).order_by('-created_at')[:8]
+        products = Product.objects.filter(category=category, is_featured=True).order_by('-created_at')[:8]
 
         if products:
             products = list(products)
