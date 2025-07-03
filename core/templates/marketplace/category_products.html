@@ -2,6 +2,8 @@
 {% load static %}
 
 {% block content %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+
 <section class="py-4">
     <div class="container">
         <!-- Breadcrumb -->
@@ -64,7 +66,7 @@
                     {% endif %}
                     
                     {% if product.is_featured %}
-                    <span class="badge-choice">Editor's Choice</span>
+                    <span class="badge-choice">Featured</span>
                     {% endif %}
 
                     <!-- Product Image -->
@@ -199,70 +201,4 @@
         {% endif %}
     </div>
 </section>
-
-<!-- Add to Cart JavaScript -->
-<script>
-function addToCart(productId) {
-    // Get CSRF token
-    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-    
-    fetch(`/marketplace/add-to-cart/${productId}/`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': csrfToken,
-        },
-        body: JSON.stringify({
-            'product_id': productId,
-            'quantity': 1
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            // Show success message
-            showNotification('Product added to cart!', 'success');
-            
-            // Update cart count if you have a cart counter
-            updateCartCount();
-        } else {
-            showNotification('Error adding product to cart', 'error');
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        showNotification('Error adding product to cart', 'error');
-    });
-}
-
-function showNotification(message, type) {
-    // Create notification element
-    const notification = document.createElement('div');
-    notification.className = `alert alert-${type === 'success' ? 'success' : 'danger'} alert-dismissible fade show position-fixed`;
-    notification.style.cssText = 'top: 20px; right: 20px; z-index: 1050; min-width: 300px;';
-    notification.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
-    
-    document.body.appendChild(notification);
-    
-    // Auto-remove after 3 seconds
-    setTimeout(() => {
-        notification.remove();
-    }, 3000);
-}
-
-function updateCartCount() {
-    // Update cart count badge if it exists
-    const cartCount = document.querySelector('.cart-count');
-    if (cartCount) {
-        fetch('/marketplace/cart/count/')
-            .then(response => response.json())
-            .then(data => {
-                cartCount.textContent = data.count;
-            });
-    }
-}
-</script>
 {% endblock %}

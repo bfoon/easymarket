@@ -3,24 +3,30 @@ from .models import Category, Product, ProductView, CartItem, Cart
 import re
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
+from datetime import timedelta
+from django.utils import timezone
 # Create your views here!
-
-from marketplace.models import Product, ProductView, Category
 
 def all_products(request):
     categories = Category.objects.all()
     category_products = []
+    two_days_ago = timezone.now() - timedelta(days=2)
 
     for category in categories:
         products = Product.objects.filter(category=category).order_by('?')[:8]  # Random order
 
         if products:
-            # Find the actual latest product by created_at
-            latest_product = Product.objects.filter(category=category).order_by('-created_at').first()
-
             products = list(products)
             for product in products:
-                product.is_new = (product.id == latest_product.id)
+                # Mark products uploaded within last 2 days as 'new'
+                product.is_new = product.created_at >= two_days_ago
+
+                # Calculate discount percentage if applicable
+                if product.original_price and product.original_price > product.price:
+                    discount = ((product.original_price - product.price) / product.original_price) * 100
+                    product.discount_percentage = round(discount)
+                else:
+                    product.discount_percentage = None
 
             category_products.append({
                 'category': category,
@@ -115,17 +121,17 @@ def product_detail(request, product_id):
 def hot_picks(request):
     categories = Category.objects.all()
     hot_products_by_category = []
+    two_days_ago = timezone.now() - timedelta(days=2)
 
     for category in categories:
         products = Product.objects.filter(category=category, is_featured=True).order_by('-created_at')[:8]
 
         if products:
             products = list(products)
-            latest_product = Product.objects.filter(category=category).order_by('-created_at').first()
 
             for product in products:
-                # Mark latest product as 'new'
-                product.is_new = product.id == latest_product.id
+                # Mark products uploaded within last 2 days as 'new'
+                product.is_new = product.created_at >= two_days_ago
 
                 # Calculate discount percentage if applicable
                 if product.original_price and product.original_price > product.price:
@@ -141,6 +147,15 @@ def hot_picks(request):
 
     return render(request, 'marketplace/hot_picks.html', {
         'hot_products_by_category': hot_products_by_category
+    })
+
+def category_products(request, slug):
+    category = get_object_or_404(Category, id=slug)
+    products = Product.objects.filter(category=category)
+
+    return render(request, 'marketplace/category_products.html', {
+        'category': category,
+        'products': products,
     })
 
 @csrf_exempt
