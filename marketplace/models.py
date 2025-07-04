@@ -11,7 +11,7 @@ class Category(models.Model):
 class Product(models.Model):
     seller = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     name = models.CharField(max_length=200)
-    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True)
+    category = models.ForeignKey('Category', on_delete=models.SET_NULL, null=True)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     description = models.TextField()
     specifications = models.TextField()
@@ -22,12 +22,30 @@ class Product(models.Model):
     video = models.FileField(upload_to='product_videos/', blank=True, null=True)
     sold_count = models.PositiveIntegerField(default=0)
 
-    # New timestamp fields
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return self.name
+
+    @property
+    def discount_percentage(self):
+        """
+        Calculates the discount percentage if original price exists and is greater than price.
+        """
+        if self.original_price and self.original_price > self.price:
+            return int(((self.original_price - self.price) / self.original_price) * 100)
+        return None
+
+    @property
+    def is_new(self):
+        """
+        Determines if product is considered 'new' (added within last 2 days).
+        """
+        from django.utils import timezone
+        two_days_ago = timezone.now() - timezone.timedelta(days=2)
+        return self.created_at >= two_days_ago
+
 
 
 class ProductImage(models.Model):

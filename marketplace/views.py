@@ -10,24 +10,11 @@ from django.utils import timezone
 def all_products(request):
     categories = Category.objects.all()
     category_products = []
-    two_days_ago = timezone.now() - timedelta(days=2)
 
     for category in categories:
-        products = Product.objects.filter(category=category).order_by('?')[:8]  # Random order
+        products = Product.objects.filter(category=category).order_by('?')[:8]
 
         if products:
-            products = list(products)
-            for product in products:
-                # Mark products uploaded within last 2 days as 'new'
-                product.is_new = product.created_at >= two_days_ago
-
-                # Calculate discount percentage if applicable
-                if product.original_price and product.original_price > product.price:
-                    discount = ((product.original_price - product.price) / product.original_price) * 100
-                    product.discount_percentage = round(discount)
-                else:
-                    product.discount_percentage = None
-
             category_products.append({
                 'category': category,
                 'products': products
@@ -121,25 +108,11 @@ def product_detail(request, product_id):
 def hot_picks(request):
     categories = Category.objects.all()
     hot_products_by_category = []
-    two_days_ago = timezone.now() - timedelta(days=2)
 
     for category in categories:
         products = Product.objects.filter(category=category, is_featured=True).order_by('-created_at')[:8]
 
-        if products:
-            products = list(products)
-
-            for product in products:
-                # Mark products uploaded within last 2 days as 'new'
-                product.is_new = product.created_at >= two_days_ago
-
-                # Calculate discount percentage if applicable
-                if product.original_price and product.original_price > product.price:
-                    discount = ((product.original_price - product.price) / product.original_price) * 100
-                    product.discount_percentage = round(discount)
-                else:
-                    product.discount_percentage = None
-
+        if products.exists():
             hot_products_by_category.append({
                 'category': category,
                 'products': products

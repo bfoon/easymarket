@@ -3,6 +3,7 @@
 
 {% block content %}
 <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+<link rel="stylesheet" type="text/css" href="{% static 'css/hot_pick.css' %}">
 
 <section class="py-4">
     <div class="container">
@@ -23,14 +24,16 @@
         <!-- Category Header with Stats -->
         <div class="row align-items-center mb-4">
             <div class="col-md-8">
-                <h2 class="h3 fw-bold mb-2">
-                    <i class="fas fa-tags text-primary me-2"></i> {{ category.name }}
+                <h2 class="section-title">
+                    <i class="fas fa-tags me-2"></i> {{ category.name }}
                 </h2>
                 {% if products %}
-                <p class="text-muted small mb-0">
-                    <i class="fas fa-info-circle me-1"></i>
-                    {{ products|length }} product{{ products|length|pluralize }} found
-                </p>
+                <div class="d-flex align-items-center mb-3">
+                    <span class="badge-choice me-2">{{ category.name }}</span>
+                    <p class="mb-0 text-muted">
+                        {{ products|length }} product{{ products|length|pluralize }} found
+                    </p>
+                </div>
                 {% endif %}
             </div>
             <div class="col-md-4 text-md-end">
@@ -52,72 +55,76 @@
 
         {% if products %}
         <!-- Products Grid -->
-        <div class="row g-3">
+        <div class="row g-2">
             {% for product in products %}
-            <div class="col-6 col-md-4 col-lg-3">
-                <div class="product-card position-relative">
-                    <!-- Product Badges -->
-                    {% if product.is_new %}
-                    <span class="badge-new">New</span>
-                    {% endif %}
-                    
-                    {% if product.discount_percentage %}
-                    <span class="badge-sale">{{ product.discount_percentage }}% OFF</span>
-                    {% endif %}
-                    
-                    {% if product.is_featured %}
-                    <span class="badge-choice">Featured</span>
-                    {% endif %}
+            <div class="col-6 col-md-3 col-lg-2">
+                <div class="product-card">
+                    <div class="product-image-container">
+                        <a href="{% url 'marketplace:product_detail' product.id %}">
+                            {% if product.image %}
+                            <img src="{{ product.image.url }}"
+                                 class="product-image"
+                                 alt="{{ product.name }}"
+                                 loading="lazy">
+                            {% else %}
+                            <div class="product-image d-flex align-items-center justify-content-center bg-light">
+                                <i class="fas fa-image text-muted" style="font-size: 2rem;"></i>
+                            </div>
+                            {% endif %}
+                        </a>
 
-                    <!-- Product Image -->
-                    <a href="{% url 'marketplace:product_detail' product.id %}" class="d-block">
-                        {% if product.image %}
-                        <img src="{{ product.image.url }}" 
-                             class="product-image" 
-                             alt="{{ product.name }}"
-                             loading="lazy">
-                        {% else %}
-                        <div class="product-image d-flex align-items-center justify-content-center bg-light">
-                            <i class="fas fa-image text-muted" style="font-size: 2rem;"></i>
-                        </div>
+                        <!-- Product Badges -->
+                        {% if product.is_new %}
+                        <span class="badge-new">NEW</span>
                         {% endif %}
-                    </a>
+
+                        {% if product.discount_percentage %}
+                        <span class="badge-sale">{{ product.discount_percentage }}% OFF</span>
+                        {% endif %}
+
+                        {% if product.is_featured %}
+                        <span class="badge-choice">
+                            <i class="fas fa-fire me-1"></i>
+                        </span>
+                        {% endif %}
+                    </div>
 
                     <!-- Product Details -->
                     <div class="card-body">
-                        <h5 class="card-title">
-                            <a href="{% url 'marketplace:product_detail' product.id %}" class="text-decoration-none">
-                                {{ product.name|truncatechars:40 }}
+                        <h6 class="card-title">
+                            <a href="{% url 'marketplace:product_detail' product.id %}" class="text-decoration-none text-dark">
+                                {{ product.name|truncatechars:30 }}
                             </a>
-                        </h5>
+                        </h6>
 
                         <!-- Rating (if available) -->
                         {% if product.average_rating %}
-                        <div class="rating mb-2">
-                            {% for i in "12345"|make_list %}
+                        <div class="rating">
+                            {% for i in "12345" %}
                                 {% if forloop.counter <= product.average_rating %}
-                                <i class="fas fa-star"></i>
+                                    <i class="fas fa-star"></i>
                                 {% else %}
-                                <i class="far fa-star"></i>
+                                    <i class="far fa-star"></i>
                                 {% endif %}
                             {% endfor %}
-                            <span class="rating-count">({{ product.review_count }})</span>
+                            {% if product.review_count %}
+                            <span class="rating-count">({{ product.review_count|floatformat:0 }})</span>
+                            {% endif %}
                         </div>
                         {% endif %}
 
                         <!-- Price -->
                         <div class="price-container">
-                            <span class="price-tag">${{ product.price }}</span>
                             {% if product.original_price and product.original_price != product.price %}
                             <span class="original-price">${{ product.original_price }}</span>
                             {% endif %}
+                            <span class="price-tag">${{ product.price }}</span>
                         </div>
 
                         <!-- Add to Cart Button -->
-                        <button class="btn-cart" 
-                                data-product-id="{{ product.id }}"
-                                onclick="addToCart({{ product.id }})">
-                            <i class="fas fa-shopping-cart me-1"></i> Add to Cart
+                        <button class="btn btn-outline-primary w-100 btn-sm"
+                                onclick="addToCart({{ product.id }}, this)">
+                            <i class="fas fa-cart-plus me-1"></i> Add to Cart
                         </button>
                     </div>
                 </div>
@@ -162,15 +169,10 @@
 
         {% else %}
         <!-- Empty State -->
-        <div class="text-center py-5">
-            <div class="mb-4">
-                <i class="fas fa-box-open text-muted" style="font-size: 4rem; opacity: 0.5;"></i>
-            </div>
-            <h4 class="text-muted mb-3">No products found in {{ category.name }}</h4>
-            <p class="text-muted mb-4">
-                We're working hard to stock this category.<br>
-                Check back soon for exciting new products!
-            </p>
+        <div class="empty-state w-100">
+            <i class="fas fa-box-open"></i>
+            <h5>No products found in {{ category.name }}</h5>
+            <p>We're working hard to stock this category.<br>Check back soon for exciting new products!</p>
             <a href="{% url 'marketplace:product_list' %}" class="btn btn-primary">
                 <i class="fas fa-arrow-left me-2"></i>Browse All Products
             </a>
@@ -180,7 +182,7 @@
         <!-- Related Categories -->
         {% if related_categories %}
         <div class="mt-5">
-            <h5 class="fw-bold mb-3">
+            <h5 class="section-title">
                 <i class="fas fa-layer-group me-2"></i>Related Categories
             </h5>
             <div class="row g-3">
@@ -201,4 +203,6 @@
         {% endif %}
     </div>
 </section>
+
+<script src="{% static 'js/main.js' %}"></script>
 {% endblock %}
