@@ -3,10 +3,23 @@ from django.conf import settings
 
 class Category(models.Model):
     name = models.CharField(max_length=100)
-    icon = models.CharField(max_length=100, blank=True)
+    icon = models.CharField(max_length=100, blank=True, help_text="Font Awesome or similar icon class (optional)")
     description = models.TextField(blank=True)
+    parent = models.ForeignKey('self', null=True, blank=True, related_name='children', on_delete=models.SET_NULL)
+
+    class Meta:
+        verbose_name_plural = "Categories"
+        ordering = ['name']
+
     def __str__(self):
         return self.name
+
+    def is_root(self):
+        return self.parent is None
+
+    def get_subcategories(self):
+        return self.children.all()
+
 
 class Product(models.Model):
     seller = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)

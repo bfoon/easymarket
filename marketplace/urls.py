@@ -10,4 +10,8 @@ urlpatterns = [
     path('cart/', views.cart_view, name='cart'),
     path('add-to-cart/<int:product_id>/', views.add_to_cart, name='add_to_cart'),
     path('category/<int:slug>/', views.category_products, name='category_products'),
+    path('category/<int:pk>/', views.category_detail, name='category_detail'),
+    path('update-cart-quantity/', views.update_cart_quantity, name='update_cart_quantity'),
+    path('remove-cart-item/', views.remove_cart_item, name='remove_cart_item'),
+    path('apply-promo-code/', views.apply_promo_code, name='apply_promo_code'),
 ]

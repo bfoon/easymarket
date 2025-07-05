@@ -1,45 +1,38 @@
 {% extends 'base.html' %}
-{% block content %}
 {% load custom_filters %}
 {% load static %}
 
-<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
-<link rel="stylesheet" type="text/css" href="{% static 'css/hot_pick.css' %}">
-<!--&lt;!&ndash; Flash Deal Banner &ndash;&gt;-->
-<!--<div class="flash-deal-banner">-->
-<!--    <div class="container">-->
-<!--        <div class="flash-timer">-->
-<!--            <i class="fas fa-bolt"></i> FLASH SALE ENDS IN: <span id="countdown">23:47:12</span> | UP TO 70% OFF!-->
-<!--        </div>-->
-<!--    </div>-->
-<!--</div>-->
+{% block content %}
+
+<link rel="stylesheet" href="{% static 'css/main.css' %}">
+<link rel="stylesheet" href="{% static 'css/hot_pick.css' %}">
 
 <!-- Stats Section -->
-<section class="stats-section">
+<section class="stats-section py-4">
     <div class="container">
-        <div class="row">
-            <div class="col-6 col-md-3">
+        <div class="row text-center">
+            <div class="col-6 col-md-3 mb-3">
                 <div class="stat-item">
-                    <span class="stat-number" id="statProducts">2.4M</span>
-                    <span class="stat-label">Products Sold</span>
+                    <h3 class="stat-number" id="statProducts">2.4M</h3>
+                    <p class="stat-label text-muted">Products Sold</p>
                 </div>
             </div>
-            <div class="col-6 col-md-3">
+            <div class="col-6 col-md-3 mb-3">
                 <div class="stat-item">
-                    <span class="stat-number" id="statCustomers">847K</span>
-                    <span class="stat-label">Happy Customers</span>
+                    <h3 class="stat-number" id="statCustomers">847K</h3>
+                    <p class="stat-label text-muted">Happy Customers</p>
                 </div>
             </div>
-            <div class="col-6 col-md-3">
+            <div class="col-6 col-md-3 mb-3">
                 <div class="stat-item">
-                    <span class="stat-number" id="statRating">4.9</span>
-                    <span class="stat-label">Average Rating</span>
+                    <h3 class="stat-number" id="statRating">4.9</h3>
+                    <p class="stat-label text-muted">Average Rating</p>
                 </div>
             </div>
-            <div class="col-6 col-md-3">
+            <div class="col-6 col-md-3 mb-3">
                 <div class="stat-item">
-                    <span class="stat-number" id="statDelivery">24H</span>
-                    <span class="stat-label">Fast Delivery</span>
+                    <h3 class="stat-number" id="statDelivery">24H</h3>
+                    <p class="stat-label text-muted">Fast Delivery</p>
                 </div>
             </div>
         </div>
@@ -47,92 +40,91 @@
 </section>
 
 <!-- Hot Picks Section -->
-<section class="hot-picks-section">
+<section class="hot-picks-section py-5">
     <div class="container">
-        <h2 class="section-title">
-            <i class="fas fa-fire trending-fire"></i> Today's Hot Picks
+        <h2 class="section-title mb-4">
+            <i class="fas fa-fire trending-fire me-2"></i> Today's Hot Picks
         </h2>
 
         {% for block in hot_products_by_category %}
-        <!-- Category Block -->
-        <div class="mb-4">
+        <div class="mb-5">
 
-            <div class="d-flex align-items-center mb-3">
-                <span class="badge-choice me-2">{{ block.category.name }}</span>
-                <p class="mb-0 text-muted">Top picks in {{ block.category.name }}</p>
+            <div class="d-flex align-items-center mb-2">
+                <span class="badge bg-warning text-dark me-2">{{ block.category.name }}</span>
+                <small class="text-muted">Top picks in {{ block.category.name }}</small>
             </div>
 
             <div class="position-relative">
 
                 <!-- Scroll Buttons -->
-                <button class="btn scroll-btn position-absolute top-50 start-0 translate-middle-y scroll-left" style="margin-left: -20px;">
+                <button class="btn scroll-btn position-absolute top-50 start-0 translate-middle-y scroll-left">
                     <i class="fas fa-chevron-left"></i>
                 </button>
-                <button class="btn scroll-btn position-absolute top-50 end-0 translate-middle-y scroll-right" style="margin-right: -20px;">
+                <button class="btn scroll-btn position-absolute top-50 end-0 translate-middle-y scroll-right">
                     <i class="fas fa-chevron-right"></i>
                 </button>
 
                 <!-- Products Container -->
                 <div class="d-flex overflow-auto gap-3 pb-3 px-4 products-container">
                     {% for product in block.products %}
-                    <div class="product-card">
-                        <div class="product-image-container">
+                    <div class="product-card shadow-sm">
+                        <div class="product-image-container position-relative">
                             <a href="{% url 'marketplace:product_detail' product.id %}">
                                 <img src="{{ product.image.url }}" class="product-image" alt="{{ product.name }}">
                             </a>
 
                             {% if product.is_new %}
-                            <span class="badge-new">NEW</span>
+                                <span class="badge badge-new">NEW</span>
                             {% else %}
-                            <span class="badge-choice">
-                            <i class="fas fa-fire me-1"></i>
-                            </span>
+                                <span class="badge badge-hot">
+                                    <i class="fas fa-fire me-1"></i>
+                                </span>
                             {% endif %}
 
                             {% if product.discount_percentage %}
-                            <span class="badge-sale">{{ product.discount_percentage }}% OFF</span>
+                                <span class="badge badge-sale">{{ product.discount_percentage }}% OFF</span>
                             {% endif %}
                         </div>
 
                         <div class="card-body">
-                            <h6 class="card-title">
+                            <h6 class="card-title mb-2">
                                 <a href="{% url 'marketplace:product_detail' product.id %}" class="text-decoration-none text-dark">
                                     {{ product.name|truncatechars:30 }}
                                 </a>
                             </h6>
 
                             {% if product.average_rating %}
-                            <div class="rating">
+                            <div class="rating mb-2">
                                 {% for i in "12345" %}
                                     {% if forloop.counter <= product.average_rating %}
-                                        <i class="fas fa-star"></i>
+                                        <i class="fas fa-star text-warning"></i>
                                     {% else %}
-                                        <i class="far fa-star"></i>
+                                        <i class="far fa-star text-muted"></i>
                                     {% endif %}
                                 {% endfor %}
                                 {% if product.review_count %}
-                                <span class="rating-count">({{ product.review_count|floatformat:0 }})</span>
+                                    <small class="text-muted ms-1">({{ product.review_count|floatformat:0 }})</small>
                                 {% endif %}
                             </div>
                             {% endif %}
 
-                            <div class="price-container">
+                            <div class="price-container mb-3">
                                 {% if product.original_price and product.original_price != product.price %}
-                                <span class="original-price">${{ product.original_price }}</span>
+                                    <span class="original-price text-muted text-decoration-line-through">${{ product.original_price }}</span>
                                 {% endif %}
-                                <span class="price-tag">${{ product.price }}</span>
+                                <span class="price-tag fw-bold ms-2">${{ product.price }}</span>
                             </div>
 
                             <button class="btn btn-outline-primary w-100 btn-sm" onclick="addToCart({{ product.id }}, this)">
-                            <i class="fas fa-cart-plus me-1"></i> Add to Cart
-                        </button>
+                                <i class="fas fa-cart-plus me-1"></i> Add to Cart
+                            </button>
                         </div>
                     </div>
                     {% empty %}
-                    <div class="empty-state w-100">
-                        <i class="fas fa-fire"></i>
-                        <h5>No hot picks in this category</h5>
-                        <p>Check back soon!</p>
+                    <div class="empty-state text-center w-100">
+                        <i class="fas fa-fire fa-2x text-muted mb-2"></i>
+                        <h5 class="text-muted">No hot picks in this category</h5>
+                        <p class="small text-muted">Check back soon for exciting deals!</p>
                     </div>
                     {% endfor %}
                 </div>
@@ -142,7 +134,6 @@
 
     </div>
 </section>
-
 
 <script src="{% static 'js/main.js' %}"></script>
 <script src="{% static 'js/hot_pick.js' %}"></script>
