@@ -144,7 +144,7 @@ function addToCart(productId, button) {
         button.classList.remove('btn-outline-primary');
         button.classList.add('btn-success');
 
-        showToast('Product added to cart successfully!');
+        showToast(data.product_name);
 
         // ✅ Update cart count dynamically
         updateCartCount(data.cart_count);
@@ -199,7 +199,7 @@ function showToast(message, type = 'success') {
         </div>
         <div class="toast-body d-flex align-items-center" style="background-color: white; color: #232f3e; font-size: 0.95rem; padding: 1rem;">
             <i class="fas fa-shopping-cart me-2 text-success"></i>
-            <span><strong>${message}</strong> added to your cart.</span>
+            <span><strong>${message}</strong> was successfully added!</span>
         </div>
     `;
 
