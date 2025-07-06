@@ -1,0 +1,198 @@
+{% extends 'base.html' %}
+
+{% block content %}
+{% load static %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+<div class="container py-5">
+    <div class="row">
+        <div class="col-lg-8 mx-auto">
+            <div class="card">
+                <div class="card-header">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h4 class="mb-0">Track Order #{{ order.id }}</h4>
+                        <span class="badge badge-{{ order.status|lower }} fs-6">
+                            {{ order.get_status_display }}
+                        </span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <!-- Order Info -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <h6>Order Details</h6>
+                            <p class="mb-1"><strong>Order Date:</strong> {{ order.created_at|date:"F d, Y" }}</p>
+                            <p class="mb-1"><strong>Total Amount:</strong> ${{ order.get_total|floatformat:2 }}</p>
+                            <p class="mb-1"><strong>Items:</strong> {{ order.items.count }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Delivery Information</h6>
+                            {% if order.expected_delivery_date %}
+                                <p class="mb-1"><strong>Expected Delivery:</strong> {{ order.expected_delivery_date|date:"F d, Y" }}</p>
+                            {% endif %}
+                            {% if order.tracking_number %}
+                                <p class="mb-1"><strong>Tracking Number:</strong> {{ order.tracking_number }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Tracking Timeline -->
+                    <div class="tracking-timeline">
+                        <h6 class="mb-3">Order Progress</h6>
+                        {% for update in tracking_updates %}
+                            <div class="timeline-item {% if update.completed %}completed{% endif %}">
+                                <div class="timeline-marker">
+                                    {% if update.completed %}
+                                        <i class="fas fa-check"></i>
+                                    {% else %}
+                                        <i class="fas fa-clock"></i>
+                                    {% endif %}
+                                </div>
+                                <div class="timeline-content">
+                                    <h6 class="mb-1">{{ update.status }}</h6>
+                                    <p class="mb-1 text-muted">{{ update.description }}</p>
+                                    {% if update.date %}
+                                        <small class="text-muted">
+                                            {{ update.date|date:"F d, Y g:i A" }}
+                                        </small>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+
+                    <!-- Order Items -->
+                    <div class="mt-4">
+                        <h6>Order Items</h6>
+                        <div class="table-responsive">
+                            <table class="table table-borderless">
+                                <tbody>
+                                    {% for item in order.items.all %}
+                                        <tr>
+                                            <td style="width: 80px;">
+                                                {% if item.product.image %}
+                                                    <img src="{{ item.product.image.url }}"
+                                                         alt="{{ item.product.name }}"
+                                                         class="rounded"
+                                                         style="width: 60px; height: 60px; object-fit: cover;">
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <h6 class="mb-1">{{ item.product.name }}</h6>
+                                                <small class="text-muted">Quantity: {{ item.quantity }}</small>
+                                            </td>
+                                            <td class="text-end">
+                                                <strong>${{ item.get_total_price|floatformat:2 }}</strong>
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="mt-4 d-flex gap-2">
+                        <a href="{% url 'orders:order_detail' order.id %}" class="btn btn-primary">
+                            <i class="fas fa-arrow-left me-2"></i>Back to Order Details
+                        </a>
+                        {% if order.status == 'delivered' %}
+                            <button class="btn btn-outline-primary" onclick="reorderItems({{ order.id }})">
+                                <i class="fas fa-redo me-2"></i>Reorder Items
+                            </button>
+                        {% endif %}
+                        <a href="{% url 'orders:order_invoice' order.id %}" class="btn btn-outline-secondary">
+                            <i class="fas fa-file-invoice me-2"></i>Download Invoice
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.tracking-timeline {
+    position: relative;
+    padding-left: 30px;
+}
+
+.tracking-timeline::before {
+    content: '';
+    position: absolute;
+    left: 15px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background-color: #e9ecef;
+}
+
+.timeline-item {
+    position: relative;
+    padding-bottom: 30px;
+}
+
+.timeline-item:last-child {
+    padding-bottom: 0;
+}
+
+.timeline-marker {
+    position: absolute;
+    left: -22px;
+    top: 0;
+    width: 30px;
+    height: 30px;
+    background-color: #e9ecef;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6c757d;
+    font-size: 12px;
+}
+
+.timeline-item.completed .timeline-marker {
+    background-color: #28a745;
+    color: white;
+}
+
+.timeline-content {
+    margin-left: 15px;
+}
+
+.timeline-item.completed .timeline-content h6 {
+    color: #28a745;
+}
+
+.badge-pending { background-color: #ffc107; color: #000; }
+.badge-processing { background-color: #17a2b8; color: #fff; }
+.badge-shipped { background-color: #28a745; color: #fff; }
+.badge-delivered { background-color: #6f42c1; color: #fff; }
+.badge-cancelled { background-color: #dc3545; color: #fff; }
+</style>
+
+<script>
+function reorderItems(orderId) {
+    fetch(`/orders/reorder/${orderId}/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value ||
+                          document.querySelector('input[name="csrfmiddlewaretoken"]').value
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Items added to cart successfully!');
+            window.location.href = '/cart/';
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while adding items to cart.');
+    });
+}
+</script>
+<script src="{% static 'js/main.js' %}"></script>
+{% endblock %}
