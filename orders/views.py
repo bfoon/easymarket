@@ -8,43 +8,90 @@ from django.core.paginator import Paginator
 from django.utils import timezone
 from datetime import timedelta
 from stock.utils import reduce_stock
-from .models import Order, OrderItem
+from .models import Order, OrderItem,  PromoCode
 from marketplace.models import Cart, CartItem
 from django.core.exceptions import ValidationError
+from decimal import Decimal
+from django.views.decorators.csrf import csrf_protect
+from django.db import transaction
+from django.views.decorators.http import require_POST
 import json
 from django.views.decorators.http import require_http_methods
 
 
+@require_http_methods(["POST"])
+@csrf_protect
 @login_required
 def checkout_cart(request):
+    promo_code_str = request.POST.get('promo_code', '').strip()
+    promo = None
+    discount_amount = Decimal('0')
+
     try:
         cart = Cart.objects.get(user=request.user)
-        cart_items = CartItem.objects.filter(cart=cart)
+        cart_items = CartItem.objects.filter(cart=cart).select_related('product')
 
         if not cart_items.exists():
             messages.error(request, "Your cart is empty.")
             return redirect('marketplace:cart_view')
 
-        order = Order.objects.create(buyer=request.user)
+        subtotal = sum(item.product.price * item.quantity for item in cart_items)
 
-        for item in cart_items:
+        # Handle Promo Code
+        if promo_code_str:
             try:
-                reduce_stock(item.product, item.quantity)
-            except ValidationError as e:
-                order.delete()
-                messages.error(request, f"Failed to checkout: {str(e)}")
+                promo = PromoCode.objects.get(code__iexact=promo_code_str, is_active=True)
+                if not promo.is_valid():
+                    messages.error(request, "Promo code is invalid or expired.")
+                    return redirect('marketplace:cart_view')
+                discount_amount = (subtotal * Decimal(promo.discount_percentage)) / 100
+            except PromoCode.DoesNotExist:
+                messages.error(request, "Promo code not found.")
                 return redirect('marketplace:cart_view')
 
-            OrderItem.objects.create(
-                order=order,
-                product=item.product,
-                quantity=item.quantity
-            )
+        # Create Order with promo applied using database transaction
+        try:
+            with transaction.atomic():
+                order = Order.objects.create(
+                    buyer=request.user,
+                    promo_code=promo,
+                    discount_amount=discount_amount
+                )
 
-        cart_items.delete()
+                for item in cart_items:
+                    # Lock the product row to prevent race conditions
+                    product = item.product.__class__.objects.select_for_update().get(id=item.product.id)
 
-        messages.success(request, "Order placed successfully!")
-        return redirect('orders:order_detail', order_id=order.id)
+                    # Reduce stock with the locked product
+                    reduce_stock(product, item.quantity)
+
+                    OrderItem.objects.create(
+                        order=order,
+                        product=product,
+                        quantity=item.quantity
+                    )
+
+                # Clear cart items after successful order creation
+                cart_items.delete()
+
+                # Increment promo code usage
+                if promo:
+                    promo.increment_usage()
+
+                messages.success(request, "Order placed successfully!")
+                return redirect('orders:order_detail', order_id=order.id)
+
+        except ValidationError as e:
+            messages.error(request, f"Failed to checkout: {str(e)}")
+            return redirect('marketplace:cart_view')
+        except Exception as e:
+            # Log the error for debugging
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Checkout error for user {request.user.id}: {str(e)}")
+
+            messages.error(request, "An error occurred during checkout. Please try again.")
+            return redirect('marketplace:cart_view')
 
     except Cart.DoesNotExist:
         messages.error(request, "You don't have any cart to checkout.")
@@ -533,4 +580,42 @@ def pending_orders_count_api(request):
             'count': 0,
             'success': False,
             'error': str(e)
+        })
+
+
+@require_POST
+@csrf_protect
+@login_required
+def validate_promo(request):
+    """
+    AJAX endpoint to validate promo codes before checkout
+    """
+    promo_code_str = request.POST.get('promo_code', '').strip()
+
+    if not promo_code_str:
+        return JsonResponse({
+            'success': False,
+            'message': 'Please enter a promo code'
+        })
+
+    try:
+        promo = PromoCode.objects.get(code__iexact=promo_code_str, is_active=True)
+
+        if not promo.is_valid():
+            return JsonResponse({
+                'success': False,
+                'message': 'Promo code is invalid or expired'
+            })
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Promo code is valid',
+            'discount_percentage': float(promo.discount_percentage),
+            'promo_code': promo.code
+        })
+
+    except PromoCode.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'message': 'Promo code not found'
         })

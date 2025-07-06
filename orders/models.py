@@ -3,6 +3,30 @@ from django.conf import settings
 from django.utils import timezone
 from decimal import Decimal
 
+class PromoCode(models.Model):
+    code = models.CharField(max_length=50, unique=True)
+    discount_percentage = models.PositiveIntegerField(help_text="Percentage discount, e.g., 10 for 10%")
+    influencer = models.ForeignKey('marketplace.CelebrityFeature', on_delete=models.SET_NULL, null=True, blank=True, related_name='promo_codes')
+    is_active = models.BooleanField(default=True)
+    usage_limit = models.PositiveIntegerField(default=0, help_text="0 means unlimited")
+    usage_count = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.code} - {self.discount_percentage}% ({self.influencer.celebrity_name if self.influencer else 'General'})"
+
+    def is_valid(self):
+        if not self.is_active:
+            return False
+        if self.usage_limit > 0 and self.usage_count >= self.usage_limit:
+            return False
+        return True
+
+    def increment_usage(self):
+        if self.usage_limit == 0 or self.usage_count < self.usage_limit:
+            self.usage_count += 1
+            self.save()
+
 
 class Order(models.Model):
     STATUS_CHOICES = [
@@ -33,6 +57,7 @@ class Order(models.Model):
     tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('8.5'))  # 8.5% default tax
     shipping_cost = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
     discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
+    promo_code = models.ForeignKey(PromoCode, on_delete=models.SET_NULL, null=True, blank=True)
 
     # Delivery information
     expected_delivery_date = models.DateField(blank=True, null=True)
@@ -84,6 +109,14 @@ class Order(models.Model):
     def is_completed(self):
         """Check if order is completed"""
         return self.status == 'delivered'
+
+    # In your Order model
+    def get_subtotal_with_tax_and_shipping(self):
+        """Get subtotal + tax + shipping (before promo discount)"""
+        subtotal = self.get_subtotal()
+        tax = self.get_tax_amount()
+        shipping = self.shipping_cost or Decimal('0')
+        return subtotal + tax + shipping
 
     def save(self, *args, **kwargs):
         # Auto-set dates based on status changes
@@ -197,3 +230,5 @@ class OrderPayment(models.Model):
 
     def can_be_refunded(self):
         return self.payment_status == 'completed' and self.refund_amount < self.amount
+
+

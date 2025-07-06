@@ -24,6 +24,7 @@ urlpatterns = [
     path('invoice/<int:order_id>/', views.order_invoice, name='order_invoice'),
     path('update-status/<int:order_id>/', views.update_order_status, name='update_order_status'),
     path('stats/', views.order_stats, name='order_stats'),
+    path('validate-promo/', views.validate_promo, name='validate_promo'),
 
     # API endpoints
     path('api/pending-orders-count/', views.pending_orders_count_api, name='pending_orders_count_api'),

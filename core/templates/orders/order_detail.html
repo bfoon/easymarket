@@ -57,6 +57,13 @@
                         <div class="col-md-6">
                             <p class="mb-2"><strong>Order Date:</strong> {{ order.created_at|date:"F d, Y" }}</p>
                             <p class="mb-2"><strong>Expected Delivery:</strong> {{ order.expected_delivery_date|date:"F d, Y"|default:"TBD" }}</p>
+                            {% if order.promo_code %}
+                                <p class="mb-2">
+                                    <strong>Promo Code Used:</strong>
+                                    <span class="badge bg-success">{{ order.promo_code.code }}</span>
+                                    <small class="text-muted">({{ order.promo_code.discount_percentage }}% discount)</small>
+                                </p>
+                            {% endif %}
                         </div>
                         <div class="col-md-6">
                             {% if order.shipping_address %}
@@ -87,15 +94,48 @@
                         <span>Shipping:</span>
                         <span>${{ order.shipping_cost|floatformat:2|default:"0.00" }}</span>
                     </div>
+
+                    <!-- Promo Code Discount -->
+                    {% if order.promo_code and order.discount_amount %}
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-success">
+                                <i class="fas fa-tag me-1"></i>
+                                Promo Discount ({{ order.promo_code.code }}):
+                            </span>
+                            <span class="text-success">-${{ order.discount_amount|floatformat:2 }}</span>
+                        </div>
+                    {% endif %}
+
                     <div class="d-flex justify-content-between mb-2">
                         <span>Tax ({{ order.tax_rate|floatformat:1 }}%):</span>
                         <span>${{ order.get_tax_amount|floatformat:2 }}</span>
                     </div>
                     <hr>
-                    <div class="d-flex justify-content-between mb-3">
-                        <strong>Total:</strong>
-                        <strong class="text-primary">${{ order.get_total|floatformat:2 }}</strong>
-                    </div>
+
+                    <!-- Show original total if discount was applied -->
+                    {% if order.promo_code and order.discount_amount %}
+                        <div class="d-flex justify-content-between mb-1">
+                            <span class="text-muted"><small>Original Total:</small></span>
+                            <span class="text-muted text-decoration-line-through">
+                                <small>${{ order.get_subtotal_with_tax_and_shipping|floatformat:2 }}</small>
+                            </span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-3">
+                            <strong>Final Total:</strong>
+                            <strong class="text-primary">${{ order.get_total|floatformat:2 }}</strong>
+                        </div>
+                        <div class="alert alert-success py-2 mb-3">
+                            <small>
+                                <i class="fas fa-check-circle me-1"></i>
+                                You saved ${{ order.discount_amount|floatformat:2 }} with promo code!
+                            </small>
+                        </div>
+                    {% else %}
+                        <div class="d-flex justify-content-between mb-3">
+                            <strong>Total:</strong>
+                            <strong class="text-primary">${{ order.get_total|floatformat:2 }}</strong>
+                        </div>
+                    {% endif %}
 
                     {% if order.status == 'pending' %}
                         <button class="btn btn-primary btn-lg w-100 mb-3" onclick="proceedToPayment({{ order.id }})">
@@ -157,6 +197,9 @@
                                         <div>
                                             <h6 class="mb-1">Order #{{ other_order.id }}</h6>
                                             <small class="text-muted">{{ other_order.created_at|date:"M d, Y" }}</small>
+                                            {% if other_order.promo_code %}
+                                                <br><span class="badge bg-success badge-sm">{{ other_order.promo_code.code }}</span>
+                                            {% endif %}
                                         </div>
                                         <div class="text-end">
                                             <span class="badge badge-{{ other_order.status|lower }} mb-1">
@@ -282,7 +325,6 @@
         </div>
     </div>
 </div>
-
 
 <script src="{% static 'js/main.js' %}"></script>
 <script src="{% static 'js/order_detail.js' %}"></script>

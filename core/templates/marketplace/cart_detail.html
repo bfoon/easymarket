@@ -4,7 +4,6 @@
 {% block content %}
 <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
 
-
 <section class="py-5 bg-light">
     <div class="container">
         <!-- Header -->
@@ -129,6 +128,13 @@
                             <span>Tax:</span>
                             <span id="tax-amount">${{ tax_amount|default:"0.00" }}</span>
                         </div>
+
+                        <!-- Promo Code Discount Display -->
+                        <div class="d-flex justify-content-between mb-2 promo-discount d-none">
+                            <span class="text-success">Promo Discount:</span>
+                            <span class="text-success" id="promo-discount-amount">-$0.00</span>
+                        </div>
+
                         <hr>
                         <div class="d-flex justify-content-between mb-3">
                             <strong>Total:</strong>
@@ -136,8 +142,10 @@
                         </div>
 
                         <div class="d-grid gap-2">
-                           <form action="{% url 'orders:checkout_cart' %}" method="post">
+                           <form action="{% url 'orders:checkout_cart' %}" method="post" id="checkoutForm">
                                 {% csrf_token %}
+                                <!-- Hidden field for promo code -->
+                                <input type="hidden" name="promo_code" id="promoCodeHidden" value="">
                                 <button type="submit" class="btn btn-success btn-lg w-100">
                                     <i class="fas fa-credit-card me-2"></i> Proceed to Checkout
                                 </button>
@@ -150,16 +158,26 @@
                     </div>
                 </div>
 
-                <!-- Promo Code -->
+               <!-- Promo Code -->
                 <div class="card shadow-sm mt-3">
                     <div class="card-body">
                         <h6 class="card-title">
                             <i class="fas fa-tag me-2"></i> Promo Code
                         </h6>
                         <div class="input-group">
-                            <input type="text" class="form-control" placeholder="Enter promo code" id="promoCode">
+                            <input type="text" class="form-control" placeholder="Enter promo code" id="promoCodeInput">
                             <button class="btn btn-outline-secondary" type="button" id="applyPromo">
                                 Apply
+                            </button>
+                        </div>
+                        <div id="promoFeedback" class="small mt-2 d-none">
+                            <!-- Feedback messages will be shown here -->
+                        </div>
+                        <div id="appliedPromo" class="small text-success mt-2 d-none">
+                            <i class="fas fa-check-circle me-1"></i>
+                            <span>Promo code applied: <strong id="appliedPromoCode"></strong></span>
+                            <button type="button" class="btn btn-sm btn-outline-danger ms-2" id="removePromo">
+                                <i class="fas fa-times"></i>
                             </button>
                         </div>
                     </div>
@@ -185,21 +203,117 @@
 
 <!-- Toast Notifications -->
 <div class="toast-container position-fixed top-0 end-0 p-3">
-    <div id="cartToast" class="toast align-items-center text-white bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
+    <div id="cartToast" class="toast align-items-center border-0" role="alert" aria-live="assertive" aria-atomic="true">
         <div class="d-flex">
             <div class="toast-body">
-                Item updated successfully!
+                <!-- Toast message will be set by JavaScript -->
             </div>
-            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast"></button>
         </div>
     </div>
 </div>
 
-<!-- Add CSRF token for AJAX requests -->
-{% csrf_token %}
-
 <script src="{% static 'js/main.js' %}"></script>
 <script src="{% static 'js/cart.js' %}"></script>
 <link rel="stylesheet" type="text/css" href="{% static 'css/cart.css' %}">
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const applyBtn = document.getElementById('applyPromo');
+    const promoInput = document.getElementById('promoCodeInput');
+    const promoHidden = document.getElementById('promoCodeHidden');
+    const feedback = document.getElementById('promoFeedback');
+    const appliedPromo = document.getElementById('appliedPromo');
+    const appliedPromoCode = document.getElementById('appliedPromoCode');
+    const removePromoBtn = document.getElementById('removePromo');
+    const promoDiscountDiv = document.querySelector('.promo-discount');
+    const promoDiscountAmount = document.getElementById('promo-discount-amount');
+    const totalPriceSpan = document.getElementById('total-price');
+    const subtotalSpan = document.getElementById('order-subtotal');
+    const cartToast = document.getElementById('cartToast');
+    const toastBody = cartToast.querySelector('.toast-body');
+
+    // Get CSRF token
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+    // Show toast notification
+    function showToast(message, type = 'success') {
+        cartToast.className = `toast align-items-center text-white bg-${type} border-0`;
+        toastBody.textContent = message;
+        const toast = new bootstrap.Toast(cartToast);
+        toast.show();
+    }
+
+    // Apply promo code
+    applyBtn.addEventListener('click', function() {
+        const code = promoInput.value.trim();
+        if (!code) {
+            showToast('Please enter a promo code', 'warning');
+            return;
+        }
+
+        // Validate promo code via AJAX
+        fetch("{% url 'orders:validate_promo' %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': csrfToken
+            },
+            body: `promo_code=${encodeURIComponent(code)}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Apply the promo code
+                promoHidden.value = code;
+                appliedPromoCode.textContent = code;
+                appliedPromo.classList.remove('d-none');
+                promoInput.value = '';
+                feedback.classList.add('d-none');
+
+                // Show discount in order summary
+                const currentSubtotal = parseFloat(subtotalSpan.textContent.replace('$', ''));
+                const discountAmount = (currentSubtotal * data.discount_percentage) / 100;
+                const newTotal = currentSubtotal - discountAmount;
+
+                promoDiscountAmount.textContent = `-$${discountAmount.toFixed(2)}`;
+                promoDiscountDiv.classList.remove('d-none');
+                totalPriceSpan.textContent = `$${newTotal.toFixed(2)}`;
+
+                showToast(`Promo code applied! ${data.discount_percentage}% discount`, 'success');
+            } else {
+                feedback.textContent = data.message;
+                feedback.className = 'small text-danger mt-2';
+                feedback.classList.remove('d-none');
+                showToast(data.message, 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('Error validating promo code', 'danger');
+        });
+    });
+
+    // Remove promo code
+    removePromoBtn.addEventListener('click', function() {
+        promoHidden.value = '';
+        appliedPromo.classList.add('d-none');
+        promoDiscountDiv.classList.add('d-none');
+
+        // Reset total price
+        const currentSubtotal = parseFloat(subtotalSpan.textContent.replace('$', ''));
+        totalPriceSpan.textContent = `$${currentSubtotal.toFixed(2)}`;
+
+        showToast('Promo code removed', 'info');
+    });
+
+    // Allow Enter key to apply promo code
+    promoInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            applyBtn.click();
+        }
+    });
+});
+</script>
 
 {% endblock %}
