@@ -139,24 +139,27 @@ function addToCart(productId, button) {
     })
     .then(response => response.json())
     .then(data => {
-        if (data.success) {
-            button.innerHTML = '<i class="fas fa-check me-1"></i> Added!';
-            button.classList.remove('btn-outline-primary');
-            button.classList.add('btn-success');
+    if (data.success) {
+        button.innerHTML = '<i class="fas fa-check me-1"></i> Added!';
+        button.classList.remove('btn-outline-primary');
+        button.classList.add('btn-success');
 
-            showToast('Product added to cart successfully!');
+        showToast('Product added to cart successfully!');
 
-            setTimeout(() => {
-                button.innerHTML = '<i class="fas fa-cart-plus me-1"></i> Add to Cart';
-                button.classList.remove('btn-success');
-                button.classList.add('btn-outline-primary');
-                button.disabled = false;
-            }, 2000);
-        } else {
-            showToast('Failed to add to cart.', 'danger');
-            resetButton(button);
-        }
-    })
+        // ✅ Update cart count dynamically
+        updateCartCount(data.cart_count);
+
+        setTimeout(() => {
+            button.innerHTML = '<i class="fas fa-cart-plus me-1"></i> Add to Cart';
+            button.classList.remove('btn-success');
+            button.classList.add('btn-outline-primary');
+            button.disabled = false;
+        }, 2000);
+    } else {
+        showToast('Failed to add to cart.', 'danger');
+        resetButton(button);
+    }
+})
     .catch(() => {
         showToast('Error adding to cart.', 'danger');
         resetButton(button);
@@ -171,17 +174,43 @@ function resetButton(button) {
 
 function showToast(message, type = 'success') {
     const toast = document.createElement('div');
-    toast.className = `alert alert-${type} position-fixed`;
-    toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 200px;';
+    toast.className = `position-fixed shadow`;
+    toast.style.cssText = `
+        top: 20px;
+        right: 20px;
+        z-index: 1055;
+        min-width: 320px;
+        max-width: 400px;
+        border-radius: 12px;
+        overflow: hidden;
+    `;
+
+    const bgColor = type === 'success' ? '#067d62' : '#c0392b';
+    const iconClass = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
+    const headerText = type === 'success' ? 'Added to Cart' : 'Alert';
+
     toast.innerHTML = `
-        <div class="d-flex align-items-center">
-            <i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'} me-2"></i>
-            ${message}
-            <button type="button" class="btn-close ms-auto" onclick="this.parentElement.parentElement.remove()"></button>
+        <div class="toast-header d-flex align-items-center justify-content-between" style="background-color: ${bgColor}; color: white; padding: 0.75rem 1rem;">
+            <div class="d-flex align-items-center">
+                <i class="fas ${iconClass} me-2"></i>
+                <strong>${headerText}</strong>
+            </div>
+            <button type="button" class="btn-close btn-close-white" style="margin-left: auto;"></button>
+        </div>
+        <div class="toast-body d-flex align-items-center" style="background-color: white; color: #232f3e; font-size: 0.95rem; padding: 1rem;">
+            <i class="fas fa-shopping-cart me-2 text-success"></i>
+            <span><strong>${message}</strong> added to your cart.</span>
         </div>
     `;
+
     document.body.appendChild(toast);
 
+    // Dismiss button functionality
+    toast.querySelector('.btn-close').addEventListener('click', () => {
+        toast.remove();
+    });
+
+    // Auto-remove after 3 seconds
     setTimeout(() => {
         if (toast.parentElement) {
             toast.remove();
@@ -191,6 +220,14 @@ function showToast(message, type = 'success') {
 
 function getCSRFToken() {
     return document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+}
+
+function updateCartCount(count) {
+    const countBadge = document.getElementById('cartCountBadge');
+    if (countBadge) {
+        countBadge.textContent = count;
+        countBadge.style.display = count > 0 ? 'inline-block' : 'none';
+    }
 }
 
 // Add to wishlist
