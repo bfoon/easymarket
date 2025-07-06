@@ -1,5 +1,5 @@
 from django.shortcuts import render, get_object_or_404, redirect
-from .models import Category, Product, ProductView, CartItem, Cart
+from .models import Category, Product, ProductView, CartItem, Cart, CelebrityFeature
 import re
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
@@ -9,6 +9,8 @@ from decimal import Decimal
 import json
 from datetime import timedelta
 from django.utils import timezone
+from django.core.paginator import Paginator
+from django.db.models import Q, Count, F, Sum
 # Create your views here!
 
 def all_products(request):
@@ -766,3 +768,78 @@ def apply_promo_code(request):
             'success': False,
             'message': f'An error occurred: {str(e)}'
         })
+
+def trending_products_view(request):
+    """
+    Display trending products with celebrity features and sorting options
+    """
+    sort_by = request.GET.get('sort', 'trending')
+
+    # Annotate products with total stock
+    trending_products = Product.objects.filter(is_trending=True).annotate(
+        total_stock=Sum('stock_records__quantity')
+    ).filter(total_stock__gt=0)  # Only show products with stock
+
+    # Apply sorting
+    if sort_by == 'price_low':
+        trending_products = trending_products.order_by('price')
+    elif sort_by == 'price_high':
+        trending_products = trending_products.order_by('-price')
+    elif sort_by == 'newest':
+        trending_products = trending_products.order_by('-created_at')
+    else:
+        trending_products = trending_products.order_by('-sold_count', '-created_at')
+
+    paginator = Paginator(trending_products, 12)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    celebrity_features = get_celebrity_features()
+    trending_categories = get_trending_categories()
+
+    context = {
+        'trending_products': page_obj,
+        'celebrity_features': celebrity_features,
+        'trending_categories': trending_categories,
+        'current_sort': sort_by,
+        'page_obj': page_obj,
+    }
+
+    return render(request, 'marketplace/trending_products.html', context)
+
+
+def get_celebrity_features():
+    """
+    Fetch active celebrity features from the database, ordered by featured_order and created_at.
+    """
+    return CelebrityFeature.objects.filter(is_active=True).prefetch_related('products').order_by('featured_order', '-created_at')
+
+
+def get_trending_categories():
+    """
+    Get trending categories with mock statistics
+    """
+    categories = Category.objects.annotate(
+        product_count=Count('product')
+    ).filter(product_count__gt=0)[:4]
+
+    # Add mock trending stats
+    trending_stats = ['230%', '180%', '156%', '145%']
+    icons = ['fas fa-tshirt', 'fas fa-spa', 'fas fa-mobile-alt', 'fas fa-home']
+    descriptions = [
+        'Celeb-inspired outfits',
+        'Red carpet ready',
+        'Celebrity must-haves',
+        'Designer favorites'
+    ]
+
+    trending_categories = []
+    for i, category in enumerate(categories):
+        trending_categories.append({
+            'category': category,
+            'increase': trending_stats[i] if i < len(trending_stats) else '100%',
+            'icon': icons[i] if i < len(icons) else 'fas fa-star',
+            'description': descriptions[i] if i < len(descriptions) else 'Trending now'
+        })
+
+    return trending_categories

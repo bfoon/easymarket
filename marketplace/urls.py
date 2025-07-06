@@ -15,4 +15,5 @@ urlpatterns = [
     path('update-cart-quantity/', views.update_cart_quantity, name='update_cart_quantity'),
     path('remove-cart-item/', views.remove_cart_item, name='remove_cart_item'),
     path('apply-promo-code/', views.apply_promo_code, name='apply_promo_code'),
+    path('trending/', views.trending_products_view, name='trending_products'),
 ]

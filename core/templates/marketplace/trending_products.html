@@ -1,0 +1,501 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Trending Now - What's Hot & Celebrity Favorites{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{% static 'css/main.css' %}">
+
+<section class="hero-section text-white py-5" style="background-color: #232f3e; border-bottom: 3px solid var(--amazon-orange, #ff9900);">
+    <div class="container">
+        <div class="row align-items-center">
+            <div class="col-lg-8">
+                <h1 class="fw-bold mb-3" style="font-size: 2.5rem;">
+                    <i class="fas fa-fire me-2 text-warning"></i>
+                    Trending Now
+                </h1>
+                <p class="mb-4" style="opacity: 0.9;">Discover what's hot, what celebrities are loving, and what everyone's talking about.</p>
+
+                <div class="d-flex gap-2 flex-wrap">
+                    <span class="badge bg-warning text-dark px-3 py-2 d-flex align-items-center">
+                        <i class="fas fa-star me-1"></i> Celebrity Favorites
+                    </span>
+                    <span class="badge bg-light text-dark px-3 py-2 d-flex align-items-center">
+                        <i class="fas fa-chart-line me-1"></i> Top Trending
+                    </span>
+                    <span class="badge bg-success text-white px-3 py-2 d-flex align-items-center">
+                        <i class="fas fa-bolt me-1"></i> Viral Products
+                    </span>
+                </div>
+            </div>
+
+            <div class="col-lg-4 text-center mt-4 mt-lg-0">
+                <div class="position-relative">
+                    <i class="fas fa-crown fa-5x text-warning" style="opacity: 0.8;"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Quick Stats Bar -->
+<section class="py-3 bg-dark text-white">
+    <div class="container">
+        <div class="row text-center">
+            <div class="col-md-3">
+                <div class="d-flex align-items-center justify-content-center">
+                    <i class="fas fa-users fa-2x me-3 text-warning"></i>
+                    <div>
+                        <h5 class="mb-0">50+ Celebrities</h5>
+                        <small>Love our products</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="d-flex align-items-center justify-content-center">
+                    <i class="fas fa-heart fa-2x me-3 text-danger"></i>
+                    <div>
+                        <h5 class="mb-0">1M+ Likes</h5>
+                        <small>On social media</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="d-flex align-items-center justify-content-center">
+                    <i class="fas fa-shopping-bag fa-2x me-3 text-success"></i>
+                    <div>
+                        <h5 class="mb-0">10K+ Sold</h5>
+                        <small>This week</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="d-flex align-items-center justify-content-center">
+                    <i class="fas fa-clock fa-2x me-3 text-info"></i>
+                    <div>
+                        <h5 class="mb-0">24/7</h5>
+                        <small>Trending updates</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Celebrity Favorites Section -->
+<section class="py-5">
+    <div class="container">
+        <div class="text-center mb-5">
+            <h2 class="display-6 fw-bold mb-3">
+                <i class="fas fa-star text-warning me-2"></i>
+                Celebrity Favorites
+            </h2>
+            <p class="lead text-muted">See what A-listers are wearing and using</p>
+        </div>
+
+        <!-- Featured Celebrity Section -->
+        <div class="row mb-5">
+            {% for celeb in celebrity_features %}
+            <div class="col-lg-4 mb-4">
+                <div class="card border-0 shadow-lg h-100">
+                    <div class="position-relative">
+                        {% if celeb.celebrity_image %}
+                            <img src="{{ celeb.celebrity_image.url }}" class="card-img-top" alt="{{ celeb.celebrity_name }}" style="height: 250px; object-fit: cover;">
+                        {% else %}
+                            <div class="bg-gradient-primary d-flex align-items-center justify-content-center" style="height: 250px;">
+                                <i class="fas fa-user fa-4x text-white opacity-50"></i>
+                            </div>
+                        {% endif %}
+                        <div class="position-absolute top-0 end-0 m-3">
+                            <span class="badge bg-warning text-dark">
+                                <i class="fas fa-crown me-1"></i>Celebrity Pick
+                            </span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <h5 class="card-title fw-bold">{{ celeb.celebrity_name }}</h5>
+                        <p class="text-muted small mb-3">{{ celeb.celebrity_title|default:"Celebrity" }}</p>
+                        <blockquote class="blockquote-footer mb-3">
+                            <small>"{{ celeb.testimonial|default:"Absolutely love this product!" }}"</small>
+                        </blockquote>
+                        <div class="row g-2">
+                            {% for product in celeb.products.all|slice:":2" %}
+                            <div class="col-6">
+                                <div class="card border">
+                                    <a href="{% url 'marketplace:product_detail' product.id %}">
+                                        {% if product.image %}
+                                            <img src="{{ product.image.url }}" class="card-img-top" alt="{{ product.name }}" style="height: 80px; object-fit: cover;">
+                                        {% endif %}
+                                    </a>
+                                    <div class="card-body p-2">
+                                        <h6 class="card-title small mb-1">{{ product.name|truncatechars:25 }}</h6>
+                                        <p class="text-danger fw-bold small mb-0">${{ product.price }}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <!-- Mock Celebrity Data if none exists -->
+            <div class="col-lg-4 mb-4">
+                <div class="card border-0 shadow-lg h-100">
+                    <div class="position-relative">
+                        <div class="bg-gradient-primary d-flex align-items-center justify-content-center" style="height: 250px;">
+                            <i class="fas fa-user fa-4x text-white opacity-50"></i>
+                        </div>
+                        <div class="position-absolute top-0 end-0 m-3">
+                            <span class="badge bg-warning text-dark">
+                                <i class="fas fa-crown me-1"></i>Celebrity Pick
+                            </span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <h5 class="card-title fw-bold">Emma Stone</h5>
+                        <p class="text-muted small mb-3">Academy Award Winner</p>
+                        <blockquote class="blockquote-footer mb-3">
+                            <small>"These products have become part of my daily routine!"</small>
+                        </blockquote>
+                        <div class="row g-2">
+                            {% for product in trending_products|slice:":2" %}
+                            <div class="col-6">
+                                <div class="card border">
+                                    <a href="{% url 'marketplace:product_detail' product.id %}">
+                                        {% if product.image %}
+                                            <img src="{{ product.image.url }}" class="card-img-top" alt="{{ product.name }}" style="height: 80px; object-fit: cover;">
+                                        {% endif %}
+                                    </a>
+                                    <div class="card-body p-2">
+                                        <h6 class="card-title small mb-1">{{ product.name|truncatechars:25 }}</h6>
+                                        <p class="text-danger fw-bold small mb-0">${{ product.price }}</p>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+
+<!-- Trending Categories -->
+<section class="py-5 bg-light">
+    <div class="container">
+        <div class="text-center mb-5">
+            <h2 class="display-6 fw-bold mb-3">
+                <i class="fas fa-chart-line text-primary me-2"></i>
+                Trending Categories
+            </h2>
+            <p class="lead text-muted">Shop by what's hot right now</p>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-md-6 col-lg-3">
+                <div class="card border-0 shadow-sm h-100 trending-category-card">
+                    <div class="card-body text-center">
+                        <div class="trending-icon mb-3">
+                            <i class="fas fa-tshirt fa-3x text-primary"></i>
+                        </div>
+                        <h5 class="card-title">Fashion & Style</h5>
+                        <p class="text-muted small">Celeb-inspired outfits</p>
+                        <div class="trending-stats">
+                            <span class="badge bg-success">↗ 230% increase</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 col-lg-3">
+                <div class="card border-0 shadow-sm h-100 trending-category-card">
+                    <div class="card-body text-center">
+                        <div class="trending-icon mb-3">
+                            <i class="fas fa-spa fa-3x text-success"></i>
+                        </div>
+                        <h5 class="card-title">Beauty & Wellness</h5>
+                        <p class="text-muted small">Red carpet ready</p>
+                        <div class="trending-stats">
+                            <span class="badge bg-success">↗ 180% increase</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 col-lg-3">
+                <div class="card border-0 shadow-sm h-100 trending-category-card">
+                    <div class="card-body text-center">
+                        <div class="trending-icon mb-3">
+                            <i class="fas fa-mobile-alt fa-3x text-warning"></i>
+                        </div>
+                        <h5 class="card-title">Tech & Gadgets</h5>
+                        <p class="text-muted small">Celebrity must-haves</p>
+                        <div class="trending-stats">
+                            <span class="badge bg-success">↗ 156% increase</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6 col-lg-3">
+                <div class="card border-0 shadow-sm h-100 trending-category-card">
+                    <div class="card-body text-center">
+                        <div class="trending-icon mb-3">
+                            <i class="fas fa-home fa-3x text-info"></i>
+                        </div>
+                        <h5 class="card-title">Home & Lifestyle</h5>
+                        <p class="text-muted small">Designer favorites</p>
+                        <div class="trending-stats">
+                            <span class="badge bg-success">↗ 145% increase</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Trending Products Grid -->
+<section class="py-5">
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2 class="display-6 fw-bold mb-1">
+                    <i class="fas fa-fire text-warning me-2"></i>
+                    Hot Right Now
+                </h2>
+                <p class="text-muted">Products everyone's talking about</p>
+            </div>
+            <div class="d-flex gap-2">
+                <select class="form-select form-select-sm" id="sortBy" style="width: auto;">
+                    <option value="trending">Most Trending</option>
+                    <option value="price_low">Price: Low to High</option>
+                    <option value="price_high">Price: High to Low</option>
+                    <option value="newest">Newest First</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Trending Products Grid -->
+        <div class="row g-4" id="productsGrid">
+            {% for product in trending_products %}
+            <div class="col-lg-3 col-md-4 col-sm-6">
+                <div class="card h-100 shadow-sm border-0 product-card">
+                    <div class="position-relative">
+                        <a href="{% url 'marketplace:product_detail' product.id %}">
+                            {% if product.image %}
+                                <img src="{{ product.image.url }}" class="card-img-top" alt="{{ product.name }}" style="height: 220px; object-fit: cover;">
+                            {% else %}
+                                <div class="bg-light d-flex align-items-center justify-content-center" style="height: 220px;">
+                                    <i class="fas fa-image fa-3x text-muted"></i>
+                                </div>
+                            {% endif %}
+                        </a>
+                        
+                        <!-- Trending Badge -->
+                        <div class="position-absolute top-0 start-0 m-2">
+                            <span class="badge bg-danger">
+                                <i class="fas fa-fire me-1"></i>Trending
+                            </span>
+                        </div>
+                        
+                        <!-- Discount Badge -->
+                        {% if product.discount_percentage %}
+                        <div class="position-absolute top-0 end-0 m-2">
+                            <span class="badge bg-success">
+                                -{{ product.discount_percentage }}%
+                            </span>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Wishlist Button -->
+                        <div class="position-absolute top-50 end-0 translate-middle-y me-2">
+                            <button class="btn btn-light btn-sm rounded-circle" onclick="toggleWishlist({{ product.id }})">
+                                <i class="far fa-heart"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="card-body d-flex flex-column">
+                        <h6 class="card-title mb-2" style="min-height: 2.5rem;">
+                            {{ product.name|truncatechars:40 }}
+                        </h6>
+                        
+                        <!-- Rating -->
+                        <div class="mb-2">
+                            <div class="text-warning small">
+                                <i class="fas fa-star"></i>
+                                <i class="fas fa-star"></i>
+                                <i class="fas fa-star"></i>
+                                <i class="fas fa-star"></i>
+                                <i class="far fa-star"></i>
+                            </div>
+                            <small class="text-muted">4.2 ({{ product.sold_count|default:"89" }} reviews)</small>
+                        </div>
+                        
+                        <!-- Price -->
+                        <div class="mb-3">
+                            <span class="h5 text-danger fw-bold">${{ product.price }}</span>
+                            {% if product.original_price %}
+                                <small class="text-muted text-decoration-line-through ms-2">${{ product.original_price }}</small>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Stock Status -->
+                        <div class="mb-3">
+                            {% if product.is_in_stock %}
+                                <small class="text-success">
+                                    <i class="fas fa-check-circle me-1"></i>In Stock
+                                </small>
+                            {% else %}
+                                <small class="text-danger">
+                                    <i class="fas fa-times-circle me-1"></i>Out of Stock
+                                </small>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Add to Cart Button -->
+                        <div class="mt-auto">
+                            <button class="btn btn-primary w-100" onclick="addToCart({{ product.id }}, this)"
+                                    {% if not product.is_in_stock %}disabled{% endif %}>
+                                <i class="fas fa-cart-plus me-1"></i>Add to Cart
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="col-12 text-center py-5">
+                <i class="fas fa-fire fa-4x text-muted mb-3"></i>
+                <h4 class="text-muted">No trending products found</h4>
+                <p class="text-muted">Check back later for hot new items!</p>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Load More Button -->
+        {% if trending_products|length >= 12 %}
+        <div class="text-center mt-5">
+            <button class="btn btn-outline-primary btn-lg" onclick="loadMoreProducts()">
+                <i class="fas fa-plus me-2"></i>Load More Trending Products
+            </button>
+        </div>
+        {% endif %}
+    </div>
+</section>
+
+<!-- CSS Styles -->
+<style>
+.trending-category-card {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    cursor: pointer;
+}
+
+.trending-category-card:hover {
+    transform: translateY(-10px);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+}
+
+.product-card {
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.product-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+}
+
+.trending-icon {
+    transition: transform 0.3s ease;
+}
+
+.trending-category-card:hover .trending-icon {
+    transform: scale(1.1);
+}
+
+
+.bg-gradient-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+</style>
+
+<!-- JavaScript -->
+<script>
+// Add to cart functionality
+function addToCart(productId, button) {
+    const originalText = button.innerHTML;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Adding...';
+    button.disabled = true;
+    
+    fetch('/marketplace/add-to-cart/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
+        },
+        body: JSON.stringify({
+            product_id: productId,
+            quantity: 1
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            button.innerHTML = '<i class="fas fa-check me-1"></i>Added!';
+            button.classList.remove('btn-primary');
+            button.classList.add('btn-success');
+            
+            setTimeout(() => {
+                button.innerHTML = originalText;
+                button.classList.remove('btn-success');
+                button.classList.add('btn-primary');
+                button.disabled = false;
+            }, 2000);
+        } else {
+            alert('Error: ' + (data.error || 'Failed to add to cart'));
+            button.innerHTML = originalText;
+            button.disabled = false;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred. Please try again.');
+        button.innerHTML = originalText;
+        button.disabled = false;
+    });
+}
+
+// Wishlist functionality
+function toggleWishlist(productId) {
+    const button = event.target.closest('button');
+    const icon = button.querySelector('i');
+    
+    if (icon.classList.contains('far')) {
+        icon.classList.remove('far');
+        icon.classList.add('fas');
+        icon.style.color = '#dc3545';
+    } else {
+        icon.classList.remove('fas');
+        icon.classList.add('far');
+        icon.style.color = '';
+    }
+}
+
+// Sort functionality
+document.getElementById('sortBy').addEventListener('change', function() {
+    const sortValue = this.value;
+    // Implement sorting logic here
+    console.log('Sorting by:', sortValue);
+});
+
+// Load more products
+function loadMoreProducts() {
+    // Implement load more functionality
+    console.log('Loading more products...');
+}
+</script>
+
+{% endblock %}

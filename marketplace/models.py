@@ -182,3 +182,20 @@ class CartItem(models.Model):
 
     def subtotal(self):
         return self.product.price * self.quantity
+
+
+class CelebrityFeature(models.Model):
+    celebrity_name = models.CharField(max_length=100)
+    celebrity_title = models.CharField(max_length=200, blank=True)
+    celebrity_image = models.ImageField(upload_to='celebrities/', blank=True, null=True)
+    testimonial = models.TextField()
+    products = models.ManyToManyField(Product, related_name='celebrity_features')
+    is_active = models.BooleanField(default=True)
+    featured_order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['featured_order', '-created_at']
+
+    def __str__(self):
+        return self.celebrity_name
