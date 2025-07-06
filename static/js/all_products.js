@@ -71,26 +71,6 @@ function updateScrollButtons(container, leftBtn, rightBtn) {
     rightBtn.style.pointerEvents = scrollLeft >= (scrollWidth - clientWidth - 5) ? 'none' : 'auto';
 }
 
-// Add to Cart functionality
-function addToCart(productId) {
-    const button = event.target.closest('button');
-    if (!button) return;
-
-    const originalHTML = button.innerHTML;
-    button.innerHTML = '<i class="fas fa-check me-1"></i> Added!';
-    button.style.backgroundColor = 'var(--success-green)';
-    button.style.borderColor = 'var(--success-green)';
-
-    // Here you would make an AJAX call to add the product to cart
-    console.log('Adding product to cart:', productId);
-
-    setTimeout(() => {
-        button.innerHTML = originalHTML;
-        button.style.backgroundColor = '';
-        button.style.borderColor = '';
-    }, 2000);
-}
-
 // Add to Wishlist functionality
 function addToWishlist(productId) {
     const button = event.target.closest('button');

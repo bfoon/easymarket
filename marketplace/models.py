@@ -193,6 +193,12 @@ class CelebrityFeature(models.Model):
     is_active = models.BooleanField(default=True)
     featured_order = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
+    # Social media fields
+    instagram_link = models.URLField(blank=True, null=True)
+    twitter_link = models.URLField(blank=True, null=True)
+    facebook_link = models.URLField(blank=True, null=True)
+    youtube_link = models.URLField(blank=True, null=True)
+    tiktok_link = models.URLField(blank=True, null=True)
 
     class Meta:
         ordering = ['featured_order', '-created_at']
