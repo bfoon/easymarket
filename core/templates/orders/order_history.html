@@ -1,0 +1,207 @@
+{% extends 'base.html' %}
+
+{% block content %}
+{% load static %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+<div class="container py-5">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>Order History</h2>
+                <a href="{% url 'orders:order_stats' %}" class="btn btn-outline-primary">
+                    <i class="fas fa-chart-bar me-2"></i>View Stats
+                </a>
+            </div>
+
+            <!-- Filters -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <form method="get" class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Search Orders</label>
+                            <input type="text" class="form-control" name="search" 
+                                   value="{{ search_query|default:'' }}" 
+                                   placeholder="Search by order ID or product name">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Filter by Status</label>
+                            <select class="form-select" name="status">
+                                <option value="">All Orders</option>
+                                {% for status_code, status_name in status_choices %}
+                                    <option value="{{ status_code }}" 
+                                            {% if status_code == current_status %}selected{% endif %}>
+                                        {{ status_name }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">&nbsp;</label>
+                            <div class="d-flex gap-2">
+                                <button type="submit" class="btn btn-primary">Filter</button>
+                                <a href="{% url 'orders:order_history' %}" class="btn btn-outline-secondary">Clear</a>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Orders List -->
+            {% if page_obj.object_list %}
+                <div class="row">
+                    {% for order in page_obj %}
+                        <div class="col-md-6 col-lg-4 mb-4">
+                            <div class="card h-100">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <h6 class="mb-0">Order #{{ order.id }}</h6>
+                                    <span class="badge badge-{{ order.status|lower }}">
+                                        {{ order.get_status_display }}
+                                    </span>
+                                </div>
+                                <div class="card-body">
+                                    <p class="card-text">
+                                        <small class="text-muted">
+                                            <i class="fas fa-calendar me-1"></i>
+                                            {{ order.created_at|date:"M d, Y" }}
+                                        </small>
+                                    </p>
+                                    <p class="card-text">
+                                        <strong>Total: ${{ order.get_total|floatformat:2 }}</strong>
+                                    </p>
+                                    <p class="card-text">
+                                        <small class="text-muted">
+                                            {{ order.items.count }} item{{ order.items.count|pluralize }}
+                                        </small>
+                                    </p>
+                                    
+                                    <!-- Quick preview of items -->
+                                    {% for item in order.items.all|slice:":2" %}
+                                        <small class="text-muted d-block">
+                                            {{ item.product.name }} ({{ item.quantity }})
+                                        </small>
+                                    {% endfor %}
+                                    {% if order.items.count > 2 %}
+                                        <small class="text-muted">
+                                            ... and {{ order.items.count|add:"-2" }} more
+                                        </small>
+                                    {% endif %}
+                                </div>
+                                <div class="card-footer">
+                                    <div class="d-flex gap-2">
+                                        <a href="{% url 'orders:order_detail' order.id %}" 
+                                           class="btn btn-sm btn-outline-primary">
+                                            View Details
+                                        </a>
+                                        {% if order.status == 'pending' %}
+                                            <a href="{% url 'orders:complete_order' order.id %}" 
+                                               class="btn btn-sm btn-primary">
+                                                Complete
+                                            </a>
+                                        {% elif order.status == 'shipped' %}
+                                            <a href="{% url 'orders:track_order' order.id %}" 
+                                               class="btn btn-sm btn-success">
+                                                Track
+                                            </a>
+                                        {% elif order.status == 'delivered' %}
+                                            <button class="btn btn-sm btn-outline-secondary" 
+                                                    onclick="reorderItems({{ order.id }})">
+                                                Reorder
+                                            </button>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+
+                <!-- Pagination -->
+                {% if page_obj.has_other_pages %}
+                    <nav aria-label="Order pagination">
+                        <ul class="pagination justify-content-center">
+                            {% if page_obj.has_previous %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}">
+                                        Previous
+                                    </a>
+                                </li>
+                            {% endif %}
+                            
+                            {% for num in page_obj.paginator.page_range %}
+                                {% if page_obj.number == num %}
+                                    <li class="page-item active">
+                                        <span class="page-link">{{ num }}</span>
+                                    </li>
+                                {% else %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ num }}{% if search_query %}&search={{ search_query }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}">
+                                            {{ num }}
+                                        </a>
+                                    </li>
+                                {% endif %}
+                            {% endfor %}
+                            
+                            {% if page_obj.has_next %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}">
+                                        Next
+                                    </a>
+                                </li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                {% endif %}
+            {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-shopping-bag fa-4x text-muted mb-3"></i>
+                    <h4 class="text-muted">No orders found</h4>
+                    <p class="text-muted">
+                        {% if search_query or current_status %}
+                            Try adjusting your search filters or
+                            <a href="{% url 'orders:order_history' %}">view all orders</a>
+                        {% else %}
+                            You haven't placed any orders yet.
+                        {% endif %}
+                    </p>
+                    <a href="{% url 'marketplace:all_products' %}" class="btn btn-primary">
+                        <i class="fas fa-shopping-cart me-2"></i>Start Shopping
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+function reorderItems(orderId) {
+    fetch(`/orders/reorder/${orderId}/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value || 
+                          document.querySelector('input[name="csrfmiddlewaretoken"]').value
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Items added to cart successfully!');
+            window.location.href = '/cart/';
+        } else {
+            alert('Error: ' + data.error);
+        }
+    });
+}
+
+// Add CSS for status badges
+const style = document.createElement('style');
+style.textContent = `
+    .badge-pending { background-color: #ffc107; color: #000; }
+    .badge-processing { background-color: #17a2b8; color: #fff; }
+    .badge-shipped { background-color: #28a745; color: #fff; }
+    .badge-delivered { background-color: #6f42c1; color: #fff; }
+    .badge-cancelled { background-color: #dc3545; color: #fff; }
+`;
+document.head.appendChild(style);
+</script>
+
+{% endblock %}

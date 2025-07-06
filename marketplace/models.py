@@ -34,6 +34,7 @@ class Product(models.Model):
     original_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
     video = models.FileField(upload_to='product_videos/', blank=True, null=True)
     sold_count = models.PositiveIntegerField(default=0)
+    stock = models.PositiveIntegerField(default=0)  # This field is necessary
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
