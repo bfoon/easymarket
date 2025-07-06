@@ -134,11 +134,11 @@
                     {% endif %}
                 </div>
 
-                <!-- Stock and Features -->
+                 <!-- Stock and Features -->
                 <ul class="list-unstyled mb-4">
                     <li class="mb-2">
-                        {% if product.stock.quantity > 0 %}
-                        <i class="fas fa-check-circle text-success"></i> In Stock - Ready to Ship
+                        {% if product.is_in_stock %}
+                        <i class="fas fa-check-circle text-success"></i> {{ product.get_stock_status }}
                         {% else %}
                         <i class="fas fa-times-circle text-danger"></i> Out of Stock
                         {% endif %}
@@ -162,17 +162,18 @@
 
                 <!-- Action Buttons -->
                 <div class="d-flex flex-wrap gap-2 mb-4">
-                    <button class="btn btn-primary" onclick="addToCart({{ product.id }}, this)" {% if product.stock.quantity == 0 %}disabled{% endif %}>
+                    <button class="btn btn-primary" onclick="addToCart({{ product.id }}, this)"
+                            {% if not product.stock or product.stock.quantity == 0 %}disabled{% endif %}>
                         <i class="fas fa-cart-plus me-1"></i> Add to Cart
                     </button>
-                    <button class="btn btn-warning" {% if product.stock.quantity == 0 %}disabled{% endif %}>
+                    <button class="btn btn-warning" onclick="buyNow({{ product.id }})"
+                            {% if not product.stock or product.stock.quantity == 0 %}disabled{% endif %}>
                         <i class="fas fa-bolt me-1"></i> Buy Now
                     </button>
-                    <button class="btn btn-outline-secondary" onclick="toggleWishlist()">
+                    <button class="btn btn-outline-secondary" onclick="toggleWishlist({{ product.id }})">
                         <i class="far fa-heart"></i>
                     </button>
                 </div>
-
                 <!-- Shipping Info -->
                 {% if user.is_authenticated %}
                 <div class="shipping-info mb-4">

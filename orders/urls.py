@@ -16,6 +16,10 @@ urlpatterns = [
     path('reorder/<int:order_id>/', views.reorder_items, name='reorder_items'),
     path('cancel/<int:order_id>/', views.cancel_order, name='cancel_order'),
 
+    # Public tracking (no login required)
+    path('track/', views.track_order_public, name='track_order_public'),
+    path('track-ajax/', views.track_order_ajax, name='track_order_ajax'),
+
     # Additional features
     path('invoice/<int:order_id>/', views.order_invoice, name='order_invoice'),
     path('update-status/<int:order_id>/', views.update_order_status, name='update_order_status'),

@@ -78,17 +78,19 @@ function changeMainImage(thumbnail, imageUrl) {
     thumbnail.classList.add('active');
 }
 
-function changeQuantity(amount) {
+// Quantity controls
+function changeQuantity(change) {
     const quantityInput = document.getElementById('quantity');
-    const min = parseInt(quantityInput.min);
-    const max = parseInt(quantityInput.max);
-    let value = parseInt(quantityInput.value);
+    if (quantityInput) {
+        const currentValue = parseInt(quantityInput.value);
+        const newValue = currentValue + change;
+        const min = parseInt(quantityInput.min);
+        const max = parseInt(quantityInput.max);
 
-    value += amount;
-    if (value < min) value = min;
-    if (value > max) value = max;
-
-    quantityInput.value = value;
+        if (newValue >= min && newValue <= max) {
+            quantityInput.value = newValue;
+        }
+    }
 }
 
 // Image zoom effect
@@ -107,3 +109,29 @@ document.getElementById('mainProductImage').addEventListener('mousemove', functi
 document.getElementById('mainProductImage').addEventListener('mouseleave', function() {
     this.style.transform = 'scale(1)';
 });
+
+// Buy now functionality
+function buyNow(productId) {
+    const quantity = document.getElementById('quantity')?.value || 1;
+    // Redirect to checkout with this product
+    window.location.href = `/checkout/?product=${productId}&quantity=${quantity}`;
+}
+// Wishlist functionality
+function toggleWishlist(productId) {
+    const button = event.target.closest('button');
+    const icon = button.querySelector('i');
+
+    // Toggle heart icon
+    if (icon.classList.contains('far')) {
+        icon.classList.remove('far');
+        icon.classList.add('fas');
+        icon.style.color = '#dc3545';
+    } else {
+        icon.classList.remove('fas');
+        icon.classList.add('far');
+        icon.style.color = '';
+    }
+
+    // Here you would make an AJAX call to add/remove from wishlist
+    console.log('Toggle wishlist for product:', productId);
+}
