@@ -142,8 +142,25 @@
                     YOUR ACCOUNT
                 </h6>
                 <ul class="list-unstyled">
-                    <li class="mb-2"><a href="#" class="footer-link">Sign In</a></li>
-                    <li class="mb-2"><a href="{% url 'orders:order_history' %}" class="footer-link">Your Orders</a></li>
+                <li class="mb-2">
+                        {% if user.is_authenticated %}
+                            <a href="#" class="footer-link">{{ user.username|upper }}</a>
+                        {% else %}
+                            <a href="#" class="footer-link">Sign In</a>
+                        {% endif %}
+                    </li>
+                <li class="mb-2">
+                        <a href="{% url 'orders:order_history' %}" class="footer-link d-flex align-items-center">
+                            <span>Your Orders</span>
+                            {% if user.is_authenticated and pending_orders_count > 0 %}
+                                <span class="badge bg-danger ms-1 pending-orders-badge"
+                                      style="font-size: 0.65rem; padding: 0.15rem 0.35rem; border-radius: 8px; line-height: 1;"
+                                      title="{{ pending_orders_count }} pending order{{ pending_orders_count|pluralize }}">
+                                    {{ pending_orders_count }}
+                                </span>
+                            {% endif %}
+                        </a>
+                    </li>
                     <li class="mb-2"><a href="#" class="footer-link">Your Wishlist</a></li>
                     <li class="mb-2"><a href="#" class="footer-link">Your Recommendations</a></li>
                 </ul>
@@ -273,5 +290,32 @@
         height: 30px;
         font-size: 0.8rem;
     }
+}
+/* Pending Orders Badge Animation */
+.pending-orders-badge {
+    animation: pulse-red 2s infinite;
+    box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7);
+}
+
+@keyframes pulse-red {
+    0% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7);
+    }
+
+    70% {
+        transform: scale(1);
+        box-shadow: 0 0 0 10px rgba(220, 53, 69, 0);
+    }
+
+    100% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(220, 53, 69, 0);
+    }
+}
+
+.pending-orders-badge:hover {
+    animation-play-state: paused;
+    transform: scale(1.1);
 }
 </style>

@@ -12,6 +12,7 @@ from .models import Order, OrderItem
 from marketplace.models import Cart, CartItem
 from django.core.exceptions import ValidationError
 import json
+from django.views.decorators.http import require_http_methods
 
 
 @login_required
@@ -318,3 +319,20 @@ def order_stats(request):
     }
 
     return render(request, 'orders/order_stats.html', {'stats': stats})
+
+login_required
+@require_http_methods(["GET"])
+def pending_orders_count_api(request):
+    """API endpoint to get pending orders count for the current user"""
+    try:
+        pending_count = request.user.orders.filter(status='pending').count()
+        return JsonResponse({
+            'count': pending_count,
+            'success': True
+        })
+    except Exception as e:
+        return JsonResponse({
+            'count': 0,
+            'success': False,
+            'error': str(e)
+        })
