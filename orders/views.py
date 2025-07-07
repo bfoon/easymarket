@@ -336,7 +336,6 @@ def track_order_ajax(request):
 
 def generate_tracking_timeline(order):
     """Generate tracking timeline for an order"""
-    from datetime import timedelta
 
     timeline = []
 
@@ -351,18 +350,20 @@ def generate_tracking_timeline(order):
     })
 
     # Payment Confirmed
-    if order.payment_date:
+    payment_date = None
+    if hasattr(order, 'payment') and order.payment and getattr(order.payment, 'payment_date', None):
+        payment_date = order.payment.payment_date
         timeline.append({
             'title': 'Payment Confirmed',
             'description': 'Payment has been processed successfully.',
-            'date': order.payment_date,
+            'date': payment_date,
             'completed': True,
             'icon': 'fas fa-credit-card',
             'color': 'success'
         })
 
     # Order Processing
-    processing_date = order.payment_date or order.created_at + timedelta(hours=2)
+    processing_date = payment_date or (order.created_at + timedelta(hours=2))
     timeline.append({
         'title': 'Order Processing',
         'description': 'Your order is being prepared for shipment.',
@@ -376,7 +377,7 @@ def generate_tracking_timeline(order):
     if order.shipped_date:
         timeline.append({
             'title': 'Shipped',
-            'description': f'Your order has been shipped via our delivery partner.',
+            'description': 'Your order has been shipped via our delivery partner.',
             'date': order.shipped_date,
             'completed': True,
             'icon': 'fas fa-truck',
@@ -427,7 +428,6 @@ def generate_tracking_timeline(order):
         })
 
     return timeline
-
 
 # Add this to generate tracking numbers for existing orders
 def generate_tracking_number(order):
