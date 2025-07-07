@@ -162,43 +162,43 @@ def complete_order(request, order_id):
     return redirect('orders:order_detail', order_id=order.id)
 
 
-@login_required
-def process_payment(request, order_id):
-    """Process payment for an order"""
-    if request.method != 'POST':
-        return JsonResponse({'success': False, 'error': 'Invalid request method'})
-
-    order = get_object_or_404(Order, id=order_id, buyer=request.user)
-
-    if order.status != 'pending':
-        return JsonResponse({'success': False, 'error': 'Order is not in pending status'})
-
-    try:
-        # Get payment details from form
-        payment_method = request.POST.get('payment_method')
-        card_number = request.POST.get('card_number')
-        expiry_date = request.POST.get('expiry_date')
-        cvv = request.POST.get('cvv')
-        cardholder_name = request.POST.get('cardholder_name')
-
-        # Basic validation
-        if not all([payment_method, card_number, expiry_date, cvv, cardholder_name]):
-            return JsonResponse({'success': False, 'error': 'All payment fields are required'})
-
-        # Here you would integrate with your payment processor
-        # For now, we'll simulate a successful payment
-
-        # Update order status
-        order.status = 'processing'
-        order.payment_method = payment_method
-        order.payment_date = timezone.now()
-        order.expected_delivery_date = timezone.now() + timedelta(days=7)
-        order.save()
-
-        return JsonResponse({'success': True, 'message': 'Payment processed successfully'})
-
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+# @login_required
+# def process_payment(request, order_id):
+#     """Process payment for an order"""
+#     if request.method != 'POST':
+#         return JsonResponse({'success': False, 'error': 'Invalid request method'})
+#
+#     order = get_object_or_404(Order, id=order_id, buyer=request.user)
+#
+#     if order.status != 'pending':
+#         return JsonResponse({'success': False, 'error': 'Order is not in pending status'})
+#
+#     try:
+#         # Get payment details from form
+#         payment_method = request.POST.get('payment_method')
+#         card_number = request.POST.get('card_number')
+#         expiry_date = request.POST.get('expiry_date')
+#         cvv = request.POST.get('cvv')
+#         cardholder_name = request.POST.get('cardholder_name')
+#
+#         # Basic validation
+#         if not all([payment_method, card_number, expiry_date, cvv, cardholder_name]):
+#             return JsonResponse({'success': False, 'error': 'All payment fields are required'})
+#
+#         # Here you would integrate with your payment processor
+#         # For now, we'll simulate a successful payment
+#
+#         # Update order status
+#         order.status = 'processing'
+#         order.payment_method = payment_method
+#         order.payment_date = timezone.now()
+#         order.expected_delivery_date = timezone.now() + timedelta(days=7)
+#         order.save()
+#
+#         return JsonResponse({'success': True, 'message': 'Payment processed successfully'})
+#
+#     except Exception as e:
+#         return JsonResponse({'success': False, 'error': str(e)})
 
 
 @login_required
@@ -477,31 +477,40 @@ def reorder_items(request, order_id):
 
 
 @login_required
+@require_POST
 def cancel_order(request, order_id):
-    """Cancel an order if it's still pending"""
     order = get_object_or_404(Order, id=order_id, buyer=request.user)
 
-    if order.status != 'pending':
-        messages.error(request, "Only pending orders can be cancelled.")
+    # Detect AJAX request
+    is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest'
+
+    if order.status not in ['pending', 'processing']:
+        if is_ajax:
+            return JsonResponse({'success': False, 'error': "Only pending or processing orders can be cancelled."})
+
+        messages.error(request, "Only pending or processing orders can be cancelled.")
         return redirect('orders:order_detail', order_id=order.id)
 
     try:
-        # Restore stock for cancelled orders
         for item in order.items.all():
-            item.product.stock += item.quantity
-            item.product.save()
+            item.product.stock.quantity += item.quantity
+            item.product.stock.save()
 
-        # Update order status
         order.status = 'cancelled'
         order.save()
 
-        messages.success(request, "Order cancelled successfully. Stock has been restored.")
+        if is_ajax:
+            return JsonResponse({'success': True})
+
+        messages.success(request, "Order cancelled successfully.")
+        return redirect('orders:order_detail', order_id=order.id)
 
     except Exception as e:
+        if is_ajax:
+            return JsonResponse({'success': False, 'error': str(e)})
+
         messages.error(request, f"Error cancelling order: {str(e)}")
-
-    return redirect('orders:order_detail', order_id=order.id)
-
+        return redirect('orders:order_detail', order_id=order.id)
 
 @login_required
 def order_invoice(request, order_id):

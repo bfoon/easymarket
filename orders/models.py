@@ -37,12 +37,12 @@ class Order(models.Model):
         ('cancelled', 'Cancelled'),
     ]
 
-    PAYMENT_METHOD_CHOICES = [
-        ('credit_card', 'Credit Card'),
-        ('paypal', 'PayPal'),
-        ('bank_transfer', 'Bank Transfer'),
-        ('cash_on_delivery', 'Cash on Delivery'),
-    ]
+    # PAYMENT_METHOD_CHOICES = [
+    #     ('credit_card', 'Credit Card'),
+    #     ('paypal', 'PayPal'),
+    #     ('bank_transfer', 'Bank Transfer'),
+    #     ('cash_on_delivery', 'Cash on Delivery'),
+    # ]
 
     buyer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='orders')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
@@ -50,7 +50,7 @@ class Order(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     # Payment information
-    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES, blank=True, null=True)
+    # payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES, blank=True, null=True)
     payment_date = models.DateTimeField(blank=True, null=True)
 
     # Financial fields
@@ -86,13 +86,14 @@ class Order(models.Model):
         """Calculate tax amount based on subtotal"""
         return self.get_subtotal() * (self.tax_rate / 100)
 
+    @property
     def get_total(self):
         """Calculate the final total including tax and shipping"""
         subtotal = self.get_subtotal()
         tax = self.get_tax_amount()
         shipping = self.shipping_cost or Decimal('0.00')
         discount = self.discount_amount or Decimal('0.00')
-        return subtotal + tax + shipping - discount
+        return round(subtotal + tax + shipping - discount, 2)
 
     def get_item_count(self):
         """Get total number of items in the order"""
@@ -197,38 +198,51 @@ class OrderStatusHistory(models.Model):
         verbose_name = 'Order Status History'
         verbose_name_plural = 'Order Status Histories'
 
+    def update_status(self, new_status, changed_by=None, notes=''):
+        """Safely update order status and log history."""
+        if self.status != new_status:
+            self.status = new_status
+            self.save()
+
+            OrderStatusHistory.objects.create(
+                order=self,
+                status=new_status,
+                changed_by=changed_by,
+                notes=notes
+            )
+
     def __str__(self):
         return f"Order #{self.order.id} - {self.get_status_display()} at {self.timestamp}"
 
-
-class OrderPayment(models.Model):
-    """Track payment information for orders"""
-    PAYMENT_STATUS_CHOICES = [
-        ('pending', 'Pending'),
-        ('processing', 'Processing'),
-        ('completed', 'Completed'),
-        ('failed', 'Failed'),
-        ('refunded', 'Refunded'),
-    ]
-
-    order = models.OneToOneField(Order, on_delete=models.CASCADE, related_name='payment')
-    payment_method = models.CharField(max_length=20, choices=Order.PAYMENT_METHOD_CHOICES)
-    payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default='pending')
-    transaction_id = models.CharField(max_length=100, blank=True, null=True)
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
-    payment_date = models.DateTimeField(blank=True, null=True)
-    refund_date = models.DateTimeField(blank=True, null=True)
-    refund_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
-    notes = models.TextField(blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"Payment for Order #{self.order.id} - {self.get_payment_status_display()}"
-
-    def is_successful(self):
-        return self.payment_status == 'completed'
-
-    def can_be_refunded(self):
-        return self.payment_status == 'completed' and self.refund_amount < self.amount
-
-
+#
+# class OrderPayment(models.Model):
+#     """Track payment information for orders"""
+#     PAYMENT_STATUS_CHOICES = [
+#         ('pending', 'Pending'),
+#         ('processing', 'Processing'),
+#         ('completed', 'Completed'),
+#         ('failed', 'Failed'),
+#         ('refunded', 'Refunded'),
+#     ]
+#
+#     order = models.OneToOneField(Order, on_delete=models.CASCADE, related_name='payment')
+#     payment_method = models.CharField(max_length=20, choices=Order.PAYMENT_METHOD_CHOICES)
+#     payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default='pending')
+#     transaction_id = models.CharField(max_length=100, blank=True, null=True)
+#     amount = models.DecimalField(max_digits=10, decimal_places=2)
+#     payment_date = models.DateTimeField(blank=True, null=True)
+#     refund_date = models.DateTimeField(blank=True, null=True)
+#     refund_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
+#     notes = models.TextField(blank=True, null=True)
+#     created_at = models.DateTimeField(auto_now_add=True)
+#
+#     def __str__(self):
+#         return f"Payment for Order #{self.order.id} - {self.get_payment_status_display()}"
+#
+#     def is_successful(self):
+#         return self.payment_status == 'completed'
+#
+#     def can_be_refunded(self):
+#         return self.payment_status == 'completed' and self.refund_amount < self.amount
+#
+#

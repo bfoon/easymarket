@@ -11,7 +11,7 @@ urlpatterns = [
     path('complete/<int:order_id>/', views.complete_order, name='complete_order'),
 
     # Payment and processing
-    path('process-payment/<int:order_id>/', views.process_payment, name='process_payment'),
+    # path('process-payment/<int:order_id>/', views.process_payment, name='process_payment'),
     path('track/<int:order_id>/', views.track_order, name='track_order'),
     path('reorder/<int:order_id>/', views.reorder_items, name='reorder_items'),
     path('cancel/<int:order_id>/', views.cancel_order, name='cancel_order'),

@@ -1,217 +1,257 @@
-// Add debugging and ensure DOM is ready
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     console.log('DOM loaded');
-    console.log('Bootstrap available:', typeof bootstrap !== 'undefined');
-    console.log('jQuery available:', typeof $ !== 'undefined');
-    console.log('Payment modal exists:', document.getElementById('paymentModal') !== null);
-
-    // Test modal functionality
-    const testModal = document.getElementById('paymentModal');
-    if (testModal) {
-        console.log('Payment modal found in DOM');
-
-        // Add click event to close buttons for manual fallback
-        const closeButtons = testModal.querySelectorAll('[data-bs-dismiss="modal"]');
-        closeButtons.forEach(button => {
-            button.addEventListener('click', closePaymentModal);
-        });
-
-        // Add click event to backdrop for manual fallback
-        testModal.addEventListener('click', function(e) {
-            if (e.target === testModal) {
-                closePaymentModal();
-            }
-        });
-    } else {
-        console.error('Payment modal not found in DOM');
-    }
+    initializePaymentFeatures();
 });
 
+// Initialize payment-specific features
+function initializePaymentFeatures() {
+    const paymentMethodSelect = document.getElementById('paymentMethod');
+    if (paymentMethodSelect) {
+        paymentMethodSelect.addEventListener('change', function () {
+            showPaymentFields(this.value);
+        });
+    }
+    setupCardInputFormatting();
+    setupMobileInputFormatting();
+}
+
+function showPaymentFields(method) {
+    const mobileFields = document.getElementById('mobilePaymentFields');
+    const cardFields = document.getElementById('verveCardFields');
+    const cashNote = document.getElementById('cashNote');
+
+    if (mobileFields) mobileFields.classList.add('d-none');
+    if (cardFields) cardFields.classList.add('d-none');
+    if (cashNote) cashNote.classList.add('d-none');
+
+    if (['wave', 'qmoney', 'afrimoney'].includes(method) && mobileFields) {
+        mobileFields.classList.remove('d-none');
+    } else if (method === 'verve_card' && cardFields) {
+        cardFields.classList.remove('d-none');
+    } else if (method === 'cash' && cashNote) {
+        cashNote.classList.remove('d-none');
+    }
+}
+
+function setupCardInputFormatting() {
+    const cardNumber = document.querySelector('input[name="card_number"]');
+    const expiry = document.querySelector('input[name="card_expiry"]');
+    const cvv = document.querySelector('input[name="card_cvv"]');
+
+    if (cardNumber) {
+        cardNumber.addEventListener('input', (e) => {
+            let val = e.target.value.replace(/\s/g, '').slice(0, 19);
+            e.target.value = val.replace(/(.{4})/g, '$1 ').trim();
+        });
+    }
+
+    if (expiry) {
+        expiry.addEventListener('input', (e) => {
+            let val = e.target.value.replace(/\D/g, '').slice(0, 4);
+            if (val.length > 2) val = `${val.slice(0, 2)}/${val.slice(2)}`;
+            e.target.value = val;
+        });
+    }
+
+    if (cvv) {
+        cvv.addEventListener('input', (e) => {
+            e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4);
+        });
+    }
+}
+
+function setupMobileInputFormatting() {
+    const mobileInput = document.querySelector('input[name="mobile_number"]');
+    if (mobileInput) {
+        mobileInput.addEventListener('input', (e) => {
+            e.target.value = e.target.value.replace(/[^\d\s+()-]/g, '');
+        });
+    }
+}
+
 function proceedToPayment(orderId) {
-    console.log('proceedToPayment called with orderId:', orderId);
+    window.currentOrderId = orderId;
+    const form = document.getElementById('paymentForm');
+    if (form) form.reset();
+    showPaymentFields('');
+
+    const modalEl = document.getElementById('paymentModal');
+    if (modalEl) {
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+    }
+}
+
+async function processPayment(orderId) {
+    const form = document.getElementById('paymentForm');
+    const formData = new FormData(form);
+
+    if (!validatePaymentForm(formData)) return;
+
+    const submitBtn = event.target;
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = `<i class="fas fa-spinner fa-spin me-2"></i>Processing...`;
+    submitBtn.disabled = true;
+
+    const paymentMethod = formData.get('payment_method');
+    const paymentData = { payment_method: paymentMethod };
+
+    if (['wave', 'qmoney', 'afrimoney'].includes(paymentMethod)) {
+        paymentData.phone_number = formData.get('mobile_number');
+        paymentData.pin = formData.get('pin');
+    } else if (paymentMethod === 'verve_card') {
+        paymentData.card_number = formData.get('card_number');
+        paymentData.expiry_date = formData.get('card_expiry');
+        paymentData.cvv = formData.get('card_cvv');
+        paymentData.cardholder_name = formData.get('cardholder_name') || 'Card Holder';
+    }
 
     try {
-        // Method 1: Bootstrap 5 native JavaScript API
-        if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
-            console.log('Using Bootstrap 5 Modal API');
-            const paymentModal = new bootstrap.Modal(document.getElementById('paymentModal'));
-            paymentModal.show();
-            return;
-        }
+        const res = await fetch(`/payments/process/${orderId}/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+            body: JSON.stringify(paymentData)
+        });
+        const result = await res.json();
 
-        // Method 2: jQuery fallback (if available)
-        if (typeof $ !== 'undefined' && $.fn.modal) {
-            console.log('Using jQuery Modal API');
-            $('#paymentModal').modal('show');
-            return;
-        }
-
-        // Method 3: Manual display fallback
-        console.log('Using manual modal display');
-        const modal = document.getElementById('paymentModal');
-        if (modal) {
-            modal.classList.add('show');
-            modal.style.display = 'block';
-            modal.setAttribute('aria-hidden', 'false');
-
-            // Add backdrop
-            const backdrop = document.createElement('div');
-            backdrop.className = 'modal-backdrop fade show';
-            backdrop.id = 'paymentModalBackdrop';
-            document.body.appendChild(backdrop);
-
-            // Add body class
-            document.body.classList.add('modal-open');
-
-            console.log('Modal displayed manually');
+        if (result.success) {
+            showPaymentSuccess(result);
+            const modalEl = document.getElementById('paymentModal');
+            if (modalEl) bootstrap.Modal.getInstance(modalEl)?.hide();
+            setTimeout(() => window.location.reload(), 2000);
         } else {
-            console.error('Payment modal element not found');
+            showPaymentError(result.error);
         }
-
-    } catch (error) {
-        console.error('Error opening payment modal:', error);
-        alert('Unable to open payment form. Please refresh the page and try again.');
+    } catch (err) {
+        console.error(err);
+        showPaymentError('An unexpected error occurred.');
+    } finally {
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
     }
 }
 
-// Function to manually close modal (for fallback method)
-function closePaymentModal() {
-    const modal = document.getElementById('paymentModal');
-    const backdrop = document.getElementById('paymentModalBackdrop');
+function validatePaymentForm(formData) {
+    const method = formData.get('payment_method');
+    if (!method) return showAlert('Select a payment method', 'danger'), false;
+    const agreeTerms = document.getElementById('agreeTerms');
+    if (agreeTerms && !agreeTerms.checked) return showAlert('Agree to terms', 'danger'), false;
 
-    if (modal) {
-        modal.classList.remove('show');
-        modal.style.display = 'none';
-        modal.setAttribute('aria-hidden', 'true');
+    if (['wave', 'qmoney', 'afrimoney'].includes(method)) {
+        const phone = formData.get('mobile_number'), pin = formData.get('pin');
+        if (!phone || !pin || !/^\+?[\d\s-()]+$/.test(phone))
+            return showAlert('Enter valid mobile details', 'danger'), false;
+    } else if (method === 'verve_card') {
+        const card = formData.get('card_number'), exp = formData.get('card_expiry'),
+              cvv = formData.get('card_cvv'), name = formData.get('cardholder_name');
+        if (!card || !exp || !cvv || !name || !/^\d{13,19}$/.test(card.replace(/\s/g, '')) ||
+            !/^\d{2}\/\d{2}$/.test(exp) || !/^\d{3,4}$/.test(cvv))
+            return showAlert('Enter valid card details', 'danger'), false;
     }
-
-    if (backdrop) {
-        backdrop.remove();
-    }
-
-    document.body.classList.remove('modal-open');
-}
-
-function processPayment() {
-    const formData = new FormData(document.getElementById('paymentForm'));
-
-    fetch(`/orders/process-payment/{{ order.id }}/`, {
-        method: 'POST',
-        body: formData,
-        headers: {
-            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert('Payment successful! Your order is being processed.');
-            location.reload();
-        } else {
-            alert('Payment failed: ' + data.error);
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('An error occurred during payment processing.');
-    });
-}
-
-function trackOrder(orderId) {
-    window.location.href = `/orders/track/${orderId}/`;
-}
-
-function reorderItems(orderId) {
-    fetch(`/orders/reorder/${orderId}/`, {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert('Items added to cart successfully!');
-            window.location.href = '/cart/';
-        } else {
-            alert('Error: ' + data.error);
-        }
-    });
+    return true;
 }
 
 function cancelOrder(orderId) {
-    // Store the order ID for later use
     window.currentOrderToCancel = orderId;
-
-    // Show the confirmation modal
-    const cancelModal = new bootstrap.Modal(document.getElementById('cancelOrderModal'));
-    cancelModal.show();
+    const modalEl = document.getElementById('cancelOrderModal');
+    if (modalEl) {
+        window.cancelModalInstance = new bootstrap.Modal(modalEl);
+        window.cancelModalInstance.show();
+    } else if (confirm('Cancel this order?')) {
+        confirmCancelOrder();
+    }
 }
 
 function confirmCancelOrder() {
     const orderId = window.currentOrderToCancel;
-    if (!orderId) return;
+    if (!orderId) return showAlert('No order selected', 'danger');
 
-    // Show loading state
-    const confirmBtn = document.getElementById('confirmCancelBtn');
-    const originalText = confirmBtn.innerHTML;
-    confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Cancelling...';
-    confirmBtn.disabled = true;
+    const btn = document.getElementById('confirmCancelBtn');
+    const originalText = btn ? btn.innerHTML : '';
+
+    if (btn) {
+        btn.innerHTML = `<i class="fas fa-spinner fa-spin me-2"></i>Cancelling...`;
+        btn.disabled = true;
+    }
 
     fetch(`/orders/cancel/${orderId}/`, {
         method: 'POST',
         headers: {
-            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
-            'Content-Type': 'application/json',
-        }
+        'X-CSRFToken': getCSRFToken(),
+        'Content-Type': 'application/json',
+         'X-Requested-With': 'XMLHttpRequest'
+         }
     })
-    .then(response => {
-        if (response.ok) {
-            // Hide modal and reload page to show updated status
-            bootstrap.Modal.getInstance(document.getElementById('cancelOrderModal')).hide();
-
-            // Show success message
-            showSuccessMessage('Order cancelled successfully. Stock has been restored.');
-
-            // Reload page after a short delay
-            setTimeout(() => {
-                window.location.reload();
-            }, 1500);
-        } else {
-            throw new Error('Failed to cancel order');
-        }
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            window.cancelModalInstance?.hide();
+            showSuccessMessage('Order cancelled.');
+            setTimeout(() => window.location.reload(), 2000);
+        } else throw new Error(data.error);
     })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('An error occurred while cancelling the order. Please try again.');
-
-        // Restore button state
-        confirmBtn.innerHTML = originalText;
-        confirmBtn.disabled = false;
+    .catch(err => {
+        console.error(err);
+        showAlert(err.message || 'Error cancelling order', 'danger');
+        if (btn) {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
     });
 }
 
-function showSuccessMessage(message) {
-    // Create and show a success alert
-    const alertHtml = `
-        <div class="alert alert-success alert-dismissible fade show position-fixed"
-             style="top: 20px; right: 20px; z-index: 9999; min-width: 300px;" role="alert">
-            <i class="fas fa-check-circle me-2"></i>
-            ${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-    `;
-
-    document.body.insertAdjacentHTML('beforeend', alertHtml);
+function trackOrder(orderId) {
+    const url = `/orders/track/${orderId}/`;
+    fetch(url, { headers: { 'X-CSRFToken': getCSRFToken() } })
+        .then(res => res.ok ? window.location.href = url : showAlert('Tracking unavailable', 'info'))
+        .catch(() => window.location.href = url);
 }
 
-// Add CSS for status badges
-const style = document.createElement('style');
-style.textContent = `
-    .badge-pending { background-color: #ffc107; color: #000; }
-    .badge-processing { background-color: #17a2b8; color: #fff; }
-    .badge-shipped { background-color: #28a745; color: #fff; }
-    .badge-delivered { background-color: #6f42c1; color: #fff; }
-    .badge-cancelled { background-color: #dc3545; color: #fff; }
-`;
-document.head.appendChild(style);
+function reorderItems(orderId) {
+    if (!confirm('Add all items from this order to your cart?')) return;
+    fetch(`/orders/reorder/${orderId}/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCSRFToken(), 'Content-Type': 'application/json' }
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            showSuccessMessage('Items added to cart!');
+            setTimeout(() => window.location.href = '/cart/', 1500);
+        } else {
+            showAlert(data.error || 'Unable to reorder', 'danger');
+        }
+    })
+    .catch(() => showAlert('Error adding items to cart', 'danger'));
+}
+
+function showPaymentSuccess(result) {
+    showAlert(`<strong>Payment Successful!</strong> ${result.message} ${result.transaction_id ? `<br><small>Transaction ID: ${result.transaction_id}</small>` : ''}`, 'success');
+}
+
+function showPaymentError(message) {
+    showAlert(message, 'danger');
+}
+
+function showSuccessMessage(message) {
+    const html = `<div class="alert alert-success alert-dismissible fade show position-fixed" style="top:20px;right:20px;z-index:9999;min-width:300px;">
+        <i class="fas fa-check-circle me-2"></i>${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>`;
+    document.body.insertAdjacentHTML('beforeend', html);
+    setTimeout(() => document.querySelector('.alert-success.position-fixed')?.remove(), 5000);
+}
+
+function showAlert(message, type = 'info') {
+    document.querySelectorAll('.alert').forEach(e => e.remove());
+    const icon = type === 'danger' ? 'exclamation-triangle' : 'info-circle';
+    const html = `<div class="alert alert-${type} alert-dismissible fade show" role="alert">
+        <i class="fas fa-${icon} me-2"></i>${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>`;
+    document.querySelector('.container')?.insertAdjacentHTML('afterbegin', html);
+    window.scrollTo(0, 0);
+    setTimeout(() => document.querySelector('.alert')?.remove(), 5000);
+}
+
+function getCSRFToken() {
+    return document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+}
