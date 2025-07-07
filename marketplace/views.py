@@ -14,24 +14,34 @@ from django.db.models import Q, Count, F, Sum
 # Create your views here!
 
 def all_products(request):
-    categories = Category.objects.all()
+    parent_categories = Category.objects.filter(parent__isnull=True, is_active=True)
     category_products = []
 
-    for category in categories:
-        products = Product.objects.filter(category=category).order_by('?')[:8]
+    for category in parent_categories:
+        # Get all subcategories recursively
+        all_subcategories = category.get_all_subcategories()
+        related_category_ids = [category.id] + [sub.id for sub in all_subcategories]
 
-        if products:
+        # Fetch products from parent and subcategories
+        products = Product.objects.filter(
+            category_id__in=related_category_ids,
+            category__is_active=True
+        ).order_by('?')[:8]
+
+        if products.exists():
             category_products.append({
                 'category': category,
-                'products': products
+                'products': products,
+                'subcategories': all_subcategories  # Optional for template use
             })
 
     return render(request, 'marketplace/all_products.html', {
         'category_products': category_products
     })
 
+
 def product_list(request):
-    categories = Category.objects.all()[:6]
+    categories = Category.objects.filter(parent__isnull=True)[:6]  # Only parent categories
     products = Product.objects.all()
     featured_products = Product.objects.filter(is_featured=True)[:6]
     trending_products = Product.objects.filter(is_trending=True)
@@ -43,17 +53,24 @@ def product_list(request):
     if request.user.is_authenticated:
         recently_viewed = Product.objects.filter(productview__user=request.user).distinct().order_by(
             '-productview__viewed_at')[:8]
-
-    # Handle anonymous user via session
     else:
         session_recently_viewed = request.session.get('recently_viewed', [])
         recently_viewed = Product.objects.filter(id__in=session_recently_viewed)
 
-    # Similar items logic
+    # Similar items logic - consider main category and its subcategories
     if recently_viewed:
-        last_viewed_product = recently_viewed.first() if request.user.is_authenticated else recently_viewed.first()
-        similar_items = Product.objects.filter(category=last_viewed_product.category).exclude(
-            id=last_viewed_product.id)[:8]
+        last_viewed_product = recently_viewed.first()
+
+        # Determine main category
+        if last_viewed_product.category:
+            main_category = last_viewed_product.category.parent or last_viewed_product.category
+
+            # Get IDs of main category and its subcategories
+            related_category_ids = [main_category.id] + list(main_category.children.values_list('id', flat=True))
+
+            similar_items = Product.objects.filter(
+                category_id__in=related_category_ids
+            ).exclude(id=last_viewed_product.id)[:8]
 
     return render(request, 'marketplace/product_list.html', {
         'categories': categories,
@@ -63,6 +80,7 @@ def product_list(request):
         'recently_viewed': recently_viewed,
         'similar_items': similar_items,
     })
+
 
 def product_detail(request, product_id):
     product = get_object_or_404(Product, id=product_id)
@@ -81,6 +99,7 @@ def product_detail(request, product_id):
 
     # Recommend similar items
     recommended_items = Product.objects.filter(category=product.category).exclude(id=product.id)[:4]
+    featured_celebrities = CelebrityFeature.objects.filter(products=product)[:8]
 
     # Clean specifications
     cleaned_specs = []
@@ -102,6 +121,7 @@ def product_detail(request, product_id):
         if last_space != -1:
             short_description = short_description[:last_space]
 
+
     return render(request, 'marketplace/product_detail.html', {
         'product': product,
         'product_images': product_images,
@@ -109,19 +129,37 @@ def product_detail(request, product_id):
         'specifications': cleaned_specs,
         'short_description': short_description,
         'description_truncated': description_truncated,
+        'featured_celebrities': featured_celebrities,
     })
 
+
 def hot_picks(request):
-    categories = Category.objects.all()
+    """
+    Display hot picks for each parent category including products from all subcategories
+    """
+    parent_categories = Category.get_root_categories()  # Only active top-level categories
     hot_products_by_category = []
 
-    for category in categories:
-        products = Product.objects.filter(category=category, is_featured=True).order_by('-created_at')[:8]
+    for category in parent_categories:
+        # Get all subcategories recursively using the model method
+        all_subcategories = category.get_all_subcategories()
+
+        # Create list of category IDs (parent + all descendants)
+        related_category_ids = [category.id] + [sub.id for sub in all_subcategories]
+
+        # Fetch featured products from parent category and all subcategories
+        products = Product.objects.filter(
+            category_id__in=related_category_ids,
+            is_featured=True,
+            category__is_active=True  # Assuming you have an is_active field on Product
+        ).select_related('category').order_by('-created_at')[:8]
 
         if products.exists():
             hot_products_by_category.append({
                 'category': category,
-                'products': products
+                'products': products,
+                'subcategories': all_subcategories,  # Include subcategories for template use
+                'total_categories': len(related_category_ids)  # Total categories included
             })
 
     return render(request, 'marketplace/hot_picks.html', {
@@ -130,13 +168,19 @@ def hot_picks(request):
 
 def category_products(request, slug):
     category = get_object_or_404(Category, id=slug)
-    products = Product.objects.filter(category=category)
+
+    # Get IDs of the category and its subcategories
+    subcategories = category.children.all()
+    related_category_ids = [category.id] + list(subcategories.values_list('id', flat=True))
+
+    # Fetch products belonging to the category and its subcategories
+    products = Product.objects.filter(category_id__in=related_category_ids)
 
     return render(request, 'marketplace/category_products.html', {
         'category': category,
+        'subcategories': subcategories,
         'products': products,
     })
-
 
 def category_detail(request, pk):
     category = get_object_or_404(Category, pk=pk)

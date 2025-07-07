@@ -127,9 +127,7 @@
                     {% if product.original_price %}
                     <span class="ms-2 text-muted text-decoration-line-through">${{ product.original_price }}</span>
                     <span class="badge bg-success ms-2">
-                        {% widthratio product.original_price product.price 100 as discount_ratio %}
-                        {% widthratio discount_ratio 1 1 as discount_percent %}
-                        {{ discount_percent|floatformat:0|add:"-100"|slice:"1:" }}% OFF
+                        {{ product.discount_percentage|floatformat:0 }}% OFF
                     </span>
                     {% endif %}
                 </div>
@@ -305,52 +303,133 @@
             </a>
         </div>
 
-        <!-- Recommended Products Grid -->
-        <div class="row g-4">
-            {% for item in recommended_items %}
-            <div class="col-xl-3 col-lg-4 col-md-6 col-sm-6">
-                <div class="card h-100 shadow-sm border-0">
+       <!-- Recommended Products Grid -->
+<div class="row g-4">
+    {% for item in recommended_items %}
+    <div class="col-xl-3 col-lg-4 col-md-6 col-sm-6">
+        <div class="card h-100 shadow-sm border-0 position-relative">
 
-                    <!-- Product Image -->
-                    <a href="{% url 'marketplace:product_detail' item.id %}" class="d-block">
-                        <img src="{{ item.image.url }}" class="card-img-top product-image" alt="{{ item.name }}">
-                    </a>
+            <!-- Percentage Tag -->
+            {% if item.discount_percentage %}
+            <span class="badge bg-danger text-white position-absolute" style="top: 10px; right: 10px; z-index: 2;">
+                {{ item.discount_percentage|floatformat:0 }}% OFF
+            </span>
+            {% endif %}
 
-                    <div class="card-body d-flex flex-column justify-content-between">
+            <!-- Product Image -->
+            <a href="{% url 'marketplace:product_detail' item.id %}" class="d-block">
+                <img src="{{ item.image.url }}" class="card-img-top product-image" alt="{{ item.name }}">
+            </a>
 
-                        <!-- Product Title -->
-                        <h6 class="card-title mb-2" style="min-height: 2.5rem;">
-                            {{ item.name|truncatechars:40 }}
-                        </h6>
+            <div class="card-body d-flex flex-column justify-content-between">
 
-                        <!-- Price -->
-                        <div class="mb-2">
-                            <span class="fw-bold text-danger">${{ item.price }}</span>
-                            {% if item.original_price %}
-                            <small class="text-muted text-decoration-line-through ms-1">${{ item.original_price }}</small>
-                            {% endif %}
-                        </div>
+                <!-- Product Title -->
+                <h6 class="card-title mb-2" style="min-height: 2.5rem;">
+                    {{ item.name|truncatechars:40 }}
+                </h6>
 
-                        <!-- Rating -->
-                        <small class="text-muted d-block mb-2">
-                            <i class="fas fa-star text-warning"></i> 4.2 (89 reviews)
-                        </small>
+                <!-- Price -->
+                <div class="mb-2">
+                    <span class="fw-bold text-danger">${{ item.price }}</span>
+                    {% if item.original_price %}
+                    <small class="text-muted text-decoration-line-through ms-1">${{ item.original_price }}</small>
+                    {% endif %}
+                </div>
 
-                        <!-- Category -->
-                        <small class="text-primary d-block">
-                            <i class="fas fa-tag me-1"></i> {{ item.category.name }}
-                        </small>
+                <!-- Rating -->
+                <small class="text-muted d-block mb-2">
+                    <i class="fas fa-star text-warning"></i> 4.2 (89 reviews)
+                </small>
+
+                <!-- Category -->
+                <small class="text-primary d-block">
+                    <i class="fas fa-tag me-1"></i> {{ item.category.name }}
+                </small>
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="col-12 text-center py-5">
+        <i class="fas fa-box-open fa-3x text-muted mb-3"></i>
+        <h5 class="text-muted">No recommended items available</h5>
+    </div>
+    {% endfor %}
+</div>
+
+</section>
+
+<section class="container my-5">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <h3 class="fw-bold mb-0">
+            <i class="fas fa-star text-warning me-2"></i> Featured Celebrities
+        </h3>
+    </div>
+
+    <div class="row g-4">
+        {% for celeb in featured_celebrities %}
+        <div class="col-md-4 col-lg-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="position-relative">
+                    {% if celeb.celebrity_image %}
+                    <img src="{{ celeb.celebrity_image.url }}" class="card-img-top" alt="{{ celeb.celebrity_name }}" style="height: 220px; object-fit: cover;">
+                    {% else %}
+                    <div class="bg-light d-flex align-items-center justify-content-center" style="height: 220px;">
+                        <i class="fas fa-user fa-4x text-muted"></i>
+                    </div>
+                    {% endif %}
+                    <div class="position-absolute top-0 end-0 m-2">
+                        <span class="badge bg-warning text-dark">
+                            <i class="fas fa-crown me-1"></i> Celebrity Pick
+                        </span>
+                    </div>
+                </div>
+
+                <div class="card-body">
+                    <h5 class="card-title mb-1">{{ celeb.celebrity_name }}</h5>
+                    <p class="text-muted small mb-2">{{ celeb.celebrity_title|default:"Celebrity" }}</p>
+                    <blockquote class="blockquote-footer mb-3">
+                        <small>"{{ celeb.testimonial|default:"Loving this product!" }}"</small>
+                    </blockquote>
+
+                    <div class="d-flex gap-2">
+                        {% if celeb.instagram_link %}
+                        <a href="{{ celeb.instagram_link }}" target="_blank" class="text-danger">
+                            <i class="fab fa-instagram fa-lg"></i>
+                        </a>
+                        {% endif %}
+                        {% if celeb.twitter_link %}
+                        <a href="{{ celeb.twitter_link }}" target="_blank" class="text-info">
+                            <i class="fab fa-twitter fa-lg"></i>
+                        </a>
+                        {% endif %}
+                        {% if celeb.facebook_link %}
+                        <a href="{{ celeb.facebook_link }}" target="_blank" class="text-primary">
+                            <i class="fab fa-facebook fa-lg"></i>
+                        </a>
+                        {% endif %}
+                        {% if celeb.youtube_link %}
+                        <a href="{{ celeb.youtube_link }}" target="_blank" class="text-danger">
+                            <i class="fab fa-youtube fa-lg"></i>
+                        </a>
+                        {% endif %}
+                        {% if celeb.tiktok_link %}
+                        <a href="{{ celeb.tiktok_link }}" target="_blank" class="text-dark">
+                            <i class="fab fa-tiktok fa-lg"></i>
+                        </a>
+                        {% endif %}
                     </div>
                 </div>
             </div>
-            {% empty %}
-            <div class="col-12 text-center py-5">
-                <i class="fas fa-box-open fa-3x text-muted mb-3"></i>
-                <h5 class="text-muted">No recommended items available</h5>
-            </div>
-            {% endfor %}
         </div>
+        {% empty %}
+        <div class="col-12 text-center py-5">
+            <i class="fas fa-user fa-3x text-muted mb-3"></i>
+            <h5 class="text-muted">No featured celebrities at the moment</h5>
+        </div>
+        {% endfor %}
+    </div>
 </section>
+
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const descCollapse = document.getElementById('fullDescription');

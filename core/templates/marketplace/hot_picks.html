@@ -7,34 +7,42 @@
 <link rel="stylesheet" href="{% static 'css/main.css' %}">
 <link rel="stylesheet" href="{% static 'css/hot_pick.css' %}">
 
-<!-- Stats Section -->
-<section class="stats-section py-4">
+<!-- Hero Section -->
+<section class="hero-section text-white py-4" style="border-bottom: 3px solid var(--amazon-orange);">
     <div class="container">
-        <div class="row text-center">
-            <div class="col-6 col-md-3 mb-3">
-                <div class="stat-item">
-                    <h3 class="stat-number" id="statProducts">2.4M</h3>
-                    <p class="stat-label text-muted">Products Sold</p>
+        <div class="row align-items-center hero-content">
+
+            <div class="col-lg-9 mb-4 mb-lg-0">
+                <h1 class="fw-bold mb-2">SHOP SMART. PAY LESS. GET MORE.</h1>
+                <p class="mb-3 opacity-90">Billionaire Taste. Everyday Price. Because Blending In Was Never the Plan.</p>
+
+                <div class="d-flex flex-wrap gap-3 hero-features">
+                    <div class="hero-feature d-flex align-items-center text-white-50">
+                        <i class="fas fa-shipping-fast me-2 text-warning small"></i>
+                        <span class="small">FREE Shipping</span>
+                    </div>
+                    <div class="hero-feature d-flex align-items-center text-white-50">
+                        <i class="fas fa-shield-alt me-2 text-warning small"></i>
+                        <span class="small">100% Secure</span>
+                    </div>
+                    <div class="hero-feature d-flex align-items-center text-white-50">
+                        <i class="fas fa-undo me-2 text-warning small"></i>
+                        <span class="small">30-Day Returns</span>
+                    </div>
+                    <div class="hero-feature d-flex align-items-center text-white-50">
+                        <i class="fas fa-clock me-2 text-warning small"></i>
+                        <span class="small">24/7 Support</span>
+                    </div>
                 </div>
             </div>
-            <div class="col-6 col-md-3 mb-3">
-                <div class="stat-item">
-                    <h3 class="stat-number" id="statCustomers">847K</h3>
-                    <p class="stat-label text-muted">Happy Customers</p>
+
+            <div class="col-lg-3 text-center">
+                <div class="hero-badge p-3 rounded-3 bg-dark bg-opacity-25">
+                    <i class="fas fa-bolt fa-3x text-warning"></i>
+                    <div class="mt-2 fw-bold text-warning">SHOP LIKE A BOSS</div>
                 </div>
             </div>
-            <div class="col-6 col-md-3 mb-3">
-                <div class="stat-item">
-                    <h3 class="stat-number" id="statRating">4.9</h3>
-                    <p class="stat-label text-muted">Average Rating</p>
-                </div>
-            </div>
-            <div class="col-6 col-md-3 mb-3">
-                <div class="stat-item">
-                    <h3 class="stat-number" id="statDelivery">24H</h3>
-                    <p class="stat-label text-muted">Fast Delivery</p>
-                </div>
-            </div>
+
         </div>
     </div>
 </section>
@@ -51,21 +59,20 @@
 
             <div class="d-flex align-items-center mb-2">
                 <span class="badge bg-warning text-dark me-2">{{ block.category.name }}</span>
-                <small class="text-muted">Top picks in {{ block.category.name }}</small>
+                <small class="text-muted">Top picks from {{ block.category.name }}</small>
             </div>
 
+            {% if block.products %}
             <div class="position-relative">
 
-                <!-- Scroll Buttons -->
-                <button class="btn scroll-btn position-absolute top-50 start-0 translate-middle-y scroll-left">
+                <button class="btn scroll-btn position-absolute top-50 start-0 translate-middle-y scroll-left-{{ forloop.counter }}">
                     <i class="fas fa-chevron-left"></i>
                 </button>
-                <button class="btn scroll-btn position-absolute top-50 end-0 translate-middle-y scroll-right">
+                <button class="btn scroll-btn position-absolute top-50 end-0 translate-middle-y scroll-right-{{ forloop.counter }}">
                     <i class="fas fa-chevron-right"></i>
                 </button>
 
-                <!-- Products Container -->
-                <div class="d-flex overflow-auto gap-3 pb-3 px-4 products-container">
+                <div class="d-flex overflow-auto gap-3 pb-3 px-4 products-container products-container-{{ forloop.counter }}">
                     {% for product in block.products %}
                     <div class="product-card shadow-sm">
                         <div class="product-image-container position-relative">
@@ -73,20 +80,27 @@
                                 <img src="{{ product.image.url }}" class="product-image" alt="{{ product.name }}">
                             </a>
 
-                            {% if product.is_new %}
+                            {% if product.discount_percentage %}
+                                <span class="badge badge-sale position-absolute top-0 end-0 m-2">
+                                    {{ product.discount_percentage }}% OFF
+                                </span>
+                            {% elif product.is_new %}
                                 <span class="badge badge-new">NEW</span>
                             {% else %}
                                 <span class="badge badge-hot">
                                     <i class="fas fa-fire me-1"></i>
                                 </span>
                             {% endif %}
-
-                            {% if product.discount_percentage %}
-                                <span class="badge badge-sale">{{ product.discount_percentage }}% OFF</span>
-                            {% endif %}
                         </div>
 
                         <div class="card-body">
+
+                            {% if product.category and product.category.parent %}
+                            <small class="text-muted d-block mb-1">
+                                <i class="fas fa-tag me-1"></i> {{ product.category.name }}
+                            </small>
+                            {% endif %}
+
                             <h6 class="card-title mb-2">
                                 <a href="{% url 'marketplace:product_detail' product.id %}" class="text-decoration-none text-dark">
                                     {{ product.name|truncatechars:30 }}
@@ -115,20 +129,25 @@
                                 <span class="price-tag fw-bold ms-2">${{ product.price }}</span>
                             </div>
 
-                            <button class="btn btn-outline-primary w-100 btn-sm" onclick="addToCart({{ product.id }}, this)">
+                            <button class="btn btn-outline-primary w-100 btn-sm" onclick="addToCart({{ product.id }}, this)"
+                            data-stock="{{ product.stock.quantity|default:0 }}"
+                            {% if not product.is_in_stock %} disabled {% endif %}>
                                 <i class="fas fa-cart-plus me-1"></i> Add to Cart
                             </button>
                         </div>
                     </div>
-                    {% empty %}
-                    <div class="empty-state text-center w-100">
-                        <i class="fas fa-fire fa-2x text-muted mb-2"></i>
-                        <h5 class="text-muted">No hot picks in this category</h5>
-                        <p class="small text-muted">Check back soon for exciting deals!</p>
-                    </div>
                     {% endfor %}
                 </div>
+
             </div>
+            {% else %}
+            <div class="empty-state text-center w-100 py-4">
+                <i class="fas fa-fire fa-2x text-muted mb-2"></i>
+                <h5 class="text-muted">No hot picks in this category</h5>
+                <p class="small text-muted">Check back soon for exciting deals!</p>
+            </div>
+            {% endif %}
+
         </div>
         {% endfor %}
 
