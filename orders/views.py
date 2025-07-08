@@ -8,8 +8,9 @@ from django.core.paginator import Paginator
 from django.utils import timezone
 from datetime import timedelta
 from stock.utils import reduce_stock
+from stock.models import Stock
 from .models import Order, OrderItem, PromoCode, ChatMessage
-from marketplace.models import Cart, CartItem
+from marketplace.models import Cart, CartItem, Product
 from django.core.exceptions import ValidationError
 from decimal import Decimal
 from django.views.decorators.csrf import csrf_protect
@@ -97,6 +98,58 @@ def checkout_cart(request):
         messages.error(request, "You don't have any cart to checkout.")
         return redirect('marketplace:cart_view')
 
+@require_http_methods(["POST"])
+@csrf_protect
+@login_required
+def quick_checkout(request):
+    product_id = request.POST.get('product')
+    quantity = request.POST.get('quantity', 1)
+
+    try:
+        quantity = int(quantity)
+        if quantity < 1:
+            raise ValueError
+    except (ValueError, TypeError):
+        messages.error(request, "Invalid quantity selected.")
+        return redirect('marketplace:all_products')
+
+    product = get_object_or_404(Product, id=product_id)
+
+    if product.stock.quantity < quantity:
+        messages.error(request, "Insufficient stock available.")
+        return redirect('marketplace:product_detail', product_id=product.id)
+
+    try:
+        with transaction.atomic():
+            order = Order.objects.create(
+                buyer=request.user,
+                promo_code=None,
+                discount_amount=Decimal('0')
+            )
+
+            # Lock product to avoid race conditions
+            locked_product = Product.objects.select_for_update().get(id=product.id)
+            reduce_stock(locked_product, quantity)
+
+            OrderItem.objects.create(
+                order=order,
+                product=locked_product,
+                quantity=quantity
+            )
+
+            messages.success(request, "Quick checkout successful!")
+            return redirect('orders:order_detail', order_id=order.id)
+
+    except ValidationError as e:
+        messages.error(request, f"Checkout failed: {str(e)}")
+        return redirect('marketplace:product_detail', product_id=product.id)
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Quick checkout error for user {request.user.id}: {str(e)}")
+
+        messages.error(request, "An error occurred during quick checkout.")
+        return redirect('marketplace:product_detail', product_id=product.id)
 
 @login_required
 def order_detail(request, order_id):
@@ -215,45 +268,6 @@ def complete_order(request, order_id):
         messages.warning(request, "This order is not in pending status.")
 
     return redirect('orders:order_detail', order_id=order.id)
-
-
-# @login_required
-# def process_payment(request, order_id):
-#     """Process payment for an order"""
-#     if request.method != 'POST':
-#         return JsonResponse({'success': False, 'error': 'Invalid request method'})
-#
-#     order = get_object_or_404(Order, id=order_id, buyer=request.user)
-#
-#     if order.status != 'pending':
-#         return JsonResponse({'success': False, 'error': 'Order is not in pending status'})
-#
-#     try:
-#         # Get payment details from form
-#         payment_method = request.POST.get('payment_method')
-#         card_number = request.POST.get('card_number')
-#         expiry_date = request.POST.get('expiry_date')
-#         cvv = request.POST.get('cvv')
-#         cardholder_name = request.POST.get('cardholder_name')
-#
-#         # Basic validation
-#         if not all([payment_method, card_number, expiry_date, cvv, cardholder_name]):
-#             return JsonResponse({'success': False, 'error': 'All payment fields are required'})
-#
-#         # Here you would integrate with your payment processor
-#         # For now, we'll simulate a successful payment
-#
-#         # Update order status
-#         order.status = 'processing'
-#         order.payment_method = payment_method
-#         order.payment_date = timezone.now()
-#         order.expected_delivery_date = timezone.now() + timedelta(days=7)
-#         order.save()
-#
-#         return JsonResponse({'success': True, 'message': 'Payment processed successfully'})
-#
-#     except Exception as e:
-#         return JsonResponse({'success': False, 'error': str(e)})
 
 
 @login_required
@@ -548,8 +562,13 @@ def cancel_order(request, order_id):
 
     try:
         for item in order.items.all():
-            item.product.stock.quantity += item.quantity
-            item.product.stock.save()
+            try:
+                stock = item.product.stock  # Only works if OneToOneField
+            except Stock.DoesNotExist:
+                stock = Stock.objects.create(product=item.product, quantity=0)
+
+            stock.quantity += item.quantity
+            stock.save()
 
         order.status = 'cancelled'
         order.save()

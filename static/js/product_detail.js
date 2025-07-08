@@ -110,11 +110,21 @@ document.getElementById('mainProductImage').addEventListener('mouseleave', funct
     this.style.transform = 'scale(1)';
 });
 
-// Buy now functionality
 function buyNow(productId) {
-    const quantity = document.getElementById('quantity')?.value || 1;
-    // Redirect to checkout with this product
-    window.location.href = `/checkout/?product=${productId}&quantity=${quantity}`;
+    const form = document.getElementById('buyNowForm');
+    const productInput = document.getElementById('buyNowProduct');
+    const quantityInput = document.getElementById('quantity');
+
+    const quantity = parseInt(quantityInput.value);
+
+    if (isNaN(quantity) || quantity < 1) {
+        alert('Please select a valid quantity.');
+        return;
+    }
+
+    productInput.value = productId;
+    form.querySelector('input[name="quantity"]').value = quantity;
+    form.submit();
 }
 // Wishlist functionality
 function toggleWishlist(productId) {
