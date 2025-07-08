@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'logistics',
     'reviews',
     'stock',
+    'chat',
 ]
 
 MIDDLEWARE = [
@@ -71,6 +72,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'marketplace.context_processors.cart_count',
+                'marketplace.context_processors.wishlist_count',
                 'orders.context_processors.pending_orders_count',
             ],
         },

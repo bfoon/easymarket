@@ -126,22 +126,34 @@ function buyNow(productId) {
     form.querySelector('input[name="quantity"]').value = quantity;
     form.submit();
 }
+
 // Wishlist functionality
-function toggleWishlist(productId) {
-    const button = event.target.closest('button');
-    const icon = button.querySelector('i');
+window.toggleWishlist = function(productId) {
+    const btn = document.getElementById(`wishlistBtn-${productId}`);
+    const icon = document.getElementById(`wishlistIcon-${productId}`);
 
-    // Toggle heart icon
-    if (icon.classList.contains('far')) {
-        icon.classList.remove('far');
-        icon.classList.add('fas');
-        icon.style.color = '#dc3545';
-    } else {
-        icon.classList.remove('fas');
-        icon.classList.add('far');
-        icon.style.color = '';
-    }
-
-    // Here you would make an AJAX call to add/remove from wishlist
-    console.log('Toggle wishlist for product:', productId);
+    fetch(`/wishlist/toggle/${productId}/`, {
+        method: 'GET',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            if (data.status === 'added') {
+                icon.classList.remove('far');
+                icon.classList.add('fas', 'text-danger');
+            } else if (data.status === 'removed') {
+                icon.classList.remove('fas', 'text-danger');
+                icon.classList.add('far');
+            }
+        } else {
+            alert(data.error || "Something went wrong.");
+        }
+    })
+    .catch(error => {
+        console.error('Wishlist toggle failed:', error);
+        alert("An error occurred while updating your wishlist.");
+    });
 }

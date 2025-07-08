@@ -1,5 +1,7 @@
 from django.shortcuts import render, get_object_or_404, redirect
-from .models import Category, Product, ProductView, CartItem, Cart, CelebrityFeature
+from .models import (Category, Product, ProductView,
+                     CartItem, Cart, CelebrityFeature, Wishlist)
+from chat.models import ChatThread, ChatMessage
 import re
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
@@ -121,6 +123,12 @@ def product_detail(request, product_id):
         if last_space != -1:
             short_description = short_description[:last_space]
 
+    # Load chat messages (if user is logged in and not the seller)
+    messages = []
+    if request.user.is_authenticated and request.user != product.seller:
+        thread = ChatThread.objects.filter(participants=request.user).filter(participants=product.seller).first()
+        if thread:
+            messages = ChatMessage.objects.filter(thread=thread).select_related('sender').order_by('timestamp')
 
     return render(request, 'marketplace/product_detail.html', {
         'product': product,
@@ -130,6 +138,7 @@ def product_detail(request, product_id):
         'short_description': short_description,
         'description_truncated': description_truncated,
         'featured_celebrities': featured_celebrities,
+        'messages': messages,
     })
 
 
@@ -946,6 +955,26 @@ def remove_cart_item(request):
             'message': f'An error occurred: {str(e)}'
         })
 
+
+@login_required
+def toggle_wishlist(request, product_id):
+    product = Product.objects.filter(id=product_id).first()
+    if not product:
+        return JsonResponse({'success': False, 'error': 'Product not found'})
+
+    wishlist_item, created = Wishlist.objects.get_or_create(user=request.user, product=product)
+
+    if not created:
+        # Already in wishlist → remove it
+        wishlist_item.delete()
+        return JsonResponse({'success': True, 'status': 'removed'})
+
+    return JsonResponse({'success': True, 'status': 'added'})
+
+@login_required
+def my_wishlist(request):
+    items = Wishlist.objects.filter(user=request.user).select_related('product')
+    return render(request, 'wishlist/my_wishlist.html', {'items': items})
 
 @csrf_exempt
 @require_POST

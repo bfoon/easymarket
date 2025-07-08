@@ -320,6 +320,16 @@ class CartItem(models.Model):
     def subtotal(self):
         return self.product.price * self.quantity
 
+class Wishlist(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='wishlist_items')
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='wishlisted_by')
+    added_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'product')  # Prevent duplicates
+
+    def __str__(self):
+        return f"{self.user} → {self.product}"
 
 class CelebrityFeature(models.Model):
     celebrity_name = models.CharField(max_length=100)

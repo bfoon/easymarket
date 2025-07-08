@@ -179,10 +179,11 @@
                         <input type="hidden" name="quantity" id="buyNowQuantity">
                     </form>
 
-                    <!-- Wishlist -->
-                    <button class="btn btn-outline-secondary" onclick="toggleWishlist({{ product.id }})">
-                        <i class="far fa-heart"></i>
+                    <!-- Wishlist Toggle Button -->
+                    <button class="btn btn-outline-secondary" onclick="toggleWishlist({{ product.id }})" id="wishlistBtn-{{ product.id }}">
+                        <i id="wishlistIcon-{{ product.id }}" class="{% if product.id in user_wishlist_product_ids %}fas fa-heart text-danger{% else %}far fa-heart{% endif %}"></i>
                     </button>
+
                 </div>
 
                 <!-- Shipping Info -->
@@ -207,8 +208,85 @@
                 <div class="seller-info border-top pt-3 mt-3">
                     <h6><i class="fas fa-store me-2"></i> Seller: {{ product.seller.get_full_name|default:product.seller.username }}</h6>
                     <p class="text-muted small">Seller Rating: 4.8/5.0</p>
-                    <a href="#" class="btn btn-outline-primary btn-sm">Visit Store</a>
+
+                    <!-- Visit Store -->
+                    <a href="#" class="btn btn-outline-primary btn-sm me-2">Visit Store</a>
+
+                    <!-- Chat Toggle Button -->
+                    {% if request.user.is_authenticated and request.user != product.seller %}
+                    <button type="button" class="btn btn-outline-success btn-sm" onclick="toggleChatBox()">
+                        <i class="fas fa-comments me-1"></i> Chat with Seller
+                    </button>
+                    {% endif %}
+
+                     <!-- Enhanced Floating Chat Box -->
+                    <div id="chatBox" class="floating-chat-box d-none">
+                        <div class="chat-header d-flex justify-content-between align-items-center p-3 bg-gradient-success text-white rounded-top position-relative overflow-hidden">
+                            <div class="header-shimmer position-absolute top-0 start-0 w-100 h-100"></div>
+                            <div class="seller-info d-flex align-items-center gap-2 position-relative">
+                                <div class="seller-avatar d-flex align-items-center justify-content-center rounded-circle bg-white text-success fw-bold position-relative overflow-hidden">
+                                    <i class="fas fa-user"></i>
+                                    <div class="avatar-glow position-absolute top-0 start-0 w-100 h-100"></div>
+                                </div>
+                                <div class="seller-details">
+                                    <strong class="d-block mb-0">{{ product.seller.get_full_name|default:product.seller.username }}</strong>
+                                    <small class="d-flex align-items-center gap-1 opacity-75">
+                                        <span class="status-dot rounded-circle bg-light"></span>
+                                        <span>Online now</span>
+                                    </small>
+                                </div>
+                            </div>
+                            <button type="button" class="btn-close btn-close-white close-btn" onclick="toggleChatBox()"></button>
+                        </div>
+
+                        <div class="chat-body p-3 position-relative" style="height: 280px; overflow-y: auto; background: linear-gradient(to bottom, #f8f9fa, #e9ecef);" id="chatMessages">
+                            {% if product %}
+                                <div class="product-preview mb-3 p-2 bg-white rounded shadow-sm border-start border-success border-3">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <i class="fas fa-box text-success"></i>
+                                        <small><strong>{{ product.name }}</strong> - D{{ product.price }}</small>
+                                    </div>
+                                </div>
+                            {% endif %}
+
+                            {% if messages %}
+                                {% for msg in messages %}
+                                    <div class="message-container mb-3 {% if msg.sender == request.user %}text-end{% endif %}" data-aos="fade-up" data-aos-duration="400">
+                                        <div class="message p-2 rounded-4 d-inline-block position-relative {% if msg.sender == request.user %}bg-gradient-success text-white message-sent{% else %}bg-white message-received{% endif %}">
+                                            <small class="message-text">{{ msg.message }}</small><br>
+                                            <small class="message-time opacity-75">{{ msg.timestamp|timesince }} ago</small>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            {% else %}
+                                <div class="empty-state text-center py-5 text-muted">
+                                    <i class="fas fa-comments fa-3x mb-3 opacity-25 floating-icon"></i>
+                                    <p class="small">No messages yet. Start the conversation!</p>
+                                </div>
+                            {% endif %}
+
+                            <div class="typing-indicator d-none py-2 text-muted">
+                                <small><i class="fas fa-circle typing-dot"></i> <span class="typing-text">Typing...</span></small>
+                            </div>
+                        </div>
+
+                        <div class="chat-footer p-3 border-top bg-white">
+                            <form method="post" action="{% url 'chat:start_chat' %}" id="chatForm">
+                                {% csrf_token %}
+                                <input type="hidden" name="recipient_id" value="{{ product.seller.id }}">
+                                <input type="hidden" name="product_id" value="{{ product.id }}">
+                                <div class="input-group">
+                                    <input type="text" name="message" class="form-control enhanced-input rounded-pill border-2 px-3" placeholder="Type your message..." required>
+                                    <button class="btn btn-success enhanced-send-btn rounded-circle ms-2 d-flex align-items-center justify-content-center" type="submit">
+                                        <i class="fas fa-paper-plane"></i>
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
                 </div>
+
             </div>
         </div>
     </div>
@@ -442,6 +520,338 @@
         {% endfor %}
     </div>
 </section>
+<style>
+/* Enhanced Chat Box Styles */
+.floating-chat-box {
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+    border-radius: 20px !important;
+    overflow: hidden;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    animation: chatSlideIn 0.5s ease-out;
+    max-width: 400px;
+    width: 100%;
+}
+
+@keyframes chatSlideIn {
+    from {
+        transform: translateY(100px) scale(0.8);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0) scale(1);
+        opacity: 1;
+    }
+}
+
+.bg-gradient-success {
+    background: linear-gradient(135deg, #28a745, #20c997) !important;
+}
+
+.header-shimmer {
+    background: linear-gradient(45deg, transparent, rgba(255,255,255,0.1), transparent);
+    animation: shimmer 3s infinite;
+}
+
+@keyframes shimmer {
+    0%, 100% { transform: translateX(-100%); }
+    50% { transform: translateX(100%); }
+}
+
+.seller-avatar {
+    width: 40px;
+    height: 40px;
+    font-size: 16px;
+}
+
+.avatar-glow {
+    background: linear-gradient(45deg, transparent, rgba(40,167,69,0.3), transparent);
+    animation: avatarGlow 2s infinite;
+}
+
+@keyframes avatarGlow {
+    0%, 100% { opacity: 0; }
+    50% { opacity: 1; }
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.close-btn {
+    transition: all 0.3s ease;
+    padding: 8px;
+    border-radius: 50%;
+}
+
+.close-btn:hover {
+    background: rgba(255, 255, 255, 0.2) !important;
+    transform: rotate(90deg);
+}
+
+.chat-body::-webkit-scrollbar {
+    width: 6px;
+}
+
+.chat-body::-webkit-scrollbar-track {
+    background: rgba(0,0,0,0.1);
+    border-radius: 10px;
+}
+
+.chat-body::-webkit-scrollbar-thumb {
+    background: linear-gradient(45deg, #28a745, #20c997);
+    border-radius: 10px;
+}
+
+.product-preview {
+    animation: fadeInUp 0.5s ease-out;
+}
+
+@keyframes fadeInUp {
+    from {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.message-container {
+    animation: messageSlide 0.4s ease-out;
+}
+
+@keyframes messageSlide {
+    from {
+        transform: translateX(-20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.message-container.text-end {
+    animation: messageSlideRight 0.4s ease-out;
+}
+
+@keyframes messageSlideRight {
+    from {
+        transform: translateX(20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.message {
+    max-width: 80%;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s ease;
+}
+
+.message:hover {
+    transform: scale(1.02);
+}
+
+.message-sent {
+    background: linear-gradient(135deg, #28a745, #20c997) !important;
+    border-bottom-right-radius: 8px !important;
+}
+
+.message-received {
+    border-bottom-left-radius: 8px !important;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.empty-state {
+    animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.floating-icon {
+    animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
+}
+
+.typing-indicator {
+    animation: fadeIn 0.3s ease-out;
+}
+
+.typing-dot {
+    animation: typingPulse 1.4s infinite;
+    font-size: 8px;
+}
+
+@keyframes typingPulse {
+    0%, 80%, 100% { opacity: 0.3; }
+    40% { opacity: 1; }
+}
+
+.enhanced-input {
+    background: #f8f9fa;
+    border-color: #e0e0e0 !important;
+    transition: all 0.3s ease;
+}
+
+.enhanced-input:focus {
+    border-color: #28a745 !important;
+    background: white;
+    box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.1) !important;
+}
+
+.enhanced-send-btn {
+    width: 45px;
+    height: 45px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+}
+
+.enhanced-send-btn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 20px rgba(40, 167, 69, 0.4);
+}
+
+.enhanced-send-btn:active {
+    transform: scale(0.95);
+}
+
+/* Responsive adjustments */
+@media (max-width: 576px) {
+    .floating-chat-box {
+        max-width: 100%;
+        margin: 0 10px;
+    }
+
+    .seller-details strong {
+        font-size: 14px;
+    }
+
+    .chat-body {
+        height: 250px !important;
+    }
+}
+
+/* Loading animation for form submission */
+.form-loading .enhanced-send-btn {
+    pointer-events: none;
+}
+
+.form-loading .enhanced-send-btn i {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const chatMessages = document.getElementById('chatMessages');
+    const chatForm = document.getElementById('chatForm');
+    const messageInput = chatForm.querySelector('input[name="message"]');
+    const typingIndicator = document.querySelector('.typing-indicator');
+
+    // Auto-scroll to bottom
+    function scrollToBottom() {
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    // Initial scroll
+    scrollToBottom();
+
+    // Enhanced form submission with loading state
+    chatForm.addEventListener('submit', function(e) {
+        const submitBtn = this.querySelector('.enhanced-send-btn');
+        const message = messageInput.value.trim();
+
+        if (!message) {
+            e.preventDefault();
+            return;
+        }
+
+        // Add loading state
+        submitBtn.classList.add('form-loading');
+        submitBtn.disabled = true;
+
+        // Show typing indicator briefly
+        if (typingIndicator) {
+            typingIndicator.classList.remove('d-none');
+            setTimeout(() => {
+                typingIndicator.classList.add('d-none');
+            }, 1000);
+        }
+    });
+
+    // Enter key to send message
+    messageInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            chatForm.dispatchEvent(new Event('submit'));
+        }
+    });
+
+    // Add smooth scroll behavior for new messages
+    const observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+                scrollToBottom();
+            }
+        });
+    });
+
+    observer.observe(chatMessages, { childList: true, subtree: true });
+
+    // Animate existing messages on load
+    document.querySelectorAll('.message-container').forEach((msg, index) => {
+        msg.style.animationDelay = `${index * 0.1}s`;
+    });
+});
+
+// Enhanced toggle function with smooth animation
+function toggleChatBox() {
+    const chatBox = document.getElementById('chatBox');
+    if (chatBox.classList.contains('d-none')) {
+        chatBox.classList.remove('d-none');
+        chatBox.style.animation = 'chatSlideIn 0.5s ease-out';
+    } else {
+        chatBox.style.animation = 'chatSlideIn 0.5s ease-out reverse';
+        setTimeout(() => {
+            chatBox.classList.add('d-none');
+        }, 500);
+    }
+}
+
+// Simulate periodic status updates (optional)
+setInterval(() => {
+    const statusDot = document.querySelector('.status-dot');
+    if (statusDot) {
+        statusDot.style.background = Math.random() > 0.9 ? '#ffc107' : '#ffffff';
+    }
+}, 10000);
+</script>
+
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
