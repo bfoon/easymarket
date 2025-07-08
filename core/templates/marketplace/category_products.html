@@ -1,6 +1,12 @@
 {% extends 'base.html' %}
 {% load static %}
 
+{% block title %}{{ category.name }} - Shop Smart{% endblock %}
+
+{% block meta_description %}
+<meta name="description" content="Shop {{ category.name }} products at unbeatable prices. {{ products|length }} items available with free shipping and 30-day returns.">
+{% endblock %}
+
 {% block content %}
 <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
 <link rel="stylesheet" type="text/css" href="{% static 'css/hot_pick.css' %}">
@@ -18,19 +24,19 @@
                 <!-- Hero Features -->
                 <div class="d-flex flex-wrap gap-3 hero-features">
                     <div class="hero-feature d-flex align-items-center text-white-50">
-                        <i class="fas fa-shipping-fast me-2 text-warning small"></i>
+                        <i class="fas fa-shipping-fast me-2 text-warning small" aria-hidden="true"></i>
                         <span class="small">FREE Shipping</span>
                     </div>
                     <div class="hero-feature d-flex align-items-center text-white-50">
-                        <i class="fas fa-shield-alt me-2 text-warning small"></i>
+                        <i class="fas fa-shield-alt me-2 text-warning small" aria-hidden="true"></i>
                         <span class="small">100% Secure</span>
                     </div>
                     <div class="hero-feature d-flex align-items-center text-white-50">
-                        <i class="fas fa-undo me-2 text-warning small"></i>
+                        <i class="fas fa-undo me-2 text-warning small" aria-hidden="true"></i>
                         <span class="small">30-Day Returns</span>
                     </div>
                     <div class="hero-feature d-flex align-items-center text-white-50">
-                        <i class="fas fa-clock me-2 text-warning small"></i>
+                        <i class="fas fa-clock me-2 text-warning small" aria-hidden="true"></i>
                         <span class="small">24/7 Support</span>
                     </div>
                 </div>
@@ -39,7 +45,7 @@
             <!-- Right Badge -->
             <div class="col-lg-3 text-center">
                 <div class="hero-badge p-3 rounded-3 bg-dark bg-opacity-25">
-                    <i class="fas fa-bolt fa-3x text-warning"></i>
+                    <i class="fas fa-bolt fa-3x text-warning" aria-hidden="true"></i>
                     <div class="mt-2 fw-bold text-warning">SHOP LIKE A BOSS</div>
                 </div>
             </div>
@@ -47,6 +53,7 @@
         </div>
     </div>
 </section>
+
 <section class="py-4">
     <div class="container">
         <!-- Breadcrumb -->
@@ -54,131 +61,320 @@
             <ol class="breadcrumb">
                 <li class="breadcrumb-item">
                     <a href="{% url 'marketplace:product_list' %}">
-                        <i class="fas fa-home me-1"></i> Home
+                        <i class="fas fa-home me-1" aria-hidden="true"></i> Home
                     </a>
                 </li>
                 <li class="breadcrumb-item">
                     <a href="{% url 'marketplace:all_products' %}">
-                        <i class="fas fa-th me-1"></i> Categories
+                        <i class="fas fa-th me-1" aria-hidden="true"></i> Categories
                     </a>
                 </li>
+                {% if category.parent %}
+                <li class="breadcrumb-item">
+                    <a href="{% url 'marketplace:category_detail' category.parent.id %}">
+                        <i class="fas fa-tag me-1" aria-hidden="true"></i>
+                        {{ category.parent.name }}
+                    </a>
+                </li>
+                {% endif %}
                 <li class="breadcrumb-item active" aria-current="page">
                     {{ category.name }}
                 </li>
             </ol>
         </nav>
 
-        <!-- Category Header with Stats -->
+        <!-- Category Header with Stats and Actions -->
         <div class="row align-items-center mb-4">
-            <div class="col-md-8">
+            <div class="col-md-6">
+                <!-- Parent Category Navigation -->
+                {% if category.parent %}
+                <div class="mb-2">
+                    <a href="{% url 'marketplace:category_detail' category.parent.id %}"
+                       class="btn btn-outline-secondary btn-sm me-2"
+                       title="Back to {{ category.parent.name }}">
+                        <i class="fas fa-arrow-left me-1" aria-hidden="true"></i>
+                        Back to {{ category.parent.name }}
+                    </a>
+                    <span class="text-muted small">
+                        <i class="fas fa-chevron-right mx-1" aria-hidden="true"></i>
+                    </span>
+                </div>
+                {% endif %}
+
                 <h2 class="section-title">
-                    <i class="fas fa-tags me-2"></i> {{ category.name }}
+                    <i class="fas fa-tags me-2" aria-hidden="true"></i> {{ category.name }}
                 </h2>
+                {% if category.description %}
+                <p class="text-muted mb-2">{{ category.description }}</p>
+                {% endif %}
                 {% if products %}
                 <div class="d-flex align-items-center mb-3">
                     <span class="badge-choice me-2">{{ category.name }}</span>
                     <p class="mb-0 text-muted">
-                        {{ products|length }} product{{ products|length|pluralize }} found
+                        {% if is_paginated %}
+                        Showing {{ page_obj.start_index }}-{{ page_obj.end_index }} of {{ page_obj.paginator.count }}
+                        {% else %}
+                        {{ products|length }}
+                        {% endif %}
+                         product{{ products|length|pluralize }} found
+                        {% if request.GET.q %}
+                        for "{{ request.GET.q }}"
+                        {% endif %}
                     </p>
                 </div>
                 {% endif %}
             </div>
-            <div class="col-md-4 text-md-end">
-                <!-- Sort Options -->
-                <div class="dropdown">
-                    <button class="btn btn-outline-primary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                        <i class="fas fa-sort me-1"></i> Sort by
-                    </button>
-                    <ul class="dropdown-menu">
-                        <li><a class="dropdown-item" href="?sort=name">Name A-Z</a></li>
-                        <li><a class="dropdown-item" href="?sort=-name">Name Z-A</a></li>
-                        <li><a class="dropdown-item" href="?sort=price">Price: Low to High</a></li>
-                        <li><a class="dropdown-item" href="?sort=-price">Price: High to Low</a></li>
-                        <li><a class="dropdown-item" href="?sort=-created_at">Newest First</a></li>
-                    </ul>
+            <div class="col-md-6">
+                <div class="row g-2">
+                    <!-- Search within category -->
+                    <div class="col-md-8">
+                        <form method="GET" class="d-flex">
+                            <input type="search"
+                                   name="q"
+                                   class="form-control form-control-sm"
+                                   placeholder="Search in {{ category.name }}..."
+                                   value="{{ request.GET.q }}"
+                                   aria-label="Search products in {{ category.name }}">
+                            <button type="submit" class="btn btn-outline-primary btn-sm ms-2">
+                                <i class="fas fa-search" aria-hidden="true"></i>
+                                <span class="visually-hidden">Search</span>
+                            </button>
+                        </form>
+                    </div>
+                    <!-- Sort Options -->
+                    <div class="col-md-4">
+                        <div class="dropdown">
+                            <button class="btn btn-outline-primary btn-sm dropdown-toggle w-100"
+                                    type="button"
+                                    data-bs-toggle="dropdown"
+                                    aria-expanded="false">
+                                <i class="fas fa-sort me-1" aria-hidden="true"></i> Sort by
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item {% if request.GET.sort == 'name' %}active{% endif %}"
+                                       href="?sort=name{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}">Name A-Z</a></li>
+                                <li><a class="dropdown-item {% if request.GET.sort == '-name' %}active{% endif %}"
+                                       href="?sort=-name{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}">Name Z-A</a></li>
+                                <li><a class="dropdown-item {% if request.GET.sort == 'price' %}active{% endif %}"
+                                       href="?sort=price{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}">Price: Low to High</a></li>
+                                <li><a class="dropdown-item {% if request.GET.sort == '-price' %}active{% endif %}"
+                                       href="?sort=-price{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}">Price: High to Low</a></li>
+                                <li><a class="dropdown-item {% if request.GET.sort == '-created_at' %}active{% endif %}"
+                                       href="?sort=-created_at{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}">Newest First</a></li>
+                                <li><a class="dropdown-item {% if request.GET.sort == 'popularity' %}active{% endif %}"
+                                       href="?sort=popularity{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}">Most Popular</a></li>
+                            </ul>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
 
+        <!-- Filter Tags (if search or filters are active) -->
+        {% if request.GET.q or request.GET.sort %}
+        <div class="mb-3">
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+                <span class="text-muted small">Active filters:</span>
+                {% if request.GET.q %}
+                <span class="badge bg-primary">
+                    Search: "{{ request.GET.q }}"
+                    <a href="?{% if request.GET.sort %}sort={{ request.GET.sort }}{% endif %}"
+                       class="text-white ms-1 text-decoration-none">×</a>
+                </span>
+                {% endif %}
+                {% if request.GET.sort %}
+                <span class="badge bg-secondary">
+                    Sort: {{ request.GET.sort|title }}
+                    <a href="?{% if request.GET.q %}q={{ request.GET.q }}{% endif %}"
+                       class="text-white ms-1 text-decoration-none">×</a>
+                </span>
+                {% endif %}
+                {% if request.GET.q or request.GET.sort %}
+                <a href="{% url 'marketplace:category_detail' category.id %}"
+                   class="btn btn-outline-secondary btn-sm">Clear All</a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
         {% if products %}
+        <!-- Subcategories -->
+        {% if subcategories %}
+        <div class="mb-4">
+            <h5 class="section-title">
+                <i class="fas fa-sitemap me-2" aria-hidden="true"></i> Explore Subcategories
+            </h5>
+            <div class="row g-2">
+                {% for subcat in subcategories %}
+                <div class="col-6 col-md-3 col-lg-2">
+                    <a href="{% url 'marketplace:category_detail' subcat.id %}"
+                       class="text-decoration-none"
+                       title="Browse {{ subcat.name }} products">
+                        <div class="category-card text-center py-3 bg-light border rounded h-100 hover-shadow">
+                            <i class="fas fa-{{ subcat.icon|default:'tags' }} fa-lg text-primary mb-2" aria-hidden="true"></i>
+                            <div class="fw-bold">{{ subcat.name }}</div>
+                            {% if subcat.product_count %}
+                            <small class="text-muted">({{ subcat.product_count }} items)</small>
+                            {% endif %}
+                        </div>
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
         <!-- Products Grid -->
-        <div class="row g-2">
+        <div class="row g-2" id="products-grid">
             {% for product in products %}
-            <div class="col-6 col-md-3 col-lg-2">
-                <div class="product-card">
-                    <div class="product-image-container">
-                        <a href="{% url 'marketplace:product_detail' product.id %}">
+            <div class="col-6 col-md-3 col-lg-2 product-item" data-product-id="{{ product.id }}">
+                <div class="product-card h-100">
+                    <div class="product-image-container position-relative">
+                        <a href="{% url 'marketplace:product_detail' product.id %}"
+                           title="View {{ product.name }} details">
                             {% if product.image %}
                             <img src="{{ product.image.url }}"
                                  class="product-image"
                                  alt="{{ product.name }}"
-                                 loading="lazy">
+                                 loading="lazy"
+                                 onerror="this.src='{% static 'images/placeholder.png' %}'">
                             {% else %}
                             <div class="product-image d-flex align-items-center justify-content-center bg-light">
-                                <i class="fas fa-image text-muted" style="font-size: 2rem;"></i>
+                                <i class="fas fa-image text-muted" style="font-size: 2rem;" aria-hidden="true"></i>
                             </div>
                             {% endif %}
                         </a>
 
                         <!-- Product Badges -->
-                        {% if product.is_new %}
-                        <span class="badge-new">NEW</span>
-                        {% endif %}
+                        <div class="product-badges">
+                            {% if product.is_new %}
+                            <span class="badge-new">NEW</span>
+                            {% endif %}
 
-                        {% if product.discount_percentage %}
-                        <span class="badge-sale">{{ product.discount_percentage }}% OFF</span>
-                        {% endif %}
+                            {% if product.discount_percentage %}
+                            <span class="badge-sale">{{ product.discount_percentage }}% OFF</span>
+                            {% endif %}
 
-                        {% if product.is_featured %}
-                        <span class="badge-choice">
-                            <i class="fas fa-fire me-1"></i>
-                        </span>
-                        {% endif %}
+                            {% if product.is_featured %}
+                            <span class="badge-choice">
+                                <i class="fas fa-fire me-1" aria-hidden="true"></i>
+                                HOT
+                            </span>
+                            {% endif %}
+
+                            {% if not product.is_in_stock %}
+                            <span class="badge-out-of-stock">OUT OF STOCK</span>
+                            {% endif %}
+                        </div>
+
+                        <!-- Quick Actions -->
+                        <div class="product-quick-actions">
+                            <button class="btn btn-sm btn-outline-light"
+                                    onclick="addToWishlist({{ product.id }}, this)"
+                                    title="Add to wishlist"
+                                    aria-label="Add {{ product.name }} to wishlist">
+                                <i class="far fa-heart" aria-hidden="true"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-light"
+                                    onclick="quickView({{ product.id }})"
+                                    title="Quick view"
+                                    aria-label="Quick view {{ product.name }}">
+                                <i class="fas fa-eye" aria-hidden="true"></i>
+                            </button>
+                        </div>
                     </div>
 
                     <!-- Product Details -->
-                    <div class="card-body">
-                        <h6 class="card-title">
-                            <a href="{% url 'marketplace:product_detail' product.id %}" class="text-decoration-none text-dark">
-                                {{ product.name|truncatechars:30 }}
+                    <div class="card-body d-flex flex-column">
+                        <h6 class="card-title mb-2">
+                            <a href="{% url 'marketplace:product_detail' product.id %}"
+                               class="text-decoration-none text-dark"
+                               title="{{ product.name }}">
+                                {{ product.name|truncatechars:35 }}
                             </a>
                         </h6>
 
-                        <!-- Rating (if available) -->
+                        <!-- Brand -->
+                        {% if product.brand %}
+                        <div class="product-brand mb-1">
+                            <small class="text-muted">{{ product.brand }}</small>
+                        </div>
+                        {% endif %}
+
+                        <!-- Rating -->
                         {% if product.average_rating %}
-                        <div class="rating">
+                        <div class="rating mb-2" role="img" aria-label="Rating: {{ product.average_rating }} out of 5 stars">
                             {% for i in "12345" %}
                                 {% if forloop.counter <= product.average_rating %}
-                                    <i class="fas fa-star"></i>
+                                    <i class="fas fa-star text-warning" aria-hidden="true"></i>
                                 {% else %}
-                                    <i class="far fa-star"></i>
+                                    <i class="far fa-star text-warning" aria-hidden="true"></i>
                                 {% endif %}
                             {% endfor %}
                             {% if product.review_count %}
-                            <span class="rating-count">({{ product.review_count|floatformat:0 }})</span>
+                            <span class="rating-count text-muted">({{ product.review_count|floatformat:0 }})</span>
                             {% endif %}
                         </div>
                         {% endif %}
 
                         <!-- Price -->
-                        <div class="price-container">
+                        <div class="price-container mb-2">
                             {% if product.original_price and product.original_price != product.price %}
-                            <span class="original-price">${{ product.original_price }}</span>
+                            <span class="original-price text-muted text-decoration-line-through">${{ product.original_price }}</span>
+                            <span class="badge bg-success ms-1">
+                                Save ${{ product.original_price|floatformat:2|add:"-"|add:product.price|floatformat:2 }}
+                            </span>
                             {% endif %}
-                            <span class="price-tag">${{ product.price }}</span>
+                            <div class="price-tag fw-bold text-primary">${{ product.price }}</div>
                         </div>
 
+                        <!-- Stock Status -->
+                        {% if product.stock.quantity %}
+                        <div class="stock-status mb-2">
+                            {% if product.stock.quantity <= 5 %}
+                            <small class="text-warning">
+                                <i class="fas fa-exclamation-triangle me-1" aria-hidden="true"></i>
+                                Only {{ product.stock.quantity }} left!
+                            </small>
+                            {% elif product.stock.quantity <= 10 %}
+                            <small class="text-info">{{ product.stock.quantity }} in stock</small>
+                            {% else %}
+                            <small class="text-success">In stock</small>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+
                         <!-- Add to Cart Button -->
-                        <button class="btn btn-outline-primary w-100 btn-sm"
-                                onclick="addToCart({{ product.id }}, this)"
-                                data-stock="{{ product.stock.quantity|default:0 }}"
-                                {% if not product.is_in_stock %} disabled {% endif %}>
-                            <i class="fas fa-cart-plus me-1"></i> Add to Cart
-                        </button>
+                        <div class="mt-auto">
+                            {% if product.is_in_stock %}
+                            <button class="btn btn-outline-primary w-100 btn-sm add-to-cart-btn"
+                                    onclick="addToCart({{ product.id }}, this)"
+                                    data-product-id="{{ product.id }}"
+                                    data-stock="{{ product.stock.quantity|default:0 }}"
+                                    aria-label="Add {{ product.name }} to cart">
+                                <i class="fas fa-cart-plus me-1" aria-hidden="true"></i>
+                                <span class="btn-text">Add to Cart</span>
+                            </button>
+                            {% else %}
+                            <button class="btn btn-outline-secondary w-100 btn-sm"
+                                    disabled
+                                    aria-label="{{ product.name }} is out of stock">
+                                <i class="fas fa-ban me-1" aria-hidden="true"></i>
+                                Out of Stock
+                            </button>
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
             </div>
             {% endfor %}
+        </div>
+
+        <!-- Loading indicator for infinite scroll -->
+        <div id="loading-indicator" class="text-center mt-4 d-none">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading more products...</span>
+            </div>
         </div>
 
         <!-- Pagination -->
@@ -187,28 +383,34 @@
             <ul class="pagination justify-content-center">
                 {% if page_obj.has_previous %}
                 <li class="page-item">
-                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}">
-                        <i class="fas fa-chevron-left"></i>
+                    <a class="page-link"
+                       href="?page={{ page_obj.previous_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.sort %}&sort={{ request.GET.sort }}{% endif %}"
+                       aria-label="Previous page">
+                        <i class="fas fa-chevron-left" aria-hidden="true"></i>
                     </a>
                 </li>
                 {% endif %}
 
                 {% for num in page_obj.paginator.page_range %}
                 {% if page_obj.number == num %}
-                <li class="page-item active">
+                <li class="page-item active" aria-current="page">
                     <span class="page-link">{{ num }}</span>
                 </li>
                 {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
                 <li class="page-item">
-                    <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+                    <a class="page-link"
+                       href="?page={{ num }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.sort %}&sort={{ request.GET.sort }}{% endif %}"
+                       aria-label="Page {{ num }}">{{ num }}</a>
                 </li>
                 {% endif %}
                 {% endfor %}
 
                 {% if page_obj.has_next %}
                 <li class="page-item">
-                    <a class="page-link" href="?page={{ page_obj.next_page_number }}">
-                        <i class="fas fa-chevron-right"></i>
+                    <a class="page-link"
+                       href="?page={{ page_obj.next_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}{% if request.GET.sort %}&sort={{ request.GET.sort }}{% endif %}"
+                       aria-label="Next page">
+                        <i class="fas fa-chevron-right" aria-hidden="true"></i>
                     </a>
                 </li>
                 {% endif %}
@@ -218,13 +420,37 @@
 
         {% else %}
         <!-- Empty State -->
-        <div class="empty-state w-100">
-            <i class="fas fa-box-open"></i>
-            <h5>No products found in {{ category.name }}</h5>
-            <p>We're working hard to stock this category.<br>Check back soon for exciting new products!</p>
-            <a href="{% url 'marketplace:product_list' %}" class="btn btn-primary">
-                <i class="fas fa-arrow-left me-2"></i>Browse All Products
-            </a>
+        <div class="empty-state w-100 text-center py-5">
+            <i class="fas fa-box-open fa-4x text-muted mb-3" aria-hidden="true"></i>
+            <h5 class="mb-3">
+                {% if request.GET.q %}
+                No products found for "{{ request.GET.q }}" in {{ category.name }}
+                {% else %}
+                No products found in {{ category.name }}
+                {% endif %}
+            </h5>
+            <p class="text-muted mb-4">
+                {% if request.GET.q %}
+                Try adjusting your search terms or browse all products in this category.
+                {% else %}
+                We're working hard to stock this category.<br>Check back soon for exciting new products!
+                {% endif %}
+            </p>
+            <div class="d-flex gap-2 justify-content-center">
+                {% if request.GET.q %}
+                <a href="{% url 'marketplace:category_detail' category.id %}" class="btn btn-outline-primary">
+                    <i class="fas fa-tags me-2" aria-hidden="true"></i>Browse All {{ category.name }}
+                </a>
+                {% endif %}
+                {% if category.parent %}
+                <a href="{% url 'marketplace:category_detail' category.parent.id %}" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left me-2" aria-hidden="true"></i>Back to {{ category.parent.name }}
+                </a>
+                {% endif %}
+                <a href="{% url 'marketplace:product_list' %}" class="btn btn-primary">
+                    <i class="fas fa-home me-2" aria-hidden="true"></i>Browse All Products
+                </a>
+            </div>
         </div>
         {% endif %}
 
@@ -232,19 +458,57 @@
         {% if related_categories %}
         <div class="mt-5">
             <h5 class="section-title">
-                <i class="fas fa-layer-group me-2"></i>Related Categories
+                <i class="fas fa-layer-group me-2" aria-hidden="true"></i>You might also like
             </h5>
             <div class="row g-3">
                 {% for related_category in related_categories %}
                 <div class="col-6 col-md-4 col-lg-3">
-                    <a href="{% url 'marketplace:category_detail' related_category.id %}" class="text-decoration-none">
-                        <div class="category-card">
+                    <a href="{% url 'marketplace:category_detail' related_category.id %}"
+                       class="text-decoration-none"
+                       title="Browse {{ related_category.name }} products">
+                        <div class="category-card hover-shadow">
                             <div class="category-icon">
-                                <i class="fas fa-{{ related_category.icon|default:'tag' }}"></i>
+                                <i class="fas fa-{{ related_category.icon|default:'tag' }}" aria-hidden="true"></i>
                             </div>
-                            <h5>{{ related_category.name }}</h5>
+                            <h6 class="mb-1">{{ related_category.name }}</h6>
+                            {% if related_category.product_count %}
+                            <small class="text-muted">{{ related_category.product_count }} products</small>
+                            {% endif %}
                         </div>
                     </a>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Recently Viewed Products -->
+        {% if recently_viewed %}
+        <div class="mt-5">
+            <h5 class="section-title">
+                <i class="fas fa-history me-2" aria-hidden="true"></i>Recently Viewed
+            </h5>
+            <div class="row g-2">
+                {% for product in recently_viewed %}
+                <div class="col-6 col-md-3 col-lg-2">
+                    <div class="product-card-small">
+                        <a href="{% url 'marketplace:product_detail' product.id %}">
+                            {% if product.image %}
+                            <img src="{{ product.image.url }}"
+                                 class="product-image-small"
+                                 alt="{{ product.name }}"
+                                 loading="lazy">
+                            {% else %}
+                            <div class="product-image-small bg-light d-flex align-items-center justify-content-center">
+                                <i class="fas fa-image text-muted" aria-hidden="true"></i>
+                            </div>
+                            {% endif %}
+                        </a>
+                        <div class="p-2">
+                            <h6 class="small mb-1">{{ product.name|truncatechars:25 }}</h6>
+                            <div class="text-primary fw-bold">${{ product.price }}</div>
+                        </div>
+                    </div>
                 </div>
                 {% endfor %}
             </div>
@@ -254,4 +518,50 @@
 </section>
 
 <script src="{% static 'js/main.js' %}"></script>
+<script>
+// Quick view functionality
+function quickView(productId) {
+    // Implementation for quick view modal
+    console.log('Quick view for product:', productId);
+    // You would typically load product details in a modal here
+}
+
+// Add hover effects and smooth transitions
+document.addEventListener('DOMContentLoaded', function() {
+    // Add smooth scroll to top functionality
+    const scrollToTopBtn = document.createElement('button');
+    scrollToTopBtn.innerHTML = '<i class="fas fa-arrow-up" aria-hidden="true"></i>';
+    scrollToTopBtn.className = 'btn btn-primary rounded-circle position-fixed bottom-0 end-0 m-3 d-none';
+    scrollToTopBtn.style.zIndex = '1000';
+    scrollToTopBtn.setAttribute('aria-label', 'Scroll to top');
+    document.body.appendChild(scrollToTopBtn);
+
+    window.addEventListener('scroll', function() {
+        if (window.scrollY > 300) {
+            scrollToTopBtn.classList.remove('d-none');
+        } else {
+            scrollToTopBtn.classList.add('d-none');
+        }
+    });
+
+    scrollToTopBtn.addEventListener('click', function() {
+        window.scrollTo({
+            top: 0,
+            behavior: 'smooth'
+        });
+    });
+
+    // Add loading states to form submissions
+    const forms = document.querySelectorAll('form');
+    forms.forEach(form => {
+        form.addEventListener('submit', function() {
+            const submitBtn = form.querySelector('button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1" aria-hidden="true"></i> Loading...';
+            }
+        });
+    });
+});
+</script>
 {% endblock %}

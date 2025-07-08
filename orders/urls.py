@@ -7,6 +7,7 @@ urlpatterns = [
     # Core order views
     path('checkout/', views.checkout_cart, name='checkout_cart'),
     path('detail/<int:order_id>/', views.order_detail, name='order_detail'),
+    path('send-chat-message/', views.send_chat_message, name='send_chat_message'),
     path('history/', views.order_history, name='order_history'),
     path('complete/<int:order_id>/', views.complete_order, name='complete_order'),
 

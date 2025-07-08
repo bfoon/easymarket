@@ -138,6 +138,8 @@ class Category(models.Model):
 
         return build_tree()
 
+
+
     def get_product_count(self):
         """Get count of products in this category (assumes you have a Product model)"""
         # This method assumes you have a Product model with a category field

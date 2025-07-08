@@ -8,7 +8,7 @@ from django.core.paginator import Paginator
 from django.utils import timezone
 from datetime import timedelta
 from stock.utils import reduce_stock
-from .models import Order, OrderItem,  PromoCode
+from .models import Order, OrderItem, PromoCode, ChatMessage
 from marketplace.models import Cart, CartItem
 from django.core.exceptions import ValidationError
 from decimal import Decimal
@@ -100,19 +100,74 @@ def checkout_cart(request):
 
 @login_required
 def order_detail(request, order_id):
-    order = get_object_or_404(Order, id=order_id, buyer=request.user)
+    """Enhanced order_detail view with chat messages"""
+    try:
+        order = Order.objects.get(id=order_id, buyer=request.user)
+    except Order.DoesNotExist:
+        return redirect('orders:order_history')
 
-    # Get other orders for the sidebar (exclude current order)
-    other_orders = Order.objects.filter(
-        buyer=request.user
-    ).exclude(id=order_id).order_by('-created_at')[:5]
+    # Get other orders for sidebar
+    other_orders = Order.objects.filter(buyer=request.user).exclude(id=order_id)[:5]
+
+    # Get chat messages for this order
+    chat_messages = ChatMessage.objects.filter(order=order).order_by('created_at')
 
     context = {
         'order': order,
         'other_orders': other_orders,
+        'chat_messages': chat_messages,
     }
 
     return render(request, 'orders/order_detail.html', context)
+
+
+@login_required
+@require_POST
+def send_chat_message(request):
+    """Handle AJAX chat message sending"""
+    try:
+        # Get form data
+        order_id = request.POST.get('order_id')
+        message_content = request.POST.get('message', '').strip()
+
+        if not order_id or not message_content:
+            return JsonResponse({
+                'success': False,
+                'error': 'Missing required data'
+            })
+
+        # Verify order belongs to user
+        try:
+            order = Order.objects.get(id=order_id, buyer=request.user)
+        except Order.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': 'Order not found'
+            })
+
+        # Create the chat message
+        chat_message = ChatMessage.objects.create(
+            order=order,
+            sender=request.user,
+            content=message_content
+        )
+
+        return JsonResponse({
+            'success': True,
+            'message': {
+                'id': chat_message.id,
+                'content': chat_message.content,
+                'sender': chat_message.sender.username,
+                'created_at': chat_message.created_at.strftime('%b %d, %Y %H:%M'),
+                'is_sender': True
+            }
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        })
 
 
 @login_required

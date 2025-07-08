@@ -1,4 +1,5 @@
 from django.db import models
+from django.contrib.auth.models import User
 from django.conf import settings
 from django.utils import timezone
 from decimal import Decimal
@@ -214,35 +215,16 @@ class OrderStatusHistory(models.Model):
     def __str__(self):
         return f"Order #{self.order.id} - {self.get_status_display()} at {self.timestamp}"
 
-#
-# class OrderPayment(models.Model):
-#     """Track payment information for orders"""
-#     PAYMENT_STATUS_CHOICES = [
-#         ('pending', 'Pending'),
-#         ('processing', 'Processing'),
-#         ('completed', 'Completed'),
-#         ('failed', 'Failed'),
-#         ('refunded', 'Refunded'),
-#     ]
-#
-#     order = models.OneToOneField(Order, on_delete=models.CASCADE, related_name='payment')
-#     payment_method = models.CharField(max_length=20, choices=Order.PAYMENT_METHOD_CHOICES)
-#     payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default='pending')
-#     transaction_id = models.CharField(max_length=100, blank=True, null=True)
-#     amount = models.DecimalField(max_digits=10, decimal_places=2)
-#     payment_date = models.DateTimeField(blank=True, null=True)
-#     refund_date = models.DateTimeField(blank=True, null=True)
-#     refund_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
-#     notes = models.TextField(blank=True, null=True)
-#     created_at = models.DateTimeField(auto_now_add=True)
-#
-#     def __str__(self):
-#         return f"Payment for Order #{self.order.id} - {self.get_payment_status_display()}"
-#
-#     def is_successful(self):
-#         return self.payment_status == 'completed'
-#
-#     def can_be_refunded(self):
-#         return self.payment_status == 'completed' and self.refund_amount < self.amount
-#
-#
+
+class ChatMessage(models.Model):
+    order = models.ForeignKey('Order', on_delete=models.CASCADE, related_name='chat_messages')
+    sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    content = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_read = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f"Message from {self.sender.username} for Order #{self.order.id}"

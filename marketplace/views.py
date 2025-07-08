@@ -9,8 +9,8 @@ from decimal import Decimal
 import json
 from datetime import timedelta
 from django.utils import timezone
-from django.core.paginator import Paginator
-from django.db.models import Q, Count, F, Sum
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from django.db.models import Q, Count, F, Sum, Avg
 # Create your views here!
 
 def all_products(request):
@@ -182,15 +182,246 @@ def category_products(request, slug):
         'products': products,
     })
 
+
 def category_detail(request, pk):
     category = get_object_or_404(Category, pk=pk)
-    products = Product.objects.filter(category=category)
-    subcategories = category.get_subcategories()
 
-    return render(request, 'marketplace/category_detail.html', {
+    # Get search query
+    search_query = request.GET.get('q', '').strip()
+
+    # Get sort parameter
+    sort_by = request.GET.get('sort', '')
+
+    # Get all subcategories at any depth (children, grandchildren, etc.)
+    all_descendants = category.get_all_subcategories()
+
+    # Collect category IDs: main + all descendant IDs
+    related_category_ids = [category.id] + [subcat.id for subcat in all_descendants]
+
+    # Base queryset with products in this category and all subcategories
+    products_queryset = Product.objects.filter(
+        category_id__in=related_category_ids,
+        is_active=True  # Only show active products
+    ).select_related('category', 'brand').prefetch_related('stock')
+
+    # Apply search filter if query exists
+    if search_query:
+        products_queryset = products_queryset.filter(
+            Q(name__icontains=search_query) |
+            Q(description__icontains=search_query) |
+            Q(brand__name__icontains=search_query) |
+            Q(tags__icontains=search_query)
+        ).distinct()
+
+    # Apply sorting
+    if sort_by == 'name':
+        products_queryset = products_queryset.order_by('name')
+    elif sort_by == '-name':
+        products_queryset = products_queryset.order_by('-name')
+    elif sort_by == 'price':
+        products_queryset = products_queryset.order_by('price')
+    elif sort_by == '-price':
+        products_queryset = products_queryset.order_by('-price')
+    elif sort_by == '-created_at':
+        products_queryset = products_queryset.order_by('-created_at')
+    elif sort_by == 'popularity':
+        # Sort by review count and average rating
+        products_queryset = products_queryset.annotate(
+            review_count=Count('reviews'),
+            avg_rating=Avg('reviews__rating')
+        ).order_by('-review_count', '-avg_rating')
+    else:
+        # Default sorting: featured first, then by creation date
+        products_queryset = products_queryset.order_by('-is_featured', '-created_at')
+
+    # Pagination
+    paginator = Paginator(products_queryset, 24)  # 24 products per page
+    page = request.GET.get('page', 1)
+
+    try:
+        products = paginator.page(page)
+    except PageNotAnInteger:
+        products = paginator.page(1)
+    except EmptyPage:
+        products = paginator.page(paginator.num_pages)
+
+    # Only direct subcategories for navigation
+    subcategories = category.get_subcategories().annotate(
+        product_count=Count('products', filter=Q(products__is_active=True))
+    )
+
+    # Get sibling categories if this category has a parent
+    sibling_categories = None
+    if category.parent:
+        sibling_categories = Category.objects.filter(
+            parent=category.parent,
+            is_active=True
+        ).annotate(
+            product_count=Count('products', filter=Q(products__is_active=True))
+        ).exclude(id=category.id)
+
+    # Get related categories (categories with similar products or tags)
+    related_categories = Category.objects.filter(
+        is_active=True
+    ).exclude(
+        id__in=related_category_ids
+    ).annotate(
+        product_count=Count('products', filter=Q(products__is_in_stock=True))
+    ).filter(
+        product_count__gt=0
+    )[:8]  # Limit to 8 related categories
+
+    # Get recently viewed products from session
+    recently_viewed_ids = request.session.get('recently_viewed', [])
+    recently_viewed = Product.objects.filter(
+        id__in=recently_viewed_ids
+    )[:6] if recently_viewed_ids else None
+
+    # Prepare context
+    context = {
         'category': category,
         'products': products,
-        'subcategories': subcategories
+        'subcategories': subcategories,
+        'sibling_categories': sibling_categories,
+        'related_categories': related_categories,
+        'recently_viewed': recently_viewed,
+        'search_query': search_query,
+        'current_sort': sort_by,
+        'is_paginated': products.has_other_pages(),
+        'page_obj': products,
+    }
+
+    # Add some category statistics
+    total_products_in_category = Product.objects.filter(
+        category_id__in=related_category_ids
+    ).count()
+
+    context['total_products'] = total_products_in_category
+
+    # AJAX request handling for infinite scroll or dynamic loading
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        # Return JSON response for AJAX requests
+        products_data = []
+        for product in products:
+            products_data.append({
+                'id': product.id,
+                'name': product.name,
+                'price': str(product.price),
+                'image_url': product.image.url if product.image else None,
+                'detail_url': product.get_absolute_url(),
+                'is_in_stock': product.is_in_stock(),
+                'discount_percentage': product.discount_percentage if hasattr(product, 'discount_percentage') else None,
+                'is_featured': product.is_featured if hasattr(product, 'is_featured') else False,
+                'is_new': product.is_new() if hasattr(product, 'is_new') else False,
+                'average_rating': product.get_average_rating() if hasattr(product, 'get_average_rating') else None,
+                'review_count': product.get_review_count() if hasattr(product, 'get_review_count') else 0,
+            })
+
+        return JsonResponse({
+            'products': products_data,
+            'has_next': products.has_next(),
+            'has_previous': products.has_previous(),
+            'current_page': products.number,
+            'total_pages': products.paginator.num_pages,
+            'total_products': products.paginator.count,
+        })
+
+    return render(request, 'marketplace/category_detail.html', context)
+
+
+def category_products_ajax(request, pk):
+    """
+    Separate view for AJAX product loading (infinite scroll, filtering, etc.)
+    """
+    category = get_object_or_404(Category, pk=pk)
+
+    # Get parameters
+    page = request.GET.get('page', 1)
+    search_query = request.GET.get('q', '').strip()
+    sort_by = request.GET.get('sort', '')
+
+    # Get all subcategories
+    all_descendants = category.get_all_subcategories()
+    related_category_ids = [category.id] + [subcat.id for subcat in all_descendants]
+
+    # Build queryset
+    products_queryset = Product.objects.filter(
+        category_id__in=related_category_ids,
+        is_active=True
+    ).select_related('category', 'brand').prefetch_related('stock')
+
+    # Apply search
+    if search_query:
+        products_queryset = products_queryset.filter(
+            Q(name__icontains=search_query) |
+            Q(description__icontains=search_query) |
+            Q(brand__name__icontains=search_query)
+        ).distinct()
+
+    # Apply sorting
+    if sort_by == 'name':
+        products_queryset = products_queryset.order_by('name')
+    elif sort_by == '-name':
+        products_queryset = products_queryset.order_by('-name')
+    elif sort_by == 'price':
+        products_queryset = products_queryset.order_by('price')
+    elif sort_by == '-price':
+        products_queryset = products_queryset.order_by('-price')
+    elif sort_by == '-created_at':
+        products_queryset = products_queryset.order_by('-created_at')
+    elif sort_by == 'popularity':
+        products_queryset = products_queryset.annotate(
+            review_count=Count('reviews'),
+            avg_rating=Avg('reviews__rating')
+        ).order_by('-review_count', '-avg_rating')
+    else:
+        products_queryset = products_queryset.order_by('-is_featured', '-created_at')
+
+    # Pagination
+    paginator = Paginator(products_queryset, 24)
+
+    try:
+        products = paginator.page(page)
+    except (PageNotAnInteger, EmptyPage):
+        products = paginator.page(1)
+
+    # Prepare product data
+    products_data = []
+    for product in products:
+        products_data.append({
+            'id': product.id,
+            'name': product.name,
+            'price': str(product.price),
+            'original_price': str(product.original_price) if hasattr(product,
+                                                                     'original_price') and product.original_price else None,
+            'image_url': product.image.url if product.image else None,
+            'detail_url': product.get_absolute_url(),
+            'is_in_stock': product.is_in_stock(),
+            'stock_quantity': product.get_stock_quantity() if hasattr(product, 'get_stock_quantity') else 0,
+            'discount_percentage': product.discount_percentage if hasattr(product, 'discount_percentage') else None,
+            'is_featured': product.is_featured if hasattr(product, 'is_featured') else False,
+            'is_new': product.is_new() if hasattr(product, 'is_new') else False,
+            'average_rating': product.get_average_rating() if hasattr(product, 'get_average_rating') else None,
+            'review_count': product.get_review_count() if hasattr(product, 'get_review_count') else 0,
+            'brand': product.brand.name if hasattr(product, 'brand') and product.brand else None,
+        })
+
+    return JsonResponse({
+        'success': True,
+        'products': products_data,
+        'pagination': {
+            'has_next': products.has_next(),
+            'has_previous': products.has_previous(),
+            'current_page': products.number,
+            'total_pages': products.paginator.num_pages,
+            'total_products': products.paginator.count,
+            'next_page_number': products.next_page_number() if products.has_next() else None,
+            'previous_page_number': products.previous_page_number() if products.has_previous() else None,
+        },
+        'filters': {
+            'search_query': search_query,
+            'sort_by': sort_by,
+        }
     })
 
 @csrf_exempt
