@@ -189,11 +189,67 @@
                 <!-- Shipping Info -->
                 {% if user.is_authenticated %}
                 <div class="shipping-info mb-4">
-                    <p><i class="fas fa-map-marker-alt text-primary me-1"></i> Deliver to:
-                    {{ user.profile.address|default:"Please add your delivery address" }}
-                    <button class="btn btn-link btn-sm ms-2 p-0" onclick="toggleAddressInput()">
+                    <!-- Change Address Button -->
+                <p>
+                    <i class="fas fa-map-marker-alt text-primary me-1"></i> Deliver to:
+                    {{ address_display|default:"Please add your delivery address" }}
+
+                    {% if address.geo_code %}
+                        <br>
+                        <a href="https://www.google.com/maps?q={{ address.geo_code }}" target="_blank"
+                           class="text-decoration-underline text-info small">
+                            View on Google Maps ({{ address.geo_code }})
+                        </a>
+                    {% endif %}
+
+                    <button class="btn btn-link btn-sm ms-2 p-0" data-bs-toggle="modal" data-bs-target="#editAddressModal">
                         <i class="fas fa-edit"></i> Change
-                    </button></p>
+                    </button>
+                </p>
+
+                <!-- Edit Address Modal -->
+                <div class="modal fade" id="editAddressModal" tabindex="-1" aria-labelledby="editAddressModalLabel" aria-hidden="true">
+                  <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content shadow rounded-4">
+                      <div class="modal-header bg-primary text-white">
+                        <h5 class="modal-title" id="editAddressModalLabel"><i class="fas fa-map-marker-alt me-2"></i>Edit Delivery Address</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                      </div>
+
+                      <form method="POST" action="{% url 'accounts:edit_address_modal' %}">
+                        {% csrf_token %}
+                        <div class="modal-body">
+                          <div class="mb-3">
+                            <label for="address1" class="form-label">Address Line 1</label>
+                            <textarea class="form-control" id="address1" name="address1" rows="2" required>{{ address.address1 }}</textarea>
+                          </div>
+                          <div class="mb-3">
+                            <label for="address2" class="form-label">Address Line 2</label>
+                            <textarea class="form-control" id="address2" name="address2" rows="2">{{ address.address2 }}</textarea>
+                          </div>
+                          <div class="mb-3">
+                            <label for="country" class="form-label">Country</label>
+                            <input type="text" class="form-control" id="country" name="country" value="{{ address.country }}" required>
+                          </div>
+                            <div class="mb-3">
+                                <label for="geo_code" class="form-label">Geo Code (on the fence)</label>
+                                <input type="text" name="geo_code" id="geo_code" class="form-control" placeholder="e.g., GC-9A23-KL4" value="{{ address.geo_code }}">
+                            </div>
+
+                        </div>
+
+                        <div class="modal-footer justify-content-between">
+                          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                          <button type="submit" class="btn btn-success">
+                            <i class="fas fa-save me-1"></i> Save Address
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                </div>
+
+
                     <p><i class="fas fa-clock text-primary me-1"></i> Estimated Delivery: Tomorrow</p>
                     <p><i class="fas fa-dollar-sign text-primary me-1"></i> Free Shipping on orders over $50</p>
                 </div>

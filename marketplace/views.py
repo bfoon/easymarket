@@ -2,6 +2,7 @@ from django.shortcuts import render, get_object_or_404, redirect
 from .models import (Category, Product, ProductView,
                      CartItem, Cart, CelebrityFeature, Wishlist)
 from chat.models import ChatThread, ChatMessage
+from accounts.models import Address
 import re
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
@@ -123,6 +124,19 @@ def product_detail(request, product_id):
         if last_space != -1:
             short_description = short_description[:last_space]
 
+    user_address = None
+    if request.user.is_authenticated:
+        address = Address.objects.filter(user=request.user).first()
+        if address:
+            address_parts = [address.address1, address.address2, address.country]
+            if address.geo_code:
+                address_parts.append(f"GeoCode: {address.geo_code}")
+            address_display = ', '.join(part for part in address_parts if part)
+        else:
+            address_display = ""
+    else:
+        address = None
+        address_display = ""
     # Load chat messages (if user is logged in and not the seller)
     messages = []
     if request.user.is_authenticated and request.user != product.seller:
@@ -139,6 +153,9 @@ def product_detail(request, product_id):
         'description_truncated': description_truncated,
         'featured_celebrities': featured_celebrities,
         'messages': messages,
+        'user_address': user_address,
+        'address': address,
+        'address_display': address_display,
     })
 
 
