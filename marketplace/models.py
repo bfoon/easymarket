@@ -2,6 +2,7 @@ from django.db import models
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.urls import reverse
+from django.db.models import Avg
 from django.utils import timezone
 
 
@@ -276,6 +277,15 @@ class Product(models.Model):
 
     def get_absolute_url(self):
         return reverse('product_detail', kwargs={'pk': self.pk})
+
+    @property
+    def average_rating(self):
+        avg = self.reviews.aggregate(Avg('rating'))['rating__avg']
+        return round(avg or 0, 1)
+
+    @property
+    def review_count(self):
+        return self.reviews.count()
 
 
 

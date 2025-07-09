@@ -177,17 +177,22 @@
                             {{ product.name|truncatechars:35 }}
                         </h6>
 
-                        <!-- Rating -->
+                       <!-- Rating -->
                         <div class="d-flex align-items-center mb-2">
                             <div class="rating-stars text-warning small me-1">
-                                <i class="fas fa-star"></i>
-                                <i class="fas fa-star"></i>
-                                <i class="fas fa-star"></i>
-                                <i class="fas fa-star"></i>
-                                <i class="fas fa-star-half-alt"></i>
+                                {% for i in "12345" %}
+                                    {% if product.average_rating|floatformat:1 >= i %}
+                                        <i class="fas fa-star"></i>
+                                    {% elif product.average_rating|floatformat:1 >= i|add:"-0.5" %}
+                                        <i class="fas fa-star-half-alt"></i>
+                                    {% else %}
+                                        <i class="far fa-star"></i>
+                                    {% endif %}
+                                {% endfor %}
                             </div>
-                            <small class="text-muted">(234)</small>
+                            <small class="text-muted">({{ product.reviews.count }})</small>
                         </div>
+
 
                         <!-- Pricing -->
                         <div class="mb-2">
@@ -203,11 +208,18 @@
                         </div>
 
                         <!-- Action Button -->
-                        <button class="btn btn-outline-primary w-100 btn-sm" onclick="addToCart({{ product.id }}, this)"
-                        data-stock="{{ product.stock.quantity|default:0 }}"
-                        {% if not product.is_in_stock %} disabled {% endif %}>
-                            <i class="fas fa-cart-plus me-1"></i> Add to Cart
+                        <button class="btn {% if product.is_in_stock %}btn-outline-primary{% else %}btn-secondary{% endif %} w-100 btn-sm"
+                                onclick="addToCart({{ product.id }}, this)"
+                                data-stock="{{ product.stock.quantity|default:0 }}"
+                                {% if not product.is_in_stock %} disabled {% endif %}>
+                            <i class="fas {% if product.is_in_stock %}fa-cart-plus{% else %}fa-ban{% endif %} me-1"></i>
+                            {% if product.is_in_stock %}
+                                Add to Cart
+                            {% else %}
+                                Out of Stock
+                            {% endif %}
                         </button>
+
 
 
 

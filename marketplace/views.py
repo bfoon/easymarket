@@ -113,7 +113,6 @@ def product_detail(request, product_id):
         Product.objects
         .filter(category=product.category)
         .exclude(id=product.id)
-        .annotate(avg_rating=Avg('reviews__rating'), review_count=Count('reviews'))
         [:4]
     )
 
