@@ -102,8 +102,15 @@ def product_detail(request, product_id):
                 recently_viewed = recently_viewed[:10]
             request.session['recently_viewed'] = recently_viewed
 
-    # Recommend similar items
-    recommended_items = Product.objects.filter(category=product.category).exclude(id=product.id)[:4]
+    # Recommended items with annotated review stats
+    recommended_items = (
+        Product.objects
+        .filter(category=product.category)
+        .exclude(id=product.id)
+        .annotate(avg_rating=Avg('reviews__rating'), review_count=Count('reviews'))
+        [:4]
+    )
+
     featured_celebrities = CelebrityFeature.objects.filter(products=product)[:8]
 
     # Clean specifications
@@ -119,42 +126,31 @@ def product_detail(request, product_id):
     description_text = product.description or ""
     short_description = description_text[:800]
     description_truncated = len(description_text) > 800
-
-    # Prevent cutting mid-word if truncated
     if description_truncated:
         last_space = short_description.rfind(' ')
         if last_space != -1:
             short_description = short_description[:last_space]
 
+    # Review data
     reviews = Review.objects.filter(product=product)
-    user_review = Review.objects.filter(product=product,
-                                        user=request.user).first() if request.user.is_authenticated else None
+    user_review = Review.objects.filter(product=product, user=request.user).first() if request.user.is_authenticated else None
     form = ReviewForm(instance=user_review)
 
-    # Fetch review data
-    avg_rating = Review.objects.filter(product=product).aggregate(avg=Avg('rating'))['avg'] or 0
-    review_count = Review.objects.filter(product=product).count()
+    avg_rating = reviews.aggregate(avg=Avg('rating'))['avg'] or 0
+    review_count = reviews.count()
 
-    user_rating = 0
-    if request.user.is_authenticated:
-        existing_review = product.reviews.filter(user=request.user).first()
-        if existing_review:
-            user_rating = existing_review.rating
+    user_rating = user_review.rating if user_review else 0
 
-    user_address = None
+    # Address display
+    address_display = ""
+    address = None
     if request.user.is_authenticated:
         address = Address.objects.filter(user=request.user).first()
         if address:
-            address_parts = [address.address1, address.address2, address.country]
-            if address.geo_code:
-                address_parts.append(f"GeoCode: {address.geo_code}")
-            address_display = ', '.join(part for part in address_parts if part)
-        else:
-            address_display = ""
-    else:
-        address = None
-        address_display = ""
-    # Load chat messages (if user is logged in and not the seller)
+            parts = [address.address1, address.address2, address.country]
+            address_display = ', '.join(part for part in parts if part)
+
+    # Chat messages
     messages = []
     if request.user.is_authenticated and request.user != product.seller:
         thread = ChatThread.objects.filter(participants=request.user).filter(participants=product.seller).first()
@@ -170,7 +166,6 @@ def product_detail(request, product_id):
         'description_truncated': description_truncated,
         'featured_celebrities': featured_celebrities,
         'messages': messages,
-        'user_address': user_address,
         'address': address,
         'address_display': address_display,
         'reviews': reviews,
@@ -181,7 +176,6 @@ def product_detail(request, product_id):
         'user_rating': user_rating,
         'rating_range': range(1, 6),
     })
-
 
 def hot_picks(request):
     """
