@@ -74,6 +74,7 @@ TEMPLATES = [
                 'marketplace.context_processors.cart_count',
                 'marketplace.context_processors.wishlist_count',
                 'orders.context_processors.pending_orders_count',
+                'reviews.context_processors.global_review_stats',
             ],
         },
     },

@@ -1,0 +1,130 @@
+<div class="comment-item p-2 rounded mb-2" id="comment-{{ comment.id }}">
+    <div class="d-flex justify-content-between align-items-start">
+        <div>
+            <strong>{{ comment.user.get_full_name|default:comment.user.username }}</strong>
+            <small class="text-muted ms-2">{{ comment.created_at|date:"M j, Y" }}</small>
+        </div>
+        {% if user == comment.user %}
+            <button class="btn btn-sm btn-outline-danger delete-comment-btn" data-comment-id="{{ comment.id }}">
+                <i class="fas fa-times"></i>
+            </button>
+        {% endif %}
+    </div>
+    <p class="mb-0 mt-1">{{ comment.content }}</p>
+</div>
+
+<!-- MAIN PRODUCT TEMPLATE: templates/product_detail.html -->
+<!-- This is how you should include the reviews in your main product template -->
+
+<div class="container mt-4">
+    <!-- Product Info -->
+    <div class="row">
+        <div class="col-md-8">
+            <h2>{{ product.name }}</h2>
+            <p>{{ product.description }}</p>
+            <h4>${{ product.price }}</h4>
+
+            <!-- Rating Display -->
+            <div class="d-flex align-items-center mb-3">
+                <div class="text-warning me-2" id="rating-stars">
+                    {% for i in rating_range %}
+                        {% if avg_rating >= i %}
+                            <i class="fas fa-star"></i>
+                        {% elif avg_rating >= i|add:"-0.5" %}
+                            <i class="fas fa-star-half-alt"></i>
+                        {% else %}
+                            <i class="far fa-star"></i>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+                <span class="me-2 text-muted">
+                    <span id="avg-rating">{{ avg_rating|floatformat:1 }}</span>
+                    (<span id="total-reviews">{{ review_count }}</span> reviews)
+                </span>
+                <span class="text-muted">|</span>
+                <span class="ms-2 text-muted">{{ product.sold_count|default:"0" }} sold</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reviews Section -->
+    <div class="mt-5">
+        <h4>Customer Reviews</h4>
+
+        <!-- Review Form -->
+        {% if user.is_authenticated and not user_review %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h6>Write a Review</h6>
+                </div>
+                <div class="card-body">
+                    <form id="review-form">
+                        {% csrf_token %}
+                        <input type="hidden" name="product_id" value="{{ product.id }}">
+
+                        <div class="mb-3">
+                            <label class="form-label">Rating</label>
+                            <div class="star-rating">
+                                {% for i in rating_range %}
+                                    <i class="far fa-star star-input" data-rating="{{ i }}"></i>
+                                {% endfor %}
+                            </div>
+                            <input type="hidden" name="rating" id="rating-input" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Comment</label>
+                            <textarea name="comment" class="form-control" rows="4" placeholder="Share your experience with this product..."></textarea>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">
+                            <span class="spinner-border spinner-border-sm d-none" id="submit-spinner"></span>
+                            Submit Review
+                        </button>
+                    </form>
+                </div>
+            </div>
+        {% elif user.is_authenticated and user_review %}
+            <div class="alert alert-info">
+                You have already reviewed this product with {{ user_rating }} stars.
+            </div>
+        {% else %}
+            <div class="alert alert-secondary">
+                <a href="{% url 'login' %}">Login</a> to leave a review.
+            </div>
+        {% endif %}
+
+        <!-- Reviews List -->
+        <div id="reviews-container">
+            {% include 'reviews/reviews_list.html' with reviews=reviews rating_range=rating_range %}
+        </div>
+    </div>
+</div>
+
+<!-- Add the CSS and JavaScript from the previous template here -->
+<style>
+.star-rating {
+    font-size: 1.5rem;
+    color: #ffc107;
+    cursor: pointer;
+    user-select: none;
+}
+
+.star-rating .star-input {
+    transition: color 0.2s;
+}
+
+.star-rating .star-input:hover,
+.star-rating .star-input.active {
+    color: #ffc107;
+}
+
+.star-rating .star-input.far {
+    color: #e9ecef;
+}
+
+.comment-item {
+    background-color: #f8f9fa;
+    border-left: 3px solid #007bff;
+}
+</style>

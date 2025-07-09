@@ -3,6 +3,8 @@ from .models import (Category, Product, ProductView,
                      CartItem, Cart, CelebrityFeature, Wishlist)
 from chat.models import ChatThread, ChatMessage
 from accounts.models import Address
+from reviews.models import Review
+from reviews.forms import ReviewForm
 import re
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
@@ -124,6 +126,21 @@ def product_detail(request, product_id):
         if last_space != -1:
             short_description = short_description[:last_space]
 
+    reviews = Review.objects.filter(product=product)
+    user_review = Review.objects.filter(product=product,
+                                        user=request.user).first() if request.user.is_authenticated else None
+    form = ReviewForm(instance=user_review)
+
+    # Fetch review data
+    avg_rating = Review.objects.filter(product=product).aggregate(avg=Avg('rating'))['avg'] or 0
+    review_count = Review.objects.filter(product=product).count()
+
+    user_rating = 0
+    if request.user.is_authenticated:
+        existing_review = product.reviews.filter(user=request.user).first()
+        if existing_review:
+            user_rating = existing_review.rating
+
     user_address = None
     if request.user.is_authenticated:
         address = Address.objects.filter(user=request.user).first()
@@ -156,6 +173,13 @@ def product_detail(request, product_id):
         'user_address': user_address,
         'address': address,
         'address_display': address_display,
+        'reviews': reviews,
+        'user_review': user_review,
+        'review_form': form,
+        'avg_rating': round(avg_rating, 1),
+        'review_count': review_count,
+        'user_rating': user_rating,
+        'rating_range': range(1, 6),
     })
 
 
