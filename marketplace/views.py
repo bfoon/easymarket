@@ -1273,12 +1273,57 @@ def search_products(request):
 
 
 def search_suggestions(request):
-    """Enhanced AJAX search suggestions"""
+    """
+    AJAX endpoint for search suggestions
+    """
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
         query = request.GET.get('q', '').strip()
 
         if len(query) >= 2:
-            suggestions = get_search_suggestions_with_history(request, query)
+            # Basic search in product name and description
+            products = Product.objects.filter(
+                Q(name__icontains=query) |
+                Q(description__icontains=query)
+            )
+
+            # If you have categories, also search there
+            if hasattr(Product, 'category'):
+                products = products.filter(
+                    Q(name__icontains=query) |
+                    Q(description__icontains=query) |
+                    Q(category__name__icontains=query)
+                )
+
+            # Select related category if it exists
+            if hasattr(Product, 'category'):
+                products = products.select_related('category')
+
+            # Limit to 8 suggestions
+            products = products[:8]
+
+            suggestions = []
+            for product in products:
+                # Get category name safely
+                category_name = 'Uncategorized'
+                if hasattr(product, 'category') and product.category:
+                    category_name = product.category.name
+
+                # Get product URL safely
+                product_url = '#'
+                try:
+                    product_url = reverse('marketplace:product_detail', kwargs={'pk': product.pk})
+                except:
+                    product_url = f'/product/{product.pk}/'
+
+                suggestions.append({
+                    'id': product.id,
+                    'name': product.name,
+                    'price': str(product.price),
+                    'category': category_name,
+                    'image': product.image.url if hasattr(product, 'image') and product.image else None,
+                    'url': product_url
+                })
+
             return JsonResponse({
                 'suggestions': suggestions,
                 'query': query
