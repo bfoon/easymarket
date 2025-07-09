@@ -11,15 +11,36 @@
                 <a class="nav-link" href="{% url 'marketplace:hot_picks' %}">Deals</a>
                 <a class="nav-link" href="#">About</a>
             </div>
-            <!-- Search Bar - Amazon Style -->
 
-                        <div class="input-group  me-2">
-                            <input type="text" class="form-control search-bar" placeholder="Search products..." style="border-radius: 4px 0 0 4px; border: 2px solid #ff9900; font-size: 0.9rem;">
-                            <button class="btn" type="button" style="background-color: #ff9900; border: 2px solid #ff9900; border-radius: 0 4px 4px 0; color: #232f3e; font-weight: 700;">
-                                <i class="fas fa-search"></i>
-                            </button>
-                        </div>
+            <!-- Enhanced Search Bar with AJAX -->
+            <div class="search-container me-3">
+                <form method="GET" action="{% url 'marketplace:search_products' %}" class="search-form">
+                    <div class="input-group">
+                        <input
+                            type="text"
+                            name="q"
+                            id="search-input"
+                            class="form-control search-bar"
+                            placeholder="Search products..."
+                            value="{{ search_query }}"
+                            style="border-radius: 4px 0 0 4px; border: 2px solid #ff9900; font-size: 0.9rem;"
+                            autocomplete="off"
+                        >
+                        <button
+                            class="btn search-btn"
+                            type="submit"
+                            style="background-color: #ff9900; border: 2px solid #ff9900; border-radius: 0 4px 4px 0; color: #232f3e; font-weight: 700;"
+                        >
+                            <i class="fas fa-search"></i>
+                        </button>
                     </div>
+                    <!-- Search Suggestions Dropdown -->
+                    <div id="search-suggestions" class="search-suggestions"></div>
+                </form>
+            </div>
+
+            <!-- User Authentication & Cart -->
+            <div class="d-flex align-items-center">
                 {% if user.is_authenticated %}
                     <a href="{% url 'logout' %}" class="btn btn-outline-danger me-2">
                         <i class="fas fa-sign-out-alt me-1"></i>Logout
@@ -36,4 +57,284 @@
                     </span>
                 </a>
             </div>
+        </div>
+    </div>
 </nav>
+
+<style>
+/* Search Container Styles */
+.search-container {
+    position: relative;
+    min-width: 300px;
+}
+
+.search-form {
+    position: relative;
+}
+
+.search-bar:focus {
+    border-color: #ff9900;
+    box-shadow: 0 0 0 0.2rem rgba(255, 153, 0, 0.25);
+}
+
+.search-btn:hover {
+    background-color: #e68900 !important;
+}
+
+/* Search Suggestions Styles */
+.search-suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    max-height: 400px;
+    overflow-y: auto;
+    z-index: 1050;
+    display: none;
+    margin-top: 2px;
+}
+
+.suggestion-item {
+    padding: 10px 15px;
+    border-bottom: 1px solid #f0f0f0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: background-color 0.2s;
+}
+
+.suggestion-item:hover {
+    background: #f8f9fa;
+}
+
+.suggestion-item:last-child {
+    border-bottom: none;
+}
+
+.suggestion-image {
+    width: 40px;
+    height: 40px;
+    object-fit: cover;
+    border-radius: 4px;
+}
+
+.suggestion-image-placeholder {
+    width: 40px;
+    height: 40px;
+    background: #f0f0f0;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #999;
+    font-size: 14px;
+}
+
+.suggestion-details {
+    flex: 1;
+}
+
+.suggestion-name {
+    font-weight: 500;
+    font-size: 14px;
+    margin-bottom: 2px;
+    color: #333;
+}
+
+.suggestion-info {
+    font-size: 12px;
+    color: #666;
+}
+
+.suggestion-price {
+    font-weight: 600;
+    color: #ff9900;
+    font-size: 14px;
+}
+
+.loading, .no-suggestions {
+    text-align: center;
+    padding: 15px;
+    color: #666;
+    font-size: 14px;
+}
+
+.search-highlight {
+    background-color: #fff3cd;
+    padding: 1px 3px;
+    border-radius: 2px;
+}
+
+/* Mobile Responsive */
+@media (max-width: 991px) {
+    .search-container {
+        min-width: 250px;
+        margin: 10px 0;
+    }
+
+    .navbar-collapse .d-flex {
+        margin-top: 10px;
+    }
+}
+
+@media (max-width: 768px) {
+    .search-container {
+        min-width: 100%;
+    }
+
+    .search-suggestions {
+        left: 15px;
+        right: 15px;
+    }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('search-input');
+    const suggestionsContainer = document.getElementById('search-suggestions');
+    let searchTimeout;
+    let currentRequest = null;
+
+    if (!searchInput || !suggestionsContainer) return;
+
+    searchInput.addEventListener('input', function() {
+        const query = this.value.trim();
+
+        // Clear previous timeout and request
+        clearTimeout(searchTimeout);
+        if (currentRequest) {
+            currentRequest.abort();
+        }
+
+        if (query.length >= 2) {
+            // Show loading
+            suggestionsContainer.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin me-2"></i>Searching...</div>';
+            suggestionsContainer.style.display = 'block';
+
+            // Debounce search requests
+            searchTimeout = setTimeout(() => {
+                fetchSuggestions(query);
+            }, 300);
+        } else {
+            hideSuggestions();
+        }
+    });
+
+    // Handle keyboard navigation
+    searchInput.addEventListener('keydown', function(e) {
+        const items = suggestionsContainer.querySelectorAll('.suggestion-item');
+        const activeItem = suggestionsContainer.querySelector('.suggestion-item.active');
+        let activeIndex = -1;
+
+        if (activeItem) {
+            activeIndex = Array.from(items).indexOf(activeItem);
+        }
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            const nextIndex = activeIndex < items.length - 1 ? activeIndex + 1 : 0;
+            setActiveItem(items, nextIndex);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            const prevIndex = activeIndex > 0 ? activeIndex - 1 : items.length - 1;
+            setActiveItem(items, prevIndex);
+        } else if (e.key === 'Enter' && activeItem) {
+            e.preventDefault();
+            activeItem.click();
+        } else if (e.key === 'Escape') {
+            hideSuggestions();
+        }
+    });
+
+    // Hide suggestions when clicking outside
+    document.addEventListener('click', function(event) {
+        if (!event.target.closest('.search-container')) {
+            hideSuggestions();
+        }
+    });
+
+    function fetchSuggestions(query) {
+        const controller = new AbortController();
+        currentRequest = controller;
+
+        fetch(`/marketplace/search/suggestions/?q=${encodeURIComponent(query)}`, {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            signal: controller.signal
+        })
+        .then(response => response.json())
+        .then(data => {
+            displaySuggestions(data.suggestions, query);
+        })
+        .catch(error => {
+            if (error.name !== 'AbortError') {
+                console.error('Error fetching suggestions:', error);
+                suggestionsContainer.innerHTML = '<div class="no-suggestions">Error loading suggestions</div>';
+            }
+        })
+        .finally(() => {
+            currentRequest = null;
+        });
+    }
+
+    function displaySuggestions(suggestions, query) {
+        if (suggestions.length === 0) {
+            suggestionsContainer.innerHTML = '<div class="no-suggestions"><i class="fas fa-search me-2"></i>No products found</div>';
+            return;
+        }
+
+        let html = '';
+        suggestions.forEach(suggestion => {
+            const highlightedName = highlightText(suggestion.name, query);
+            html += `
+                <div class="suggestion-item" data-url="${suggestion.url}">
+                    ${suggestion.image ?
+                        `<img src="${suggestion.image}" alt="${suggestion.name}" class="suggestion-image">` :
+                        `<div class="suggestion-image-placeholder"><i class="fas fa-image"></i></div>`
+                    }
+                    <div class="suggestion-details">
+                        <div class="suggestion-name">${highlightedName}</div>
+                        <div class="suggestion-info">${suggestion.category}</div>
+                    </div>
+                    <div class="suggestion-price">$${suggestion.price}</div>
+                </div>
+            `;
+        });
+
+        suggestionsContainer.innerHTML = html;
+
+        // Add click event listeners
+        suggestionsContainer.querySelectorAll('.suggestion-item').forEach(item => {
+            item.addEventListener('click', function() {
+                window.location.href = this.dataset.url;
+            });
+        });
+
+        suggestionsContainer.style.display = 'block';
+    }
+
+    function highlightText(text, query) {
+        const regex = new RegExp(`(${query})`, 'gi');
+        return text.replace(regex, '<span class="search-highlight">$1</span>');
+    }
+
+    function setActiveItem(items, index) {
+        items.forEach(item => item.classList.remove('active'));
+        if (items[index]) {
+            items[index].classList.add('active');
+            items[index].scrollIntoView({ block: 'nearest' });
+        }
+    }
+
+    function hideSuggestions() {
+        suggestionsContainer.style.display = 'none';
+    }
+});
+</script>

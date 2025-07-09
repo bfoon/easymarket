@@ -1,0 +1,648 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}
+    {% if query %}
+        Search Results for "{{ query }}" - EasyMarket
+    {% else %}
+        Search Products - EasyMarket
+    {% endif %}
+{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+<div class="container mt-4">
+    <!-- Search Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            {% if query %}
+                <h2 class="mb-2">Search Results for "{{ query }}"</h2>
+                <p class="text-muted">Found {{ total_results }} product{{ total_results|pluralize }}</p>
+            {% else %}
+                <h2 class="mb-2">Search Products</h2>
+                <p class="text-muted">Use the search bar above to find products</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Advanced Search Filters -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <button class="btn btn-link" type="button" data-bs-toggle="collapse" data-bs-target="#advancedFilters">
+                            <i class="fas fa-filter me-2"></i>Advanced Filters
+                        </button>
+                    </h5>
+                </div>
+                <div class="collapse" id="advancedFilters">
+                    <div class="card-body">
+                        <form method="GET" action="{% url 'marketplace:search_products' %}">
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <label class="form-label">Search Query</label>
+                                    <input type="text" name="q" class="form-control" value="{{ query }}" placeholder="Search products...">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Category</label>
+                                    <select name="category" class="form-select">
+                                        <option value="">All Categories</option>
+                                        {% for category in categories %}
+                                            <option value="{{ category.id }}" {% if category.id|stringformat:"s" == selected_category %}selected{% endif %}>
+                                                {{ category.name }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label">Min Price</label>
+                                    <input type="number" name="min_price" class="form-control" value="{{ min_price }}" placeholder="D0" step="0.01">
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label">Max Price</label>
+                                    <input type="number" name="max_price" class="form-control" value="{{ max_price }}" placeholder="D999" step="0.01">
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label">Sort By</label>
+                                    <select name="sort" class="form-select">
+                                        <option value="name" {% if sort_by == 'name' %}selected{% endif %}>Name</option>
+                                        <option value="price_low" {% if sort_by == 'price_low' %}selected{% endif %}>Price: Low to High</option>
+                                        <option value="price_high" {% if sort_by == 'price_high' %}selected{% endif %}>Price: High to Low</option>
+                                        <option value="newest" {% if sort_by == 'newest' %}selected{% endif %}>Newest</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="row mt-3">
+                                <div class="col-12">
+                                    <button type="submit" class="btn btn-primary me-2">
+                                        <i class="fas fa-search me-1"></i>Apply Filters
+                                    </button>
+                                    <a href="{% url 'marketplace:search_products' %}" class="btn btn-outline-secondary">
+                                        <i class="fas fa-times me-1"></i>Clear Filters
+                                    </a>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search Results -->
+    {% if products %}
+        <div class="row">
+            {% for product in products %}
+                <div class="col-lg-3 col-md-4 col-sm-6 mb-4">
+                    <div class="card h-100 product-card">
+                        <div class="card-img-container">
+                            {% if product.image %}
+                                <img src="{{ product.image.url }}" alt="{{ product.name }}" class="card-img-top">
+                            {% else %}
+                                <div class="card-img-placeholder">
+                                    <i class="fas fa-image"></i>
+                                </div>
+                            {% endif %}
+                        </div>
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title">{{ product.name }}</h5>
+                            <p class="card-text flex-grow-1">{{ product.description|truncatewords:15 }}</p>
+                            <div class="mt-auto">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="h5 text-primary mb-0">D{{ product.price }}</span>
+                                    <small class="text-muted">{{ product.category.name }}</small>
+                                </div>
+                                <div class="d-grid gap-2">
+                                    <a href="{% url 'marketplace:product_detail' product.pk %}" class="btn btn-outline-primary btn-sm">
+                                        <i class="fas fa-eye me-1"></i>View Details
+                                    </a>
+                                    <button class="btn btn-primary btn-sm add-to-cart" data-product-id="{{ product.pk }}">
+                                        <i class="fas fa-shopping-cart me-1"></i>Add to Cart
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+
+        <!-- Pagination -->
+        {% if page_obj.has_other_pages %}
+            <nav aria-label="Search results pagination">
+                <ul class="pagination justify-content-center">
+                    {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}">
+                                <i class="fas fa-chevron-left"></i>
+                            </a>
+                        </li>
+                    {% endif %}
+                    
+                    {% for num in page_obj.paginator.page_range %}
+                        {% if page_obj.number == num %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ num }}</span>
+                            </li>
+                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                            <li class="page-item">
+                                <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ num }}">{{ num }}</a>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.next_page_number }}">
+                                <i class="fas fa-chevron-right"></i>
+                            </a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        {% endif %}
+    {% else %}
+        <!-- No Results -->
+        <div class="text-center py-5">
+            <i class="fas fa-search fa-3x text-muted mb-3"></i>
+            <h3 class="text-muted">No products found</h3>
+            <p class="text-muted">Try adjusting your search terms or browse our categories.</p>
+            <a href="{% url 'marketplace:all_products' %}" class="btn btn-primary">
+                <i class="fas fa-grid-2 me-1"></i>Browse All Products
+            </a>
+        </div>
+    {% endif %}
+</div>
+<script src="{% static 'js/main.js' %}"></script>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.product-card {
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.product-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.card-img-container {
+    height: 200px;
+    overflow: hidden;
+}
+
+.card-img-top {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.card-img-placeholder {
+    width: 100%;
+    height: 100%;
+    background: #f8f9fa;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6c757d;
+    font-size: 2rem;
+}
+
+.add-to-cart {
+    transition: all 0.2s;
+}
+
+.add-to-cart:hover {
+    transform: scale(1.05);
+}
+
+.pagination .page-link {
+    color: #ff9900;
+    border-color: #ff9900;
+}
+
+.pagination .page-item.active .page-link {
+    background-color: #ff9900;
+    border-color: #ff9900;
+}
+
+.pagination .page-link:hover {
+    color: #e68900;
+    background-color: #fff3cd;
+    border-color: #e68900;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Enhanced search suggestions with history in header -->
+<script>
+// Enhanced search suggestions with different types
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('search-input');
+    const suggestionsContainer = document.getElementById('search-suggestions');
+    let searchTimeout;
+    let currentRequest = null;
+
+    if (!searchInput || !suggestionsContainer) return;
+
+    // Show popular searches when input is focused and empty
+    searchInput.addEventListener('focus', function() {
+        if (this.value.trim() === '') {
+            showPopularSearches();
+        }
+    });
+
+    searchInput.addEventListener('input', function() {
+        const query = this.value.trim();
+
+        clearTimeout(searchTimeout);
+        if (currentRequest) {
+            currentRequest.abort();
+        }
+
+        if (query.length >= 2) {
+            suggestionsContainer.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin me-2"></i>Searching...</div>';
+            suggestionsContainer.style.display = 'block';
+
+            searchTimeout = setTimeout(() => {
+                fetchSuggestions(query);
+            }, 300);
+        } else if (query.length === 0) {
+            showPopularSearches();
+        } else {
+            hideSuggestions();
+        }
+    });
+
+    function fetchSuggestions(query) {
+        const controller = new AbortController();
+        currentRequest = controller;
+
+        fetch(`/marketplace/search/suggestions/?q=${encodeURIComponent(query)}`, {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            signal: controller.signal
+        })
+        .then(response => response.json())
+        .then(data => {
+            displayEnhancedSuggestions(data.suggestions, query);
+        })
+        .catch(error => {
+            if (error.name !== 'AbortError') {
+                console.error('Error fetching suggestions:', error);
+                suggestionsContainer.innerHTML = '<div class="no-suggestions">Error loading suggestions</div>';
+            }
+        })
+        .finally(() => {
+            currentRequest = null;
+        });
+    }
+
+    function showPopularSearches() {
+        fetch('/marketplace/search/popular/', {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.popular_searches.length > 0) {
+                let html = '<div class="suggestions-header">Popular Searches</div>';
+                data.popular_searches.forEach(search => {
+                    html += `
+                        <div class="suggestion-item popular-search" onclick="performSearch('${search.query}')">
+                            <div class="suggestion-icon">
+                                <i class="fas fa-fire text-danger"></i>
+                            </div>
+                            <div class="suggestion-details">
+                                <div class="suggestion-name">${search.query}</div>
+                                <div class="suggestion-info">${search.count} searches</div>
+                            </div>
+                        </div>
+                    `;
+                });
+                suggestionsContainer.innerHTML = html;
+                suggestionsContainer.style.display = 'block';
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching popular searches:', error);
+        });
+    }
+
+    function displayEnhancedSuggestions(suggestions, query) {
+        if (suggestions.length === 0) {
+            suggestionsContainer.innerHTML = '<div class="no-suggestions"><i class="fas fa-search me-2"></i>No suggestions found</div>';
+            return;
+        }
+
+        let html = '';
+        let currentType = '';
+
+        suggestions.forEach(suggestion => {
+            // Add section headers for different types
+            if (suggestion.type !== currentType) {
+                if (currentType !== '') {
+                    html += '<div class="suggestions-divider"></div>';
+                }
+
+                let headerText = '';
+                switch(suggestion.type) {
+                    case 'product':
+                        headerText = 'Products';
+                        break;
+                    case 'recent':
+                        headerText = 'Recent Searches';
+                        break;
+                    case 'popular':
+                        headerText = 'Popular Searches';
+                        break;
+                }
+
+                html += `<div class="suggestions-header">${headerText}</div>`;
+                currentType = suggestion.type;
+            }
+
+            if (suggestion.type === 'product') {
+                const highlightedName = highlightText(suggestion.name, query);
+                html += `
+                    <div class="suggestion-item product-suggestion" onclick="window.location.href='${suggestion.url}'">
+                        ${suggestion.image ?
+                            `<img src="${suggestion.image}" alt="${suggestion.name}" class="suggestion-image">` :
+                            `<div class="suggestion-image-placeholder"><i class="fas fa-image"></i></div>`
+                        }
+                        <div class="suggestion-details">
+                            <div class="suggestion-name">${highlightedName}</div>
+                            <div class="suggestion-info">${suggestion.category}</div>
+                        </div>
+                        <div class="suggestion-price">$${suggestion.price}</div>
+                    </div>
+                `;
+            } else {
+                const highlightedQuery = highlightText(suggestion.query, query);
+                const icon = suggestion.type === 'recent' ? 'fas fa-history' : 'fas fa-fire';
+                const iconColor = suggestion.type === 'recent' ? 'text-secondary' : 'text-danger';
+
+                html += `
+                    <div class="suggestion-item query-suggestion" onclick="performSearch('${suggestion.query}')">
+                        <div class="suggestion-icon">
+                            <i class="${icon} ${iconColor}"></i>
+                        </div>
+                        <div class="suggestion-details">
+                            <div class="suggestion-name">${highlightedQuery}</div>
+                        </div>
+                        <div class="suggestion-action">
+                            <i class="fas fa-arrow-right text-muted"></i>
+                        </div>
+                    </div>
+                `;
+            }
+        });
+
+        suggestionsContainer.innerHTML = html;
+        suggestionsContainer.style.display = 'block';
+    }
+
+    function performSearch(query) {
+        searchInput.value = query;
+        searchInput.closest('form').submit();
+    }
+
+    function highlightText(text, query) {
+        const regex = new RegExp(`(${query})`, 'gi');
+        return text.replace(regex, '<span class="search-highlight">$1</span>');
+    }
+
+    function hideSuggestions() {
+        suggestionsContainer.style.display = 'none';
+    }
+
+    // Hide suggestions when clicking outside
+    document.addEventListener('click', function(event) {
+        if (!event.target.closest('.search-container')) {
+            hideSuggestions();
+        }
+    });
+});
+</script>
+
+<style>
+/* Enhanced search suggestions styles */
+.suggestions-header {
+    padding: 8px 15px;
+    background: #f8f9fa;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: #6c757d;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.suggestions-divider {
+    height: 1px;
+    background: #e9ecef;
+    margin: 5px 0;
+}
+
+.suggestion-icon {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f8f9fa;
+    border-radius: 50%;
+    font-size: 16px;
+}
+
+.query-suggestion {
+    padding: 8px 15px;
+}
+
+.query-suggestion:hover {
+    background: #f8f9fa;
+}
+
+.suggestion-action {
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.query-suggestion:hover .suggestion-action {
+    opacity: 1;
+}
+
+.popular-search .suggestion-icon {
+    background: #fff5f5;
+}
+
+.product-suggestion {
+    border-left: 3px solid #ff9900;
+}
+
+.query-suggestion {
+    border-left: 3px solid #6c757d;
+}
+
+/* Loading animation */
+.loading i {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+</style>
+
+<!-- Popular searches section for search results page -->
+<div class="popular-searches-section mb-4" style="display: none;">
+    <div class="card">
+        <div class="card-body">
+            <h6 class="card-title mb-3">
+                <i class="fas fa-fire text-danger me-2"></i>Popular Searches
+            </h6>
+            <div id="popular-searches-container">
+                <!-- Popular searches will be loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Search history section (for authenticated users) -->
+{% if user.is_authenticated %}
+<div class="search-history-section mb-4" style="display: none;">
+    <div class="card">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="card-title mb-0">
+                    <i class="fas fa-history text-secondary me-2"></i>Your Recent Searches
+                </h6>
+                <button class="btn btn-sm btn-outline-secondary" onclick="clearSearchHistory()">
+                    <i class="fas fa-trash me-1"></i>Clear History
+                </button>
+            </div>
+            <div id="search-history-container">
+                <!-- Search history will be loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<script>
+// Load popular searches and search history on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadPopularSearches();
+    {% if user.is_authenticated %}
+    loadSearchHistory();
+    {% endif %}
+});
+
+function loadPopularSearches() {
+    fetch('/marketplace/search/popular/', {
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.popular_searches.length > 0) {
+            let html = '';
+            data.popular_searches.forEach(search => {
+                html += `
+                    <span class="badge bg-light text-dark me-2 mb-2 popular-search-badge"
+                          onclick="performSearch('${search.query}')"
+                          style="cursor: pointer; font-size: 0.9rem;">
+                        ${search.query}
+                        <small class="ms-1 text-muted">(${search.count})</small>
+                    </span>
+                `;
+            });
+            document.getElementById('popular-searches-container').innerHTML = html;
+            document.querySelector('.popular-searches-section').style.display = 'block';
+        }
+    })
+    .catch(error => {
+        console.error('Error loading popular searches:', error);
+    });
+}
+
+function loadSearchHistory() {
+    // This would load user's search history
+    // Implementation depends on your backend API
+}
+
+function clearSearchHistory() {
+    if (confirm('Are you sure you want to clear your search history?')) {
+        fetch('/marketplace/search/clear-history/', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                document.querySelector('.search-history-section').style.display = 'none';
+                showToast('Search history cleared successfully', 'success');
+            }
+        })
+        .catch(error => {
+            console.error('Error clearing search history:', error);
+        });
+    }
+}
+
+function performSearch(query) {
+    const searchForm = document.querySelector('.search-form');
+    const searchInput = document.getElementById('search-input');
+
+    if (searchInput && searchForm) {
+        searchInput.value = query;
+        searchForm.submit();
+    } else {
+        // Fallback: redirect to search page
+        window.location.href = `/marketplace/search/?q=${encodeURIComponent(query)}`;
+    }
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// Style popular search badges
+document.addEventListener('DOMContentLoaded', function() {
+    const style = document.createElement('style');
+    style.textContent = `
+        .popular-search-badge:hover {
+            background-color: #ff9900 !important;
+            color: white !important;
+            transform: scale(1.05);
+            transition: all 0.2s;
+        }
+
+        .popular-search-badge:hover small {
+            color: rgba(255, 255, 255, 0.8) !important;
+        }
+    `;
+    document.head.appendChild(style);
+});
+</script>
+{% endblock %}

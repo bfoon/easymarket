@@ -18,4 +18,8 @@ urlpatterns = [
     path('remove-cart-item/', views.remove_cart_item, name='remove_cart_item'),
     path('apply-promo-code/', views.apply_promo_code, name='apply_promo_code'),
     path('trending/', views.trending_products_view, name='trending_products'),
+    path('search/', views.search_products, name='search_products'),
+    path('search/suggestions/', views.search_suggestions, name='search_suggestions'),
+    path('search/popular/', views.get_popular_searches, name='popular_searches'),
+    path('search/clear-history/', views.clear_search_history, name='clear_search_history'),
 ]

@@ -1,6 +1,9 @@
 from django.shortcuts import render, get_object_or_404, redirect
+from unicodedata import category
+
 from .models import (Category, Product, ProductView,
-                     CartItem, Cart, CelebrityFeature, Wishlist)
+                     CartItem, Cart, CelebrityFeature, Wishlist,
+                     SearchHistory, PopularSearch)
 from chat.models import ChatThread, ChatMessage
 from accounts.models import Address
 from reviews.models import Review
@@ -11,6 +14,9 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.contrib.auth.decorators import login_required
 from decimal import Decimal
+from django.core.cache import cache
+from .utils import log_search, get_search_suggestions_with_history
+from django.urls import reverse
 import json
 from datetime import timedelta
 from django.utils import timezone
@@ -1182,3 +1188,115 @@ def get_trending_categories():
         })
 
     return trending_categories
+
+
+def search_products(request):
+    """Enhanced search view with logging and caching"""
+    query = request.GET.get('q', '').strip()
+    category_id = request.GET.get('category', '')
+    min_price = request.GET.get('min_price', '')
+    max_price = request.GET.get('max_price', '')
+    sort_by = request.GET.get('sort', 'name')
+
+    # Create cache key for search results
+    cache_key = f"search:{query}:{category_id}:{min_price}:{max_price}:{sort_by}"
+
+    # Try to get results from cache
+    cached_results = cache.get(cache_key)
+    if cached_results:
+        products = cached_results
+    else:
+        # Build query
+        products = Product.objects.filter(category__is_active=True)
+
+        if query:
+            products = products.filter(
+                Q(name__icontains=query) |
+                Q(description__icontains=query) |
+                Q(category__name__icontains=query)
+            )
+
+        if category_id:
+            products = products.filter(category_id=category_id)
+
+        if min_price:
+            try:
+                products = products.filter(price__gte=float(min_price))
+            except ValueError:
+                pass
+
+        if max_price:
+            try:
+                products = products.filter(price__lte=float(max_price))
+            except ValueError:
+                pass
+
+        # Apply sorting
+        if sort_by == 'price_low':
+            products = products.order_by('price')
+        elif sort_by == 'price_high':
+            products = products.order_by('-price')
+        elif sort_by == 'newest':
+            products = products.order_by('-created_at')
+        else:
+            products = products.order_by('name')
+
+        # Cache results for 5 minutes
+        cache.set(cache_key, products, 300)
+
+    # Log search if query exists
+    if query:
+        log_search(request, query, products.count())
+
+    # Pagination
+    paginator = Paginator(products, 12)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    # Get popular searches for suggestions
+    popular_searches = PopularSearch.objects.all()[:5]
+
+    context = {
+        'products': page_obj,
+        'query': query,
+        'selected_category': category_id,
+        'min_price': min_price,
+        'max_price': max_price,
+        'sort_by': sort_by,
+        'categories': Category.objects.all(),
+        'total_results': products.count(),
+        'page_obj': page_obj,
+        'popular_searches': popular_searches,
+    }
+
+    return render(request, 'marketplace/search_results.html', context)
+
+
+def search_suggestions(request):
+    """Enhanced AJAX search suggestions"""
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        query = request.GET.get('q', '').strip()
+
+        if len(query) >= 2:
+            suggestions = get_search_suggestions_with_history(request, query)
+            return JsonResponse({
+                'suggestions': suggestions,
+                'query': query
+            })
+
+    return JsonResponse({'suggestions': [], 'query': ''})
+
+
+def get_popular_searches(request):
+    """API endpoint for popular searches"""
+    popular_searches = PopularSearch.objects.all()[:10]
+    searches = [{'query': search.query, 'count': search.search_count} for search in popular_searches]
+    return JsonResponse({'popular_searches': searches})
+
+
+def clear_search_history(request):
+    """Clear user's search history"""
+    if request.user.is_authenticated and request.method == 'POST':
+        SearchHistory.objects.filter(user=request.user).delete()
+        return JsonResponse({'success': True})
+    return JsonResponse({'success': False})

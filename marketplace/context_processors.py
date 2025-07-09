@@ -1,5 +1,5 @@
-from .models import Cart, Wishlist
-from django.db.models import Sum
+from .models import Cart, Wishlist, Product, Category
+from django.db.models import Sum, Q
 
 def cart_count(request):
     count = 0
@@ -27,4 +27,30 @@ def wishlist_count(request):
     return {
         'wishlist_count': count,
         'user_wishlist_product_ids': wishlist_product_ids,
+    }
+
+
+def search_context(request):
+    """
+    Context processor to handle product search functionality
+    """
+    search_query = request.GET.get('q', '')
+    search_results = []
+
+    if search_query:
+        # Search in product name, description, and category
+        search_results = Product.objects.filter(
+            Q(name__icontains=search_query) |
+            Q(description__icontains=search_query) |
+            Q(category__name__icontains=search_query)
+        ).distinct()
+
+    # Get all categories for dropdown/filter
+    categories = Category.objects.all()
+
+    return {
+        'search_query': search_query,
+        'search_results': search_results,
+        'categories': categories,
+        'search_results_count': search_results.count() if search_results else 0,
     }

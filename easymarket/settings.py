@@ -74,6 +74,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'marketplace.context_processors.cart_count',
                 'marketplace.context_processors.wishlist_count',
+                'marketplace.context_processors.search_context',
                 'orders.context_processors.pending_orders_count',
                 'reviews.context_processors.global_review_stats',
             ],
@@ -154,3 +155,8 @@ AUTH_USER_MODEL = 'accounts.User'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+SEARCH_RESULTS_PER_PAGE = 12
+SEARCH_SUGGESTIONS_LIMIT = 8
+SEARCH_MIN_QUERY_LENGTH = 2
+
