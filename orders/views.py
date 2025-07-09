@@ -642,7 +642,7 @@ def order_stats(request):
         'shipped_orders': orders.filter(status='shipped').count(),
         'delivered_orders': orders.filter(status='delivered').count(),
         'cancelled_orders': orders.filter(status='cancelled').count(),
-        'total_spent': sum(order.get_total() for order in orders if order.status != 'cancelled'),
+        'total_spent': sum(order.get_total for order in orders if order.status != 'cancelled'),
         'recent_orders': orders.order_by('-created_at')[:5]
     }
 

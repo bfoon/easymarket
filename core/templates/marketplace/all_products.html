@@ -124,9 +124,9 @@
 
                             <div class="price-container">
                                 {% if product.original_price and product.original_price != product.price %}
-                                    <span class="original-price">${{ product.original_price }}</span>
+                                    <span class="original-price">D{{ product.original_price }}</span>
                                 {% endif %}
-                                <span class="current-price">${{ product.price }}</span>
+                                <span class="current-price">D{{ product.price }}</span>
                             </div>
 
                             {% if product.average_rating %}
@@ -143,10 +143,16 @@
                             {% endif %}
 
                             <div class="d-grid gap-2 mt-3">
-                                <button class="btn btn-outline-primary w-100 btn-sm" onclick="addToCart({{ product.id }}, this)"
-                                data-stock="{{ product.stock.quantity|default:0 }}"
-                                {% if not product.is_in_stock %} disabled {% endif %}>
-                                    <i class="fas fa-cart-plus me-1"></i> Add to Cart
+                                <button class="btn {% if product.is_in_stock %}btn-outline-primary{% else %}btn-secondary{% endif %} w-100 btn-sm"
+                                        onclick="{% if product.is_in_stock %}addToCart({{ product.id }}, this){% else %}return false;{% endif %}"
+                                        data-stock="{{ product.stock.quantity|default:0 }}"
+                                        {% if not product.is_in_stock %} disabled {% endif %}>
+                                    <i class="fas {% if product.is_in_stock %}fa-cart-plus{% else %}fa-ban{% endif %} me-1"></i>
+                                    {% if product.is_in_stock %}
+                                        Add to Cart
+                                    {% else %}
+                                        Out of Stock
+                                    {% endif %}
                                 </button>
                             </div>
                         </div>

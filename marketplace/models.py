@@ -172,6 +172,7 @@ class Product(models.Model):
     is_trending = models.BooleanField(default=False)
     has_30_day_return = models.BooleanField(default=False,
                                             help_text="Enable if product is eligible for 30-day return policy.")
+    free_shipping = models.BooleanField(default=False)
 
     original_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
     video = models.FileField(upload_to='product_videos/', blank=True, null=True)

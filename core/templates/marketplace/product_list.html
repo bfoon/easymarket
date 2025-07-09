@@ -83,7 +83,7 @@
                     <div class="small text-dark fw-semibold" style="font-size: 0.75rem; min-height: 2rem;">
                         {{ product.name|truncatechars:20 }}
                     </div>
-                    <div class="text-danger fw-bold small mt-1">${{ product.price }}</div>
+                    <div class="text-danger fw-bold small mt-1">D{{ product.price }}</div>
                 </div>
                 {% endfor %}
             </div>
@@ -196,16 +196,23 @@
 
                         <!-- Pricing -->
                         <div class="mb-2">
-                            <span class="fw-bold text-danger">${{ product.price }}</span>
+                            <span class="fw-bold text-danger">D{{ product.price }}</span>
                             {% if product.original_price %}
                             <small class="text-muted text-decoration-line-through ms-1">${{ product.original_price }}</small>
                             {% endif %}
                         </div>
 
                         <!-- Shipping Info -->
-                        <div class="text-success small mb-2">
-                            <i class="fas fa-shipping-fast me-1"></i> Free delivery tomorrow
-                        </div>
+                        <ul class="list-unstyled text-muted small">
+                            <li><i class="fas fa-check text-success me-1"></i> Fast Delivery</li>
+                            {% if product.free_shipping %}
+                                <div class="text-success small mb-2">
+                                  <i class="fas fa-shipping-fast me-1"></i> Free delivery
+                                </div>
+                            {% endif %}
+                        </ul>
+
+
 
                         <!-- Action Button -->
                         <button class="btn {% if product.is_in_stock %}btn-outline-primary{% else %}btn-secondary{% endif %} w-100 btn-sm"
@@ -286,22 +293,25 @@
 
                             <!-- Badges -->
                             <div class="position-absolute top-0 start-0 p-2">
-                                {% if product.discount %}
-                                <span class="badge bg-danger shadow-sm">-{{ product.discount }}%</span>
+                                {% if product.discount_percentage %}
+                                <span class="badge bg-danger shadow-sm">-{{ product.discount_percentage }}%</span>
                                 {% endif %}
-                                {% if product.is_bestseller %}
+                                {% if product.is_trending %}
                                 <span class="badge bg-warning text-dark shadow-sm mt-1">Best Seller</span>
                                 {% endif %}
                             </div>
 
                             <!-- Quick Actions -->
                             <div class="position-absolute top-0 end-0 p-2">
-                                <button class="btn btn-light btn-sm rounded-circle shadow-sm opacity-75 hover-opacity-100 mb-1" title="Add to Wishlist">
+                                <button class="btn btn-light btn-sm rounded-circle shadow-sm opacity-75 hover-opacity-100 mb-1"
+                                        onclick="toggleWishlist({{ product.id }})"
+                                        title="Add to Wishlist"
+                                id="wishlistBtn-{{ product.id }}">
                                     <i class="fas fa-heart"></i>
                                 </button>
-                                <button class="btn btn-light btn-sm rounded-circle shadow-sm opacity-75 hover-opacity-100" title="Quick View" onclick="quickView({{ product.id }}, '{{ product.name }}', '{{ product.image.url }}', '{{ product.description|default:"No description available" }}', '{{ product.price }}')">
+                                <a href="{% url 'marketplace:product_detail' product.id %}" class="btn btn-light btn-sm rounded-circle shadow-sm opacity-75 hover-opacity-100" title="Quick View" onclick="quickView({{ product.id }}, '{{ product.name }}', '{{ product.image.url }}', '{{ product.description|default:"No description available" }}', '{{ product.price }}')">
                                     <i class="fas fa-eye"></i>
-                                </button>
+                                </a>
                             </div>
 
                             <!-- Quick Add to Cart Overlay -->
@@ -321,32 +331,32 @@
                             </h6>
 
                             <!-- Rating -->
-                            {% if product.rating %}
-                            <div class="d-flex align-items-center mb-2">
-                                <div class="rating-stars me-2">
-                                    {% for i in "12345" %}
-                                        {% if forloop.counter <= product.rating %}
-                                        <i class="fas fa-star text-warning"></i>
-                                        {% else %}
-                                        <i class="far fa-star text-muted"></i>
-                                        {% endif %}
-                                    {% endfor %}
-                                </div>
-                                <small class="text-muted">({{ product.review_count|default:"0" }})</small>
+                             <div class="d-flex align-items-center mb-2">
+                            <div class="rating-stars text-warning small me-1">
+                                {% for i in "12345" %}
+                                    {% if product.average_rating|floatformat:1 >= i %}
+                                        <i class="fas fa-star"></i>
+                                    {% elif product.average_rating|floatformat:1 >= i|add:"-0.5" %}
+                                        <i class="fas fa-star-half-alt"></i>
+                                    {% else %}
+                                        <i class="far fa-star"></i>
+                                    {% endif %}
+                                {% endfor %}
                             </div>
-                            {% endif %}
+                            <small class="text-muted">({{ product.reviews.count }})</small>
+                        </div>
 
                             <!-- Pricing -->
                             {% if product.price %}
                             <div class="pricing mb-2">
                                 <div class="d-flex align-items-baseline gap-2">
-                                    <span class="h6 fw-bold text-danger mb-0">${{ product.price }}</span>
+                                    <span class="h6 fw-bold text-danger mb-0">D{{ product.price }}</span>
                                     {% if product.original_price %}
                                     <small class="text-muted text-decoration-line-through">${{ product.original_price }}</small>
                                     {% endif %}
                                 </div>
                                 {% if product.discount %}
-                                <small class="text-success fw-medium">Save ${{ product.original_price }}</small>
+                                <small class="text-success fw-medium">Save D{{ product.original_price }}</small>
                                 {% endif %}
                             </div>
                             {% endif %}
