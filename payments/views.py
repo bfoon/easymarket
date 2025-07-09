@@ -102,6 +102,12 @@ def process_payment(request, order_id):
                 order.expected_delivery_date = timezone.now() + timedelta(days=7)
                 order.save()
 
+                # Update sold_count for each product in the order
+                for item in order.items.select_related('product'):
+                    product = item.product
+                    product.sold_count = (product.sold_count or 0) + item.quantity
+                    product.save()
+
                 logger.info(f"Payment successful for order {order.id}")
 
                 return JsonResponse({
