@@ -56,7 +56,7 @@
                                     {% endif %}
                                 </div>
                                 <div class="col-6">
-                                    <p class="mb-1">{{ "now"|date:"F d, Y" }}</p>
+                                    <p class="mb-1">{{ order.shipped_date|date:"F d, Y" }}</p>
                                     <p class="mb-1">{{ order.created_at|date:"F d, Y" }}</p>
                                     <p class="mb-1">{{ order.get_payment_method_display|default:"Not specified" }}</p>
                                     <p class="mb-1">
@@ -85,28 +85,37 @@
                             </thead>
                             <tbody>
                                 {% for item in order.items.all %}
-                                    <tr>
-                                        <td>
-                                            <div class="d-flex align-items-center">
-                                                {% if item.product.image %}
-                                                    <img src="{{ item.product.image.url }}" 
-                                                         alt="{{ item.product.name }}" 
-                                                         class="rounded me-3" 
-                                                         style="width: 40px; height: 40px; object-fit: cover;">
-                                                {% endif %}
-                                                <div>
-                                                    <h6 class="mb-0">{{ item.product.name }}</h6>
-                                                    {% if item.product.description %}
-                                                        <small class="text-muted">{{ item.product.description|truncatewords:10 }}</small>
-                                                    {% endif %}
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td class="text-center">{{ item.quantity }}</td>
-                                        <td class="text-end">${{ item.price_at_time|floatformat:2 }}</td>
-                                        <td class="text-end"><strong>${{ item.get_total_price|floatformat:2 }}</strong></td>
-                                    </tr>
-                                {% endfor %}
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        {% if item.product.image %}
+                                            <img src="{{ item.product.image.url }}"
+                                                 alt="{{ item.product.name }}"
+                                                 class="rounded me-3"
+                                                 style="width: 40px; height: 40px; object-fit: cover;">
+                                        {% endif %}
+                                        <div>
+                                            <h6 class="mb-0">{{ item.product.name }}</h6>
+                                            {% if item.product.description %}
+                                                <small class="text-muted">{{ item.product.description|truncatewords:10 }}</small>
+                                            {% endif %}
+
+                                            {% if item.selected_features %}
+                                                <ul class="list-unstyled mt-1 mb-0 small text-muted ps-3" style="font-size: 0.8rem;">
+                                                    {% for key, value in item.selected_features.items %}
+                                                        <li><strong>{{ key|title }}:</strong> {{ value }}</li>
+                                                    {% endfor %}
+                                                </ul>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="text-center">{{ item.quantity }}</td>
+                                <td class="text-end">${{ item.price_at_time|floatformat:2 }}</td>
+                                <td class="text-end"><strong>${{ item.get_total_price|floatformat:2 }}</strong></td>
+                            </tr>
+                            {% endfor %}
+
                             </tbody>
                         </table>
                     </div>
@@ -189,9 +198,9 @@
                                 <button onclick="window.print()" class="btn btn-primary me-2">
                                     <i class="fas fa-print me-2"></i>Print Invoice
                                 </button>
-                                <button onclick="downloadPDF()" class="btn btn-outline-primary me-2">
+                                <a href="{% url 'orders:download_invoice' order.id %}" class="btn btn-outline-primary me-2">
                                     <i class="fas fa-download me-2"></i>Download PDF
-                                </button>
+                                </a>
                             </div>
                             <div class="col-md-6 text-md-end">
                                 <a href="{% url 'orders:order_detail' order.id %}" class="btn btn-outline-secondary">

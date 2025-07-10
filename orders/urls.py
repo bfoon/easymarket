@@ -24,6 +24,7 @@ urlpatterns = [
 
     # Additional features
     path('invoice/<int:order_id>/', views.order_invoice, name='order_invoice'),
+    path('invoice/download/<int:order_id>/', views.download_invoice_pdf, name='download_invoice'),
     path('update-status/<int:order_id>/', views.update_order_status, name='update_order_status'),
     path('stats/', views.order_stats, name='order_stats'),
     path('validate-promo/', views.validate_promo, name='validate_promo'),

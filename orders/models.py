@@ -120,6 +120,21 @@ class Order(models.Model):
         shipping = self.shipping_cost or Decimal('0')
         return subtotal + tax + shipping
 
+    def get_payment_method_display(self):
+        """
+        Retrieve a human-readable payment method name from the related Payment model
+        """
+        if hasattr(self, 'payment_record') and self.payment_record.method:
+            method_map = {
+                'wave': 'Wave',
+                'qmoney': 'Qmoney',
+                'afrimoney': 'Afrimoney',
+                'cash': 'Cash Payment',
+                'verve_card': 'Verve Card',
+            }
+            return method_map.get(self.payment_record.method, 'Unknown')
+        return 'Not specified'
+
     def save(self, *args, **kwargs):
         # Auto-set dates based on status changes
         if self.pk:  # Only for existing orders
@@ -137,6 +152,7 @@ class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')
     product = models.ForeignKey('marketplace.Product', on_delete=models.CASCADE)
     quantity = models.PositiveIntegerField()
+    selected_features = models.JSONField(blank=True, null=True)
     price_at_time = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

@@ -203,6 +203,22 @@ function addToCart(productId, button) {
 
     const originalContent = button.innerHTML;
 
+    // Collect selected features
+    const selectedFeatures = {};
+    document.querySelectorAll('.feature-group').forEach(group => {
+        const featureName = group.getAttribute('data-feature');
+        const selectedInput = group.querySelector('input[type="radio"]:checked');
+        if (selectedInput) {
+            const label = selectedInput.nextElementSibling;
+            const value = label ? label.textContent.trim() : 'Unknown';
+            selectedFeatures[featureName] = value;
+        }
+    });
+
+    // Convert features to x-www-form-urlencoded
+    const formData = new URLSearchParams();
+    formData.append('features', JSON.stringify(selectedFeatures));
+
     // Add loading state
     button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Adding...';
     button.disabled = true;
@@ -213,7 +229,8 @@ function addToCart(productId, button) {
             'X-CSRFToken': getCSRFToken(),
             'Accept': 'application/json',
             'Content-Type': 'application/x-www-form-urlencoded'
-        }
+        },
+        body: formData.toString()
     })
     .then(response => response.json())
     .then(data => {
@@ -223,8 +240,6 @@ function addToCart(productId, button) {
             button.classList.add('btn-success');
 
             showToast(`${data.product_name} was successfully added!`, 'success', 'Added to Cart');
-
-            // Update cart count dynamically
             updateCartCount(data.cart_count);
 
             setTimeout(() => {

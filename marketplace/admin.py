@@ -1,6 +1,8 @@
 from django.contrib import admin
 from .models import (Product, Category, ProductImage, ProductView,
-                     Cart, CartItem, CelebrityFeature, Wishlist, SearchHistory, PopularSearch)
+                     Cart, CartItem, CelebrityFeature, Wishlist,
+                     SearchHistory, PopularSearch, ProductFeature, ProductFeatureOption,
+                     ProductVariant)
 
 class CategoryAdmin(admin.ModelAdmin):
     list_display = ('name', 'parent',)
@@ -15,6 +17,9 @@ admin.site.register(Cart)
 admin.site.register(CartItem)
 admin.site.register(CelebrityFeature)
 admin.site.register(Wishlist)
+admin.site.register(ProductFeature)
+admin.site.register(ProductFeatureOption)
+admin.site.register(ProductVariant)
 
 
 @admin.register(SearchHistory)

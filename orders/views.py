@@ -18,6 +18,10 @@ from django.db import transaction
 from django.views.decorators.http import require_POST
 import json
 from django.views.decorators.http import require_http_methods
+from django.template.loader import get_template
+from django.http import HttpResponse
+from weasyprint import HTML
+import tempfile
 
 
 @require_http_methods(["POST"])
@@ -69,7 +73,8 @@ def checkout_cart(request):
                     OrderItem.objects.create(
                         order=order,
                         product=product,
-                        quantity=item.quantity
+                        quantity=item.quantity,
+                        selected_features = item.selected_features
                     )
 
                 # Clear cart items after successful order creation
@@ -173,6 +178,31 @@ def order_detail(request, order_id):
 
     return render(request, 'orders/order_detail.html', context)
 
+
+def download_invoice_pdf(request, order_id):
+    from orders.models import Order
+
+    order = Order.objects.get(id=order_id, buyer=request.user)
+    template = get_template('orders/invoice_template.html')  # your template name
+    html_content = template.render({
+        'order': order,
+        'company_name': "EasyMarket",
+        'company_address': "Banjul, The Gambia",
+        'company_email': "info@easymarket.com",
+        'company_phone': "+220 123 4567"
+    })
+
+    # Generate PDF
+    response = HttpResponse(content_type='application/pdf')
+    response['Content-Disposition'] = f'filename="Invoice_{order.id}.pdf"'
+
+    # Temp file to write PDF
+    with tempfile.NamedTemporaryFile(delete=True) as output:
+        HTML(string=html_content).write_pdf(target=output.name)
+        output.seek(0)
+        response.write(output.read())
+
+    return response
 
 @login_required
 @require_POST

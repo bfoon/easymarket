@@ -310,6 +310,28 @@ class ProductView(models.Model):
         unique_together = ('user', 'product')
 
 
+class ProductFeature(models.Model):
+    name = models.CharField(max_length=100)  # e.g. "Color", "Size"
+
+    def __str__(self):
+        return self.name
+
+
+class ProductFeatureOption(models.Model):
+    feature = models.ForeignKey(ProductFeature, related_name='options', on_delete=models.CASCADE)
+    value = models.CharField(max_length=100)  # e.g. "Red", "Large"
+
+    def __str__(self):
+        return f"{self.feature.name}: {self.value}"
+
+
+class ProductVariant(models.Model):
+    product = models.ForeignKey('Product', related_name='variants', on_delete=models.CASCADE)
+    feature_option = models.ForeignKey(ProductFeatureOption, on_delete=models.CASCADE)
+
+    def __str__(self):
+        return f"{self.product.name} - {self.feature_option}"
+
 class Cart(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='cart')
     created_at = models.DateTimeField(auto_now_add=True)
@@ -328,6 +350,7 @@ class CartItem(models.Model):
     cart = models.ForeignKey(Cart, on_delete=models.CASCADE, related_name='items')
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
     quantity = models.PositiveIntegerField(default=1)
+    selected_features = models.JSONField(null=True, blank=True)
 
     class Meta:
         unique_together = ('cart', 'product')

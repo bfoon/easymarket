@@ -3,7 +3,8 @@ from unicodedata import category
 
 from .models import (Category, Product, ProductView,
                      CartItem, Cart, CelebrityFeature, Wishlist,
-                     SearchHistory, PopularSearch)
+                     SearchHistory, PopularSearch, ProductFeature,
+                     ProductFeatureOption, ProductVariant)
 from chat.models import ChatThread, ChatMessage
 from accounts.models import Address
 from reviews.models import Review
@@ -96,6 +97,18 @@ def product_list(request):
 def product_detail(request, product_id):
     product = get_object_or_404(Product, id=product_id)
     product_images = product.images.all()
+    variants = product.variants.select_related('feature_option__feature')
+
+    # Organize by feature name
+    feature_map = {}
+    for variant in variants:
+        feature_name = variant.feature_option.feature.name
+        feature_map.setdefault(feature_name, set()).add(variant.feature_option)
+
+    # convert to list for template rendering
+    feature_data = {
+        k: sorted(list(v), key=lambda x: x.value) for k, v in feature_map.items()
+    }
 
     # Record view
     if request.user.is_authenticated:
@@ -108,7 +121,16 @@ def product_detail(request, product_id):
                 recently_viewed = recently_viewed[:10]
             request.session['recently_viewed'] = recently_viewed
 
-    # Recommended items with annotated review stats
+        # Organize by feature name
+        feature_map = {}
+        for variant in variants:
+            feature_name = variant.feature_option.feature.name
+            feature_map.setdefault(feature_name, set()).add(variant.feature_option)
+
+        # convert to list for template rendering
+        feature_data = {
+            k: sorted(list(v), key=lambda x: x.value) for k, v in feature_map.items()
+        }    # Recommended items with annotated review stats
     recommended_items = (
         Product.objects
         .filter(category=product.category)
@@ -135,6 +157,9 @@ def product_detail(request, product_id):
         last_space = short_description.rfind(' ')
         if last_space != -1:
             short_description = short_description[:last_space]
+
+
+
 
     # Review data
     reviews = Review.objects.filter(product=product)
@@ -180,6 +205,7 @@ def product_detail(request, product_id):
         'review_count': review_count,
         'user_rating': user_rating,
         'rating_range': range(1, 6),
+        'feature_data': feature_data,
     })
 
 def hot_picks(request):
@@ -475,12 +501,13 @@ def category_products_ajax(request, pk):
 
 @csrf_exempt
 def add_to_cart(request, product_id):
-    """
-    Add product to cart and return updated cart information for real-time updates
-    """
     try:
         product = get_object_or_404(Product, id=product_id)
         quantity = int(request.POST.get('quantity', 1))
+
+        # Get feature selections
+        features_json = request.POST.get('features', '{}')
+        selected_features = json.loads(features_json)
 
         if quantity < 1:
             quantity = 1
@@ -488,31 +515,36 @@ def add_to_cart(request, product_id):
             quantity = 99
 
         if request.user.is_authenticated:
-            # Handle authenticated users
             cart, created = Cart.objects.get_or_create(user=request.user)
-            cart_item, item_created = CartItem.objects.get_or_create(
+
+            # Check for same product + same features
+            cart_item = CartItem.objects.filter(
                 cart=cart,
                 product=product,
-                defaults={'quantity': 0}
-            )
+                selected_features=selected_features
+            ).first()
 
-            if not item_created:
+            if cart_item:
                 cart_item.quantity += quantity
+                item_created = False
             else:
-                cart_item.quantity = quantity
+                cart_item = CartItem.objects.create(
+                    cart=cart,
+                    product=product,
+                    quantity=quantity,
+                    selected_features=selected_features
+                )
+                item_created = True
 
-            # Ensure quantity doesn't exceed maximum
             if cart_item.quantity > 99:
                 cart_item.quantity = 99
 
             cart_item.save()
 
-            # Calculate cart totals for real-time updates
             cart_items = CartItem.objects.filter(cart=cart)
             cart_count = sum(item.quantity for item in cart_items)
             cart_total = sum(item.product.price * item.quantity for item in cart_items)
 
-            # Calculate tax (8.5% - adjust as needed)
             tax_rate = Decimal('0.085')
             tax_amount = cart_total * tax_rate
             final_total = cart_total + tax_amount
@@ -530,38 +562,37 @@ def add_to_cart(request, product_id):
             })
 
         else:
-            # Handle anonymous users with session cart
+            # Session cart
             cart = request.session.get('cart', {})
-            product_key = str(product_id)
 
-            if product_key in cart:
-                cart[product_key]['quantity'] += quantity
-                if cart[product_key]['quantity'] > 99:
-                    cart[product_key]['quantity'] = 99
+            key = f"{product_id}::{json.dumps(selected_features, sort_keys=True)}"
+
+            if key in cart:
+                cart[key]['quantity'] += quantity
+                if cart[key]['quantity'] > 99:
+                    cart[key]['quantity'] = 99
                 item_was_updated = True
             else:
-                cart[product_key] = {
+                cart[key] = {
                     'quantity': quantity,
                     'name': product.name,
-                    'price': str(product.price)
+                    'price': str(product.price),
+                    'features': selected_features
                 }
                 item_was_updated = False
 
             request.session['cart'] = cart
             request.session.modified = True
 
-            # Calculate cart totals
             cart_count = sum(item['quantity'] for item in cart.values())
             cart_total = Decimal('0')
 
-            for pid, item in cart.items():
+            for entry in cart.values():
                 try:
-                    prod = Product.objects.get(id=pid)
-                    cart_total += prod.price * item['quantity']
-                except Product.DoesNotExist:
+                    cart_total += Decimal(entry['price']) * entry['quantity']
+                except:
                     continue
 
-            # Calculate tax
             tax_rate = Decimal('0.085')
             tax_amount = cart_total * tax_rate
             final_total = cart_total + tax_amount
@@ -573,7 +604,7 @@ def add_to_cart(request, product_id):
                 'cart_total': f"{cart_total:.2f}",
                 'tax_amount': f"{tax_amount:.2f}",
                 'final_total': f"{final_total:.2f}",
-                'item_quantity': cart[product_key]['quantity'],
+                'item_quantity': cart[key]['quantity'],
                 'item_was_updated': item_was_updated,
                 'product_name': product.name
             })
@@ -588,7 +619,6 @@ def add_to_cart(request, product_id):
             'success': False,
             'message': f'Error adding item to cart: {str(e)}'
         })
-
 
 def cart_view(request):
     """
@@ -607,7 +637,9 @@ def cart_view(request):
                     'id': item.id,  # Add item ID for frontend reference
                     'product': item.product,
                     'quantity': item.quantity,
-                    'subtotal': subtotal
+                    'subtotal': subtotal,
+                    # Optional: include features if stored for auth users
+                    'selected_features': item.selected_features if hasattr(item, 'selected_features') else {},
                 })
                 total_price += subtotal
     else:
@@ -616,13 +648,18 @@ def cart_view(request):
         products = Product.objects.filter(id__in=product_ids)
 
         for product in products:
-            quantity = session_cart[str(product.id)]['quantity']
+            product_id_str = str(product.id)
+            cart_data = session_cart.get(product_id_str, {})
+            quantity = cart_data.get('quantity', 1)
+            selected_features = cart_data.get('selected_features', {})
             subtotal = product.price * quantity
+
             cart_items.append({
                 'id': product.id,  # Use product ID for session carts
                 'product': product,
                 'quantity': quantity,
-                'subtotal': subtotal
+                'subtotal': subtotal,
+                'selected_features': selected_features,  # ✅ Add this to context
             })
             total_price += subtotal
 
@@ -641,7 +678,6 @@ def cart_view(request):
         'final_total': final_total,
         'cart_count': cart_count,
     })
-
 
 # Optional: Add this view to get current cart count for consistency
 @csrf_exempt
