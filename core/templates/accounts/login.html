@@ -1,0 +1,433 @@
+<!-- account/templates/account/login.html -->
+
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign In - EasyMarket</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: "Amazon Ember", Arial, sans-serif;
+            background-color: #f0f2f2;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px 0;
+        }
+
+        .header {
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .logo {
+            font-size: 36px;
+            font-weight: bold;
+            color: #232f3e;
+            text-decoration: none;
+            position: relative;
+        }
+
+        .logo::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, #ff9900 0%, #ffad33 100%);
+            border-radius: 2px;
+        }
+
+        .login-container {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 26px 22px;
+            width: 100%;
+            max-width: 350px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .login-container h1 {
+            font-size: 28px;
+            font-weight: 400;
+            color: #111;
+            margin-bottom: 18px;
+        }
+
+        .messages {
+            margin-bottom: 15px;
+        }
+
+        .alert {
+            padding: 12px 16px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            border: 1px solid;
+            font-size: 13px;
+        }
+
+        .alert-error {
+            background-color: #fdf2f2;
+            border-color: #f5c6cb;
+            color: #721c24;
+        }
+
+        .alert-success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+            color: #155724;
+        }
+
+        .alert-info {
+            background-color: #d1ecf1;
+            border-color: #b8daff;
+            color: #0c5460;
+        }
+
+        .form-group {
+            margin-bottom: 14px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 4px;
+            color: #111;
+            font-weight: bold;
+            font-size: 13px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #a6a6a6;
+            border-radius: 3px;
+            font-size: 13px;
+            background: white;
+            transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #e77600;
+            box-shadow: 0 0 3px 2px rgba(228, 121, 17, 0.5);
+        }
+
+        .form-group input::placeholder {
+            color: #767676;
+        }
+
+        .remember-me {
+            display: flex;
+            align-items: center;
+            margin-bottom: 18px;
+        }
+
+        .remember-me input[type="checkbox"] {
+            width: auto;
+            margin-right: 8px;
+        }
+
+        .remember-me label {
+            font-size: 13px;
+            color: #111;
+            font-weight: normal;
+            margin: 0;
+        }
+
+        .sign-in-btn {
+            width: 100%;
+            padding: 8px 0;
+            background: linear-gradient(to bottom, #f7dfa5, #f0c14b);
+            border: 1px solid #a88734;
+            border-radius: 3px;
+            font-size: 13px;
+            color: #111;
+            cursor: pointer;
+            transition: all 0.15s ease-in-out;
+            margin-bottom: 18px;
+            position: relative;
+        }
+
+        .sign-in-btn:hover {
+            background: linear-gradient(to bottom, #f5d78e, #eeb933);
+            border-color: #9c7e31;
+        }
+
+        .sign-in-btn:active {
+            background: linear-gradient(to bottom, #f0c14b, #f7dfa5);
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.15);
+        }
+
+        .sign-in-btn:disabled {
+            background: #f7f7f7;
+            border-color: #ccc;
+            color: #999;
+            cursor: not-allowed;
+        }
+
+        .loading-spinner {
+            display: none;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #999;
+            border-radius: 50%;
+            border-top-color: #111;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .conditions {
+            font-size: 11px;
+            color: #111;
+            line-height: 1.4;
+            margin-bottom: 18px;
+        }
+
+        .conditions a {
+            color: #0066c0;
+            text-decoration: none;
+        }
+
+        .conditions a:hover {
+            color: #c7511f;
+            text-decoration: underline;
+        }
+
+        .help-section {
+            margin-bottom: 16px;
+        }
+
+        .help-section .help-title {
+            font-size: 12px;
+            color: #767676;
+            margin-bottom: 8px;
+        }
+
+        .help-section .help-link {
+            color: #0066c0;
+            text-decoration: none;
+            font-size: 13px;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .help-section .help-link:hover {
+            color: #c7511f;
+            text-decoration: underline;
+        }
+
+        .divider {
+            position: relative;
+            margin: 26px 0;
+            color: #767676;
+            font-size: 12px;
+            text-align: center;
+        }
+
+        .divider::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: #e7e7e7;
+        }
+
+        .divider span {
+            background: white;
+            padding: 0 8px;
+            position: relative;
+        }
+
+        .create-account-btn {
+            width: 100%;
+            padding: 8px 0;
+            background: linear-gradient(to bottom, #f7f8fa, #e7e9ec);
+            border: 1px solid #adb1b8;
+            border-radius: 3px;
+            font-size: 13px;
+            color: #111;
+            cursor: pointer;
+            transition: all 0.15s ease-in-out;
+            margin-bottom: 18px;
+            text-decoration: none;
+            display: block;
+            text-align: center;
+        }
+
+        .create-account-btn:hover {
+            background: linear-gradient(to bottom, #e7e9ec, #dde0e6);
+            border-color: #9da3ab;
+            text-decoration: none;
+            color: #111;
+        }
+
+        .footer {
+            margin-top: 30px;
+            padding-top: 16px;
+            border-top: 1px solid #e7e7e7;
+            text-align: center;
+            font-size: 11px;
+            color: #555;
+            max-width: 350px;
+        }
+
+        .footer a {
+            color: #0066c0;
+            text-decoration: none;
+            margin: 0 4px;
+        }
+
+        .footer a:hover {
+            color: #c7511f;
+            text-decoration: underline;
+        }
+
+        @media (max-width: 480px) {
+            .login-container {
+                margin: 0 14px;
+                padding: 20px 18px;
+            }
+
+            .logo {
+                font-size: 28px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <a href="/" class="logo">EasyMarket</a>
+    </div>
+
+    <div class="login-container">
+        <h1>Sign in</h1>
+
+        <!-- Django Messages -->
+        {% if messages %}
+            <div class="messages">
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <form method="post" id="loginForm">
+            {% csrf_token %}
+
+            {% if next %}
+                <input type="hidden" name="next" value="{{ next }}">
+            {% endif %}
+
+            <div class="form-group">
+                <label for="username">Email or username</label>
+                <input type="text" id="username" name="username"
+                       value="{{ username|default:'' }}"
+                       placeholder="Enter your email or username" required>
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password"
+                       placeholder="Enter your password" required>
+            </div>
+
+            <div class="remember-me">
+                <input type="checkbox" id="remember_me" name="remember_me">
+                <label for="remember_me">Keep me signed in</label>
+            </div>
+
+            <button type="submit" class="sign-in-btn" id="submitBtn">
+                <span class="loading-spinner" id="loadingSpinner"></span>
+                <span id="btnText">Sign in</span>
+            </button>
+
+            <div class="conditions">
+                By signing in, you agree to EasyMarket's
+                <a href="#">Conditions of Use</a> and <a href="#">Privacy Notice</a>.
+            </div>
+        </form>
+
+        <div class="help-section">
+            <div class="help-title">Need help?</div>
+            <a href="#" class="help-link">
+                Forgot your password?
+            </a>
+            <a href="#" class="help-link">Other issues with Sign in</a>
+        </div>
+
+        <div class="divider">
+            <span>New to EasyMarket?</span>
+        </div>
+
+        <a href="#" class="create-account-btn">
+            Create your EasyMarket account
+        </a>
+    </div>
+
+    <div class="footer">
+        <a href="#">Conditions of Use</a> |
+        <a href="#">Privacy Notice</a> |
+        <a href="#">Help</a>
+        <br><br>
+        © 2025 EasyMarket, Inc. or its affiliates
+    </div>
+
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            const submitBtn = document.getElementById('submitBtn');
+            const loadingSpinner = document.getElementById('loadingSpinner');
+            const btnText = document.getElementById('btnText');
+
+            // Show loading state
+            loadingSpinner.style.display = 'inline-block';
+            btnText.textContent = 'Signing in...';
+            submitBtn.disabled = true;
+
+            // Note: Form will submit normally, loading state will show during server processing
+        });
+
+        // Auto-focus first input
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('username').focus();
+        });
+
+        // Client-side validation (optional)
+        function validateForm() {
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+
+            if (!username) {
+                alert('Please enter your username or email.');
+                return false;
+            }
+
+            if (!password) {
+                alert('Please enter your password.');
+                return false;
+            }
+
+            return true;
+        }
+    </script>
+</body>
+</html>
