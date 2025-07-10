@@ -40,67 +40,73 @@ def checkout_cart(request):
             messages.error(request, "Your cart is empty.")
             return redirect('marketplace:cart_view')
 
-        subtotal = sum(item.product.price * item.quantity for item in cart_items)
+        subtotal = Decimal('0')
+        eligible_discount = Decimal('0')
 
         # Handle Promo Code
         if promo_code_str:
             try:
                 promo = PromoCode.objects.get(code__iexact=promo_code_str, is_active=True)
+
                 if not promo.is_valid():
                     messages.error(request, "Promo code is invalid or expired.")
                     return redirect('marketplace:cart_view')
-                discount_amount = (subtotal * Decimal(promo.discount_percentage)) / 100
+
             except PromoCode.DoesNotExist:
                 messages.error(request, "Promo code not found.")
                 return redirect('marketplace:cart_view')
 
-        # Create Order with promo applied using database transaction
-        try:
-            with transaction.atomic():
-                order = Order.objects.create(
-                    buyer=request.user,
-                    promo_code=promo,
-                    discount_amount=discount_amount
+        # Calculate totals
+        for item in cart_items:
+            line_total = item.product.price * item.quantity
+            subtotal += line_total
+
+            if promo and promo.applies_to_product(item.product):
+                eligible_discount += (line_total * Decimal(promo.discount_percentage)) / 100
+
+        discount_amount = eligible_discount
+
+        # Create Order
+        with transaction.atomic():
+            order = Order.objects.create(
+                buyer=request.user,
+                promo_code=promo,
+                discount_amount=discount_amount
+            )
+
+            for item in cart_items:
+                product = item.product.__class__.objects.select_for_update().get(id=item.product.id)
+
+                reduce_stock(product, item.quantity)
+
+                OrderItem.objects.create(
+                    order=order,
+                    product=product,
+                    quantity=item.quantity,
+                    selected_features=item.selected_features
                 )
 
-                for item in cart_items:
-                    # Lock the product row to prevent race conditions
-                    product = item.product.__class__.objects.select_for_update().get(id=item.product.id)
+            cart_items.delete()
 
-                    # Reduce stock with the locked product
-                    reduce_stock(product, item.quantity)
+            if promo:
+                promo.increment_usage()
 
-                    OrderItem.objects.create(
-                        order=order,
-                        product=product,
-                        quantity=item.quantity,
-                        selected_features = item.selected_features
-                    )
-
-                # Clear cart items after successful order creation
-                cart_items.delete()
-
-                # Increment promo code usage
-                if promo:
-                    promo.increment_usage()
-
-                messages.success(request, "Order placed successfully!")
-                return redirect('orders:order_detail', order_id=order.id)
-
-        except ValidationError as e:
-            messages.error(request, f"Failed to checkout: {str(e)}")
-            return redirect('marketplace:cart_view')
-        except Exception as e:
-            # Log the error for debugging
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"Checkout error for user {request.user.id}: {str(e)}")
-
-            messages.error(request, "An error occurred during checkout. Please try again.")
-            return redirect('marketplace:cart_view')
+            messages.success(request, "Order placed successfully!")
+            return redirect('orders:order_detail', order_id=order.id)
 
     except Cart.DoesNotExist:
         messages.error(request, "You don't have any cart to checkout.")
+        return redirect('marketplace:cart_view')
+
+    except ValidationError as e:
+        messages.error(request, f"Failed to checkout: {str(e)}")
+        return redirect('marketplace:cart_view')
+
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Checkout error for user {request.user.id}: {str(e)}")
+        messages.error(request, "An error occurred during checkout. Please try again.")
         return redirect('marketplace:cart_view')
 
 @require_http_methods(["POST"])

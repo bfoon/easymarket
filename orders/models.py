@@ -7,14 +7,22 @@ from decimal import Decimal
 class PromoCode(models.Model):
     code = models.CharField(max_length=50, unique=True)
     discount_percentage = models.PositiveIntegerField(help_text="Percentage discount, e.g., 10 for 10%")
-    influencer = models.ForeignKey('marketplace.CelebrityFeature', on_delete=models.SET_NULL, null=True, blank=True, related_name='promo_codes')
+    influencer = models.ForeignKey(
+        'marketplace.CelebrityFeature',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='promo_codes'
+    )
+    products = models.ManyToManyField('marketplace.Product', blank=True, related_name='promo_codes')
     is_active = models.BooleanField(default=True)
     usage_limit = models.PositiveIntegerField(default=0, help_text="0 means unlimited")
     usage_count = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.code} - {self.discount_percentage}% ({self.influencer.celebrity_name if self.influencer else 'General'})"
+        scope = f"{self.influencer.celebrity_name}" if self.influencer else "General"
+        return f"{self.code} - {self.discount_percentage}% ({scope})"
 
     def is_valid(self):
         if not self.is_active:
@@ -27,6 +35,14 @@ class PromoCode(models.Model):
         if self.usage_limit == 0 or self.usage_count < self.usage_limit:
             self.usage_count += 1
             self.save()
+
+    def applies_to_product(self, product):
+        """
+        Return True if promo code applies to this product.
+        If no products are tied, it's considered global.
+        """
+        return self.products.count() == 0 or self.products.filter(id=product.id).exists()
+
 
 
 class Order(models.Model):

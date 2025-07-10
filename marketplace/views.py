@@ -8,6 +8,7 @@ from .models import (Category, Product, ProductView,
 from chat.models import ChatThread, ChatMessage
 from accounts.models import Address
 from reviews.models import Review
+from orders.models import PromoCode
 from reviews.forms import ReviewForm
 import re
 from django.views.decorators.csrf import csrf_exempt
@@ -1055,82 +1056,73 @@ def my_wishlist(request):
 @csrf_exempt
 @require_POST
 def apply_promo_code(request):
-    """
-    Apply a promo code to the cart
-    Expects: promo_code
-    """
     try:
-        promo_code = request.POST.get('promo_code', '').strip().upper()
+        promo_code_str = request.POST.get('promo_code', '').strip().upper()
 
-        if not promo_code:
-            return JsonResponse({
-                'success': False,
-                'message': 'Promo code is required'
-            })
+        if not promo_code_str:
+            return JsonResponse({'success': False, 'message': 'Promo code is required'})
 
-        # Define your promo codes here or get from database
-        PROMO_CODES = {
-            'SAVE10': {'discount_percent': 10, 'description': '10% off'},
-            'SAVE20': {'discount_percent': 20, 'description': '20% off'},
-            'WELCOME': {'discount_percent': 15, 'description': '15% off for new customers'},
-            'FREESHIP': {'discount_percent': 0, 'free_shipping': True, 'description': 'Free shipping'},
-        }
+        try:
+            promo = PromoCode.objects.get(code__iexact=promo_code_str, is_active=True)
+        except PromoCode.DoesNotExist:
+            return JsonResponse({'success': False, 'message': 'Invalid or expired promo code'})
 
-        if promo_code not in PROMO_CODES:
-            return JsonResponse({
-                'success': False,
-                'message': 'Invalid promo code'
-            })
+        if not promo.is_valid():
+            return JsonResponse({'success': False, 'message': 'Promo code usage limit reached or inactive'})
 
-        promo_data = PROMO_CODES[promo_code]
+        subtotal = Decimal('0')
+        discount_amount = Decimal('0')
+        item_count = 0
+        eligible_total = Decimal('0')
 
-        # Calculate current cart total
+        # Get cart items (auth or guest)
         if request.user.is_authenticated:
             cart = Cart.objects.filter(user=request.user).first()
             if not cart:
-                return JsonResponse({
-                    'success': False,
-                    'message': 'Cart is empty'
-                })
-
-            cart_items = CartItem.objects.filter(cart=cart)
-            subtotal = sum(item.product.price * item.quantity for item in cart_items)
-            item_count = sum(item.quantity for item in cart_items)
+                return JsonResponse({'success': False, 'message': 'Cart is empty'})
+            cart_items = CartItem.objects.filter(cart=cart).select_related('product')
         else:
-            cart = request.session.get('cart', {})
-            if not cart:
-                return JsonResponse({
-                    'success': False,
-                    'message': 'Cart is empty'
-                })
-
-            subtotal = Decimal('0')
-            item_count = 0
-            for pid, item in cart.items():
+            cart_data = request.session.get('cart', {})
+            if not cart_data:
+                return JsonResponse({'success': False, 'message': 'Cart is empty'})
+            cart_items = []
+            for pid, item in cart_data.items():
                 try:
-                    prod = Product.objects.get(id=pid)
-                    subtotal += prod.price * item['quantity']
-                    item_count += item['quantity']
+                    product = Product.objects.get(id=pid)
+                    quantity = item.get('quantity', 1)
+                    cart_items.append({
+                        'product': product,
+                        'quantity': quantity
+                    })
                 except Product.DoesNotExist:
                     continue
 
-        # Apply discount
-        discount_amount = Decimal('0')
-        if 'discount_percent' in promo_data and promo_data['discount_percent'] > 0:
-            discount_percent = Decimal(str(promo_data['discount_percent'])) / 100
-            discount_amount = subtotal * discount_percent
+        # Calculate eligible total & subtotal
+        for item in cart_items:
+            product = item.product if hasattr(item, 'product') else item['product']
+            quantity = item.quantity if hasattr(item, 'quantity') else item['quantity']
+            line_total = product.price * quantity
+            subtotal += line_total
+            item_count += quantity
 
-        # Calculate final totals
+            if not promo.products.exists() or promo.products.filter(id=product.id).exists():
+                eligible_total += line_total
+
+        # Calculate discount
+        if promo.discount_percentage > 0 and eligible_total > 0:
+            discount_amount = (eligible_total * Decimal(promo.discount_percentage)) / 100
+
+        # Totals
         discounted_subtotal = subtotal - discount_amount
         tax_rate = Decimal('0.085')
         tax_amount = discounted_subtotal * tax_rate
         final_total = discounted_subtotal + tax_amount
 
-        # Store promo code in session
+        # Store promo in session for later use
         request.session['applied_promo'] = {
-            'code': promo_code,
+            'code': promo.code,
             'discount_amount': str(discount_amount),
-            'discount_percent': promo_data.get('discount_percent', 0)
+            'discount_percent': promo.discount_percentage
         }
 
         return JsonResponse({
@@ -1140,7 +1132,7 @@ def apply_promo_code(request):
             'tax_amount': f"{tax_amount:.2f}",
             'final_total': f"{final_total:.2f}",
             'item_count': item_count,
-            'message': f'Promo code "{promo_code}" applied successfully!'
+            'message': f'Promo code "{promo.code}" applied successfully!'
         })
 
     except Exception as e:
@@ -1148,7 +1140,6 @@ def apply_promo_code(request):
             'success': False,
             'message': f'An error occurred: {str(e)}'
         })
-
 def trending_products_view(request):
     """
     Display trending products with celebrity features and sorting options
