@@ -623,10 +623,10 @@ def order_invoice(request, order_id):
 
     context = {
         'order': order,
-        'company_name': 'Your Company Name',
-        'company_address': 'Your Company Address',
-        'company_email': 'contact@yourcompany.com',
-        'company_phone': '+1 (555) 123-4567',
+        'company_name': 'EasyMarket',
+        'company_address': 'Banjul, The Gambia',
+        'company_email': 'info@easymarket.com',
+        'company_phone': ' +220 123 4567',
     }
 
     return render(request, 'orders/order_invoice.html', context)
