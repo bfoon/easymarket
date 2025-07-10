@@ -11,6 +11,7 @@ from stock.utils import reduce_stock
 from stock.models import Stock
 from .models import Order, OrderItem, PromoCode, ChatMessage
 from marketplace.models import Cart, CartItem, Product
+from utils.qr import generate_invoice_qr_code
 from django.core.exceptions import ValidationError
 from decimal import Decimal
 from django.views.decorators.csrf import csrf_protect
@@ -626,9 +627,11 @@ def cancel_order(request, order_id):
 def order_invoice(request, order_id):
     """Generate and display order invoice"""
     order = get_object_or_404(Order, id=order_id, buyer=request.user)
+    qr_code = generate_invoice_qr_code(order)
 
     context = {
         'order': order,
+        'invoice_qr_code': qr_code,
         'company_name': 'EasyMarket',
         'company_address': 'Banjul, The Gambia',
         'company_email': 'info@easymarket.com',

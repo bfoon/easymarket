@@ -24,6 +24,7 @@ from datetime import timedelta
 from django.utils import timezone
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.db.models import Q, Count, F, Sum, Avg
+from django.contrib import messages
 # Create your views here!
 
 def all_products(request):
@@ -1032,21 +1033,46 @@ def remove_cart_item(request):
             'message': f'An error occurred: {str(e)}'
         })
 
-
 @login_required
 def toggle_wishlist(request, product_id):
-    product = Product.objects.filter(id=product_id).first()
-    if not product:
-        return JsonResponse({'success': False, 'error': 'Product not found'})
-
+    product = get_object_or_404(Product, id=product_id)
     wishlist_item, created = Wishlist.objects.get_or_create(user=request.user, product=product)
 
-    if not created:
-        # Already in wishlist → remove it
-        wishlist_item.delete()
-        return JsonResponse({'success': True, 'status': 'removed'})
+    # If user clicked 'Add to Cart' from wishlist
+    if request.GET.get('action') == 'add_to_cart':
+        # Logic to add to cart
+        cart, _ = Cart.objects.get_or_create(user=request.user)
+        CartItem.objects.get_or_create(cart=cart, product=product, defaults={'quantity': 1})
 
-    return JsonResponse({'success': True, 'status': 'added'})
+        # Remove from wishlist (optional)
+        wishlist_item.delete()
+
+        messages.success(request, f"{product.name} added to cart.")
+        return redirect('marketplace:my_wishlist')
+
+    # AJAX or normal toggle
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        if not created:
+            wishlist_item.delete()
+            return JsonResponse({
+                'success': True,
+                'status': 'removed',
+                'message': f"{product.name} removed from your wishlist"
+            })
+        return JsonResponse({
+            'success': True,
+            'status': 'added',
+            'message': f"{product.name} added to your wishlist"
+        })
+
+    else:
+        if not created:
+            wishlist_item.delete()
+            messages.info(request, f"{product.name} removed from your wishlist.")
+        else:
+            messages.success(request, f"{product.name} added to your wishlist.")
+        return redirect('marketplace:my_wishlist')
+
 
 @login_required
 def my_wishlist(request):

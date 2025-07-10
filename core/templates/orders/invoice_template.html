@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>Invoice</title>
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js"></script>
   <style>
     body {
       font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
@@ -77,6 +78,17 @@
       margin-bottom: 5px;
       border-radius: 4px;
     }
+
+    .qr-code-section {
+      text-align: right;
+      margin-top: 1rem;
+    }
+
+    .qr-code-section img {
+      border: 1px solid #ddd;
+      padding: 5px;
+      border-radius: 4px;
+    }
   </style>
 </head>
 <body>
@@ -86,10 +98,17 @@
     <h2>{{ company_name }}</h2>
     <p class="text-muted">{{ company_address }}<br>{{ company_email }} | {{ company_phone }}</p>
     <h1 class="text-end">INVOICE</h1>
-    <p class="text-end text-muted">Invoice #INV-{{ order.id|stringformat:"05d" }}</p>
+    <div class="text-end">
+      <p class="text-muted mb-1">Invoice #INV-{{ order.id|stringformat:"05d" }}</p>
+
+      <!-- QR Code Section with debugging -->
+      <div id="qrcode" style="float: right;"></div>
+
+    </div>
     <p class="text-end text-muted">Order #{{ order.id }}</p>
   </div>
 
+  <!-- Rest of your template remains the same -->
   <!-- Buyer Info -->
   <div class="invoice-section">
     <div style="float: left; width: 48%;">
@@ -150,7 +169,7 @@
           {% endif %}
         </td>
         <td class="text-center">{{ item.quantity }}</td>
-        <td class="text-end">D{{ item.price_at_time|floatformat:2 }}</td>
+        <td class="text-end">D{{ item.product.price|floatformat:2 }}</td>
         <td class="text-end">D{{ item.get_total_price|floatformat:2 }}</td>
       </tr>
       {% endfor %}
@@ -190,6 +209,20 @@
     </ul>
     <p><strong>Thank you for your business!</strong></p>
   </div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const invoiceNumber = "INV-{{ order.id|stringformat:'05d' }}";  // Make sure this is safe
+    new QRCode(document.getElementById("qrcode"), {
+      text: invoiceNumber,
+      width: 100,
+      height: 100,
+      colorDark: "#000000",
+      colorLight: "#ffffff",
+      correctLevel: QRCode.CorrectLevel.H
+    });
+  });
+</script>
 
 </body>
 </html>

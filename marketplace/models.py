@@ -3,6 +3,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.urls import reverse
 from django.db.models import Avg
+from decimal import Decimal
 from django.utils import timezone
 
 
@@ -287,6 +288,12 @@ class Product(models.Model):
     @property
     def review_count(self):
         return self.reviews.count()
+
+    @property
+    def amount_saved(self):
+        if self.original_price and self.original_price > self.price:
+            return self.original_price - self.price
+        return Decimal('0.00')
 
 
 

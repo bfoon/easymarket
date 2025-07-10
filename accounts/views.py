@@ -1,7 +1,12 @@
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import login, get_user_model
+from django.contrib.auth import logout
 from .models import Address
+
+def custom_logout(request):
+    logout(request)
+    return redirect('marketplace:product_list')
 
 def register_buyer(request):
     UserModel = get_user_model()

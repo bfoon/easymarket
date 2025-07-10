@@ -155,8 +155,11 @@ AUTH_USER_MODEL = 'accounts.User'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
 SEARCH_RESULTS_PER_PAGE = 12
 SEARCH_SUGGESTIONS_LIMIT = 8
 SEARCH_MIN_QUERY_LENGTH = 2
 
+# settings.py
+LOGIN_URL = '/accounts/login/'
+LOGIN_REDIRECT_URL = '/'  # Where to go after successful login
+LOGOUT_REDIRECT_URL = '/'  # Where to go after logout

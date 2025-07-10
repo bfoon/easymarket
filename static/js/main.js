@@ -1,4 +1,3 @@
-// static/js/main.js - General site-wide functionality
 
 // ==============================================
 // UTILITY FUNCTIONS
@@ -288,17 +287,24 @@ function addToWishlist(productId, button) {
             'X-Requested-With': 'XMLHttpRequest'
         }
     })
-    .then(response => response.json())
+    .then(response => {
+        const contentType = response.headers.get("content-type");
+        if (response.ok && contentType && contentType.includes("application/json")) {
+            return response.json();
+        } else {
+            throw new Error('Unexpected response format');
+        }
+    })
     .then(data => {
         if (data.success) {
             if (data.status === 'added') {
                 heartIcon.classList.remove('far');
                 heartIcon.classList.add('fas', 'text-danger');
-                showToast('Added to wishlist!', 'success');
+                showToast(data.message || 'Added to wishlist!', 'success');
             } else {
                 heartIcon.classList.remove('fas', 'text-danger');
                 heartIcon.classList.add('far');
-                showToast('Removed from wishlist!', 'success');
+                showToast(data.message || 'Removed from wishlist!', 'success');
             }
         } else {
             showToast(data.error || "Something went wrong.", 'error');

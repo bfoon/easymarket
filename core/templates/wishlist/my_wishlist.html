@@ -1,10 +1,301 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Title</title>
-</head>
-<body>
+{% extends 'base.html' %}
+{% load static %}
 
-</body>
-</html>
+{% block content %}
+<link rel="stylesheet" href="{% static 'css/main.css' %}">
+<link rel="stylesheet" href="{% static 'css/wishlist.css' %}">
+
+<!-- Amazon-style breadcrumb -->
+<div class="amazon-breadcrumb">
+  <div class="container">
+    <a href="{% url 'marketplace:product_list' %}">Shopping</a>
+    <span class="mx-2">›</span>
+    <span>Your Lists</span>
+    <span class="mx-2">›</span>
+    <span>Wishlist</span>
+  </div>
+</div>
+
+<!-- Main header -->
+<section class="wishlist-header">
+  <div class="container">
+    <div class="row align-items-center">
+      <div class="col-md-8">
+        <h1 class="wishlist-title">Your Wishlist</h1>
+        <div class="wishlist-subtitle">
+          {% if items %}
+            {{ items|length }} item{{ items|length|pluralize }}
+          {% else %}
+            No items yet
+          {% endif %}
+        </div>
+      </div>
+      <div class="col-md-4 text-end">
+        <a href="{% url 'marketplace:product_list' %}" class="btn-amazon-primary">
+          Continue Shopping
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="py-4" style="background: var(--amazon-light-gray);">
+  <div class="container">
+    <!-- Django Flash Messages -->
+    {% if messages %}
+      {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show mb-3"
+             style="border-radius: 4px; border: 1px solid var(--amazon-border);">
+          {{ message }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      {% endfor %}
+    {% endif %}
+
+    {% if items %}
+      <!-- Stats Bar -->
+      <div class="wishlist-stats">
+        <div class="row">
+          <div class="col-md-3">
+            <div class="stat-item">
+              <span class="stat-number">{{ items|length }}</span>
+              <div class="stat-label">Total Items</div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="stat-item">
+              <span class="stat-number">
+                {% regroup items by product.is_in_stock as stock_groups %}
+                {% for group in stock_groups %}
+                  {% if group.grouper %}
+                    {{ group.list|length }}
+                  {% endif %}
+                {% empty %}
+                  0
+                {% endfor %}
+              </span>
+              <div class="stat-label">In Stock</div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="stat-item">
+              <span class="stat-number">
+                {% regroup items by product.is_in_stock as stock_groups %}
+                {% for group in stock_groups %}
+                  {% if not group.grouper %}
+                    {{ group.list|length }}
+                  {% endif %}
+                {% empty %}
+                  0
+                {% endfor %}
+              </span>
+              <div class="stat-label">Out of Stock</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filter Tabs -->
+      <div class="filter-tabs">
+        <button class="filter-tab active" data-filter="all">
+          All Items ({{ items|length }})
+        </button>
+        <button class="filter-tab" data-filter="in-stock">
+          In Stock
+          ({% regroup items by product.is_in_stock as stock_groups %}{% for group in stock_groups %}{% if group.grouper %}{{ group.list|length }}{% endif %}{% empty %}0{% endfor %})
+        </button>
+        <button class="filter-tab" data-filter="out-of-stock">
+          Out of Stock
+          ({% regroup items by product.is_in_stock as stock_groups %}{% for group in stock_groups %}{% if not group.grouper %}{{ group.list|length }}{% endif %}{% empty %}0{% endfor %})
+        </button>
+      </div>
+
+      <!-- Wishlist Items -->
+      <div id="wishlistItems">
+        {% for item in items %}
+        <div class="wishlist-item"
+             data-status="{% if item.product.is_in_stock %}in-stock{% else %}out-of-stock{% endif %}">
+          <div class="row">
+            <div class="col-md-2">
+              <div class="product-image-container">
+                <img src="{{ item.product.image.url }}"
+                     class="product-image"
+                     alt="{{ item.product.name }}"
+                     loading="lazy">
+              </div>
+            </div>
+            <div class="col-md-7">
+              <div class="product-info">
+                <h3 class="product-title">
+                  <a href="{% url 'marketplace:product_detail' item.product.id %}">
+                    {{ item.product.name }}
+                  </a>
+                </h3>
+                {% if item.product.description %}
+                  <div class="product-description">
+                    {{ item.product.description|truncatewords:20 }}
+                  </div>
+                {% endif %}
+                <div class="product-price">
+                  D{{ item.product.price|floatformat:2 }}
+                </div>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="button-group">
+                {% if item.product.is_in_stock %}
+                  <button class="btn-amazon-primary add-to-cart-btn"
+                          onclick="addToCart({{ item.product.id }}, this)">
+                    Add to Cart
+                  </button>
+                {% else %}
+                  <button class="btn-amazon-secondary" disabled>
+                    Currently Unavailable
+                  </button>
+                {% endif %}
+                <a href="{% url 'marketplace:product_detail' item.product.id %}"
+                   class="btn-amazon-secondary">
+                  View Details
+                </a>
+                <a href="{% url 'marketplace:toggle_wishlist' item.product.id %}"
+                   class="btn-amazon-danger remove-from-wishlist"
+                   data-product-name="{{ item.product.name }}">
+                  Remove
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <!-- Empty Wishlist -->
+      <div class="empty-wishlist">
+        <div class="empty-wishlist-icon">
+          <i class="fas fa-heart"></i>
+        </div>
+        <h3>Your Wishlist is empty</h3>
+        <p>Save items to your Wishlist to buy them later or share with friends and family.</p>
+        <a href="{% url 'marketplace:product_list' %}" class="btn-amazon-primary">
+          Start Shopping
+        </a>
+      </div>
+    {% endif %}
+  </div>
+</section>
+
+<!-- Toast Message -->
+<div id="amazonToast" class="amazon-toast">
+  <i class="fas fa-check-circle me-2"></i>
+  <span class="toast-message">Success!</span>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Filter functionality
+    const filterTabs = document.querySelectorAll('.filter-tab');
+    const wishlistItems = document.querySelectorAll('.wishlist-item');
+
+    filterTabs.forEach(tab => {
+        tab.addEventListener('click', function() {
+            // Remove active class from all tabs
+            filterTabs.forEach(t => t.classList.remove('active'));
+            // Add active class to clicked tab
+            this.classList.add('active');
+
+            const filter = this.getAttribute('data-filter');
+
+            wishlistItems.forEach(item => {
+                const status = item.getAttribute('data-status');
+                if (filter === 'all' || status === filter) {
+                    item.style.display = 'block';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        });
+    });
+
+    // Add to cart functionality
+    const addToCartButtons = document.querySelectorAll('.add-to-cart-btn');
+    addToCartButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const productId = this.getAttribute('data-product-id');
+            const originalText = this.textContent;
+
+            // Show loading state
+            this.innerHTML = '<span class="spinner"></span> Adding...';
+            this.disabled = true;
+            this.classList.add('loading');
+
+            // Simulate API call (replace with actual AJAX call)
+            setTimeout(() => {
+                // Show success state
+                this.innerHTML = '✓ Added to Cart';
+                this.style.background = 'var(--amazon-green)';
+
+                // Show toast
+                showToast('Item added to cart!');
+
+                // Reset button after 3 seconds
+                setTimeout(() => {
+                    this.innerHTML = originalText;
+                    this.disabled = false;
+                    this.classList.remove('loading');
+                    this.style.background = 'var(--amazon-orange)';
+                }, 3000);
+            }, 1000);
+        });
+    });
+
+    // Remove from wishlist confirmation
+    const removeButtons = document.querySelectorAll('.remove-from-wishlist');
+    removeButtons.forEach(button => {
+        button.addEventListener('click', function(e) {
+            const productName = this.getAttribute('data-product-name');
+            if (!confirm(`Remove "${productName}" from your wishlist?`)) {
+                e.preventDefault();
+            }
+        });
+    });
+
+    // Toast function
+    function showToast(message) {
+        const toast = document.getElementById('amazonToast');
+        const messageElement = toast.querySelector('.toast-message');
+
+        messageElement.textContent = message;
+        toast.classList.add('show');
+
+        setTimeout(() => {
+            toast.classList.remove('show');
+        }, 3000);
+    }
+
+    // Initialize with proper counts
+    updateFilterCounts();
+
+    function updateFilterCounts() {
+        const allItems = document.querySelectorAll('.wishlist-item');
+        const inStockItems = document.querySelectorAll('.wishlist-item[data-status="in-stock"]');
+        const outOfStockItems = document.querySelectorAll('.wishlist-item[data-status="out-of-stock"]');
+
+        // Update tab text with counts
+        document.querySelector('.filter-tab[data-filter="all"]').textContent =
+            `All Items (${allItems.length})`;
+        document.querySelector('.filter-tab[data-filter="in-stock"]').textContent =
+            `In Stock (${inStockItems.length})`;
+        document.querySelector('.filter-tab[data-filter="out-of-stock"]').textContent =
+            `Out of Stock (${outOfStockItems.length})`;
+    }
+});
+
+// Make addToCart available globally for backward compatibility
+window.addToCart = function(productId, button) {
+    const event = new Event('click');
+    button.dispatchEvent(event);
+};
+</script>
+
+<script src="{% static 'js/main.js' %}"></script>
+{% endblock %}
