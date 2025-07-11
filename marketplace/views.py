@@ -1328,7 +1328,16 @@ def cart_view(request):
                 total_price += subtotal
     else:
         session_cart = request.session.get('cart', {})
-        product_ids = session_cart.keys()
+
+        # Safely extract numeric product IDs
+        product_ids = []
+        for key in session_cart.keys():
+            try:
+                product_id = int(key.split("::")[0])  # if malformed
+                product_ids.append(product_id)
+            except ValueError:
+                continue  # skip bad keys
+
         products = Product.objects.filter(id__in=product_ids)
 
         for product in products:
@@ -2079,3 +2088,6 @@ def clear_search_history(request):
         SearchHistory.objects.filter(user=request.user).delete()
         return JsonResponse({'success': True})
     return JsonResponse({'success': False})
+
+def about(request):
+    return render(request, 'marketplace/about.html')
