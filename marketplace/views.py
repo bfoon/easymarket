@@ -10,6 +10,7 @@ from accounts.models import Address
 from reviews.models import Review
 from orders.models import PromoCode
 from reviews.forms import ReviewForm
+from django.contrib.auth import get_user_model
 import re
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
@@ -24,7 +25,13 @@ from datetime import timedelta
 from django.utils import timezone
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.db.models import Q, Count, F, Sum, Avg
+from decimal import Decimal
 from django.contrib import messages
+from collections import Counter
+
+# Get the custom User model
+User = get_user_model()
+
 # Create your views here!
 
 def all_products(request):
@@ -62,6 +69,7 @@ def product_list(request):
 
     recently_viewed = []
     similar_items = []
+    recommended_products = []
 
     # Handle logged-in user
     if request.user.is_authenticated:
@@ -86,6 +94,9 @@ def product_list(request):
                 category_id__in=related_category_ids
             ).exclude(id=last_viewed_product.id)[:8]
 
+    # Generate personalized recommendations
+    recommended_products = generate_recommendations(request, recently_viewed)
+
     return render(request, 'marketplace/product_list.html', {
         'categories': categories,
         'featured_products': featured_products,
@@ -93,7 +104,678 @@ def product_list(request):
         'products': products,
         'recently_viewed': recently_viewed,
         'similar_items': similar_items,
+        'recommended_products': recommended_products,
     })
+
+
+def generate_recommendations(request, recently_viewed):
+    """
+    Generate personalized product recommendations based on user behavior
+    """
+    recommended_products = []
+
+    if request.user.is_authenticated:
+        # For authenticated users, use comprehensive recommendation logic
+        recommended_products = get_authenticated_user_recommendations(request.user, recently_viewed)
+    else:
+        # For anonymous users, use session-based recommendations
+        recommended_products = get_anonymous_user_recommendations(request, recently_viewed)
+
+    return recommended_products[:12]  # Limit to 12 recommendations
+
+
+def get_authenticated_user_recommendations(user, recently_viewed):
+    """
+    Generate recommendations for authenticated users based on multiple factors
+    """
+    recommendations = []
+
+    # 1. Category-based recommendations (40% weight)
+    category_recommendations = get_category_based_recommendations(user, recently_viewed)
+    recommendations.extend(category_recommendations[:5])
+
+    # 2. Collaborative filtering - users who viewed similar products (30% weight)
+    collaborative_recommendations = get_collaborative_recommendations(user, recently_viewed)
+    recommendations.extend(collaborative_recommendations[:4])
+
+    # 3. Price range preferences (15% weight)
+    price_recommendations = get_price_based_recommendations(user, recently_viewed)
+    recommendations.extend(price_recommendations[:2])
+
+    # 4. Trending products in user's preferred categories (10% weight)
+    trending_recommendations = get_trending_category_recommendations(user, recently_viewed)
+    recommendations.extend(trending_recommendations[:1])
+
+    # 5. Wishlist-based recommendations (5% weight)
+    wishlist_recommendations = get_wishlist_based_recommendations(user)
+    recommendations.extend(wishlist_recommendations[:1])
+
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_recommendations = []
+    for product in recommendations:
+        if product.id not in seen:
+            seen.add(product.id)
+            unique_recommendations.append(product)
+
+    return unique_recommendations
+
+
+def get_anonymous_user_recommendations(request, recently_viewed):
+    """
+    Generate recommendations for anonymous users based on session data
+    """
+    recommendations = []
+
+    if recently_viewed:
+        # 1. Category-based recommendations
+        category_ids = [p.category.id for p in recently_viewed if p.category]
+        if category_ids:
+            category_recommendations = Product.objects.filter(
+                category_id__in=category_ids
+            ).exclude(
+                id__in=[p.id for p in recently_viewed]
+            ).annotate(
+                avg_rating=Avg('reviews__rating')
+            ).order_by('-avg_rating', '-created_at')[:8]
+            recommendations.extend(category_recommendations)
+
+        # 2. Price range recommendations
+        price_range = calculate_price_range(recently_viewed)
+        if price_range:
+            price_recommendations = Product.objects.filter(
+                price__range=price_range
+            ).exclude(
+                id__in=[p.id for p in recently_viewed]
+            ).order_by('-is_trending', '-created_at')[:4]
+            recommendations.extend(price_recommendations)
+
+    # 3. Fallback to popular products
+    if len(recommendations) < 8:
+        popular_products = Product.objects.annotate(
+            view_count=Count('productview'),
+            avg_rating=Avg('reviews__rating')
+        ).order_by('-view_count', '-avg_rating')[:12]
+        recommendations.extend(popular_products)
+
+    # Remove duplicates
+    seen = set()
+    unique_recommendations = []
+    for product in recommendations:
+        if product.id not in seen:
+            seen.add(product.id)
+            unique_recommendations.append(product)
+
+    return unique_recommendations
+
+
+def get_category_based_recommendations(user, recently_viewed):
+    """
+    Recommend products based on user's category preferences
+    """
+    # Get user's most viewed categories
+    user_categories = ProductView.objects.filter(
+        user=user
+    ).values('product__category').annotate(
+        view_count=Count('id')
+    ).order_by('-view_count')[:5]
+
+    category_ids = [cat['product__category'] for cat in user_categories if cat['product__category']]
+
+    if not category_ids:
+        return []
+
+    # Get highly rated products from preferred categories
+    recommendations = Product.objects.filter(
+        category_id__in=category_ids
+    ).exclude(
+        id__in=[p.id for p in recently_viewed] if recently_viewed else []
+    ).annotate(
+        avg_rating=Avg('reviews__rating'),
+        review_count=Count('reviews')
+    ).filter(
+        avg_rating__gte=4.0,
+        review_count__gte=5
+    ).order_by('-avg_rating', '-review_count')
+
+    return list(recommendations)
+
+
+def get_collaborative_recommendations(user, recently_viewed):
+    """
+    Collaborative filtering - recommend products viewed by similar users
+    """
+    if not recently_viewed:
+        return []
+
+    # Find users who viewed similar products
+    similar_users = User.objects.filter(
+        productview__product__in=recently_viewed
+    ).exclude(
+        id=user.id
+    ).annotate(
+        common_views=Count('productview')
+    ).filter(
+        common_views__gte=2
+    ).order_by('-common_views')[:10]
+
+    # Get products viewed by similar users
+    collaborative_products = Product.objects.filter(
+        productview__user__in=similar_users
+    ).exclude(
+        id__in=[p.id for p in recently_viewed]
+    ).annotate(
+        similarity_score=Count('productview__user', distinct=True)
+    ).order_by('-similarity_score')
+
+    return list(collaborative_products)
+
+
+def get_price_based_recommendations(user, recently_viewed):
+    """
+    Recommend products based on user's price preferences
+    """
+    if not recently_viewed:
+        return []
+
+    # Calculate user's average price preference
+    user_price_range = calculate_price_range(recently_viewed)
+
+    if not user_price_range:
+        return []
+
+    # Find products in similar price range
+    price_recommendations = Product.objects.filter(
+        price__range=user_price_range
+    ).exclude(
+        id__in=[p.id for p in recently_viewed]
+    ).annotate(
+        avg_rating=Avg('reviews__rating')
+    ).order_by('-avg_rating', '-created_at')
+
+    return list(price_recommendations)
+
+
+def get_trending_category_recommendations(user, recently_viewed):
+    """
+    Get trending products from user's preferred categories
+    """
+    if not recently_viewed:
+        return []
+
+    # Get categories from recently viewed products
+    category_ids = [p.category.id for p in recently_viewed if p.category]
+
+    if not category_ids:
+        return []
+
+    # Get trending products from these categories
+    trending_recommendations = Product.objects.filter(
+        category_id__in=category_ids,
+        is_trending=True
+    ).exclude(
+        id__in=[p.id for p in recently_viewed]
+    ).order_by('-created_at')
+
+    return list(trending_recommendations)
+
+
+def get_wishlist_based_recommendations(user):
+    """
+    Recommend products similar to items in user's wishlist
+    """
+    try:
+        # Assuming you have a Wishlist model
+        wishlist_items = Wishlist.objects.filter(user=user).values_list('product', flat=True)
+
+        if not wishlist_items:
+            return []
+
+        # Get categories from wishlist items
+        wishlist_categories = Product.objects.filter(
+            id__in=wishlist_items
+        ).values_list('category', flat=True)
+
+        # Recommend similar products
+        wishlist_recommendations = Product.objects.filter(
+            category__in=wishlist_categories
+        ).exclude(
+            id__in=wishlist_items
+        ).annotate(
+            avg_rating=Avg('reviews__rating')
+        ).order_by('-avg_rating')
+
+        return list(wishlist_recommendations)
+    except:
+        # If Wishlist model doesn't exist, return empty list
+        return []
+
+
+def calculate_price_range(products):
+    """
+    Calculate price range based on user's viewing history
+    """
+    if not products:
+        return None
+
+    prices = [p.price for p in products if p.price]
+
+    if not prices:
+        return None
+
+    # Convert to Decimal for consistent decimal arithmetic
+    min_price = min(prices)
+    max_price = max(prices)
+    avg_price = sum(prices) / len(prices)
+
+    # Create a range around the average price (±30%)
+    # Use Decimal for arithmetic operations
+    range_min = max(min_price, avg_price * Decimal('0.7'))
+    range_max = min(max_price, avg_price * Decimal('1.3'))
+
+    return (range_min, range_max)
+
+
+# Additional helper view for AJAX recommendations
+def get_more_recommendations(request):
+    """
+    API endpoint to fetch more recommendations via AJAX
+    """
+    from django.http import JsonResponse
+
+    if request.method == 'GET':
+        page = int(request.GET.get('page', 1))
+        per_page = int(request.GET.get('per_page', 8))
+
+        # Get recently viewed for context
+        recently_viewed = []
+        if request.user.is_authenticated:
+            recently_viewed = Product.objects.filter(
+                productview__user=request.user
+            ).distinct().order_by('-productview__viewed_at')[:5]
+
+        # Generate recommendations
+        all_recommendations = generate_recommendations(request, recently_viewed)
+
+        # Paginate
+        start = (page - 1) * per_page
+        end = start + per_page
+        recommendations = all_recommendations[start:end]
+
+        # Serialize data
+        data = []
+        for product in recommendations:
+            data.append({
+                'id': product.id,
+                'name': product.name,
+                'price': str(product.price),
+                'image_url': product.image.url if product.image else '',
+                'url': f'/products/{product.id}/',
+                'rating': product.average_rating if hasattr(product, 'average_rating') else 0,
+                'is_trending': product.is_trending,
+                'discount_percentage': product.discount_percentage if hasattr(product, 'discount_percentage') else 0,
+            })
+
+        return JsonResponse({
+            'recommendations': data,
+            'has_more': len(all_recommendations) > end
+        })
+
+    return JsonResponse({'error': 'Invalid request'}, status=400)
+
+
+def recommended_products_view(request):
+    """
+    Dedicated view for the "Recommended for You" page
+    """
+    # Get recently viewed products for context
+    recently_viewed = []
+    if request.user.is_authenticated:
+        recently_viewed = Product.objects.filter(
+            productview__user=request.user
+        ).distinct().order_by('-productview__viewed_at')[:10]
+    else:
+        session_recently_viewed = request.session.get('recently_viewed', [])
+        recently_viewed = Product.objects.filter(id__in=session_recently_viewed)
+
+    # Generate comprehensive recommendations
+    all_recommendations = generate_comprehensive_recommendations(request, recently_viewed)
+
+    # Pagination
+    page = request.GET.get('page', 1)
+    paginator = Paginator(all_recommendations, 24)  # 24 products per page
+    recommended_products = paginator.get_page(page)
+
+    # Get recommendation insights for the user
+    recommendation_insights = get_recommendation_insights(request, recently_viewed)
+
+    context = {
+        'recommended_products': recommended_products,
+        'recently_viewed': recently_viewed,
+        'recommendation_insights': recommendation_insights,
+        'total_recommendations': len(all_recommendations),
+        'page_title': 'Recommended for You',
+    }
+
+    # Return JSON for AJAX requests
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return JsonResponse({
+            'products': serialize_products(recommended_products),
+            'has_next': recommended_products.has_next(),
+            'has_previous': recommended_products.has_previous(),
+            'current_page': recommended_products.number,
+            'total_pages': paginator.num_pages,
+        })
+
+    return render(request, 'marketplace/recommended_products.html', context)
+
+
+def generate_comprehensive_recommendations(request, recently_viewed):
+    """
+    Generate a comprehensive list of recommendations for the dedicated page
+    """
+    all_recommendations = []
+
+    if request.user.is_authenticated:
+        # For authenticated users - more sophisticated recommendations
+        recommendations = get_authenticated_comprehensive_recommendations(request.user, recently_viewed)
+    else:
+        # For anonymous users - session-based recommendations
+        recommendations = get_anonymous_comprehensive_recommendations(request, recently_viewed)
+
+    return recommendations
+
+
+def get_authenticated_comprehensive_recommendations(user, recently_viewed):
+    """
+    Comprehensive recommendations for authenticated users
+    """
+    recommendations = []
+
+    # 1. Personal category preferences (30%)
+    category_recs = get_enhanced_category_recommendations(user, recently_viewed)
+    recommendations.extend(category_recs[:12])
+
+    # 2. Collaborative filtering - similar users (25%)
+    collaborative_recs = get_enhanced_collaborative_recommendations(user, recently_viewed)
+    recommendations.extend(collaborative_recs[:10])
+
+    # 3. Price preference matching (20%)
+    price_recs = get_enhanced_price_recommendations(user, recently_viewed)
+    recommendations.extend(price_recs[:8])
+
+    # 4. Trending in preferred categories (15%)
+    trending_recs = get_trending_category_recommendations(user, recently_viewed)
+    recommendations.extend(trending_recs[:6])
+
+    # 5. High-rated products in browsed categories (10%)
+    quality_recs = get_quality_recommendations(user, recently_viewed)
+    recommendations.extend(quality_recs[:4])
+
+    # Remove duplicates and recently viewed
+    viewed_ids = [p.id for p in recently_viewed] if recently_viewed else []
+    unique_recommendations = remove_duplicates(recommendations, viewed_ids)
+
+    # If we don't have enough recommendations, add fallback products
+    if len(unique_recommendations) < 30:
+        fallback_recs = get_fallback_recommendations(user, viewed_ids, 30 - len(unique_recommendations))
+        unique_recommendations.extend(fallback_recs)
+
+    return unique_recommendations[:48]  # Limit to 48 products for performance
+
+
+def get_anonymous_comprehensive_recommendations(request, recently_viewed):
+    """
+    Comprehensive recommendations for anonymous users
+    """
+    recommendations = []
+    viewed_ids = [p.id for p in recently_viewed] if recently_viewed else []
+
+    if recently_viewed:
+        # 1. Category-based recommendations (40%)
+        category_ids = list(set([p.category.id for p in recently_viewed if p.category]))
+        if category_ids:
+            category_recs = Product.objects.filter(
+                category_id__in=category_ids
+            ).exclude(id__in=viewed_ids).order_by('-created_at')[:16]
+            recommendations.extend(category_recs)
+
+        # 2. Price range recommendations (30%)
+        price_range = calculate_price_range(recently_viewed)
+        if price_range:
+            price_recs = Product.objects.filter(
+                price__range=price_range
+            ).exclude(id__in=viewed_ids).order_by('-is_trending')[:12]
+            recommendations.extend(price_recs)
+
+        # 3. Similar products (30%)
+        similar_recs = get_similar_products_anonymous(recently_viewed, viewed_ids)
+        recommendations.extend(similar_recs[:12])
+
+    # Fallback to popular and trending products
+    popular_recs = Product.objects.annotate(
+        view_count=Count('productview')
+    ).exclude(id__in=viewed_ids).order_by('-view_count', '-created_at')[:20]
+    recommendations.extend(popular_recs)
+
+    return remove_duplicates(recommendations, viewed_ids)[:48]
+
+
+def get_enhanced_category_recommendations(user, recently_viewed):
+    """
+    Enhanced category-based recommendations
+    """
+    # Get user's category preferences with weights
+    category_stats = ProductView.objects.filter(
+        user=user,
+        viewed_at__gte=timezone.now() - timedelta(days=90)
+    ).values('product__category__name', 'product__category').annotate(
+        view_count=Count('id'),
+        recent_views=Count('id', filter=Q(viewed_at__gte=timezone.now() - timedelta(days=30)))
+    ).order_by('-view_count')[:10]
+
+    recommendations = []
+    for stat in category_stats:
+        if stat['product__category']:
+            try:
+                category_products = Product.objects.filter(
+                    category_id=stat['product__category']
+                ).annotate(
+                    avg_rating=Avg('reviews__rating'),
+                    review_count=Count('reviews')
+                ).filter(
+                    avg_rating__gte=3.5
+                ).order_by('-avg_rating', '-review_count')[:5]
+                recommendations.extend(category_products)
+            except:
+                # Fallback without reviews
+                category_products = Product.objects.filter(
+                    category_id=stat['product__category']
+                ).order_by('-created_at')[:5]
+                recommendations.extend(category_products)
+
+    return recommendations
+
+
+def get_enhanced_collaborative_recommendations(user, recently_viewed):
+    """
+    Enhanced collaborative filtering
+    """
+    if not recently_viewed:
+        return []
+
+    # Find users with similar viewing patterns
+    similar_users = User.objects.filter(
+        productview__product__in=recently_viewed
+    ).exclude(id=user.id).annotate(
+        common_products=Count('productview__product', distinct=True),
+        total_views=Count('productview')
+    ).filter(common_products__gte=2).order_by('-common_products')[:20]
+
+    # Get their recently viewed products
+    collaborative_products = Product.objects.filter(
+        productview__user__in=similar_users,
+        productview__viewed_at__gte=timezone.now() - timedelta(days=60)
+    ).exclude(
+        id__in=[p.id for p in recently_viewed]
+    ).annotate(
+        similarity_score=Count('productview__user', distinct=True)
+    ).order_by('-similarity_score', '-created_at')
+
+    return list(collaborative_products)
+
+
+def get_enhanced_price_recommendations(user, recently_viewed):
+    """
+    Enhanced price-based recommendations
+    """
+    # Get user's purchase history if available
+    try:
+        # Try to get actual purchase data
+        from orders.models import OrderItem
+        purchase_prices = OrderItem.objects.filter(
+            order__user=user,
+            order__created_at__gte=timezone.now() - timedelta(days=180)
+        ).values_list('price', flat=True)
+
+        if purchase_prices:
+            avg_purchase_price = sum(purchase_prices) / len(purchase_prices)
+            price_range = (
+                avg_purchase_price * Decimal('0.6'),
+                avg_purchase_price * Decimal('1.4')
+            )
+        else:
+            price_range = calculate_price_range(recently_viewed)
+    except:
+        # Fallback to viewing history
+        price_range = calculate_price_range(recently_viewed)
+
+    if not price_range:
+        return []
+
+    return list(Product.objects.filter(
+        price__range=price_range
+    ).order_by('-is_trending', '-created_at'))
+
+
+def get_quality_recommendations(user, recently_viewed):
+    """
+    Get high-quality products from user's preferred categories
+    """
+    if not recently_viewed:
+        return []
+
+    category_ids = [p.category.id for p in recently_viewed if p.category]
+
+    try:
+        quality_products = Product.objects.filter(
+            category_id__in=category_ids
+        ).annotate(
+            avg_rating=Avg('reviews__rating'),
+            review_count=Count('reviews')
+        ).filter(
+            avg_rating__gte=4.5,
+            review_count__gte=10
+        ).order_by('-avg_rating', '-review_count')
+
+        return list(quality_products)
+    except:
+        return []
+
+
+def get_similar_products_anonymous(recently_viewed, viewed_ids):
+    """
+    Get similar products for anonymous users
+    """
+    if not recently_viewed:
+        return []
+
+    # Get products from same categories
+    category_ids = [p.category.id for p in recently_viewed if p.category]
+
+    similar_products = Product.objects.filter(
+        category_id__in=category_ids
+    ).exclude(id__in=viewed_ids).order_by('?')  # Random order for variety
+
+    return list(similar_products)
+
+
+def get_fallback_recommendations(user, excluded_ids, count):
+    """
+    Fallback recommendations when we don't have enough personalized ones
+    """
+    return list(Product.objects.exclude(
+        id__in=excluded_ids
+    ).annotate(
+        popularity_score=Count('productview') + Count('reviews') * 2
+    ).order_by('-popularity_score', '-created_at')[:count])
+
+
+def remove_duplicates(recommendations, excluded_ids):
+    """
+    Remove duplicate products and excluded IDs
+    """
+    seen = set(excluded_ids)
+    unique_recommendations = []
+
+    for product in recommendations:
+        if product.id not in seen:
+            seen.add(product.id)
+            unique_recommendations.append(product)
+
+    return unique_recommendations
+
+
+def get_recommendation_insights(request, recently_viewed):
+    """
+    Get insights about why products are recommended
+    """
+    insights = {
+        'total_categories_viewed': 0,
+        'primary_category': None,
+        'avg_price_range': None,
+        'recommendation_reasons': []
+    }
+
+    if recently_viewed:
+        # Category insights
+        categories = [p.category for p in recently_viewed if p.category]
+        if categories:
+            category_counts = Counter([cat.name for cat in categories])
+            insights['total_categories_viewed'] = len(set(categories))
+            insights['primary_category'] = category_counts.most_common(1)[0][0] if category_counts else None
+
+        # Price insights
+        price_range = calculate_price_range(recently_viewed)
+        if price_range:
+            insights['avg_price_range'] = f"D{price_range[0]:.2f} - D{price_range[1]:.2f}"
+
+        # Recommendation reasons
+        if insights['primary_category']:
+            insights['recommendation_reasons'].append(f"Based on your interest in {insights['primary_category']}")
+
+        if len(recently_viewed) >= 3:
+            insights['recommendation_reasons'].append("Curated from your browsing history")
+
+        insights['recommendation_reasons'].append("Popular products in your price range")
+
+    return insights
+
+def serialize_products(products):
+    serialized = []
+    for product in products:
+        serialized.append({
+            'id': product.id,
+            'name': product.name,
+            'price': str(product.price),
+            'image_url': product.image.url if product.image else '',
+            'url': f'/products/{product.id}/',
+            'category': product.category.name if product.category else '',
+            'is_trending': getattr(product, 'is_trending', False),
+            'discount_percentage': getattr(product, 'discount_percentage', 0),
+            'view_count': getattr(product, 'view_count', 0),  # <- new line
+        })
+    return serialized
 
 
 def product_detail(request, product_id):
