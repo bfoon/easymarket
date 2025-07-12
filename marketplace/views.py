@@ -900,6 +900,11 @@ def product_detail(request, product_id):
         'store': store,
     })
 
+
+def product_quick_view(request, product_id):
+    product = get_object_or_404(Product, id=product_id)
+    return render(request, 'marketplace/partials/product_quick_view.html', {'product': product})
+
 def hot_picks(request):
     """
     Display hot picks for each parent category including products from all subcategories

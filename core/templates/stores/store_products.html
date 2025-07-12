@@ -539,76 +539,41 @@ function setViewMode(mode) {
         });
     }
 }
-
-function addToCart(productId) {
-    fetch(`/add-to-cart/${productId}/`, {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
-            'Content-Type': 'application/json',
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            // Show success message or update cart counter
-            showToast('Product added to cart successfully!', 'success');
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        showToast('Error adding product to cart', 'error');
-    });
-}
-
-function toggleWishlist(productId) {
-    fetch(`/wishlist/toggle/${productId}/`, {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            showToast(data.added ? 'Added to wishlist!' : 'Removed from wishlist!', 'success');
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-    });
-}
-
 function quickView(productId) {
+    // Show initial loading message
+    const loadingContent = `
+        <div class="text-center">
+            <h5>Loading...</h5>
+            <p>Please wait while we fetch the product details.</p>
+        </div>
+    `;
+    document.getElementById('quickViewContent').innerHTML = loadingContent;
+
+    // Show the modal immediately with loading message
+    const modal = new bootstrap.Modal(document.getElementById('quickViewModal'));
+    modal.show();
+
     // Load product details via AJAX
-    fetch(`/product/${productId}/`)
-    .then(response => response.text())
+    fetch(`/product/${productId}/quick-view/`)
+    .then(response => {
+        if (!response.ok) throw new Error("Failed to load product data.");
+        return response.text();
+    })
     .then(html => {
-        // Create a simple product preview
-        const quickViewContent = `
-            <div class="text-center">
-                <h5>Product Quick View</h5>
-                <p>Loading product details...</p>
-                <a href="/product/${productId}/" class="btn btn-primary">View Full Details</a>
-            </div>
-        `;
-        document.getElementById('quickViewContent').innerHTML = quickViewContent;
-        const modal = new bootstrap.Modal(document.getElementById('quickViewModal'));
-        modal.show();
+        document.getElementById('quickViewContent').innerHTML = html;
     })
     .catch(error => {
         console.error('Error:', error);
         document.getElementById('quickViewContent').innerHTML = `
             <div class="text-center">
-                <h5>Quick View</h5>
-                <p>Unable to load product details.</p>
-                <a href="/product/${productId}/" class="btn btn-primary">View Product Page</a>
+                <h5>Error Loading Product</h5>
+                <p>We couldn't fetch the product details at this time.</p>
+                <a href="/product/${productId}/" class="btn btn-primary">Go to Product Page</a>
             </div>
         `;
-        const modal = new bootstrap.Modal(document.getElementById('quickViewModal'));
-        modal.show();
     });
 }
+
 
 function showToast(message, type) {
     // Simple toast notification

@@ -197,3 +197,5 @@ class StorePageManager {
 document.addEventListener('DOMContentLoaded', () => {
   window.storeManager = new StorePageManager();
 });
+
+

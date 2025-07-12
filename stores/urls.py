@@ -4,24 +4,26 @@ from . import views
 app_name = 'stores'
 
 urlpatterns = [
-    # Store management URLs
+    # Store management URLs - All management under /admin/ prefix to avoid conflicts
     path('create/', views.create_store, name='create_store'),
     path('manage/', views.manage_stores, name='manage_stores'),
-    path('update/<uuid:store_id>/', views.update_store, name='update_store'),
-    path('delete/<uuid:store_id>/', views.delete_store, name='delete_store'),
 
-    # Store status management
-    path('toggle-status/<uuid:store_id>/', views.toggle_store_status, name='toggle_store_status'),
+    # Store admin/management URLs (completely separate from public URLs)
+    path('admin/<uuid:store_id>/dashboard/', views.store_dashboard, name='store_dashboard'),
+    path('admin/<uuid:store_id>/update/', views.update_store, name='update_store'),
+    path('admin/<uuid:store_id>/delete/', views.delete_store, name='delete_store'),
+    path('admin/<uuid:store_id>/toggle-status/', views.toggle_store_status, name='toggle_store_status'),
 
-    # Store analytics/dashboard
-    path('dashboard/<uuid:store_id>/', views.store_dashboard, name='store_dashboard'),
+    # Product management URLs - All under /admin/ prefix
+    path('admin/<uuid:store_id>/add-product/', views.add_product, name='add_product'),
+    path('admin/<uuid:store_id>/products/', views.manage_store_products, name='manage_store_products'),
+    path('admin/<uuid:store_id>/products/<int:product_id>/edit/', views.edit_product, name='edit_product'),
+    path('admin/<uuid:store_id>/products/<int:product_id>/images/<int:image_id>/delete/',
+         views.delete_product_image, name='delete_product_image'),
 
-    # Product management URLs (using UUID for management) - MUST come before slug patterns
-    path('manage/<uuid:store_id>/add-product/', views.add_product, name='add_product'),
-    path('manage/<uuid:store_id>/products/', views.manage_store_products, name='manage_store_products'),
-    path('product/<int:product_id>/', views.product_detail, name='product_detail'),
-
-    # Public store display URLs (using slug for SEO-friendly URLs) - MUST come after UUID patterns
+    # Public store display URLs (using slug for SEO-friendly URLs) - MUST come last
     path('<slug:slug>/', views.store_detail, name='store_detail'),
     path('<slug:slug>/products/', views.store_products, name='store_products'),
+
+    path('product/<int:product_id>/', views.product_detail, name='product_detail'),
 ]

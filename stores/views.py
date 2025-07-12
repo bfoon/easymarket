@@ -2,6 +2,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.db.models import Sum, Count, Q
 from django.utils import timezone
+from django.db import models
 from datetime import datetime, timedelta
 import json
 from django.contrib import messages
@@ -10,13 +11,17 @@ from django.db import IntegrityError
 from django.utils.text import slugify
 from django.db.models import Q, Avg
 from django.core.paginator import Paginator
+from django.http import JsonResponse
+from django.forms import modelformset_factory
+from django.db import transaction
 import re
 from .models import Store
 from reviews.models import Review
-from marketplace.models import Product, Category
+from marketplace.models import Product, Category, ProductImage
 from orders.models import Order, OrderItem
 from django.http import HttpResponseForbidden
 from functools import wraps
+from .forms import ProductForm, ProductImageForm
 
 def store_owner_required(view_func):
     @wraps(view_func)
@@ -245,7 +250,6 @@ def toggle_store_status(request, store_id):
 
 
 @login_required
-@store_owner_required
 def add_product(request, store_id):
     """Add a product to a specific store."""
     store = get_object_or_404(Store, id=store_id, owner=request.user)
@@ -549,6 +553,90 @@ def store_products(request, slug):
     return render(request, 'stores/store_products.html', context)
 
 
+# @login_required
+# def manage_store_products(request, store_id):
+#     """Display all products for a specific store"""
+#     store = get_object_or_404(Store, id=store_id, owner=request.user)
+#     products = Product.objects.filter(store=store).order_by('-created_at')
+#
+#     context = {
+#         'store': store,
+#         'products': products,
+#     }
+#     return render(request, 'stores/manage_products.html', context)
+
+
+@login_required
+def edit_product(request, store_id, product_id):
+    """Edit a product and manage its images"""
+    store = get_object_or_404(Store, id=store_id, owner=request.user)
+    # Fix: Product is linked to seller, not store
+    product = get_object_or_404(Product, id=product_id, seller=request.user)
+
+    # Create a formset for product images
+    ImageFormSet = modelformset_factory(
+        ProductImage,
+        form=ProductImageForm,
+        extra=3,  # Allow 3 new images to be added
+        can_delete=True
+    )
+
+    if request.method == 'POST':
+        product_form = ProductForm(request.POST, request.FILES, instance=product)
+        image_formset = ImageFormSet(
+            request.POST,
+            request.FILES,
+            queryset=ProductImage.objects.filter(product=product)
+        )
+
+        if product_form.is_valid() and image_formset.is_valid():
+            with transaction.atomic():
+                # Save the product
+                product = product_form.save()
+
+                # Save the images
+                for form in image_formset:
+                    if form.cleaned_data and not form.cleaned_data.get('DELETE'):
+                        if form.cleaned_data.get('image'):
+                            image = form.save(commit=False)
+                            image.product = product
+                            image.save()
+                    elif form.cleaned_data.get('DELETE'):
+                        # Delete the image if marked for deletion
+                        if form.instance.pk:
+                            form.instance.delete()
+
+                messages.success(request, 'Product updated successfully!')
+                return redirect('stores:manage_store_products', store_id=store.id)
+        else:
+            messages.error(request, 'Please correct the errors below.')
+    else:
+        product_form = ProductForm(instance=product)
+        image_formset = ImageFormSet(queryset=ProductImage.objects.filter(product=product))
+
+    context = {
+        'store': store,
+        'product': product,
+        'product_form': product_form,
+        'image_formset': image_formset,
+    }
+    return render(request, 'stores/edit_product.html', context)
+
+
+@login_required
+def delete_product_image(request, store_id, product_id, image_id):
+    """Delete a specific product image via AJAX"""
+    if request.method == 'POST':
+        store = get_object_or_404(Store, id=store_id, owner=request.user)
+        # Fix: Product is linked to seller, not store
+        product = get_object_or_404(Product, id=product_id, seller=request.user)
+        image = get_object_or_404(ProductImage, id=image_id, product=product)
+
+        image.delete()
+        return JsonResponse({'success': True})
+
+    return JsonResponse({'success': False})
+
 @login_required
 @store_owner_required
 def toggle_store_status(request, store_id):
@@ -556,7 +644,7 @@ def toggle_store_status(request, store_id):
     store = get_object_or_404(Store, id=store_id, owner=request.user)
 
     if request.method == 'POST':
-        # Toggle between active and inactive
+        # Fix: Use store.status, not store.is_active or store.is_active_store
         if store.status == 'active':
             store.status = 'inactive'
             messages.success(request, f'Store "{store.name}" has been deactivated.')

@@ -1,0 +1,77 @@
+from django import forms
+from marketplace.models import Product, ProductImage, Category
+
+class ProductForm(forms.ModelForm):
+    class Meta:
+        model = Product
+        fields = [
+            'name', 'category', 'price', 'original_price', 'description',
+            'specifications', 'image', 'video', 'is_featured', 'is_trending',
+            'has_30_day_return', 'free_shipping'
+        ]
+        widgets = {
+            'name': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Enter product name'
+            }),
+            'category': forms.Select(attrs={
+                'class': 'form-control'
+            }),
+            'price': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'step': '0.01',
+                'placeholder': '0.00'
+            }),
+            'original_price': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'step': '0.01',
+                'placeholder': '0.00 (optional)'
+            }),
+            'description': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 4,
+                'placeholder': 'Enter product description'
+            }),
+            'specifications': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 3,
+                'placeholder': 'Enter product specifications'
+            }),
+            'image': forms.FileInput(attrs={
+                'class': 'form-control',
+                'accept': 'image/*'
+            }),
+            'video': forms.FileInput(attrs={
+                'class': 'form-control',
+                'accept': 'video/*'
+            }),
+            'is_featured': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
+            }),
+            'is_trending': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
+            }),
+            'has_30_day_return': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
+            }),
+            'free_shipping': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
+            }),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['category'].queryset = Category.objects.all()
+        self.fields['category'].empty_label = "Select a category"
+        self.fields['category'].required = False
+
+class ProductImageForm(forms.ModelForm):
+    class Meta:
+        model = ProductImage
+        fields = ['image']
+        widgets = {
+            'image': forms.FileInput(attrs={
+                'class': 'form-control',
+                'accept': 'image/*'
+            })
+        }
