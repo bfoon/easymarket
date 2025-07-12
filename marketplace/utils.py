@@ -1,7 +1,8 @@
 from django.db.models import Q
 from django.urls import reverse
-
+from .models import Cart, CartItem
 from .models import Product, SearchHistory, PopularSearch  # adjust app name if needed
+from decimal import Decimal
 
 def get_client_ip(request):
     """Get client IP address from request"""
@@ -85,3 +86,30 @@ def get_search_suggestions_with_history(request, query):
         })
 
     return suggestions[:10]  # Limit total suggestions
+
+def migrate_session_cart_to_user(request, user):
+    session_cart = request.session.get('cart', {})
+    if not session_cart:
+        return
+
+    cart, _ = Cart.objects.get_or_create(user=user)
+
+    for key, item in session_cart.items():
+        try:
+            product_id = int(key.split("::")[0])
+            product = Product.objects.get(id=product_id)
+        except (ValueError, Product.DoesNotExist):
+            continue
+
+        quantity = item.get('quantity', 1)
+        selected_features = item.get('selected_features', {})
+
+        existing = CartItem.objects.filter(cart=cart, product=product, selected_features=selected_features).first()
+        if existing:
+            existing.quantity += quantity
+            existing.save()
+        else:
+            CartItem.objects.create(cart=cart, product=product, quantity=quantity, selected_features=selected_features)
+
+    request.session['cart'] = {}
+    request.session.modified = True

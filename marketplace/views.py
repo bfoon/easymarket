@@ -1328,36 +1328,42 @@ def cart_view(request):
                 total_price += subtotal
     else:
         session_cart = request.session.get('cart', {})
+        cart_items = []
+        total_price = Decimal('0.00')
 
-        # Safely extract numeric product IDs
-        product_ids = []
+        # Step 1: Map product_id to actual cart keys
+        product_key_map = {}
         for key in session_cart.keys():
             try:
-                product_id = int(key.split("::")[0])  # if malformed
-                product_ids.append(product_id)
+                pid = int(key.split("::")[0])
+                product_key_map.setdefault(pid, []).append(key)
             except ValueError:
-                continue  # skip bad keys
+                continue
 
+        # Step 2: Load Products
+        product_ids = list(product_key_map.keys())
         products = Product.objects.filter(id__in=product_ids)
 
+        # Step 3: Build cart item entries
         for product in products:
-            product_id_str = str(product.id)
-            cart_data = session_cart.get(product_id_str, {})
-            quantity = cart_data.get('quantity', 1)
-            selected_features = cart_data.get('selected_features', {})
-            subtotal = product.price * quantity
+            product_keys = product_key_map.get(product.id, [])
+            for key in product_keys:
+                cart_data = session_cart.get(key, {})
+                quantity = cart_data.get('quantity', 1)
+                selected_features = cart_data.get('selected_features', {})
+                subtotal = product.price * quantity
 
-            cart_items.append({
-                'id': product.id,  # Use product ID for session carts
-                'product': product,
-                'quantity': quantity,
-                'subtotal': subtotal,
-                'selected_features': selected_features,  # ✅ Add this to context
-            })
-            total_price += subtotal
+                cart_items.append({
+                    'id': product.id,
+                    'product': product,
+                    'quantity': quantity,
+                    'subtotal': subtotal,
+                    'selected_features': selected_features,
+                })
+                total_price += subtotal
 
     # Calculate tax and final total
-    tax_rate = Decimal('0.085')
+    tax_rate = Decimal('0.15')
     tax_amount = total_price * tax_rate
     final_total = total_price + tax_amount
 
@@ -1626,97 +1632,75 @@ def update_cart_quantity(request):
 @require_POST
 def remove_cart_item(request):
     """
-    Remove an item from the cart
-    Expects: product_id
+    Remove an item from the cart.
+    Expects POST data: product_id
     """
     try:
         product_id = request.POST.get('product_id')
 
-        if not product_id:
-            return JsonResponse({
-                'success': False,
-                'message': 'Product ID is required'
-            })
+        if not product_id or not product_id.isdigit():
+            return JsonResponse({'success': False, 'message': 'Invalid product ID'})
 
+        product_id = int(product_id)
         product = get_object_or_404(Product, id=product_id)
 
-        # Handle authenticated users
+        # --- Authenticated Users ---
         if request.user.is_authenticated:
             cart = Cart.objects.filter(user=request.user).first()
             if not cart:
-                return JsonResponse({
-                    'success': False,
-                    'message': 'Cart not found'
-                })
+                return JsonResponse({'success': False, 'message': 'Cart not found'})
 
             cart_item = CartItem.objects.filter(cart=cart, product=product).first()
             if not cart_item:
-                return JsonResponse({
-                    'success': False,
-                    'message': 'Item not found in cart'
-                })
+                return JsonResponse({'success': False, 'message': 'Item not found in cart'})
 
             cart_item.delete()
 
-            # Calculate new totals
+            # Recalculate totals
             cart_items = CartItem.objects.filter(cart=cart)
             total_price = sum(item.product.price * item.quantity for item in cart_items)
             item_count = sum(item.quantity for item in cart_items)
 
-            # Calculate tax
-            tax_rate = Decimal('0.085')
-            tax_amount = total_price * tax_rate
-            final_total = total_price + tax_amount
-
-            return JsonResponse({
-                'success': True,
-                'total_price': f"{total_price:.2f}",
-                'tax_amount': f"{tax_amount:.2f}",
-                'final_total': f"{final_total:.2f}",
-                'item_count': item_count,
-                'message': 'Item removed from cart'
-            })
-
-        # Handle session-based cart for anonymous users
+        # --- Anonymous Users ---
         else:
             cart = request.session.get('cart', {})
-            product_key = str(product_id)
 
-            if product_key not in cart:
-                return JsonResponse({
-                    'success': False,
-                    'message': 'Item not found in cart'
-                })
+            # Handle malformed keys like "1::{}"
+            normalized_keys = {key.split("::")[0]: key for key in cart.keys()}
+            matched_key = normalized_keys.get(str(product_id))
 
-            del cart[product_key]
+            if not matched_key or matched_key not in cart:
+                return JsonResponse({'success': False, 'message': 'Item not found in cart'})
+
+            del cart[matched_key]
             request.session['cart'] = cart
             request.session.modified = True
 
-            # Calculate new totals
-            total_price = Decimal('0')
+            # Recalculate totals
+            total_price = Decimal('0.00')
             item_count = 0
             for pid, item in cart.items():
                 try:
-                    prod = Product.objects.get(id=pid)
-                    item_total = prod.price * item['quantity']
-                    total_price += item_total
-                    item_count += item['quantity']
-                except Product.DoesNotExist:
+                    prod = Product.objects.get(id=int(pid.split("::")[0]))
+                    qty = item.get('quantity', 1)
+                    total_price += prod.price * qty
+                    item_count += qty
+                except (Product.DoesNotExist, ValueError):
                     continue
 
-            # Calculate tax
-            tax_rate = Decimal('0.085')
-            tax_amount = total_price * tax_rate
-            final_total = total_price + tax_amount
+        # Shared tax calculation
+        tax_rate = Decimal('0.085')
+        tax_amount = total_price * tax_rate
+        final_total = total_price + tax_amount
 
-            return JsonResponse({
-                'success': True,
-                'total_price': f"{total_price:.2f}",
-                'tax_amount': f"{tax_amount:.2f}",
-                'final_total': f"{final_total:.2f}",
-                'item_count': item_count,
-                'message': 'Item removed from cart'
-            })
+        return JsonResponse({
+            'success': True,
+            'message': 'Item removed from cart',
+            'total_price': f"{total_price:.2f}",
+            'tax_amount': f"{tax_amount:.2f}",
+            'final_total': f"{final_total:.2f}",
+            'item_count': item_count
+        })
 
     except Exception as e:
         return JsonResponse({

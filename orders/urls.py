@@ -6,6 +6,7 @@ app_name = 'orders'
 urlpatterns = [
     # Core order views
     path('checkout/', views.checkout_cart, name='checkout_cart'),
+    path('checkout_redirect/', views.checkout_redirect, name='checkout_redirect'),
     path('quick-checkout/', views.quick_checkout, name='quick_checkout'),
     path('detail/<int:order_id>/', views.order_detail, name='order_detail'),
     path('send-chat-message/', views.send_chat_message, name='send_chat_message'),

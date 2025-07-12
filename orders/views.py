@@ -17,18 +17,41 @@ from decimal import Decimal
 from django.views.decorators.csrf import csrf_protect
 from django.db import transaction
 from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET
 import json
 from django.views.decorators.http import require_http_methods
 from django.template.loader import get_template
 from django.http import HttpResponse
+from django.urls import reverse
 from weasyprint import HTML
 import tempfile
 
 
+
+
+@login_required
+@require_GET
+def checkout_redirect(request):
+    """
+    Auto-submit POST to /orders/checkout/ if 'checkout_after_login' is in session
+    """
+    if request.session.get('checkout_after_login'):
+        del request.session['checkout_after_login']
+        return render(request, 'orders/confirm_checkout.html')  # auto-submit form
+    return redirect('marketplace:cart_view')
+
+
 @require_http_methods(["POST"])
 @csrf_protect
-@login_required
 def checkout_cart(request):
+    if not request.user.is_authenticated:
+        request.session['checkout_after_login'] = True
+        return redirect(f"{reverse('accounts:sign_in')}?next={reverse('orders:checkout_redirect')}")
+
+        # migrate and proceed
+    from marketplace.utils import migrate_session_cart_to_user
+    migrate_session_cart_to_user(request, request.user)
+
     promo_code_str = request.POST.get('promo_code', '').strip()
     promo = None
     discount_amount = Decimal('0')
@@ -48,16 +71,13 @@ def checkout_cart(request):
         if promo_code_str:
             try:
                 promo = PromoCode.objects.get(code__iexact=promo_code_str, is_active=True)
-
                 if not promo.is_valid():
                     messages.error(request, "Promo code is invalid or expired.")
                     return redirect('marketplace:cart_view')
-
             except PromoCode.DoesNotExist:
                 messages.error(request, "Promo code not found.")
                 return redirect('marketplace:cart_view')
 
-        # Calculate totals
         for item in cart_items:
             line_total = item.product.price * item.quantity
             subtotal += line_total
@@ -77,9 +97,7 @@ def checkout_cart(request):
 
             for item in cart_items:
                 product = item.product.__class__.objects.select_for_update().get(id=item.product.id)
-
                 reduce_stock(product, item.quantity)
-
                 OrderItem.objects.create(
                     order=order,
                     product=product,
@@ -88,7 +106,6 @@ def checkout_cart(request):
                 )
 
             cart_items.delete()
-
             if promo:
                 promo.increment_usage()
 

@@ -3,6 +3,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth import login, get_user_model
 from django.contrib.auth import authenticate, login, logout
 from .models import Address
+from marketplace.utils import migrate_session_cart_to_user
 from django.contrib import messages
 
 
@@ -15,8 +16,15 @@ def login_view(request):
 
         if user is not None:
             login(request, user)
+
+            if request.session.get('checkout_after_login'):
+                # Migrate cart and redirect to resume checkout
+                migrate_session_cart_to_user(request, user)
+                del request.session['checkout_after_login']  # Clean up
+                return redirect('orders:checkout_redirect')
+
             messages.success(request, f"Welcome back, {user.username}!")
-            return redirect('/')  # Change to your desired redirect URL
+            return redirect('/')  # ✅ Replace with user dashboard or homepage
         else:
             messages.error(request, 'Invalid username or password.')
 
