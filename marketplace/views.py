@@ -783,6 +783,7 @@ def product_detail(request, product_id):
     product = get_object_or_404(Product, id=product_id)
     product_images = product.images.all()
     variants = product.variants.select_related('feature_option__feature')
+    store = Store.objects.filter(owner=product.seller, status='active').first()
 
     # Organize by feature name
     feature_map = {}
@@ -896,6 +897,7 @@ def product_detail(request, product_id):
         'rating_range': range(1, 6),
         'seller_store': seller_store,
         'feature_data': feature_data,
+        'store': store,
     })
 
 def hot_picks(request):

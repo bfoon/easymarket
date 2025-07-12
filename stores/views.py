@@ -81,8 +81,15 @@ def validate_store_data(data, files=None):
 
 
 @login_required
-@store_owner_required
 def create_store(request):
+    if Store.objects.filter(owner=request.user).exists():
+        messages.warning(request, 'You already own a store.')
+        return redirect('stores:manage_stores')
+
+    if request.user.is_seller == False:
+        messages.error(request, 'Only buyers can create a store.')
+        return redirect('marketplace:product_list')
+
     if request.method == 'POST':
         # Validate data
         errors = validate_store_data(request.POST, request.FILES)
@@ -136,7 +143,6 @@ def create_store(request):
 
 
 @login_required
-@store_owner_required
 def manage_stores(request):
     stores = Store.objects.filter(owner=request.user).order_by('-created_at')
     return render(request, 'stores/manage_stores.html', {'stores': stores})
@@ -378,7 +384,6 @@ def validate_product_data(data, files=None):
 
 
 @login_required
-@store_owner_required
 def manage_store_products(request, store_id):
     """View and manage products for a specific store."""
     store = get_object_or_404(Store, id=store_id, owner=request.user)
@@ -491,18 +496,25 @@ def store_detail(request, slug):
     # Get products by this store owner
     products = Product.objects.filter(seller=store.owner).order_by('-created_at')[:8]
     product_ids = products.values_list('id', flat=True)
-    recent_reviews = Review.objects.filter(product_id__in=product_ids).select_related('user').order_by('-created_at')[
-                     :5]
 
-    # Get all reviews related to the store's products
+    # Recent reviews
+    recent_reviews = Review.objects.filter(product_id__in=product_ids).select_related('user').order_by('-created_at')[:5]
+
+    # All reviews for this store's products
     reviews = Review.objects.filter(product_id__in=product_ids)
     review_count = reviews.count()
     average_rating = reviews.aggregate(avg=Avg('rating'))['avg'] or 0
 
-    # Rating breakdown (1 to 5 stars)
-    rating_breakdown = {}
-    for i in range(1, 6):
-        rating_breakdown[i] = reviews.filter(rating=i).count()
+    # Rating breakdown
+    rating_breakdown = {i: reviews.filter(rating=i).count() for i in range(1, 6)}
+
+    # Get store's product categories with product counts
+    categories = (
+        Category.objects
+        .filter(product__seller=store.owner)
+        .annotate(product_count=Count('product'))
+        .distinct()
+    )
 
     context = {
         'store': store,
@@ -512,6 +524,7 @@ def store_detail(request, slug):
         'rating_breakdown': rating_breakdown,
         'rating_order': [5, 4, 3, 2, 1],
         'recent_reviews': recent_reviews,
+        'categories': categories,
     }
     return render(request, 'stores/store_detail.html', context)
 
