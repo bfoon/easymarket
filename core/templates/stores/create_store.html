@@ -1,0 +1,373 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+<div class="container py-5">
+  <div class="row justify-content-center">
+    <div class="col-lg-8">
+      <div class="card shadow-lg rounded-4">
+        <div class="card-header bg-dark text-white rounded-top-4">
+          <h3 class="mb-0">
+            <i class="fas fa-store me-2 text-warning"></i> Launch Your Store
+          </h3>
+          <p class="text-light small mt-1">Let your brand go live — fill in the essentials to set up your store.</p>
+        </div>
+        <div class="card-body bg-light">
+
+          <!-- Progress Bar -->
+          <div class="progress mb-4" style="height: 8px;">
+            <div class="progress-bar bg-success" role="progressbar" style="width: 0%" id="formProgress"></div>
+          </div>
+
+          <form method="post" enctype="multipart/form-data" id="storeForm" novalidate>
+            {% csrf_token %}
+
+            <!-- Store Information Section -->
+            <div class="form-section mb-4">
+              <h5 class="text-dark mb-3">
+                <i class="fas fa-info-circle me-2"></i>Store Information
+              </h5>
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label class="form-label">Store Name <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" name="name" id="name"
+                         value="{{ form_data.name|default:'' }}" required>
+                  {% if errors.name %}
+                  <div class="invalid-feedback d-block">{{ errors.name }}</div>
+                  {% endif %}
+                  <div class="form-text">Choose a memorable name for your store</div>
+                </div>
+
+                <div class="col-md-6">
+                  <label class="form-label">Slug (URL) <span class="text-danger">*</span></label>
+                  <div class="input-group">
+                    <span class="input-group-text">yoursite.com/store/</span>
+                    <input type="text" class="form-control" name="slug" id="slug"
+                           value="{{ form_data.slug|default:'' }}" required>
+                  </div>
+                  {% if errors.slug %}
+                  <div class="invalid-feedback d-block">{{ errors.slug }}</div>
+                  {% endif %}
+                  <div class="form-text">Lowercase letters, numbers, and hyphens only</div>
+                </div>
+
+                <div class="col-12">
+                  <label class="form-label">Short Tagline</label>
+                  <input type="text" class="form-control" name="short_description"
+                         value="{{ form_data.short_description|default:'' }}"
+                         placeholder="e.g. Africa's #1 Fashion Hub" maxlength="100">
+                  <div class="form-text">Brief description that appears in store listings</div>
+                </div>
+
+                <div class="col-12">
+                  <label class="form-label">Full Description</label>
+                  <textarea class="form-control" name="description" rows="4"
+                            placeholder="Tell buyers what makes your store amazing...">{{ form_data.description|default:'' }}</textarea>
+                  <div class="form-text">Detailed description of your store and products</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Contact Information Section -->
+            <div class="form-section mb-4">
+              <h5 class="text-dark mb-3">
+                <i class="fas fa-address-book me-2"></i>Contact Information
+              </h5>
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label class="form-label">Email <span class="text-danger">*</span></label>
+                  <input type="email" class="form-control" name="email"
+                         value="{{ form_data.email|default:'' }}" required>
+                  {% if errors.email %}
+                  <div class="invalid-feedback d-block">{{ errors.email }}</div>
+                  {% endif %}
+                </div>
+
+                <div class="col-md-6">
+                  <label class="form-label">Phone Number <span class="text-danger">*</span></label>
+                  <input type="tel" class="form-control" name="phone"
+                         value="{{ form_data.phone|default:'' }}" required>
+                  {% if errors.phone %}
+                  <div class="invalid-feedback d-block">{{ errors.phone }}</div>
+                  {% endif %}
+                </div>
+
+                <div class="col-12">
+                  <label class="form-label">Website (optional)</label>
+                  <input type="url" class="form-control" name="website"
+                         value="{{ form_data.website|default:'' }}"
+                         placeholder="https://yourwebsite.com">
+                  {% if errors.website %}
+                  <div class="invalid-feedback d-block">{{ errors.website }}</div>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+
+            <!-- Address Information Section -->
+            <div class="form-section mb-4">
+              <h5 class="text-dark mb-3">
+                <i class="fas fa-map-marker-alt me-2"></i>Address Information
+              </h5>
+              <div class="row g-3">
+                <div class="col-12">
+                  <label class="form-label">Address Line 1 <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" name="address_line_1"
+                         value="{{ form_data.address_line_1|default:'' }}" required>
+                </div>
+
+                <div class="col-12">
+                  <label class="form-label">Address Line 2</label>
+                  <input type="text" class="form-control" name="address_line_2"
+                         value="{{ form_data.address_line_2|default:'' }}">
+                </div>
+
+                <div class="col-md-4">
+                  <label class="form-label">City <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" name="city"
+                         value="{{ form_data.city|default:'' }}" required>
+                </div>
+
+                <div class="col-md-4">
+                  <label class="form-label">Region <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" name="region"
+                         value="{{ form_data.region|default:'' }}" required>
+                </div>
+
+                <div class="col-md-4">
+                  <label class="form-label">Postal Code <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" name="postal_code"
+                         value="{{ form_data.postal_code|default:'' }}" required>
+                </div>
+
+                <div class="col-12">
+                  <label class="form-label">Country</label>
+                  <select class="form-select" name="country">
+                    <option value="Gambia" {% if form_data.country == "Gambia" or not form_data.country %}selected{% endif %}>Gambia</option>
+                    <option value="Senegal" {% if form_data.country == "Senegal" %}selected{% endif %}>Senegal</option>
+                    <option value="Ghana" {% if form_data.country == "Ghana" %}selected{% endif %}>Ghana</option>
+                    <option value="Nigeria" {% if form_data.country == "Nigeria" %}selected{% endif %}>Nigeria</option>
+                    <option value="Mali" {% if form_data.country == "Mali" %}selected{% endif %}>Mali</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Media Upload Section -->
+            <div class="form-section mb-4">
+              <h5 class="text-dark mb-3">
+                <i class="fas fa-images me-2"></i>Store Media
+              </h5>
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label class="form-label">Upload Logo</label>
+                  <input type="file" class="form-control" name="logo" accept="image/*" id="logoInput">
+                  {% if errors.logo %}
+                  <div class="invalid-feedback d-block">{{ errors.logo }}</div>
+                  {% endif %}
+                  <div class="form-text">Recommended: 200x200px, max 2MB</div>
+                  <div id="logoPreview" class="mt-2"></div>
+                </div>
+
+                <div class="col-md-6">
+                  <label class="form-label">Upload Banner</label>
+                  <input type="file" class="form-control" name="banner" accept="image/*" id="bannerInput">
+                  {% if errors.banner %}
+                  <div class="invalid-feedback d-block">{{ errors.banner }}</div>
+                  {% endif %}
+                  <div class="form-text">Recommended: 1200x400px, max 2MB</div>
+                  <div id="bannerPreview" class="mt-2"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="mt-4">
+              <div class="d-flex justify-content-between">
+                <a href="{% url 'stores:manage_stores' %}" class="btn btn-outline-secondary">
+                  <i class="fas fa-arrow-left me-2"></i>Back to Stores
+                </a>
+                <button type="submit" class="btn btn-success btn-lg" id="submitBtn">
+                  <i class="fas fa-rocket me-2"></i>Launch Store
+                  <span class="spinner-border spinner-border-sm ms-2 d-none" id="loadingSpinner"></span>
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Tips Card -->
+      <div class="card mt-4 border-info">
+        <div class="card-header bg-info text-white">
+          <h6 class="mb-0"><i class="fas fa-lightbulb me-2"></i>Tips for Success</h6>
+        </div>
+        <div class="card-body">
+          <ul class="list-unstyled mb-0">
+            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Choose a memorable and brandable store name</li>
+            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Use high-quality images for your logo and banner</li>
+            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Write a compelling description that highlights your unique value</li>
+            <li><i class="fas fa-check text-success me-2"></i>Ensure all contact information is accurate and up-to-date</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="{% static 'js/main.js' %}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('storeForm');
+    const nameInput = document.getElementById('name');
+    const slugInput = document.getElementById('slug');
+    const progressBar = document.getElementById('formProgress');
+    const submitBtn = document.getElementById('submitBtn');
+    const loadingSpinner = document.getElementById('loadingSpinner');
+
+    // Auto-generate slug from name
+    nameInput.addEventListener('input', function() {
+        const name = this.value;
+        const slug = name.toLowerCase()
+            .replace(/[^a-z0-9\s-]/g, '')
+            .replace(/\s+/g, '-')
+            .replace(/-+/g, '-')
+            .trim('-');
+        slugInput.value = slug;
+        updateProgress();
+    });
+
+    // Update progress bar based on filled fields
+    function updateProgress() {
+        const requiredFields = form.querySelectorAll('input[required], select[required], textarea[required]');
+        let filledFields = 0;
+
+        requiredFields.forEach(field => {
+            if (field.value.trim() !== '') {
+                filledFields++;
+            }
+        });
+
+        const progress = (filledFields / requiredFields.length) * 100;
+        progressBar.style.width = progress + '%';
+        progressBar.setAttribute('aria-valuenow', progress);
+    }
+
+    // Add event listeners to all form inputs
+    form.addEventListener('input', updateProgress);
+    form.addEventListener('change', updateProgress);
+
+    // Image preview functionality
+    function setupImagePreview(inputId, previewId, maxWidth = 200) {
+        const input = document.getElementById(inputId);
+        const preview = document.getElementById(previewId);
+
+        input.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    preview.innerHTML = `
+                        <img src="${e.target.result}"
+                             class="img-thumbnail"
+                             style="max-width: ${maxWidth}px; max-height: 150px;"
+                             alt="Preview">
+                        <button type="button" class="btn btn-sm btn-outline-danger mt-1"
+                                onclick="clearPreview('${inputId}', '${previewId}')">
+                            <i class="fas fa-times"></i> Remove
+                        </button>
+                    `;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    }
+
+    setupImagePreview('logoInput', 'logoPreview', 150);
+    setupImagePreview('bannerInput', 'bannerPreview', 300);
+
+    // Form submission handling
+    form.addEventListener('submit', function() {
+        submitBtn.disabled = true;
+        loadingSpinner.classList.remove('d-none');
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Creating Store...';
+    });
+
+    // Initialize progress
+    updateProgress();
+
+    // Validate slug format
+    slugInput.addEventListener('input', function() {
+        const slug = this.value;
+        const validSlug = /^[a-z0-9-]+$/.test(slug);
+
+        if (slug && !validSlug) {
+            this.setCustomValidity('Slug can only contain lowercase letters, numbers, and hyphens');
+        } else {
+            this.setCustomValidity('');
+        }
+    });
+});
+
+// Function to clear image preview
+function clearPreview(inputId, previewId) {
+    document.getElementById(inputId).value = '';
+    document.getElementById(previewId).innerHTML = '';
+}
+
+// Auto-hide alert messages
+setTimeout(function() {
+    const alerts = document.querySelectorAll('.alert');
+    alerts.forEach(alert => {
+        if (window.bootstrap && window.bootstrap.Alert) {
+            const bsAlert = new bootstrap.Alert(alert);
+            bsAlert.close();
+        }
+    });
+}, 5000);
+</script>
+
+<style>
+.form-section {
+    border-left: 4px solid #28a745;
+    padding-left: 1rem;
+    margin-left: 0.5rem;
+}
+
+.form-label {
+    font-weight: 600;
+    color: #495057;
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: #28a745;
+    box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+}
+
+.invalid-feedback {
+    font-size: 0.875rem;
+}
+
+.progress {
+    background-color: #e9ecef;
+}
+
+.card-header {
+    background: linear-gradient(135deg, #343a40 0%, #495057 100%) !important;
+}
+
+.img-thumbnail {
+    border: 2px dashed #dee2e6;
+    padding: 0.5rem;
+}
+
+@media (max-width: 768px) {
+    .input-group-text {
+        font-size: 0.8rem;
+    }
+}
+</style>
+{% endblock %}

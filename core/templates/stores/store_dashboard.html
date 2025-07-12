@@ -1,0 +1,502 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+<div class="container-fluid py-4">
+  <!-- Dashboard Header -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="d-flex justify-content-between align-items-center flex-wrap">
+        <div>
+          <h2 class="mb-1">
+            <i class="fas fa-chart-bar text-primary me-2"></i>{{ store.name }} Dashboard
+          </h2>
+          <p class="text-muted mb-0">
+            <i class="fas fa-calendar me-1"></i>Last updated: <span id="lastUpdated">Today</span>
+            {% if store.status == 'active' %}
+            <span class="badge bg-success ms-2">
+              <i class="fas fa-check-circle"></i> Active
+            </span>
+            {% else %}
+            <span class="badge bg-warning ms-2">
+              <i class="fas fa-pause-circle"></i> {{ store.status|title }}
+            </span>
+            {% endif %}
+          </p>
+        </div>
+        <div class="btn-group" role="group">
+          <a href="{% url 'stores:update_store' store.id %}" class="btn btn-outline-primary">
+            <i class="fas fa-edit"></i> Edit Store
+          </a>
+          {% if store.status == 'active' %}
+          <a href="{% url 'stores:store_detail' store.slug %}" class="btn btn-outline-success" target="_blank">
+            <i class="fas fa-eye"></i> View Live
+          </a>
+          {% endif %}
+          <a href="{% url 'stores:manage_stores' %}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Back
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Key Metrics Row -->
+  <div class="row mb-4">
+    <div class="col-lg-3 col-md-6 mb-3">
+      <div class="card bg-primary text-white h-100">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <h6 class="card-title text-uppercase mb-1">Total Products</h6>
+              <h3 class="mb-0">{{ store.products.count|default:0 }}</h3>
+              <small class="opacity-75">
+                <i class="fas fa-arrow-up me-1"></i>Active: {{ store.products.filter.is_active.count|default:0 }}
+              </small>
+            </div>
+            <div class="text-primary-light">
+              <i class="fas fa-box fa-2x opacity-75"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-3 col-md-6 mb-3">
+      <div class="card bg-success text-white h-100">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <h6 class="card-title text-uppercase mb-1">Total Orders</h6>
+              <h3 class="mb-0">{{ total_orders|default:0 }}</h3>
+              <small class="opacity-75">
+                <i class="fas fa-arrow-up me-1"></i>This month: {{ monthly_orders|default:0 }}
+              </small>
+            </div>
+            <div class="text-success-light">
+              <i class="fas fa-shopping-cart fa-2x opacity-75"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-3 col-md-6 mb-3">
+      <div class="card bg-warning text-white h-100">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <h6 class="card-title text-uppercase mb-1">Revenue</h6>
+              <h3 class="mb-0">D{{ total_revenue|default:0|floatformat:0 }}</h3>
+              <small class="opacity-75">
+                <i class="fas fa-arrow-up me-1"></i>This month: D{{ monthly_revenue|default:0|floatformat:0 }}
+              </small>
+            </div>
+            <div class="text-warning-light">
+              <i class="fas fa-dollar-sign fa-2x opacity-75"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-3 col-md-6 mb-3">
+      <div class="card bg-info text-white h-100">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <h6 class="card-title text-uppercase mb-1">Store Views</h6>
+              <h3 class="mb-0">{{ store_views|default:0 }}</h3>
+              <small class="opacity-75">
+                <i class="fas fa-arrow-up me-1"></i>This week: {{ weekly_views|default:0 }}
+              </small>
+            </div>
+            <div class="text-info-light">
+              <i class="fas fa-eye fa-2x opacity-75"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts and Analytics Row -->
+  <div class="row mb-4">
+    <div class="col-lg-8 mb-3">
+      <div class="card h-100">
+        <div class="card-header bg-light">
+          <h5 class="card-title mb-0">
+            <i class="fas fa-chart-line text-primary me-2"></i>Sales Overview
+          </h5>
+        </div>
+        <div class="card-body">
+          <canvas id="salesChart" height="300"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-4 mb-3">
+      <div class="card h-100">
+        <div class="card-header bg-light">
+          <h5 class="card-title mb-0">
+            <i class="fas fa-chart-pie text-warning me-2"></i>Top Categories
+          </h5>
+        </div>
+        <div class="card-body">
+          <canvas id="categoryChart" height="300"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent Activity and Quick Actions -->
+  <div class="row mb-4">
+    <div class="col-lg-6 mb-3">
+      <div class="card h-100">
+        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+          <h5 class="card-title mb-0">
+            <i class="fas fa-clock text-info me-2"></i>Recent Orders
+          </h5>
+          <a href="#" class="btn btn-sm btn-outline-info">View All</a>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover mb-0">
+              <thead class="bg-light">
+                <tr>
+                  <th>Order #</th>
+                  <th>Customer</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                  <th>Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for order in recent_orders|slice:":5" %}
+                <tr>
+                  <td><strong>#{{ order.id|slice:":8" }}</strong></td>
+                  <td>{{ order.buyer.first_name }} {{ order.buyer.last_name }}</td>
+                  <td>D{{ order.get_total}}</td>
+                  <td>
+                    <span class="badge bg-{% if order.status == 'completed' %}success{% elif order.status == 'pending' %}warning{% else %}secondary{% endif %}">
+                      {{ order.status|title }}
+                    </span>
+                  </td>
+                  <td>{{ order.created_at|date:"M d" }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                  <td colspan="5" class="text-center text-muted py-4">
+                    <i class="fas fa-shopping-cart fa-2x mb-2"></i><br>
+                    No recent orders
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-6 mb-3">
+      <div class="card h-100">
+        <div class="card-header bg-light">
+          <h5 class="card-title mb-0">
+            <i class="fas fa-star text-warning me-2"></i>Top Products
+          </h5>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover mb-0">
+              <thead class="bg-light">
+                <tr>
+                  <th>Product</th>
+                  <th>Sales</th>
+                  <th>Revenue</th>
+                  <th>Stock</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for product in top_products|slice:":5" %}
+                <tr>
+                  <td>
+                    <div class="d-flex align-items-center">
+                      {% if product.image %}
+                      <img src="{{ product.image.url }}" alt="{{ product.name }}" class="rounded me-2" style="width: 40px; height: 40px; object-fit: cover;">
+                      {% else %}
+                      <div class="bg-light rounded me-2 d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                        <i class="fas fa-image text-muted"></i>
+                      </div>
+                      {% endif %}
+                      <div>
+                        <strong>{{ product.name|truncatechars:20 }}</strong><br>
+                        <small class="text-muted">D{{ product.price }}</small>
+                      </div>
+                    </div>
+                  </td>
+                  <td>{{ product.sales_count|default:0 }}</td>
+                  <td>D{{ product.revenue|default:0|floatformat:0 }}</td>
+                  <td>
+                    {% if product.stock_quantity <= 5 %}
+                    <span class="badge bg-danger">{{ product.stock_quantity }}</span>
+                    {% elif product.stock_quantity <= 20 %}
+                    <span class="badge bg-warning">{{ product.stock_quantity }}</span>
+                    {% else %}
+                    <span class="badge bg-success">{{ product.stock_quantity }}</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% empty %}
+                <tr>
+                  <td colspan="4" class="text-center text-muted py-4">
+                    <i class="fas fa-box fa-2x mb-2"></i><br>
+                    No products yet
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Store Information and Quick Actions -->
+  <div class="row">
+    <div class="col-lg-8 mb-3">
+      <div class="card">
+        <div class="card-header bg-light">
+          <h5 class="card-title mb-0">
+            <i class="fas fa-info-circle text-primary me-2"></i>Store Information
+          </h5>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-3">
+                <strong>Store Name:</strong><br>
+                <span class="text-muted">{{ store.name }}</span>
+              </div>
+              <div class="mb-3">
+                <strong>Email:</strong><br>
+                <span class="text-muted">{{ store.email }}</span>
+              </div>
+              <div class="mb-3">
+                <strong>Phone:</strong><br>
+                <span class="text-muted">{{ store.phone|default:"Not provided" }}</span>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="mb-3">
+                <strong>Location:</strong><br>
+                <span class="text-muted">{{ store.city }}, {{ store.country }}</span>
+              </div>
+              <div class="mb-3">
+                <strong>Created:</strong><br>
+                <span class="text-muted">{{ store.created_at|date:"F d, Y" }}</span>
+              </div>
+              <div class="mb-3">
+                <strong>Store URL:</strong><br>
+                <a href="{% url 'stores:store_detail' store.slug %}" target="_blank" class="text-primary">
+                  yoursite.com/store/{{ store.slug }}
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-4 mb-3">
+      <div class="card">
+        <div class="card-header bg-light">
+          <h5 class="card-title mb-0">
+            <i class="fas fa-bolt text-warning me-2"></i>Quick Actions
+          </h5>
+        </div>
+        <div class="card-body">
+          <div class="d-grid gap-2">
+            <a href="{% url 'stores:add_product' store.id %}" class="btn btn-outline-primary">
+              <i class="fas fa-plus me-2"></i>Add Product
+            </a>
+            <a href="{% url 'stores:manage_store_products' store.id %}" class="btn btn-outline-success">
+              <i class="fas fa-box me-2"></i>Manage Products
+            </a>
+            <a href="#" class="btn btn-outline-info">
+              <i class="fas fa-shipping-fast me-2"></i>View Orders
+            </a>
+            <a href="#" class="btn btn-outline-warning">
+              <i class="fas fa-chart-bar me-2"></i>Analytics
+            </a>
+            <hr>
+            <a href="{% url 'stores:update_store' store.id %}" class="btn btn-outline-secondary">
+              <i class="fas fa-cog me-2"></i>Store Settings
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="{% static 'js/main.js' %}"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Update last updated timestamp
+    document.getElementById('lastUpdated').textContent = new Date().toLocaleDateString();
+
+    // Sales Chart
+    const salesCtx = document.getElementById('salesChart').getContext('2d');
+    new Chart(salesCtx, {
+        type: 'line',
+        data: {
+            labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+            datasets: [{
+                label: 'Sales (D)',
+                data: {{ monthly_sales_data|default:"[0,0,0,0,0,0,0,0,0,0,0,0]"|safe }},
+                borderColor: '#007bff',
+                backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return 'D' + value;
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    // Category Chart
+    const categoryCtx = document.getElementById('categoryChart').getContext('2d');
+    new Chart(categoryCtx, {
+        type: 'doughnut',
+        data: {
+            labels: {{ category_labels|default:"['No Data']"|safe }},
+            datasets: [{
+                data: {{ category_data|default:"[1]"|safe }},
+                backgroundColor: [
+                    '#007bff',
+                    '#28a745',
+                    '#ffc107',
+                    '#dc3545',
+                    '#6c757d',
+                    '#17a2b8'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+
+    // Auto-refresh dashboard every 5 minutes
+    setInterval(function() {
+        location.reload();
+    }, 300000);
+});
+</script>
+
+<style>
+.card {
+    border: none;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    transition: box-shadow 0.15s ease-in-out;
+}
+
+.card:hover {
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.bg-primary {
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%) !important;
+}
+
+.bg-success {
+    background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%) !important;
+}
+
+.bg-warning {
+    background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%) !important;
+}
+
+.bg-info {
+    background: linear-gradient(135deg, #17a2b8 0%, #138496 100%) !important;
+}
+
+.table th {
+    border-top: none;
+    font-weight: 600;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.badge {
+    font-size: 0.75rem;
+}
+
+@media (max-width: 768px) {
+    .btn-group {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .btn-group .btn {
+        margin-bottom: 0.5rem;
+    }
+
+    .d-flex.justify-content-between {
+        flex-direction: column;
+        gap: 1rem;
+    }
+}
+
+.opacity-75 {
+    opacity: 0.75;
+}
+
+.text-primary-light {
+    color: rgba(255, 255, 255, 0.8) !important;
+}
+
+.text-success-light {
+    color: rgba(255, 255, 255, 0.8) !important;
+}
+
+.text-warning-light {
+    color: rgba(255, 255, 255, 0.8) !important;
+}
+
+.text-info-light {
+    color: rgba(255, 255, 255, 0.8) !important;
+}
+</style>
+{% endblock %}

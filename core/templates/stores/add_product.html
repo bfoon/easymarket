@@ -1,0 +1,537 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+<div class="container py-5">
+  <div class="row justify-content-center">
+    <div class="col-lg-10">
+      <div class="card shadow-lg rounded-4">
+        <div class="card-header bg-primary text-white rounded-top-4">
+          <h3 class="mb-0">
+            <i class="fas fa-plus me-2 text-warning"></i> Add New Product
+          </h3>
+          <p class="text-light small mt-1">Add a new product to your store: <strong>{{ store.name }}</strong></p>
+        </div>
+        <div class="card-body bg-light">
+          
+          <!-- Progress Bar -->
+          <div class="progress mb-4" style="height: 8px;">
+            <div class="progress-bar bg-primary" role="progressbar" style="width: 0%" id="formProgress"></div>
+          </div>
+
+          <form method="post" enctype="multipart/form-data" id="productForm" novalidate>
+            {% csrf_token %}
+            
+            <!-- Basic Information Section -->
+            <div class="form-section mb-4">
+              <h5 class="text-dark mb-3">
+                <i class="fas fa-info-circle me-2"></i>Basic Information
+              </h5>
+              <div class="row g-3">
+                <div class="col-md-8">
+                  <label class="form-label">Product Name <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" name="name" id="name" 
+                         value="{{ form_data.name|default:'' }}" required>
+                  {% if errors.name %}
+                  <div class="invalid-feedback d-block">{{ errors.name }}</div>
+                  {% endif %}
+                  <div class="form-text">Enter a clear, descriptive product name</div>
+                </div>
+
+                <div class="col-md-4">
+                  <label class="form-label">Category</label>
+                  <select class="form-select" name="category">
+                    <option value="">Select Category</option>
+                    {% for category in categories %}
+                    <option value="{{ category.id }}" 
+                            {% if form_data.category == category.id|stringformat:"s" %}selected{% endif %}>
+                      {{ category.name }}
+                    </option>
+                    {% endfor %}
+                  </select>
+                  <div class="form-text">Choose the most relevant category</div>
+                </div>
+
+                <div class="col-12">
+                  <label class="form-label">Product Description <span class="text-danger">*</span></label>
+                  <textarea class="form-control" name="description" rows="4" 
+                            placeholder="Describe your product features, benefits, and what makes it special..."
+                            required>{{ form_data.description|default:'' }}</textarea>
+                  {% if errors.description %}
+                  <div class="invalid-feedback d-block">{{ errors.description }}</div>
+                  {% endif %}
+                  <div class="form-text">Detailed description helps customers understand your product</div>
+                </div>
+
+                <div class="col-12">
+                  <label class="form-label">Specifications</label>
+                  <textarea class="form-control" name="specifications" rows="3" 
+                            placeholder="Technical details, dimensions, materials, etc...">{{ form_data.specifications|default:'' }}</textarea>
+                  <div class="form-text">Technical specifications and additional details</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Pricing Section -->
+            <div class="form-section mb-4">
+              <h5 class="text-dark mb-3">
+                <i class="fas fa-dollar-sign me-2"></i>Pricing & Stock
+              </h5>
+              <div class="row g-3">
+                <div class="col-md-4">
+                  <label class="form-label">Current Price (D) <span class="text-danger">*</span></label>
+                  <div class="input-group">
+                    <span class="input-group-text">D</span>
+                    <input type="number" step="0.01" min="0" class="form-control" name="price" 
+                           value="{{ form_data.price|default:'' }}" required>
+                  </div>
+                  {% if errors.price %}
+                  <div class="invalid-feedback d-block">{{ errors.price }}</div>
+                  {% endif %}
+                </div>
+
+                <div class="col-md-4">
+                  <label class="form-label">Original Price (D)</label>
+                  <div class="input-group">
+                    <span class="input-group-text">D</span>
+                    <input type="number" step="0.01" min="0" class="form-control" name="original_price" 
+                           value="{{ form_data.original_price|default:'' }}">
+                  </div>
+                  {% if errors.original_price %}
+                  <div class="invalid-feedback d-block">{{ errors.original_price }}</div>
+                  {% endif %}
+                  <div class="form-text">Optional: Shows discount if higher than current price</div>
+                </div>
+
+                <div class="col-md-4">
+                  <label class="form-label">Initial Stock Quantity</label>
+                  <input type="number" min="0" class="form-control" name="initial_stock" 
+                         value="{{ form_data.initial_stock|default:'' }}">
+                  {% if errors.initial_stock %}
+                  <div class="invalid-feedback d-block">{{ errors.initial_stock }}</div>
+                  {% endif %}
+                  <div class="form-text">How many items do you have in stock?</div>
+                </div>
+
+                <div class="col-12">
+                  <div id="discountPreview" class="alert alert-info d-none">
+                    <i class="fas fa-percentage me-2"></i>
+                    <span id="discountText"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Media Upload Section -->
+            <div class="form-section mb-4">
+              <h5 class="text-dark mb-3">
+                <i class="fas fa-images me-2"></i>Product Media
+              </h5>
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label class="form-label">Product Image <span class="text-danger">*</span></label>
+                  <input type="file" class="form-control" name="image" accept="image/*" id="imageInput" required>
+                  {% if errors.image %}
+                  <div class="invalid-feedback d-block">{{ errors.image }}</div>
+                  {% endif %}
+                  <div class="form-text">Recommended: 800x800px, max 5MB (JPEG, PNG, GIF, WebP)</div>
+                  <div id="imagePreview" class="mt-2"></div>
+                </div>
+
+                <div class="col-md-6">
+                  <label class="form-label">Product Video (Optional)</label>
+                  <input type="file" class="form-control" name="video" accept="video/*" id="videoInput">
+                  {% if errors.video %}
+                  <div class="invalid-feedback d-block">{{ errors.video }}</div>
+                  {% endif %}
+                  <div class="form-text">Max 50MB (MP4, AVI, MOV, WMV)</div>
+                  <div id="videoPreview" class="mt-2"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Product Features Section -->
+            <div class="form-section mb-4">
+              <h5 class="text-dark mb-3">
+                <i class="fas fa-star me-2"></i>Product Features
+              </h5>
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" name="is_featured" id="is_featured"
+                           {% if form_data.is_featured %}checked{% endif %}>
+                    <label class="form-check-label" for="is_featured">
+                      <strong>Featured Product</strong>
+                      <br><small class="text-muted">Highlight this product in featured sections</small>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="col-md-6">
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" name="is_trending" id="is_trending"
+                           {% if form_data.is_trending %}checked{% endif %}>
+                    <label class="form-check-label" for="is_trending">
+                      <strong>Trending Product</strong>
+                      <br><small class="text-muted">Mark as trending/popular item</small>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="col-md-6">
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" name="has_30_day_return" id="has_30_day_return"
+                           {% if form_data.has_30_day_return %}checked{% endif %}>
+                    <label class="form-check-label" for="has_30_day_return">
+                      <strong>30-Day Return Policy</strong>
+                      <br><small class="text-muted">Product eligible for 30-day returns</small>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="col-md-6">
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" name="free_shipping" id="free_shipping"
+                           {% if form_data.free_shipping %}checked{% endif %}>
+                    <label class="form-check-label" for="free_shipping">
+                      <strong>Free Shipping</strong>
+                      <br><small class="text-muted">Offer free shipping for this product</small>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="mt-4">
+              <div class="d-flex justify-content-between">
+                <a href="{% url 'stores:store_dashboard' store.id %}" class="btn btn-outline-secondary">
+                  <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+                </a>
+                <div>
+                  <button type="button" class="btn btn-outline-primary me-2" onclick="previewProduct()">
+                    <i class="fas fa-eye me-2"></i>Preview
+                  </button>
+                  <button type="submit" class="btn btn-primary btn-lg" id="submitBtn">
+                    <i class="fas fa-plus me-2"></i>Add Product
+                    <span class="spinner-border spinner-border-sm ms-2 d-none" id="loadingSpinner"></span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Product Tips Card -->
+      <div class="card mt-4 border-success">
+        <div class="card-header bg-success text-white">
+          <h6 class="mb-0"><i class="fas fa-lightbulb me-2"></i>Product Success Tips</h6>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-6">
+              <ul class="list-unstyled mb-0">
+                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Use high-quality, clear product images</li>
+                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Write detailed, honest descriptions</li>
+                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Include accurate specifications</li>
+              </ul>
+            </div>
+            <div class="col-md-6">
+              <ul class="list-unstyled mb-0">
+                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Set competitive, fair pricing</li>
+                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Choose the right category</li>
+                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Enable features that add value</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Product Preview Modal -->
+<div class="modal fade" id="previewModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="fas fa-eye me-2"></i>Product Preview
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="previewContent">
+        <!-- Preview content will be inserted here -->
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-primary" onclick="$('#previewModal').modal('hide'); $('#productForm').submit();">
+          <i class="fas fa-plus me-2"></i>Add This Product
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="{% static 'js/main.js' %}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('productForm');
+    const progressBar = document.getElementById('formProgress');
+    const submitBtn = document.getElementById('submitBtn');
+    const loadingSpinner = document.getElementById('loadingSpinner');
+    const priceInput = document.querySelector('input[name="price"]');
+    const originalPriceInput = document.querySelector('input[name="original_price"]');
+
+    // Update progress bar based on filled fields
+    function updateProgress() {
+        const requiredFields = form.querySelectorAll('input[required], select[required], textarea[required]');
+        const optionalFields = form.querySelectorAll('input:not([required]), select:not([required]), textarea:not([required])');
+        let filledRequired = 0;
+        let filledOptional = 0;
+
+        requiredFields.forEach(field => {
+            if (field.type === 'file') {
+                if (field.files && field.files.length > 0) filledRequired++;
+            } else if (field.value.trim() !== '') {
+                filledRequired++;
+            }
+        });
+
+        optionalFields.forEach(field => {
+            if (field.type === 'checkbox') {
+                if (field.checked) filledOptional++;
+            } else if (field.type === 'file') {
+                if (field.files && field.files.length > 0) filledOptional++;
+            } else if (field.value.trim() !== '') {
+                filledOptional++;
+            }
+        });
+
+        const requiredProgress = (filledRequired / requiredFields.length) * 70; // 70% for required
+        const optionalProgress = (filledOptional / optionalFields.length) * 30; // 30% for optional
+        const totalProgress = requiredProgress + optionalProgress;
+        
+        progressBar.style.width = Math.min(totalProgress, 100) + '%';
+    }
+
+    // Calculate discount preview
+    function updateDiscountPreview() {
+        const price = parseFloat(priceInput.value) || 0;
+        const originalPrice = parseFloat(originalPriceInput.value) || 0;
+        const discountPreview = document.getElementById('discountPreview');
+        const discountText = document.getElementById('discountText');
+
+        if (originalPrice > price && price > 0) {
+            const discount = ((originalPrice - price) / originalPrice * 100).toFixed(0);
+            const savings = (originalPrice - price).toFixed(2);
+            discountText.textContent = `${discount}% discount! Customers save D${savings}`;
+            discountPreview.classList.remove('d-none');
+        } else {
+            discountPreview.classList.add('d-none');
+        }
+    }
+
+    // Add event listeners
+    form.addEventListener('input', updateProgress);
+    form.addEventListener('change', updateProgress);
+    priceInput.addEventListener('input', updateDiscountPreview);
+    originalPriceInput.addEventListener('input', updateDiscountPreview);
+
+    // Image preview functionality
+    function setupFilePreview(inputId, previewId, type = 'image') {
+        const input = document.getElementById(inputId);
+        const preview = document.getElementById(previewId);
+
+        input.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    if (type === 'image') {
+                        preview.innerHTML = `
+                            <div class="mt-2">
+                                <img src="${e.target.result}" 
+                                     class="img-thumbnail" 
+                                     style="max-width: 200px; max-height: 200px;"
+                                     alt="Preview">
+                                <button type="button" class="btn btn-sm btn-outline-danger mt-1 d-block" 
+                                        onclick="clearPreview('${inputId}', '${previewId}')">
+                                    <i class="fas fa-times"></i> Remove
+                                </button>
+                            </div>
+                        `;
+                    } else if (type === 'video') {
+                        preview.innerHTML = `
+                            <div class="mt-2">
+                                <video controls style="max-width: 200px; max-height: 200px;">
+                                    <source src="${e.target.result}" type="${file.type}">
+                                    Your browser does not support the video tag.
+                                </video>
+                                <button type="button" class="btn btn-sm btn-outline-danger mt-1 d-block" 
+                                        onclick="clearPreview('${inputId}', '${previewId}')">
+                                    <i class="fas fa-times"></i> Remove
+                                </button>
+                            </div>
+                        `;
+                    }
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    }
+
+    setupFilePreview('imageInput', 'imagePreview', 'image');
+    setupFilePreview('videoInput', 'videoPreview', 'video');
+
+    // Form submission handling
+    form.addEventListener('submit', function() {
+        submitBtn.disabled = true;
+        loadingSpinner.classList.remove('d-none');
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Adding Product...';
+    });
+
+    // Initialize
+    updateProgress();
+    updateDiscountPreview();
+});
+
+// Function to clear file preview
+function clearPreview(inputId, previewId) {
+    document.getElementById(inputId).value = '';
+    document.getElementById(previewId).innerHTML = '';
+}
+
+// Product preview function
+function previewProduct() {
+    const form = document.getElementById('productForm');
+    const formData = new FormData(form);
+    
+    const name = formData.get('name') || 'Product Name';
+    const price = formData.get('price') || '0';
+    const originalPrice = formData.get('original_price');
+    const description = formData.get('description') || 'No description provided';
+    const category = formData.get('category');
+    const categoryText = category ? document.querySelector(`option[value="${category}"]`).textContent : 'Uncategorized';
+    const imageFile = formData.get('image');
+    
+    let discountBadge = '';
+    if (originalPrice && parseFloat(originalPrice) > parseFloat(price)) {
+        const discount = ((originalPrice - price) / originalPrice * 100).toFixed(0);
+        discountBadge = `<span class="badge bg-danger position-absolute top-0 start-0 m-2">${discount}% OFF</span>`;
+    }
+    
+    let imagePreview = '<div class="bg-light d-flex align-items-center justify-content-center" style="height: 250px;"><i class="fas fa-image text-muted fa-3x"></i></div>';
+    if (imageFile && imageFile.size > 0) {
+        const imageUrl = URL.createObjectURL(imageFile);
+        imagePreview = `<img src="${imageUrl}" alt="Product Preview" style="width: 100%; height: 250px; object-fit: cover;">`;
+    }
+    
+    const features = [];
+    if (formData.get('is_featured')) features.push('<span class="badge bg-warning me-1">Featured</span>');
+    if (formData.get('is_trending')) features.push('<span class="badge bg-info me-1">Trending</span>');
+    if (formData.get('has_30_day_return')) features.push('<span class="badge bg-success me-1">30-Day Return</span>');
+    if (formData.get('free_shipping')) features.push('<span class="badge bg-primary me-1">Free Shipping</span>');
+    
+    const previewHtml = `
+        <div class="card">
+            <div class="position-relative">
+                ${imagePreview}
+                ${discountBadge}
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h5 class="card-title mb-0">${name}</h5>
+                    <small class="text-muted">${categoryText}</small>
+                </div>
+                <div class="mb-2">
+                    ${features.join('')}
+                </div>
+                <p class="card-text">${description.length > 100 ? description.substring(0, 100) + '...' : description}</p>
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <span class="h5 text-primary mb-0">D${parseFloat(price).toFixed(2)}</span>
+                        ${originalPrice ? `<small class="text-muted ms-2"><s>D${parseFloat(originalPrice).toFixed(2)}</s></small>` : ''}
+                    </div>
+                    <button class="btn btn-primary">Add to Cart</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('previewContent').innerHTML = previewHtml;
+    const modal = new bootstrap.Modal(document.getElementById('previewModal'));
+    modal.show();
+}
+
+// Auto-hide alert messages
+setTimeout(function() {
+    const alerts = document.querySelectorAll('.alert');
+    alerts.forEach(alert => {
+        if (window.bootstrap && window.bootstrap.Alert) {
+            const bsAlert = new bootstrap.Alert(alert);
+            bsAlert.close();
+        }
+    });
+}, 5000);
+</script>
+
+<style>
+.form-section {
+    border-left: 4px solid #007bff;
+    padding-left: 1rem;
+    margin-left: 0.5rem;
+}
+
+.form-label {
+    font-weight: 600;
+    color: #495057;
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.form-check-input:checked {
+    background-color: #007bff;
+    border-color: #007bff;
+}
+
+.invalid-feedback {
+    font-size: 0.875rem;
+}
+
+.progress {
+    background-color: #e9ecef;
+}
+
+.card-header {
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%) !important;
+}
+
+.img-thumbnail {
+    border: 2px dashed #dee2e6;
+    padding: 0.5rem;
+}
+
+.form-check-label small {
+    font-size: 0.8rem;
+}
+
+@media (max-width: 768px) {
+    .d-flex.justify-content-between {
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .d-flex.justify-content-between > div {
+        text-align: center;
+    }
+}
+</style>
+{% endblock %}

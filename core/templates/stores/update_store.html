@@ -1,0 +1,570 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+<div class="container py-5">
+  <div class="row justify-content-center">
+    <div class="col-lg-8">
+      <div class="card shadow-lg rounded-4">
+        <div class="card-header bg-dark text-white rounded-top-4">
+          <h3 class="mb-0">
+            <i class="fas fa-edit me-2 text-warning"></i> Update Your Store
+          </h3>
+          <p class="text-light small mt-1">Make changes to keep your store information current and accurate.</p>
+        </div>
+        <div class="card-body bg-light">
+
+          <!-- Current Store Status -->
+          <div class="alert alert-info d-flex align-items-center mb-4">
+            <i class="fas fa-info-circle me-2"></i>
+            <div>
+              <strong>Editing:</strong> {{ store.name }}
+              {% if store.status == 'active' %}
+              <span class="badge bg-success ms-2">Active</span>
+              {% else %}
+              <span class="badge bg-warning ms-2">{{ store.status|title }}</span>
+              {% endif %}
+            </div>
+          </div>
+
+          <!-- Progress Bar -->
+          <div class="progress mb-4" style="height: 8px;">
+            <div class="progress-bar bg-warning" role="progressbar" style="width: 100%" id="formProgress"></div>
+          </div>
+
+          <form method="post" enctype="multipart/form-data" id="storeForm" novalidate>
+            {% csrf_token %}
+
+            <!-- Store Information Section -->
+            <div class="form-section mb-4">
+              <h5 class="text-dark mb-3">
+                <i class="fas fa-info-circle me-2"></i>Store Information
+              </h5>
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label class="form-label">Store Name <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" name="name" id="name"
+                         value="{{ form_data.name|default:store.name }}" required>
+                  {% if errors.name %}
+                  <div class="invalid-feedback d-block">{{ errors.name }}</div>
+                  {% endif %}
+                  <div class="form-text">Choose a memorable name for your store</div>
+                </div>
+
+                <div class="col-md-6">
+                  <label class="form-label">Slug (URL) <span class="text-danger">*</span></label>
+                  <div class="input-group">
+                    <span class="input-group-text">yoursite.com/store/</span>
+                    <input type="text" class="form-control" name="slug" id="slug"
+                           value="{{ form_data.slug|default:store.slug }}" required>
+                  </div>
+                  {% if errors.slug %}
+                  <div class="invalid-feedback d-block">{{ errors.slug }}</div>
+                  {% endif %}
+                  <div class="form-text">Lowercase letters, numbers, and hyphens only</div>
+                </div>
+
+                <div class="col-12">
+                  <label class="form-label">Short Tagline</label>
+                  <input type="text" class="form-control" name="short_description"
+                         value="{{ form_data.short_description|default:store.short_description }}"
+                         placeholder="e.g. Africa's #1 Fashion Hub" maxlength="100">
+                  <div class="form-text">Brief description that appears in store listings</div>
+                </div>
+
+                <div class="col-12">
+                  <label class="form-label">Full Description</label>
+                  <textarea class="form-control" name="description" rows="4"
+                            placeholder="Tell buyers what makes your store amazing...">{{ form_data.description|default:store.description }}</textarea>
+                  <div class="form-text">Detailed description of your store and products</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Contact Information Section -->
+            <div class="form-section mb-4">
+              <h5 class="text-dark mb-3">
+                <i class="fas fa-address-book me-2"></i>Contact Information
+              </h5>
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label class="form-label">Email <span class="text-danger">*</span></label>
+                  <input type="email" class="form-control" name="email"
+                         value="{{ form_data.email|default:store.email }}" required>
+                  {% if errors.email %}
+                  <div class="invalid-feedback d-block">{{ errors.email }}</div>
+                  {% endif %}
+                </div>
+
+                <div class="col-md-6">
+                  <label class="form-label">Phone Number <span class="text-danger">*</span></label>
+                  <input type="tel" class="form-control" name="phone"
+                         value="{{ form_data.phone|default:store.phone }}" required>
+                  {% if errors.phone %}
+                  <div class="invalid-feedback d-block">{{ errors.phone }}</div>
+                  {% endif %}
+                </div>
+
+                <div class="col-12">
+                  <label class="form-label">Website (optional)</label>
+                  <input type="url" class="form-control" name="website"
+                         value="{{ form_data.website|default:store.website }}"
+                         placeholder="https://yourwebsite.com">
+                  {% if errors.website %}
+                  <div class="invalid-feedback d-block">{{ errors.website }}</div>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+
+            <!-- Address Information Section -->
+            <div class="form-section mb-4">
+              <h5 class="text-dark mb-3">
+                <i class="fas fa-map-marker-alt me-2"></i>Address Information
+              </h5>
+              <div class="row g-3">
+                <div class="col-12">
+                  <label class="form-label">Address Line 1 <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" name="address_line_1"
+                         value="{{ form_data.address_line_1|default:store.address_line_1 }}" required>
+                </div>
+
+                <div class="col-12">
+                  <label class="form-label">Address Line 2</label>
+                  <input type="text" class="form-control" name="address_line_2"
+                         value="{{ form_data.address_line_2|default:store.address_line_2 }}">
+                </div>
+
+                <div class="col-md-4">
+                  <label class="form-label">City <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" name="city"
+                         value="{{ form_data.city|default:store.city }}" required>
+                </div>
+
+                <div class="col-md-4">
+                  <label class="form-label">Region <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" name="region"
+                         value="{{ form_data.region|default:store.region }}" required>
+                </div>
+
+                <div class="col-md-4">
+                  <label class="form-label">Postal Code <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" name="postal_code"
+                         value="{{ form_data.postal_code|default:store.postal_code }}" required>
+                </div>
+
+                <div class="col-12">
+                  <label class="form-label">Country</label>
+                  <select class="form-select" name="country">
+                    {% with selected_country=form_data.country|default:store.country %}
+                    <option value="Gambia" {% if selected_country == "Gambia" %}selected{% endif %}>Gambia</option>
+                    <option value="Senegal" {% if selected_country == "Senegal" %}selected{% endif %}>Senegal</option>
+                    <option value="Ghana" {% if selected_country == "Ghana" %}selected{% endif %}>Ghana</option>
+                    <option value="Nigeria" {% if selected_country == "Nigeria" %}selected{% endif %}>Nigeria</option>
+                    <option value="Mali" {% if selected_country == "Mali" %}selected{% endif %}>Mali</option>
+                    {% endwith %}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Media Upload Section -->
+            <div class="form-section mb-4">
+              <h5 class="text-dark mb-3">
+                <i class="fas fa-images me-2"></i>Store Media
+              </h5>
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label class="form-label">Upload New Logo</label>
+
+                  <!-- Current Logo Display -->
+                  {% if store.logo %}
+                  <div class="current-image mb-2">
+                    <label class="form-label small text-muted">Current Logo:</label>
+                    <div class="position-relative d-inline-block">
+                      <img src="{{ store.logo.url }}" alt="Current Logo" class="img-thumbnail" style="max-width: 150px; max-height: 150px;">
+                      <button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0"
+                              onclick="markForRemoval('logo')" id="removeLogo">
+                        <i class="fas fa-times"></i>
+                      </button>
+                    </div>
+                    <input type="hidden" name="remove_logo" id="remove_logo" value="false">
+                  </div>
+                  {% endif %}
+
+                  <input type="file" class="form-control" name="logo" accept="image/*" id="logoInput">
+                  {% if errors.logo %}
+                  <div class="invalid-feedback d-block">{{ errors.logo }}</div>
+                  {% endif %}
+                  <div class="form-text">Recommended: 200x200px, max 2MB</div>
+                  <div id="logoPreview" class="mt-2"></div>
+                </div>
+
+                <div class="col-md-6">
+                  <label class="form-label">Upload New Banner</label>
+
+                  <!-- Current Banner Display -->
+                  {% if store.banner %}
+                  <div class="current-image mb-2">
+                    <label class="form-label small text-muted">Current Banner:</label>
+                    <div class="position-relative d-inline-block">
+                      <img src="{{ store.banner.url }}" alt="Current Banner" class="img-thumbnail" style="max-width: 300px; max-height: 150px;">
+                      <button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0"
+                              onclick="markForRemoval('banner')" id="removeBanner">
+                        <i class="fas fa-times"></i>
+                      </button>
+                    </div>
+                    <input type="hidden" name="remove_banner" id="remove_banner" value="false">
+                  </div>
+                  {% endif %}
+
+                  <input type="file" class="form-control" name="banner" accept="image/*" id="bannerInput">
+                  {% if errors.banner %}
+                  <div class="invalid-feedback d-block">{{ errors.banner }}</div>
+                  {% endif %}
+                  <div class="form-text">Recommended: 1200x400px, max 2MB</div>
+                  <div id="bannerPreview" class="mt-2"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="mt-4">
+              <div class="d-flex justify-content-between">
+                <div>
+                  <a href="{% url 'stores:manage_stores' %}" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Stores
+                  </a>
+                  {% if store.status == 'active' %}
+                  <a href="{% url 'stores:store_detail' store.slug %}" class="btn btn-outline-info ms-2" target="_blank">
+                    <i class="fas fa-eye me-2"></i>View Live
+                  </a>
+                  {% endif %}
+                </div>
+                <button type="submit" class="btn btn-warning btn-lg" id="submitBtn">
+                  <i class="fas fa-save me-2"></i>Update Store
+                  <span class="spinner-border spinner-border-sm ms-2 d-none" id="loadingSpinner"></span>
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Store Actions Card -->
+      <div class="card mt-4 border-warning">
+        <div class="card-header bg-warning text-dark">
+          <h6 class="mb-0"><i class="fas fa-tools me-2"></i>Store Actions</h6>
+        </div>
+        <div class="card-body">
+          <div class="row g-2">
+            <div class="col-md-4">
+              {% if store.status == 'active' %}
+              <a href="{% url 'stores:toggle_store_status' store.id %}" class="btn btn-outline-warning btn-sm w-100">
+                <i class="fas fa-pause me-1"></i>Deactivate Store
+              </a>
+              {% else %}
+              <a href="{% url 'stores:toggle_store_status' store.id %}" class="btn btn-outline-success btn-sm w-100">
+                <i class="fas fa-play me-1"></i>Activate Store
+              </a>
+              {% endif %}
+            </div>
+            <div class="col-md-4">
+              <a href="{% url 'stores:store_dashboard' store.id %}" class="btn btn-outline-info btn-sm w-100">
+                <i class="fas fa-chart-bar me-1"></i>Dashboard
+              </a>
+            </div>
+            <div class="col-md-4">
+              <button type="button" class="btn btn-outline-danger btn-sm w-100"
+                      onclick="confirmDelete('{{ store.name }}', '{% url 'stores:delete_store' store.id %}')">
+                <i class="fas fa-trash me-1"></i>Delete Store
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Update Tips Card -->
+      <div class="card mt-4 border-info">
+        <div class="card-header bg-info text-white">
+          <h6 class="mb-0"><i class="fas fa-lightbulb me-2"></i>Update Tips</h6>
+        </div>
+        <div class="card-body">
+          <ul class="list-unstyled mb-0">
+            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Keep your store information up-to-date for better customer trust</li>
+            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Update images periodically to keep your store looking fresh</li>
+            <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Ensure contact details are current for customer inquiries</li>
+            <li><i class="fas fa-check text-success me-2"></i>Review your description to highlight new products or services</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="fas fa-exclamation-triangle text-danger"></i> Confirm Deletion
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>Are you sure you want to delete the store <strong id="deleteStoreName"></strong>?</p>
+        <p class="text-muted">This action cannot be undone. All store data, products, and associated information will be permanently deleted.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <form method="post" id="deleteForm" style="display: inline;">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-danger">
+            <i class="fas fa-trash"></i> Delete Store
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="{% static 'js/main.js' %}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('storeForm');
+    const nameInput = document.getElementById('name');
+    const slugInput = document.getElementById('slug');
+    const progressBar = document.getElementById('formProgress');
+    const submitBtn = document.getElementById('submitBtn');
+    const loadingSpinner = document.getElementById('loadingSpinner');
+
+    // Auto-generate slug from name (only if slug is empty or matches current pattern)
+    const originalSlug = slugInput.value;
+    nameInput.addEventListener('input', function() {
+        // Only auto-generate if user hasn't manually changed the slug
+        const currentSlug = slugInput.value;
+        const expectedSlug = generateSlug(nameInput.dataset.originalValue || '');
+
+        if (!currentSlug || currentSlug === expectedSlug || currentSlug === originalSlug) {
+            const name = this.value;
+            const slug = generateSlug(name);
+            slugInput.value = slug;
+        }
+        updateProgress();
+    });
+
+    function generateSlug(name) {
+        return name.toLowerCase()
+            .replace(/[^a-z0-9\s-]/g, '')
+            .replace(/\s+/g, '-')
+            .replace(/-+/g, '-')
+            .replace(/^-+|-+$/g, '');
+    }
+
+    // Store original name for comparison
+    nameInput.dataset.originalValue = nameInput.value;
+
+    // Update progress bar based on filled fields
+    function updateProgress() {
+        const requiredFields = form.querySelectorAll('input[required], select[required], textarea[required]');
+        let filledFields = 0;
+
+        requiredFields.forEach(field => {
+            if (field.value.trim() !== '') {
+                filledFields++;
+            }
+        });
+
+        const progress = (filledFields / requiredFields.length) * 100;
+        progressBar.style.width = progress + '%';
+        progressBar.setAttribute('aria-valuenow', progress);
+    }
+
+    // Add event listeners to all form inputs
+    form.addEventListener('input', updateProgress);
+    form.addEventListener('change', updateProgress);
+
+    // Image preview functionality
+    function setupImagePreview(inputId, previewId, maxWidth = 200) {
+        const input = document.getElementById(inputId);
+        const preview = document.getElementById(previewId);
+
+        input.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    preview.innerHTML = `
+                        <div class="mt-2">
+                            <label class="form-label small text-success">New Image Preview:</label>
+                            <div class="position-relative d-inline-block">
+                                <img src="${e.target.result}"
+                                     class="img-thumbnail"
+                                     style="max-width: ${maxWidth}px; max-height: 150px;"
+                                     alt="Preview">
+                                <button type="button" class="btn btn-sm btn-outline-danger position-absolute top-0 end-0"
+                                        onclick="clearPreview('${inputId}', '${previewId}')">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    }
+
+    setupImagePreview('logoInput', 'logoPreview', 150);
+    setupImagePreview('bannerInput', 'bannerPreview', 300);
+
+    // Form submission handling
+    form.addEventListener('submit', function() {
+        submitBtn.disabled = true;
+        loadingSpinner.classList.remove('d-none');
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Updating Store...';
+    });
+
+    // Initialize progress
+    updateProgress();
+
+    // Validate slug format
+    slugInput.addEventListener('input', function() {
+        const slug = this.value;
+        const validSlug = /^[a-z0-9-]+$/.test(slug);
+
+        if (slug && !validSlug) {
+            this.setCustomValidity('Slug can only contain lowercase letters, numbers, and hyphens');
+        } else {
+            this.setCustomValidity('');
+        }
+    });
+});
+
+// Function to clear image preview
+function clearPreview(inputId, previewId) {
+    document.getElementById(inputId).value = '';
+    document.getElementById(previewId).innerHTML = '';
+}
+
+// Function to mark images for removal
+function markForRemoval(imageType) {
+    const removeInput = document.getElementById(`remove_${imageType}`);
+    const removeButton = document.getElementById(`remove${imageType.charAt(0).toUpperCase() + imageType.slice(1)}`);
+    const currentImageDiv = removeButton.closest('.current-image');
+
+    removeInput.value = 'true';
+    currentImageDiv.style.opacity = '0.5';
+    removeButton.innerHTML = '<i class="fas fa-undo"></i>';
+    removeButton.onclick = function() { undoRemoval(imageType); };
+    removeButton.className = 'btn btn-sm btn-warning position-absolute top-0 end-0';
+
+    // Add removal indicator
+    const indicator = document.createElement('div');
+    indicator.className = 'text-danger small mt-1';
+    indicator.innerHTML = '<i class="fas fa-trash me-1"></i>Will be removed on save';
+    indicator.id = `${imageType}_removal_indicator`;
+    currentImageDiv.appendChild(indicator);
+}
+
+// Function to undo image removal
+function undoRemoval(imageType) {
+    const removeInput = document.getElementById(`remove_${imageType}`);
+    const removeButton = document.getElementById(`remove${imageType.charAt(0).toUpperCase() + imageType.slice(1)}`);
+    const currentImageDiv = removeButton.closest('.current-image');
+    const indicator = document.getElementById(`${imageType}_removal_indicator`);
+
+    removeInput.value = 'false';
+    currentImageDiv.style.opacity = '1';
+    removeButton.innerHTML = '<i class="fas fa-times"></i>';
+    removeButton.onclick = function() { markForRemoval(imageType); };
+    removeButton.className = 'btn btn-sm btn-danger position-absolute top-0 end-0';
+
+    if (indicator) {
+        indicator.remove();
+    }
+}
+
+// Delete confirmation
+function confirmDelete(storeName, deleteUrl) {
+    document.getElementById('deleteStoreName').textContent = storeName;
+    document.getElementById('deleteForm').action = deleteUrl;
+
+    const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
+    modal.show();
+}
+
+// Auto-hide alert messages
+setTimeout(function() {
+    const alerts = document.querySelectorAll('.alert');
+    alerts.forEach(alert => {
+        if (window.bootstrap && window.bootstrap.Alert) {
+            const bsAlert = new bootstrap.Alert(alert);
+            bsAlert.close();
+        }
+    });
+}, 5000);
+</script>
+
+<style>
+.form-section {
+    border-left: 4px solid #ffc107;
+    padding-left: 1rem;
+    margin-left: 0.5rem;
+}
+
+.form-label {
+    font-weight: 600;
+    color: #495057;
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: #ffc107;
+    box-shadow: 0 0 0 0.2rem rgba(255, 193, 7, 0.25);
+}
+
+.invalid-feedback {
+    font-size: 0.875rem;
+}
+
+.progress {
+    background-color: #e9ecef;
+}
+
+.card-header {
+    background: linear-gradient(135deg, #343a40 0%, #495057 100%) !important;
+}
+
+.img-thumbnail {
+    border: 2px dashed #dee2e6;
+    padding: 0.5rem;
+}
+
+.current-image {
+    transition: opacity 0.3s ease;
+}
+
+.current-image img {
+    object-fit: cover;
+}
+
+@media (max-width: 768px) {
+    .input-group-text {
+        font-size: 0.8rem;
+    }
+
+    .d-flex.justify-content-between {
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .d-flex.justify-content-between > div {
+        text-align: center;
+    }
+}
+</style>
+{% endblock %}

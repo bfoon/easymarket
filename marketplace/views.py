@@ -7,6 +7,7 @@ from .models import (Category, Product, ProductView,
                      ProductFeatureOption, ProductVariant)
 from chat.models import ChatThread, ChatMessage
 from accounts.models import Address
+from stores.models import Store
 from reviews.models import Review
 from orders.models import PromoCode
 from reviews.forms import ReviewForm
@@ -793,6 +794,10 @@ def product_detail(request, product_id):
     feature_data = {
         k: sorted(list(v), key=lambda x: x.value) for k, v in feature_map.items()
     }
+    try:
+        seller_store = Store.objects.get(owner=product.seller, status='active')
+    except Store.DoesNotExist:
+        seller_store = None
 
     # Record view
     if request.user.is_authenticated:
@@ -889,6 +894,7 @@ def product_detail(request, product_id):
         'review_count': review_count,
         'user_rating': user_rating,
         'rating_range': range(1, 6),
+        'seller_store': seller_store,
         'feature_data': feature_data,
     })
 

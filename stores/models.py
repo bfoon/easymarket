@@ -114,7 +114,7 @@ class Store(models.Model):
         return self.name
 
     def save(self, *args, **kwargs):
-        if self.pk:
+        if not self._state.adding:
             old_store = Store.objects.get(pk=self.pk)
             if old_store.status != self.status and self.status == 'active' and not self.approved_at:
                 self.approved_at = timezone.now()
