@@ -1,0 +1,305 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Orders - {{ store.name }}{% endblock %}
+
+{% block content %}
+
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+<link rel="stylesheet" type="text/css" href="{% static 'css/store_orders.css' %}">
+<div class="container-fluid py-4">
+  <!-- Breadcrumb -->
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb bg-transparent p-0 m-0 fw-semibold" style="--bs-breadcrumb-divider: '>';">
+    <li class="breadcrumb-item">
+      <a href="{% url 'stores:store_dashboard' store.id %}" class="text-decoration-none text-dark">
+        <i class="fas fa-home me-1 text-muted"></i>Dashboard
+      </a>
+    </li>
+    <li class="breadcrumb-item active text-primary" aria-current="page">
+      Orders
+    </li>
+  </ol>
+</nav>
+
+  <!-- Header Section -->
+  <div class="row mb-4">
+    <div class="col-lg-6">
+      <h2 class="h3 mb-2">
+        <i class="fas fa-shopping-cart me-2 text-primary"></i>
+        Orders Management
+      </h2>
+     <p class="text-muted mb-0">{{ store.name }} - {{ page_obj.paginator.count }} order{{ page_obj.paginator.count|pluralize }}</p>
+    </div>
+    <div class="col-lg-6">
+      <div class="d-flex justify-content-end align-items-center gap-2">
+        <div class="search-container-order">
+          <i class="fas fa-search"></i>
+          <input type="text" class="form-control search-input-order" placeholder="Search orders..." id="orderSearch">
+        </div>
+        <div class="dropdown">
+          <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+            <i class="fas fa-filter me-1"></i>Filter
+          </button>
+          <ul class="dropdown-menu">
+            <li><a class="dropdown-item" href="#" data-filter="all">All Orders</a></li>
+            <li><a class="dropdown-item" href="#" data-filter="pending">Pending</a></li>
+            <li><a class="dropdown-item" href="#" data-filter="completed">Completed</a></li>
+            <li><a class="dropdown-item" href="#" data-filter="cancelled">Cancelled</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if page_obj %}
+  <!-- Desktop Table View -->
+  <div class="card shadow-sm d-none d-md-block">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0" id="ordersTable">
+          <thead class="table-light">
+            <tr>
+              <th class="px-4 py-3">
+                <i class="fas fa-hashtag me-1"></i>Order ID
+              </th>
+              <th class="py-3">
+                <i class="fas fa-user me-1"></i>Customer
+              </th>
+              <th class="py-3">
+                <i class="fas fa-dollar-sign me-1"></i>Amount
+              </th>
+              <th class="py-3">
+                <i class="fas fa-info-circle me-1"></i>Status
+              </th>
+              <th class="py-3">
+                <i class="fas fa-calendar me-1"></i>Date
+              </th>
+              <th class="py-3">
+                <i class="fas fa-cog me-1"></i>Actions
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for order in page_obj %}
+            <tr class="order-row" data-status="{{ order.status }}">
+              <td class="px-4 py-3">
+                <strong class="text-primary">#{{ order.id|slice:":8" }}</strong>
+              </td>
+              <td class="py-3">
+                <div class="d-flex align-items-center">
+                  <div class="avatar-circle bg-secondary text-white me-2 d-flex align-items-center justify-content-center" style="width: 32px; height: 32px; border-radius: 50%; font-size: 12px;">
+                    {{ order.buyer.get_full_name|slice:":1"|upper }}
+                  </div>
+                  <div>
+                    <div class="fw-medium">{{ order.buyer.get_full_name }}</div>
+                    <small class="text-muted">{{ order.buyer.email }}</small>
+                  </div>
+                </div>
+              </td>
+              <td class="py-3">
+                <span class="order-amount">D{{ order.get_total|floatformat:2 }}</span>
+              </td>
+              <td class="py-3">
+                <span class="badge status-badge bg-{% if order.status == 'completed' %}success{% elif order.status == 'pending' %}warning text-dark{% elif order.status == 'processing' %}info{% else %}secondary{% endif %}">
+                  {% if order.status == 'completed' %}
+                    <i class="fas fa-check-circle me-1"></i>
+                  {% elif order.status == 'pending' %}
+                    <i class="fas fa-clock me-1"></i>
+                  {% elif order.status == 'processing' %}
+                    <i class="fas fa-spinner me-1"></i>
+                  {% else %}
+                    <i class="fas fa-times-circle me-1"></i>
+                  {% endif %}
+                  {{ order.status|title }}
+                </span>
+              </td>
+              <td class="py-3">
+                <div>{{ order.created_at|date:"M d, Y" }}</div>
+                <small class="text-muted">{{ order.created_at|date:"H:i" }}</small>
+              </td>
+              <td class="py-3 table-actions">
+                <div class="btn-group" role="group">
+                  <a href="{% url 'orders:order_detail' order.id %}" class="btn btn-sm btn-outline-primary" title="View Details">
+                    <i class="fas fa-eye"></i>
+                  </a>
+                  {% if order.status == 'pending' %}
+                  <button class="btn btn-sm btn-outline-success" onclick="updateOrderStatus({{ order.id }}, 'processing')" title="Process Order">
+                    <i class="fas fa-play"></i>
+                  </button>
+                  {% endif %}
+                  <div class="dropdown">
+                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                      <i class="fas fa-ellipsis-v"></i>
+                    </button>
+                    <ul class="dropdown-menu">
+                      <li><a class="dropdown-item" href="{% url 'orders:order_detail' order.id %}">View Details</a></li>
+                      <li><a class="dropdown-item" href="{% url 'orders:order_invoice' order.id %}">Download Invoice</a></li>
+                      {% if order.status != 'completed' %}
+                      <li><hr class="dropdown-divider"></li>
+                      <li><a class="dropdown-item" href="#" onclick="updateOrderStatus({{ order.id }}, 'completed')">Mark as Completed</a></li>
+                      {% endif %}
+                    </ul>
+                  </div>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mobile Card View -->
+  <div class="d-block d-md-none">
+    {% for order in orders %}
+    <div class="card order-card mb-3" data-status="{{ order.status }}">
+      <div class="card-body">
+        <div class="row">
+          <div class="col-8">
+            <h6 class="card-title text-primary mb-1">#{{ order.id|slice:":8" }}</h6>
+            <p class="text-muted mb-2">{{ order.buyer.get_full_name }}</p>
+          </div>
+          <div class="col-4 text-end">
+            <div class="order-amount mb-2">D{{ order.get_total|floatformat:2 }}</div>
+            <span class="badge status-badge bg-{% if order.status == 'completed' %}success{% elif order.status == 'pending' %}warning text-dark{% elif order.status == 'processing' %}info{% else %}secondary{% endif %}">
+              {{ order.status|title }}
+            </span>
+          </div>
+        </div>
+        <div class="row mt-2">
+          <div class="col-6">
+            <small class="text-muted">{{ order.created_at|date:"M d, Y H:i" }}</small>
+          </div>
+          <div class="col-6 text-end">
+            <a href="{% url 'orders:order_detail' order.id %}" class="btn btn-sm btn-outline-primary">
+              <i class="fas fa-eye me-1"></i>View
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Pagination -->
+  {% if page_obj.has_other_pages %}
+<nav aria-label="Orders pagination" class="mt-4">
+  <ul class="pagination justify-content-center">
+    {% if page_obj.has_previous %}
+    <li class="page-item">
+      <a class="page-link" href="?page={{ page_obj.previous_page_number }}">
+        <i class="fas fa-chevron-left"></i>
+      </a>
+    </li>
+    {% endif %}
+
+    {% for num in page_obj.paginator.page_range %}
+      {% if page_obj.number == num %}
+      <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+      {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+      <li class="page-item"><a class="page-link" href="?page={{ num }}">{{ num }}</a></li>
+      {% endif %}
+    {% endfor %}
+
+    {% if page_obj.has_next %}
+    <li class="page-item">
+      <a class="page-link" href="?page={{ page_obj.next_page_number }}">
+        <i class="fas fa-chevron-right"></i>
+      </a>
+    </li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/main.js' %}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Search functionality
+  const searchInput = document.getElementById('orderSearch');
+  const table = document.getElementById('ordersTable');
+  const rows = table ? table.querySelectorAll('tbody tr') : [];
+  const cards = document.querySelectorAll('.order-card');
+
+  if (searchInput) {
+    searchInput.addEventListener('input', function() {
+      const searchTerm = this.value.toLowerCase();
+
+      // Filter table rows
+      rows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.includes(searchTerm) ? '' : 'none';
+      });
+
+      // Filter cards
+      cards.forEach(card => {
+        const text = card.textContent.toLowerCase();
+        card.style.display = text.includes(searchTerm) ? '' : 'none';
+      });
+    });
+  }
+
+  // Status filter functionality
+  document.querySelectorAll('[data-filter]').forEach(filter => {
+    filter.addEventListener('click', function(e) {
+      e.preventDefault();
+      const filterValue = this.getAttribute('data-filter');
+
+      // Filter table rows
+      rows.forEach(row => {
+        const status = row.getAttribute('data-status');
+        if (filterValue === 'all' || status === filterValue) {
+          row.style.display = '';
+        } else {
+          row.style.display = 'none';
+        }
+      });
+
+      // Filter cards
+      cards.forEach(card => {
+        const status = card.getAttribute('data-status');
+        if (filterValue === 'all' || status === filterValue) {
+          card.style.display = '';
+        } else {
+          card.style.display = 'none';
+        }
+      });
+    });
+  });
+});
+
+// Update order status function
+function updateOrderStatus(orderId, newStatus) {
+  if (confirm(`Are you sure you want to update this order to ${newStatus}?`)) {
+    fetch(`/orders/${orderId}/update-status/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+      },
+      body: JSON.stringify({
+        status: newStatus
+      })
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        location.reload();
+      } else {
+        alert('Error updating order status');
+      }
+    })
+    .catch(error => {
+      console.error('Error:', error);
+      alert('Error updating order status');
+    });
+  }
+}
+</script>
+{% endblock %}

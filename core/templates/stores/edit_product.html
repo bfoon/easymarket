@@ -45,6 +45,7 @@
           <div class="card-body">
             <div class="row">
               <div class="col-md-6">
+                <!-- Name, Category, Price -->
                 <div class="mb-3">
                   <label for="{{ product_form.name.id_for_label }}" class="form-label">Product Name *</label>
                   {{ product_form.name }}
@@ -52,7 +53,6 @@
                   <div class="text-danger small">{{ product_form.name.errors }}</div>
                   {% endif %}
                 </div>
-
                 <div class="mb-3">
                   <label for="{{ product_form.category.id_for_label }}" class="form-label">Category</label>
                   {{ product_form.category }}
@@ -60,7 +60,6 @@
                   <div class="text-danger small">{{ product_form.category.errors }}</div>
                   {% endif %}
                 </div>
-
                 <div class="row">
                   <div class="col-md-6">
                     <div class="mb-3">
@@ -84,6 +83,7 @@
               </div>
 
               <div class="col-md-6">
+                <!-- Main Image + Video -->
                 <div class="mb-3">
                   <label for="{{ product_form.image.id_for_label }}" class="form-label">Main Product Image</label>
                   {% if product.image %}
@@ -107,6 +107,7 @@
               </div>
             </div>
 
+            <!-- Description + Specs -->
             <div class="mb-3">
               <label for="{{ product_form.description.id_for_label }}" class="form-label">Description *</label>
               {{ product_form.description }}
@@ -114,7 +115,6 @@
               <div class="text-danger small">{{ product_form.description.errors }}</div>
               {% endif %}
             </div>
-
             <div class="mb-3">
               <label for="{{ product_form.specifications.id_for_label }}" class="form-label">Specifications</label>
               {{ product_form.specifications }}
@@ -123,39 +123,49 @@
               {% endif %}
             </div>
 
+            <!-- Boolean Feature Toggles -->
             <div class="row">
+              {% for item in boolean_fields %}
               <div class="col-md-3">
                 <div class="form-check mb-3">
-                  {{ product_form.is_featured }}
-                  <label class="form-check-label" for="{{ product_form.is_featured.id_for_label }}">
-                    <i class="fas fa-star text-warning me-1"></i>Featured Product
+                  {{ item.field }}
+                  <label class="form-check-label" for="{{ item.field.id_for_label }}">
+                    <i class="fas {{ item.icon }} text-{{ item.color }} me-1"></i>{{ item.text }}
                   </label>
                 </div>
               </div>
-              <div class="col-md-3">
-                <div class="form-check mb-3">
-                  {{ product_form.is_trending }}
-                  <label class="form-check-label" for="{{ product_form.is_trending.id_for_label }}">
-                    <i class="fas fa-fire text-danger me-1"></i>Trending Product
-                  </label>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+
+        <!-- Product Variants -->
+        <div class="card mb-4">
+          <div class="card-header bg-light">
+            <h5 class="card-title mb-0">
+              <i class="fas fa-layer-group me-2"></i>Product Variants
+            </h5>
+          </div>
+          <div class="card-body">
+            {{ variant_formset.management_form }}
+            <div class="row">
+              {% for form in variant_formset %}
+              <div class="col-md-6 mb-3">
+                <label>{{ form.feature_option.label }}</label>
+                {{ form.feature_option }}
+                {% if form.feature_option.errors %}
+                <div class="text-danger small">{{ form.feature_option.errors }}</div>
+                {% endif %}
+                <div class="form-check mt-1">
+                  {{ form.DELETE }}
+                  <label class="form-check-label">Delete</label>
                 </div>
               </div>
-              <div class="col-md-3">
-                <div class="form-check mb-3">
-                  {{ product_form.has_30_day_return }}
-                  <label class="form-check-label" for="{{ product_form.has_30_day_return.id_for_label }}">
-                    <i class="fas fa-undo text-info me-1"></i>30-Day Return
-                  </label>
-                </div>
-              </div>
-              <div class="col-md-3">
-                <div class="form-check mb-3">
-                  {{ product_form.free_shipping }}
-                  <label class="form-check-label" for="{{ product_form.free_shipping.id_for_label }}">
-                    <i class="fas fa-shipping-fast text-success me-1"></i>Free Shipping
-                  </label>
-                </div>
-              </div>
+              {% endfor %}
+            </div>
+            <div class="alert alert-info mt-3">
+              <i class="fas fa-info-circle me-2"></i>
+              <small>Add product variations (e.g., color, size, material, etc.)</small>
             </div>
           </div>
         </div>
@@ -170,7 +180,7 @@
             </h5>
           </div>
           <div class="card-body">
-            <!-- Current Images -->
+            <!-- Existing Images -->
             <div class="mb-3">
               <h6 class="text-muted">Current Images</h6>
               <div class="row" id="currentImages">
@@ -191,19 +201,19 @@
               </div>
             </div>
 
-            <!-- Image Upload Forms -->
+            <!-- New Uploads -->
             <div class="mb-3">
               <h6 class="text-muted">Add New Images</h6>
               {{ image_formset.management_form }}
               {% for form in image_formset %}
-                {% if not form.instance.pk %}
-                <div class="mb-2">
-                  {{ form.image }}
-                  {% if form.image.errors %}
-                  <div class="text-danger small">{{ form.image.errors }}</div>
-                  {% endif %}
-                </div>
+              {% if not form.instance.pk %}
+              <div class="mb-2">
+                {{ form.image }}
+                {% if form.image.errors %}
+                <div class="text-danger small">{{ form.image.errors }}</div>
                 {% endif %}
+              </div>
+              {% endif %}
               {% endfor %}
             </div>
 
@@ -216,17 +226,15 @@
       </div>
     </div>
 
-    <!-- Action Buttons -->
+    <!-- Submit -->
     <div class="row mt-4">
-      <div class="col-12">
-        <div class="d-flex justify-content-between">
-          <a href="{% url 'stores:manage_store_products' store.id %}" class="btn btn-secondary">
-            <i class="fas fa-times me-1"></i>Cancel
-          </a>
-          <button type="submit" class="btn btn-primary">
-            <i class="fas fa-save me-1"></i>Save Changes
-          </button>
-        </div>
+      <div class="col-12 d-flex justify-content-between">
+        <a href="{% url 'stores:manage_store_products' store.id %}" class="btn btn-secondary">
+          <i class="fas fa-times me-1"></i>Cancel
+        </a>
+        <button type="submit" class="btn btn-primary">
+          <i class="fas fa-save me-1"></i>Save Changes
+        </button>
       </div>
     </div>
   </form>
@@ -247,72 +255,21 @@ function deleteImage(imageId) {
       if (data.success) {
         document.getElementById(`image-${imageId}`).remove();
       } else {
-        alert('Error deleting image. Please try again.');
+        alert('Error deleting image.');
       }
     })
     .catch(error => {
-      console.error('Error:', error);
-      alert('Error deleting image. Please try again.');
+      alert('Error deleting image.');
     });
   }
 }
 
-// Auto-resize textareas
-document.querySelectorAll('textarea').forEach(textarea => {
-  textarea.addEventListener('input', function() {
+document.querySelectorAll('textarea').forEach(el => {
+  el.addEventListener('input', function () {
     this.style.height = 'auto';
     this.style.height = this.scrollHeight + 'px';
   });
 });
 </script>
 
-<style>
-.form-label {
-  font-weight: 600;
-  color: #495057;
-}
-
-.form-control:focus {
-  border-color: #007bff;
-  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
-}
-
-.form-check-label {
-  font-weight: 500;
-}
-
-.btn-group .btn {
-  margin-right: 0.5rem;
-}
-
-.btn-group .btn:last-child {
-  margin-right: 0;
-}
-
-.position-relative .btn {
-  padding: 0.25rem 0.5rem;
-  font-size: 0.75rem;
-}
-
-.img-thumbnail {
-  max-height: 120px;
-  object-fit: cover;
-}
-
-@media (max-width: 768px) {
-  .btn-group {
-    flex-direction: column;
-    width: 100%;
-  }
-
-  .btn-group .btn {
-    margin-bottom: 0.5rem;
-  }
-
-  .d-flex.justify-content-between {
-    flex-direction: column;
-    gap: 1rem;
-  }
-}
-</style>
 {% endblock %}

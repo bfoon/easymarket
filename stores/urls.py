@@ -20,6 +20,7 @@ urlpatterns = [
     path('admin/<uuid:store_id>/products/<int:product_id>/edit/', views.edit_product, name='edit_product'),
     path('admin/<uuid:store_id>/products/<int:product_id>/images/<int:image_id>/delete/',
          views.delete_product_image, name='delete_product_image'),
+    path('<uuid:store_id>/orders/', views.store_orders, name='store_orders'),
 
     # Public store display URLs (using slug for SEO-friendly URLs) - MUST come last
     path('<slug:slug>/', views.store_detail, name='store_detail'),

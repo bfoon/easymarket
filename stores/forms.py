@@ -1,5 +1,5 @@
 from django import forms
-from marketplace.models import Product, ProductImage, Category
+from marketplace.models import Product, ProductImage, Category, ProductVariant, ProductFeatureOption
 
 class ProductForm(forms.ModelForm):
     class Meta:
@@ -75,3 +75,24 @@ class ProductImageForm(forms.ModelForm):
                 'accept': 'image/*'
             })
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Ensure the image field is not required (to allow blank extra forms)
+        self.fields['image'].required = False
+
+
+class ProductVariantForm(forms.ModelForm):
+    class Meta:
+        model = ProductVariant
+        fields = ['feature_option']
+        widgets = {
+            'feature_option': forms.Select(attrs={
+                'class': 'form-control'
+            })
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Allow empty extra forms to pass validation
+        self.fields['feature_option'].required = False

@@ -9,10 +9,13 @@ from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 from django.utils.text import slugify
-from django.db.models import Q, Avg
+from django.db.models import Q, Avg, F, FloatField
+from django.db.models.functions import Coalesce
 from django.core.paginator import Paginator
 from django.http import JsonResponse
 from django.forms import modelformset_factory
+from marketplace.models import Product, ProductImage, ProductVariant
+from .forms import ProductForm, ProductImageForm, ProductVariantForm
 from django.db import transaction
 import re
 from .models import Store
@@ -407,6 +410,28 @@ def manage_store_products(request, store_id):
         'total_products': products.count()
     })
 
+@login_required
+def store_orders(request, store_id):
+    store = get_object_or_404(Store, id=store_id, owner=request.user)
+
+    # Get all order items for products in this store
+    order_items = OrderItem.objects.filter(
+        product__seller=store.owner
+    ).select_related('order', 'product', 'order__buyer').order_by('-order__created_at')
+
+    # Group by order
+    orders_set = {item.order for item in order_items}
+    sorted_orders = sorted(orders_set, key=lambda o: o.created_at, reverse=True)
+
+    # Apply pagination
+    paginator = Paginator(sorted_orders, 15)  # 20 orders per page
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    return render(request, 'stores/store_orders.html', {
+        'store': store,
+        'page_obj': page_obj,
+    })
 
 def product_detail(request, product_id):
     """
@@ -568,58 +593,94 @@ def store_products(request, slug):
 
 @login_required
 def edit_product(request, store_id, product_id):
-    """Edit a product and manage its images"""
+    """Edit a product, its images, and variants"""
     store = get_object_or_404(Store, id=store_id, owner=request.user)
-    # Fix: Product is linked to seller, not store
     product = get_object_or_404(Product, id=product_id, seller=request.user)
 
-    # Create a formset for product images
-    ImageFormSet = modelformset_factory(
-        ProductImage,
-        form=ProductImageForm,
-        extra=3,  # Allow 3 new images to be added
-        can_delete=True
-    )
+    ImageFormSet = modelformset_factory(ProductImage, form=ProductImageForm, extra=3, can_delete=True)
+    VariantFormSet = modelformset_factory(ProductVariant, form=ProductVariantForm, extra=3, can_delete=True)
 
     if request.method == 'POST':
         product_form = ProductForm(request.POST, request.FILES, instance=product)
         image_formset = ImageFormSet(
-            request.POST,
-            request.FILES,
+            request.POST, request.FILES,
             queryset=ProductImage.objects.filter(product=product)
         )
+        variant_formset = VariantFormSet(
+            request.POST,
+            queryset=ProductVariant.objects.filter(product=product)
+        )
 
-        if product_form.is_valid() and image_formset.is_valid():
+        if product_form.is_valid() and image_formset.is_valid() and variant_formset.is_valid():
             with transaction.atomic():
-                # Save the product
+                # Save product details
                 product = product_form.save()
 
-                # Save the images
+                # Save images
                 for form in image_formset:
-                    if form.cleaned_data and not form.cleaned_data.get('DELETE'):
-                        if form.cleaned_data.get('image'):
+                    if form.cleaned_data:
+                        if form.cleaned_data.get('DELETE') and form.instance.pk:
+                            form.instance.delete()
+                        elif form.cleaned_data.get('image'):
                             image = form.save(commit=False)
                             image.product = product
                             image.save()
-                    elif form.cleaned_data.get('DELETE'):
-                        # Delete the image if marked for deletion
-                        if form.instance.pk:
-                            form.instance.delete()
 
-                messages.success(request, 'Product updated successfully!')
-                return redirect('stores:manage_store_products', store_id=store.id)
+                # Save variants
+                for form in variant_formset:
+                    if form.cleaned_data:
+                        if form.cleaned_data.get('DELETE') and form.instance.pk:
+                            form.instance.delete()
+                        elif form.cleaned_data.get('feature_option'):
+                            variant = form.save(commit=False)
+                            variant.product = product
+                            variant.save()
+
+            messages.success(request, 'Product updated successfully!')
+            return redirect('stores:manage_store_products', store_id=store.id)
         else:
             messages.error(request, 'Please correct the errors below.')
     else:
         product_form = ProductForm(instance=product)
         image_formset = ImageFormSet(queryset=ProductImage.objects.filter(product=product))
+        variant_formset = VariantFormSet(queryset=ProductVariant.objects.filter(product=product))
+
+    boolean_fields = [
+        {
+            "field": product_form['is_featured'],
+            "icon": "fa-star",
+            "text": "Featured Product",
+            "color": "warning"
+        },
+        {
+            "field": product_form['is_trending'],
+            "icon": "fa-fire",
+            "text": "Trending Product",
+            "color": "danger"
+        },
+        {
+            "field": product_form['has_30_day_return'],
+            "icon": "fa-undo",
+            "text": "30-Day Return",
+            "color": "info"
+        },
+        {
+            "field": product_form['free_shipping'],
+            "icon": "fa-shipping-fast",
+            "text": "Free Shipping",
+            "color": "success"
+        },
+    ]
 
     context = {
         'store': store,
         'product': product,
         'product_form': product_form,
         'image_formset': image_formset,
+        'variant_formset': variant_formset,
+        'boolean_fields': boolean_fields,
     }
+
     return render(request, 'stores/edit_product.html', context)
 
 
@@ -658,7 +719,6 @@ def toggle_store_status(request, store_id):
 
 
 @login_required
-@store_owner_required
 def store_dashboard(request, store_id):
     store = get_object_or_404(Store, id=store_id)
 
@@ -673,11 +733,16 @@ def store_dashboard(request, store_id):
         user_products = Product.objects.filter(seller=store.owner)
         total_products = user_products.count()
 
-        # Top and recent products
+        # Recent products
         recent_products = user_products.order_by('-created_at')[:5]
+
+        # Top products with total sold and revenue
         top_products = user_products.annotate(
-            avg_rating=Count('reviews__rating')
-        ).order_by('-sold_count')[:5]
+            total_sold=Coalesce(Sum('order_items__quantity'), 0),
+            total_revenue=Coalesce(
+                Sum(F('order_items__quantity') * F('order_items__price_at_time'), output_field=FloatField()), 0.0),
+            avg_rating=Coalesce(Avg('reviews__rating'), 0.0)
+        ).order_by('-total_sold')[:5]
 
         # Seller's orders
         seller_orders = Order.objects.filter(
@@ -713,7 +778,8 @@ def store_dashboard(request, store_id):
             count=Count('id')
         ).order_by('-count')[:6]
 
-        category_labels = [cat['category__name'] or 'Uncategorized' for cat in category_data] if category_data else ['No Products']
+        category_labels = [cat['category__name'] or 'Uncategorized' for cat in category_data] if category_data else [
+            'No Products']
         category_counts = [cat['count'] for cat in category_data] if category_data else [1]
 
         # Monthly sales chart data
@@ -742,6 +808,9 @@ def store_dashboard(request, store_id):
         monthly_sales_data = [0] * 12
         category_labels = ['No Data']
         category_counts = [1]
+        review_count = 0
+        average_rating = 0
+        rating_breakdown = {}
 
     context = {
         'store': store,

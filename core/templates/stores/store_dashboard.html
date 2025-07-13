@@ -52,9 +52,9 @@
           <div class="d-flex justify-content-between align-items-center">
             <div>
               <h6 class="card-title text-uppercase mb-1">Total Products</h6>
-              <h3 class="mb-0">{{ store.products.count|default:0 }}</h3>
+              <h3 class="mb-0">{{ total_products|default:0 }}</h3>
               <small class="opacity-75">
-                <i class="fas fa-arrow-up me-1"></i>Active: {{ store.products.filter.is_active.count|default:0 }}
+                <i class="fas fa-arrow-up me-1"></i>Active: {{ store.products.count|default:0 }}
               </small>
             </div>
             <div class="text-primary-light">
@@ -108,14 +108,14 @@
         <div class="card-body">
           <div class="d-flex justify-content-between align-items-center">
             <div>
-              <h6 class="card-title text-uppercase mb-1">Store Views</h6>
-              <h3 class="mb-0">{{ store_views|default:0 }}</h3>
+              <h6 class="card-title text-uppercase mb-1">Average Rating</h6>
+              <h3 class="mb-0">{{ average_rating|default:0 }}</h3>
               <small class="opacity-75">
-                <i class="fas fa-arrow-up me-1"></i>This week: {{ weekly_views|default:0 }}
+                <i class="fas fa-star me-1"></i>{{ review_count|default:0 }} reviews
               </small>
             </div>
             <div class="text-info-light">
-              <i class="fas fa-eye fa-2x opacity-75"></i>
+              <i class="fas fa-star fa-2x opacity-75"></i>
             </div>
           </div>
         </div>
@@ -160,7 +160,7 @@
           <h5 class="card-title mb-0">
             <i class="fas fa-clock text-info me-2"></i>Recent Orders
           </h5>
-          <a href="#" class="btn btn-sm btn-outline-info">View All</a>
+          <a href="{% url 'stores:store_orders' store.id %}" class="btn btn-sm btn-outline-info">View All</a>
         </div>
         <div class="card-body p-0">
           <div class="table-responsive">
@@ -204,10 +204,11 @@
 
     <div class="col-lg-6 mb-3">
       <div class="card h-100">
-        <div class="card-header bg-light">
+        <div class="card-header bg-light d-flex justify-content-between align-items-center">
           <h5 class="card-title mb-0">
             <i class="fas fa-star text-warning me-2"></i>Top Products
           </h5>
+          <a href="{% url 'stores:manage_store_products' store.id %}" class="btn btn-sm btn-outline-warning">View All</a>
         </div>
         <div class="card-body p-0">
           <div class="table-responsive">
@@ -215,9 +216,9 @@
               <thead class="bg-light">
                 <tr>
                   <th>Product</th>
-                  <th>Sales</th>
+                  <th>Sold</th>
                   <th>Revenue</th>
-                  <th>Stock</th>
+                  <th>Rating</th>
                 </tr>
               </thead>
               <tbody>
@@ -238,15 +239,20 @@
                       </div>
                     </div>
                   </td>
-                  <td>{{ product.sales_count|default:0 }}</td>
-                  <td>D{{ product.revenue|default:0|floatformat:0 }}</td>
                   <td>
-                    {% if product.stock_quantity <= 5 %}
-                    <span class="badge bg-danger">{{ product.stock_quantity }}</span>
-                    {% elif product.stock_quantity <= 20 %}
-                    <span class="badge bg-warning">{{ product.stock_quantity }}</span>
+                    <span class="badge bg-primary">{{ product.total_sold|default:0 }}</span>
+                  </td>
+                  <td>
+                    <strong>D{{ product.total_revenue|default:0|floatformat:2 }}</strong>
+                  </td>
+                  <td>
+                    {% if product.avg_rating %}
+                    <div class="d-flex align-items-center">
+                      <i class="fas fa-star text-warning me-1"></i>
+                      <span>{{ product.avg_rating|floatformat:1 }}</span>
+                    </div>
                     {% else %}
-                    <span class="badge bg-success">{{ product.stock_quantity }}</span>
+                    <span class="text-muted">No rating</span>
                     {% endif %}
                   </td>
                 </tr>
@@ -312,35 +318,78 @@
       </div>
     </div>
 
-    <!-- Replace the Quick Actions section in your dashboard template with this: -->
-
-<!-- Replace the Quick Actions section in your dashboard template with this: -->
-
-<div class="col-lg-4 mb-3">
-  <div class="card">
-    <div class="card-header bg-light">
-      <h5 class="card-title mb-0">
-        <i class="fas fa-bolt text-warning me-2"></i>Quick Actions
-      </h5>
+    <div class="col-lg-4 mb-3">
+      <div class="card">
+        <div class="card-header bg-light">
+          <h5 class="card-title mb-0">
+            <i class="fas fa-bolt text-warning me-2"></i>Quick Actions
+          </h5>
+        </div>
+        <div class="card-body">
+          <div class="d-grid gap-2">
+            <a href="{% url 'stores:add_product' store.id %}" class="btn btn-outline-primary">
+              <i class="fas fa-plus me-2"></i>Add Product
+            </a>
+            <a href="{% url 'stores:manage_store_products' store.id %}" class="btn btn-outline-success">
+              <i class="fas fa-box me-2"></i>Manage Products
+            </a>
+            <a href="{% url 'stores:store_orders' store.id %}" class="btn btn-outline-info">
+              <i class="fas fa-shipping-fast me-2"></i>View Orders
+            </a>
+            <a href="#" class="btn btn-outline-warning">
+              <i class="fas fa-chart-bar me-2"></i>Analytics
+            </a>
+            <hr>
+            <a href="{% url 'stores:update_store' store.id %}" class="btn btn-outline-secondary">
+              <i class="fas fa-cog me-2"></i>Store Settings
+            </a>
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="card-body">
-      <div class="d-grid gap-2">
-        <a href="{% url 'stores:add_product' store.id %}" class="btn btn-outline-primary">
-          <i class="fas fa-plus me-2"></i>Add Product
-        </a>
-        <a href="{% url 'stores:manage_store_products' store.id %}" class="btn btn-outline-success">
-          <i class="fas fa-box me-2"></i>Manage Products
-        </a>
-        <a href="#" class="btn btn-outline-info">
-          <i class="fas fa-shipping-fast me-2"></i>View Orders
-        </a>
-        <a href="#" class="btn btn-outline-warning">
-          <i class="fas fa-chart-bar me-2"></i>Analytics
-        </a>
-        <hr>
-        <a href="{% url 'stores:update_store' store.id %}" class="btn btn-outline-secondary">
-          <i class="fas fa-cog me-2"></i>Store Settings
-        </a>
+  </div>
+
+  <!-- Customer Reviews Section -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header bg-light">
+          <h5 class="card-title mb-0">
+            <i class="fas fa-comments text-info me-2"></i>Customer Reviews Overview
+          </h5>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-6">
+              <div class="d-flex align-items-center mb-3">
+                <h3 class="mb-0 me-2">{{ average_rating|default:0 }}</h3>
+                <div>
+                  {% for i in "12345" %}
+                    {% if forloop.counter <= average_rating %}
+                      <i class="fas fa-star text-warning"></i>
+                    {% else %}
+                      <i class="far fa-star text-warning"></i>
+                    {% endif %}
+                  {% endfor %}
+                </div>
+              </div>
+              <p class="text-muted">Based on {{ review_count }} reviews</p>
+            </div>
+            <div class="col-md-6">
+              <div class="rating-breakdown">
+                {% for rating, count in rating_breakdown.items %}
+                <div class="d-flex align-items-center mb-2">
+                  <span class="me-2">{{ rating }} <i class="fas fa-star text-warning"></i></span>
+                  <div class="progress flex-fill me-2" style="height: 8px;">
+                    <div class="progress-bar bg-warning" style="width: {% widthratio count review_count 100 %}%"></div>
+                  </div>
+                  <span class="text-muted">{{ count }}</span>
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -463,6 +512,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
 .badge {
     font-size: 0.75rem;
+}
+
+.rating-breakdown .progress {
+    height: 8px;
 }
 
 @media (max-width: 768px) {
