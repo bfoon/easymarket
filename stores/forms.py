@@ -96,3 +96,38 @@ class ProductVariantForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         # Allow empty extra forms to pass validation
         self.fields['feature_option'].required = False
+
+
+class ProductWithStockForm(forms.ModelForm):
+    quantity = forms.IntegerField(
+        label="Stock Quantity",
+        min_value=0,
+        required=True,
+        widget=forms.NumberInput(attrs={'class': 'form-control'})
+    )
+
+    class Meta:
+        model = Product
+        fields = [
+            'name', 'category', 'price', 'original_price', 'description',
+            'specifications', 'image', 'video', 'is_featured', 'is_trending',
+            'has_30_day_return', 'free_shipping'
+        ]
+        widgets = {
+            # keep your existing widgets here...
+        }
+
+    def __init__(self, *args, **kwargs):
+        stock = kwargs.pop('stock', None)
+        super().__init__(*args, **kwargs)
+
+        if stock:
+            self.fields['quantity'].initial = stock.quantity
+
+    def save(self, commit=True):
+        product = super().save(commit=commit)
+        if commit:
+            stock, created = product.stock_set.get_or_create(product=product)
+            stock.quantity = self.cleaned_data['quantity']
+            stock.save()
+        return product

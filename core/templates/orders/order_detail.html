@@ -95,7 +95,10 @@
                 </div>
                 <div class="card-body p-0">
                     <!-- Chat Messages -->
-                    <div id="chatMessages" class="chat-messages p-3" style="height: 400px; overflow-y: auto; border-bottom: 1px solid #dee2e6;">
+                    <div id="chatMessages" class="chat-messages p-3"
+     data-fetch-url="{% url 'orders:fetch_chat_messages' order.id %}"
+     style="height: 400px; overflow-y: auto; border-bottom: 1px solid #dee2e6;">
+
                         {% if chat_messages %}
                             {% for message in chat_messages %}
                                 <div class="message mb-3 {% if message.sender == request.user %}sent{% else %}received{% endif %}">
@@ -128,7 +131,7 @@
 
                     <!-- Chat Input -->
                     <div class="chat-input p-3">
-                        <form id="chatForm" class="d-flex">
+                        <form id="chatForm" class="d-flex" data-send-url="{% url 'orders:send_chat_message' %}">
                             {% csrf_token %}
                             <input type="hidden" name="order_id" value="{{ order.id }}">
                             <div class="flex-grow-1 me-3">
@@ -396,146 +399,8 @@
 
 <script src="{% static 'js/main.js' %}"></script>
 <script src="{% static 'js/order_detail.js' %}"></script>
+<script src="{% static 'js/order2_chat.js' %}"></script>
 
-<script>
-// Chat functionality
-document.addEventListener('DOMContentLoaded', function() {
-    const chatForm = document.getElementById('chatForm');
-    const chatMessages = document.getElementById('chatMessages');
-    const chatMessage = document.getElementById('chatMessage');
-    const sendMessageBtn = document.getElementById('sendMessageBtn');
 
-    // Auto-scroll to bottom of chat
-    function scrollToBottom() {
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-    }
-
-    // Initialize scroll position
-    scrollToBottom();
-
-    // Handle form submission
-    chatForm.addEventListener('submit', function(e) {
-        e.preventDefault();
-
-        const messageText = chatMessage.value.trim();
-        if (!messageText) return;
-
-        // Disable send button
-        sendMessageBtn.disabled = true;
-        sendMessageBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-
-        // Create FormData
-        const formData = new FormData(chatForm);
-
-        // Send message via AJAX
-        fetch('{% url "orders:send_chat_message" %}', {
-            method: 'POST',
-            body: formData,
-            headers: {
-                'X-CSRFToken': formData.get('csrfmiddlewaretoken'),
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // Add message to chat
-                const messageHtml = `
-                    <div class="message mb-3 sent">
-                        <div class="message-content">
-                            <div class="message-bubble bg-primary text-white ms-auto p-3 rounded">
-                                <p class="mb-1">${messageText}</p>
-                                <small class="text-white-50">Just now</small>
-                            </div>
-                            <div class="message-sender mt-1 text-end">
-                                <small class="text-muted">You</small>
-                            </div>
-                        </div>
-                    </div>
-                `;
-
-                // If no messages before, remove the empty state
-                const emptyState = chatMessages.querySelector('.text-center.text-muted.py-5');
-                if (emptyState) {
-                    emptyState.remove();
-                }
-
-                chatMessages.insertAdjacentHTML('beforeend', messageHtml);
-                chatMessage.value = '';
-                scrollToBottom();
-            } else {
-                alert('Failed to send message. Please try again.');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('An error occurred. Please try again.');
-        })
-        .finally(() => {
-            // Re-enable send button
-            sendMessageBtn.disabled = false;
-            sendMessageBtn.innerHTML = '<i class="fas fa-paper-plane"></i><span class="d-none d-sm-inline ms-1">Send</span>';
-        });
-    });
-
-    // Handle Enter key in textarea
-    chatMessage.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            chatForm.dispatchEvent(new Event('submit'));
-        }
-    });
-
-    // Auto-resize textarea
-    chatMessage.addEventListener('input', function() {
-        this.style.height = 'auto';
-        this.style.height = Math.min(this.scrollHeight, 120) + 'px';
-    });
-});
-</script>
-<script>
-let lastMessageIds = new Set();
-
-function refreshChatMessages() {
-    fetch("{% url 'orders:fetch_chat_messages' order.id %}", {
-        headers: {
-            'X-Requested-With': 'XMLHttpRequest',
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            const chatMessages = document.getElementById('chatMessages');
-
-            // Only add new messages not already in DOM
-            data.messages.forEach(msg => {
-                if (!lastMessageIds.has(msg.id)) {
-                    const msgDiv = document.createElement('div');
-                    msgDiv.classList.add('message', 'mb-3');
-                    msgDiv.classList.add(msg.is_self ? 'sent' : 'received');
-
-                    msgDiv.innerHTML = `
-                        <div class="message-content">
-                            <div class="message-bubble ${msg.is_self ? 'bg-primary text-white ms-auto' : 'bg-light'} p-3 rounded">
-                                <p class="mb-1">${msg.content}</p>
-                                <small class="${msg.is_self ? 'text-white-50' : 'text-muted'}">${msg.timestamp}</small>
-                            </div>
-                            <div class="message-sender mt-1 ${msg.is_self ? 'text-end' : ''}">
-                                <small class="text-muted">${msg.is_self ? 'You' : msg.sender_name}</small>
-                            </div>
-                        </div>
-                    `;
-
-                    chatMessages.appendChild(msgDiv);
-                    lastMessageIds.add(msg.id);
-                    chatMessages.scrollTop = chatMessages.scrollHeight;
-                }
-            });
-        }
-    });
-}
-
-// Start polling every 5 seconds
-setInterval(refreshChatMessages, 5000);
-</script>
 
 {% endblock %}

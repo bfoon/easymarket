@@ -31,6 +31,7 @@ from orders.models import Order, OrderItem
 from django.http import HttpResponseForbidden
 from functools import wraps
 from .forms import ProductForm, ProductImageForm
+from stock.models import Stock
 
 def store_owner_required(view_func):
     @wraps(view_func)
@@ -612,29 +613,34 @@ def store_products(request, slug):
 
 @login_required
 def edit_product(request, store_id, product_id):
-    """Edit a product, images, and variants — even if no images/variants yet."""
+    """Edit a product, images, variants, and stock — even if no images/variants yet."""
     store = get_object_or_404(Store, id=store_id, owner=request.user)
     product = get_object_or_404(Product, id=product_id, seller=request.user)
+    stock, created = Stock.objects.get_or_create(product=product)
 
-    # Only create formset for NEW images (not existing ones)
     ImageFormSet = modelformset_factory(ProductImage, form=ProductImageForm, extra=3, can_delete=False)
     VariantFormSet = modelformset_factory(ProductVariant, form=ProductVariantForm, extra=3, can_delete=True)
 
     if request.method == 'POST':
         product_form = ProductForm(request.POST, request.FILES, instance=product)
-        # Only include empty queryset for new images since existing ones are handled separately
         image_formset = ImageFormSet(request.POST, request.FILES, queryset=ProductImage.objects.none())
         variant_formset = VariantFormSet(request.POST, queryset=ProductVariant.objects.filter(product=product))
+        stock_quantity = request.POST.get('stock_quantity')
 
         if product_form.is_valid() and image_formset.is_valid() and variant_formset.is_valid():
             with transaction.atomic():
                 product = product_form.save()
 
-                # Save NEW images only
+                # Update stock quantity
+                if stock_quantity is not None and stock_quantity.isdigit():
+                    stock.quantity = int(stock_quantity)
+                    stock.save()
+
+                # Save NEW images
                 for form in image_formset:
                     if form.is_valid() and form.cleaned_data:
                         image_file = form.cleaned_data.get('image')
-                        if image_file:  # Only save if there's actually an image
+                        if image_file:
                             image = form.save(commit=False)
                             image.product = product
                             image.save()
@@ -643,29 +649,25 @@ def edit_product(request, store_id, product_id):
                 for form in variant_formset:
                     if form.is_valid() and form.cleaned_data:
                         if form.cleaned_data.get('DELETE') and form.instance.pk:
-                            # Delete existing variant
                             form.instance.delete()
                         elif form.cleaned_data.get('feature_option') or form.instance.pk:
-                            # Save if there's a feature option OR if it's an existing variant
                             variant = form.save(commit=False)
                             variant.product = product
                             variant.save()
 
-            messages.success(request, 'Product updated successfully!')
+            messages.success(request, 'Product and stock updated successfully!')
             return redirect('stores:manage_store_products', store_id=store.id)
         else:
-            # Add debug information to see what's failing
             if not product_form.is_valid():
                 messages.error(request, f'Product form errors: {product_form.errors}')
             if not image_formset.is_valid():
                 messages.error(request, f'Image formset errors: {image_formset.errors}')
             if not variant_formset.is_valid():
                 messages.error(request, f'Variant formset errors: {variant_formset.errors}')
-
             messages.error(request, 'Please correct the errors below.')
+
     else:
         product_form = ProductForm(instance=product)
-        # Only show empty forms for new images
         image_formset = ImageFormSet(queryset=ProductImage.objects.none())
         variant_formset = VariantFormSet(queryset=ProductVariant.objects.filter(product=product))
 
@@ -673,8 +675,7 @@ def edit_product(request, store_id, product_id):
         {"field": product_form['is_featured'], "icon": "fa-star", "text": "Featured Product", "color": "warning"},
         {"field": product_form['is_trending'], "icon": "fa-fire", "text": "Trending Product", "color": "danger"},
         {"field": product_form['has_30_day_return'], "icon": "fa-undo", "text": "30-Day Return", "color": "info"},
-        {"field": product_form['free_shipping'], "icon": "fa-shipping-fast", "text": "Free Shipping",
-         "color": "success"},
+        {"field": product_form['free_shipping'], "icon": "fa-shipping-fast", "text": "Free Shipping", "color": "success"},
     ]
 
     context = {
@@ -684,6 +685,7 @@ def edit_product(request, store_id, product_id):
         'image_formset': image_formset,
         'variant_formset': variant_formset,
         'boolean_fields': boolean_fields,
+        'stock_quantity': stock.quantity,  # Pass current stock to template
     }
 
     return render(request, 'stores/edit_product.html', context)
