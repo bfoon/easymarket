@@ -5,16 +5,20 @@ from django.utils import timezone
 from django.db import models
 from datetime import datetime, timedelta
 import json
+from django.views.decorators.http import require_http_methods
+from django.http import Http404
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 from django.utils.text import slugify
-from django.db.models import Q, Avg, F, FloatField
+from django.db.models import Q, Avg, F, FloatField, DecimalField, ExpressionWrapper
 from django.db.models.functions import Coalesce
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.forms import modelformset_factory
+from chat.models import ChatThread, ChatMessage
+from django.contrib.auth import get_user_model
 from marketplace.models import Product, ProductImage, ProductVariant
 from .forms import ProductForm, ProductImageForm, ProductVariantForm
 from django.db import transaction
@@ -22,6 +26,7 @@ import re
 from .models import Store
 from reviews.models import Review
 from marketplace.models import Product, Category, ProductImage
+from orders.models import ChatMessage
 from orders.models import Order, OrderItem
 from django.http import HttpResponseForbidden
 from functools import wraps
@@ -753,6 +758,208 @@ def toggle_store_status(request, store_id):
 
     return redirect('stores:manage_stores')
 
+@login_required
+@require_http_methods(["GET", "POST"])
+def store_order_detail(request, store_id, order_id):
+    store = get_object_or_404(Store, id=store_id, owner=request.user)
+    order = get_object_or_404(Order, id=order_id)
+
+    # Get order items related to this store
+    store_order_items = order.items.filter(product__seller=store.owner).select_related('product')
+
+    if not store_order_items.exists():
+        raise Http404("No items in this order belong to your store.")
+
+    # Capture "ship to warehouse" action
+    if request.method == "POST" and 'ship_to_warehouse' in request.POST:
+        store_order_items.update(shipped_to_warehouse=True, shipped_at=timezone.now())
+        messages.success(request, "Items marked as shipped to warehouse.")
+
+    # Calculate subtotal
+    subtotal_qs = store_order_items.annotate(
+        item_total=ExpressionWrapper(
+            F('product__price') * F('quantity'),
+            output_field=DecimalField()
+        )
+    ).aggregate(total=Sum('item_total'))
+    subtotal = subtotal_qs['total'] or 0
+
+    context = {
+        'store': store,
+        'order': order,
+        'order_items': store_order_items,
+        'buyer': order.buyer,
+        'store_subtotal': subtotal,
+    }
+    return render(request, 'stores/store_order_detail.html', context)
+
+@require_POST
+@login_required
+def update_order_status(request, order_id):
+    try:
+        order = Order.objects.get(id=order_id)
+        store = Store.objects.get(owner=request.user)
+
+        # Filter only the order items belonging to this store
+        order_items = order.items.filter(product__seller=store.owner)
+
+        if not order_items.exists():
+            return JsonResponse({'success': False, 'message': 'No items for your store in this order.'})
+
+        # Update each item to be marked as shipped to warehouse
+        order_items.update(shipped_to_warehouse=True)
+
+        return JsonResponse({'success': True})
+
+    except Order.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'Order not found.'})
+    except Store.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'Store not found.'})
+
+User = get_user_model()
+@login_required
+def start_store_chat(request, store_id, buyer_id, order_id=None):
+    """
+    Allows store owner to initiate chat with a buyer from the order view.
+    """
+    store = get_object_or_404(Store, id=store_id, owner=request.user)
+    buyer = get_object_or_404(User, id=buyer_id)
+
+    if buyer == request.user:
+        return redirect('stores:store_dashboard', store_id=store.id)
+
+    # Create or get chat thread
+    thread, _ = ChatThread.objects.get_or_create_between(request.user, buyer)
+
+    # Optional: create message if submitted
+    if request.method == 'POST':
+        message = request.POST.get('message', '').strip()
+        if message:
+            ChatMessage.objects.create(
+                thread=thread,
+                sender=request.user,
+                message=message
+            )
+        if order_id:
+            return redirect('stores:store_order_detail', store_id=store.id, order_id=order_id)
+        return redirect('stores:store_dashboard', store_id=store.id)
+
+    # Default fallback
+    return redirect('stores:store_dashboard', store_id=store.id)
+
+@login_required
+def store_order_detail(request, store_id, order_id):
+    store = get_object_or_404(Store, id=store_id, owner=request.user)
+    order = get_object_or_404(Order, id=order_id)
+
+    store_order_items = order.items.filter(product__seller=store.owner).select_related('product')
+    if not store_order_items.exists():
+        raise Http404("No items in this order belong to your store.")
+
+    # Chat messages related to the order
+    chat_messages = order.chat_messages.all().select_related('sender')
+
+    subtotal_qs = store_order_items.annotate(
+        item_total=ExpressionWrapper(
+            F('product__price') * F('quantity'),
+            output_field=DecimalField()
+        )
+    ).aggregate(total=Sum('item_total'))
+
+    subtotal = subtotal_qs['total'] or 0
+
+    context = {
+        'store': store,
+        'order': order,
+        'order_items': store_order_items,
+        'buyer': order.buyer,
+        'store_subtotal': subtotal,
+        'chat_messages': chat_messages,  # Pass to template
+    }
+    return render(request, 'stores/store_order_detail.html', context)
+
+@require_POST
+@login_required
+def send_chat_message(request):
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        order_id = request.POST.get('order_id')
+        content = request.POST.get('message')
+
+        if not content or not order_id:
+            return JsonResponse({'success': False, 'message': 'Missing content or order ID.'})
+
+        try:
+            order = Order.objects.get(id=order_id)
+            ChatMessage.objects.create(
+                order=order,
+                sender=request.user,
+                content=content
+            )
+            return JsonResponse({'success': True, 'message': content})
+        except Order.DoesNotExist:
+            return JsonResponse({'success': False, 'message': 'Order not found.'})
+    else:
+        return JsonResponse({'success': False, 'message': 'Invalid request type.'})
+
+@login_required
+def fetch_chat_messages(request, order_id):
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        try:
+            order = Order.objects.get(id=order_id)
+            messages = order.chat_messages.select_related('sender').order_by('created_at')
+
+            data = []
+            for msg in messages:
+                data.append({
+                    'sender_id': msg.sender.id,
+                    'sender_name': msg.sender.get_full_name() or msg.sender.username,
+                    'content': msg.content,
+                    'timestamp': msg.created_at.strftime('%b %d, %H:%M'),
+                    'is_self': msg.sender == request.user,
+                })
+
+            return JsonResponse({'success': True, 'messages': data})
+        except Order.DoesNotExist:
+            return JsonResponse({'success': False, 'message': 'Order not found'})
+    return JsonResponse({'success': False, 'message': 'Invalid request'})
+
+@require_POST
+@login_required
+def update_order_item_quantity(request, item_id):
+    try:
+        item = OrderItem.objects.select_related('product', 'order').get(id=item_id)
+        product = item.product
+
+        if product.seller != request.user:
+            return JsonResponse({'success': False, 'message': 'Unauthorized'})
+
+        new_quantity = int(request.POST.get('quantity', item.quantity))
+        if new_quantity < 1:
+            return JsonResponse({'success': False, 'message': 'Invalid quantity'})
+
+        quantity_diff = new_quantity - item.quantity
+
+        # Update the product stock
+        if product.stock.quantity - quantity_diff < 0:
+            return JsonResponse({'success': False, 'message': 'Not enough stock available.'})
+
+        product.stock.quantity -= quantity_diff
+        product.save()
+
+        # Update order item quantity
+        item.quantity = new_quantity
+        item.save()
+
+        return JsonResponse({
+            'success': True,
+            'quantity': item.quantity,
+            'product_stock': product.stock.quantity
+        })
+
+    except OrderItem.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'Item not found'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)})
 
 @login_required
 def store_dashboard(request, store_id):

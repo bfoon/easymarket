@@ -10,6 +10,7 @@ urlpatterns = [
     path('quick-checkout/', views.quick_checkout, name='quick_checkout'),
     path('detail/<int:order_id>/', views.order_detail, name='order_detail'),
     path('send-chat-message/', views.send_chat_message, name='send_chat_message'),
+    path('chat/fetch/<int:order_id>/', views.fetch_chat_messages, name='fetch_chat_messages'),
     path('history/', views.order_history, name='order_history'),
     path('complete/<int:order_id>/', views.complete_order, name='complete_order'),
 

@@ -171,6 +171,9 @@ class OrderItem(models.Model):
     quantity = models.PositiveIntegerField()
     selected_features = models.JSONField(blank=True, null=True)
     price_at_time = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+
+    shipped_to_warehouse = models.BooleanField(default=False)  # ✅ New field
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -180,12 +183,10 @@ class OrderItem(models.Model):
         return f"{self.product.name} x {self.quantity}"
 
     def get_total_price(self):
-        """Get total price for this item"""
         price = self.price_at_time if self.price_at_time else self.product.price
         return price * self.quantity
 
     def save(self, *args, **kwargs):
-        # Store the price at time of order
         if not self.price_at_time:
             self.price_at_time = self.product.price
         super().save(*args, **kwargs)

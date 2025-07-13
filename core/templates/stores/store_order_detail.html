@@ -1,0 +1,372 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Order #{{ order.id }} - {{ store.name }}{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+<link rel="stylesheet" type="text/css" href="{% static 'css/store_order_detail.css' %}">
+
+<div class="container py-4">
+  <!-- Breadcrumb -->
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb breadcrumb-modern">
+      <li class="breadcrumb-item">
+        <a href="{% url 'stores:store_dashboard' store.id %}">
+          <i class="fas fa-tachometer-alt me-1"></i>Dashboard
+        </a>
+      </li>
+      <li class="breadcrumb-item">
+        <a href="{% url 'stores:store_orders' store.id %}">Orders</a>
+      </li>
+      <li class="breadcrumb-item active" aria-current="page">Order #{{ order.id }}</li>
+    </ol>
+  </nav>
+
+  <!-- Order Header -->
+  <div class="order-header">
+    <h1 class="order-title">Order #{{ order.id }}</h1>
+    <div class="order-status status-{{ order.status|lower }}">
+      <i class="fas fa-circle" style="font-size: 0.5rem;"></i>
+      {{ order.status|title }}
+    </div>
+  </div>
+
+  <!-- Customer Information -->
+  <div class="modern-card mb-4">
+    <div class="card-header-modern">
+      <i class="fas fa-user me-2"></i>Customer Information
+    </div>
+    <div class="card-body-modern">
+      <div class="customer-info">
+        <div class="info-row">
+          <i class="fas fa-user info-icon"></i>
+          <span class="info-label">Name:</span>
+          <span class="info-value">{{ buyer.get_full_name }}</span>
+        </div>
+        <div class="info-row">
+          <i class="fas fa-envelope info-icon"></i>
+          <span class="info-label">Email:</span>
+          <span class="info-value">{{ buyer.email }}</span>
+        </div>
+        {% if buyer.phone %}
+        <div class="info-row">
+          <i class="fas fa-phone info-icon"></i>
+          <span class="info-label">Phone:</span>
+          <span class="info-value">{{ buyer.phone }}</span>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Order Items -->
+  <div class="modern-card mb-4">
+    <div class="card-header-modern">
+      <i class="fas fa-box me-2"></i>Order Items
+    </div>
+    <div class="card-body-modern">
+      {% for item in order_items %}
+      <div class="order-item">
+        <div class="item-details">
+          <div class="item-name">{{ item.product.name }}</div>
+          <form class="update-quantity-form d-flex align-items-center" data-item-id="{{ item.id }}">
+            {% csrf_token %}
+            <label class="me-2 mb-0">Qty:</label>
+            <input type="number" name="quantity" min="1" value="{{ item.quantity }}" class="form-control form-control-sm me-2" style="width: 70px;">
+            <button type="submit" class="btn btn-sm btn-outline-primary">Update</button>
+          </form>
+          {% if item.shipped_to_warehouse %}
+            <div class="badge bg-success text-white small">Shipped to Warehouse</div>
+          {% endif %}
+        </div>
+        <div class="item-price">D{{ item.get_total_price|floatformat:2 }}</div>
+      </div>
+    {% endfor %}
+
+      <!-- Order Total -->
+    <div class="order-item" style="border-top: 2px solid #e5e7eb; margin-top: 1rem; padding-top: 1rem;">
+      <div class="item-details">
+        <div class="item-name" style="font-size: 1.1rem;">Total Amount</div>
+      </div>
+      <div class="item-price" style="font-size: 1.25rem; color: #059669;">
+        D{{ store_subtotal|floatformat:2 }}
+      </div>
+    </div>
+
+    <!-- Tax Information -->
+    <div class="alert alert-info mt-3" style="font-size: 0.9rem;">
+      <i class="fas fa-info-circle me-1"></i>
+      <strong>Note:</strong> A VAT rate of <strong>15%</strong> may apply if you're eligible. Ensure your tax settings are correctly configured.
+    </div>
+    </div>
+      </div>
+
+      <!-- Order Actions -->
+      <div class="modern-card mb-4">
+        <div class="card-header-modern">
+          <i class="fas fa-cogs me-2"></i>Order Management
+        </div>
+        <div class="card-body-modern">
+          <div class="d-flex flex-wrap gap-3 mb-3">
+            <a href="{% url 'orders:order_invoice' order.id %}" class="action-btn btn-primary-modern">
+              <i class="fas fa-file-invoice"></i>
+              View Invoice
+            </a>
+     <button type="button" class="action-btn btn-secondary-modern" onclick="toggleChatBox()">
+  <i class="fas fa-comment-dots"></i> Chat with Buyer
+</button>
+
+
+        <a href="#" class="action-btn btn-secondary-modern" data-bs-toggle="modal" data-bs-target="#statusModal">
+        <i class="fas fa-edit"></i>
+        Update Status
+      </a>
+            {% if order.status == 'cancelled' %}
+              <div class="alert alert-warning mt-2">
+                <i class="fas fa-info-circle me-1"></i>
+                This order is <strong>cancelled</strong>. You can still mark items as shipped to the warehouse for stock reconciliation.
+              </div>
+            {% endif %}
+            </div>
+
+      {% if order.tracking_number %}
+      <div class="tracking-info">
+        <div class="tracking-label">
+          <i class="fas fa-shipping-fast me-1"></i>
+          Tracking Information
+        </div>
+        <div class="tracking-number">{{ order.tracking_number }}</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Order Timeline (Optional Enhancement) -->
+  <div class="modern-card">
+    <div class="card-header-modern">
+      <i class="fas fa-history me-2"></i>Order Timeline
+    </div>
+    <div class="card-body-modern">
+      <div class="d-flex align-items-center text-muted">
+        <i class="fas fa-clock me-2"></i>
+        <span>Order placed on {{ order.created_at|date:"F d, Y \a\t g:i A" }}</span>
+      </div>
+      {% if order.updated_at != order.created_at %}
+      <div class="d-flex align-items-center text-muted mt-2">
+        <i class="fas fa-edit me-2"></i>
+        <span>Last updated on {{ order.updated_at|date:"F d, Y \a\t g:i A" }}</span>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+
+<!-- Floating Chat Box -->
+<div id="floatingChatBox" class="floating-chat-box d-none">
+  <div class="chat-header">
+    <span><i class="fas fa-comment me-1"></i>Chat with {{ buyer.get_full_name }}</span>
+    <button onclick="toggleChatBox()" class="close-chat">&times;</button>
+  </div>
+  <div id="chatMessages" class="chat-messages">
+  {% if chat_messages %}
+    {% for msg in chat_messages %}
+      <div class="mb-2 {% if msg.sender == request.user %}text-end text-primary{% else %}text-start text-dark{% endif %}">
+        <div class="p-2 rounded {% if msg.sender == request.user %}bg-light{% else %}bg-white border{% endif %}">
+          <small>{{ msg.content }}</small><br>
+          <small class="text-muted">{{ msg.created_at|date:"M d, H:i" }}</small>
+        </div>
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="text-muted small text-center">No messages yet.</div>
+  {% endif %}
+</div>
+
+ <form id="chatForm" method="post">
+  {% csrf_token %}
+  <input type="hidden" name="order_id" value="{{ order.id }}">
+  <textarea name="message" class="form-control chat-input" rows="2" required></textarea>
+  <button type="submit" class="btn btn-sm btn-primary w-100 mt-1">
+    <i class="fas fa-paper-plane"></i> Send
+  </button>
+</form>
+
+</div>
+
+
+<!-- Update Status Modal -->
+<div class="modal fade" id="statusModal" tabindex="-1" aria-labelledby="statusModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="statusModalLabel">Confirm Status Update</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        Are you sure you want to mark this order as <strong>Shipped</strong>?
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-success" onclick="confirmStatusUpdate()">Yes, Mark as Shipped</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+document.querySelectorAll('.update-quantity-form').forEach(form => {
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+
+    const itemId = this.getAttribute('data-item-id');
+    const quantity = this.querySelector('input[name="quantity"]').value;
+    const csrfToken = this.querySelector('[name="csrfmiddlewaretoken"]').value;
+
+    fetch(`/stores/order/item/${itemId}/update-quantity/`, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': csrfToken,
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      body: new URLSearchParams({ quantity })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        alert('Quantity updated.');
+        location.reload();
+      } else {
+        alert(data.message || 'Failed to update.');
+      }
+    });
+  });
+});
+</script>
+
+
+<script>
+ function confirmStatusUpdate() {
+  fetch("{% url 'stores:update_order_status' order.id %}", {
+    method: 'POST',
+    headers: {
+      'X-CSRFToken': '{{ csrf_token }}',
+      'Accept': 'application/json',
+    },
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.success) {
+      location.reload();
+    } else {
+      alert(data.message || 'Failed to update status.');
+    }
+  });
+}
+
+</script>
+<script>
+document.getElementById('chatForm').addEventListener('submit', function (e) {
+  e.preventDefault();
+
+  const form = e.target;
+  const formData = new FormData(form);
+  const messageText = form.message.value.trim();  // get before clearing
+
+  if (!messageText) return;
+
+  fetch("{% url 'stores:send_chat_message' %}", {
+    method: 'POST',
+    body: formData,
+    headers: {
+      'X-Requested-With': 'XMLHttpRequest',
+      'X-CSRFToken': '{{ csrf_token }}'
+    },
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      const messages = document.getElementById('chatMessages');
+
+      const msg = document.createElement('div');
+      msg.classList.add('mb-2', 'text-end', 'text-primary');
+      msg.innerHTML = `
+        <div class="p-2 rounded bg-light">
+          <small>${messageText}</small><br>
+          <small class="text-muted">just now</small>
+        </div>
+      `;
+      messages.appendChild(msg);
+
+      form.message.value = '';
+      messages.scrollTop = messages.scrollHeight;
+    } else {
+      alert(data.message || 'Failed to send message.');
+    }
+  })
+  .catch(error => {
+    alert('Error submitting message.');
+    console.error(error);
+  });
+});
+
+  function toggleChatBox() {
+  const chatBox = document.getElementById("floatingChatBox");
+  chatBox.classList.toggle("d-none");
+
+  // Scroll to bottom if showing
+  if (!chatBox.classList.contains("d-none")) {
+    const messages = document.getElementById("chatMessages");
+    messages.scrollTop = messages.scrollHeight;
+  }
+}
+
+</script>
+<script>
+let lastMessageCount = 0;
+
+function refreshChatMessages() {
+  fetch("{% url 'stores:fetch_chat_messages' order.id %}", {
+    method: 'GET',
+    headers: {
+      'X-Requested-With': 'XMLHttpRequest',
+    }
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      const messagesContainer = document.getElementById('chatMessages');
+      messagesContainer.innerHTML = ''; // Clear old
+
+      data.messages.forEach(msg => {
+        const msgDiv = document.createElement('div');
+        msgDiv.classList.add('mb-2');
+        msgDiv.classList.add(msg.is_self ? 'text-end' : 'text-start');
+        msgDiv.classList.add(msg.is_self ? 'text-primary' : 'text-dark');
+
+        msgDiv.innerHTML = `
+          <div class="p-2 rounded ${msg.is_self ? 'bg-light' : 'bg-white border'}">
+            <small>${msg.content}</small><br>
+            <small class="text-muted">${msg.timestamp}</small>
+          </div>
+        `;
+
+        messagesContainer.appendChild(msgDiv);
+      });
+
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+  });
+}
+
+// Start polling every 5 seconds
+setInterval(refreshChatMessages, 5000);
+
+// Initial load
+refreshChatMessages();
+</script>
+
+
+
+<script src="{% static 'js/main.js' %}"></script>
+{% endblock %}

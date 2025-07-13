@@ -492,4 +492,50 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
+<script>
+let lastMessageIds = new Set();
+
+function refreshChatMessages() {
+    fetch("{% url 'orders:fetch_chat_messages' order.id %}", {
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const chatMessages = document.getElementById('chatMessages');
+
+            // Only add new messages not already in DOM
+            data.messages.forEach(msg => {
+                if (!lastMessageIds.has(msg.id)) {
+                    const msgDiv = document.createElement('div');
+                    msgDiv.classList.add('message', 'mb-3');
+                    msgDiv.classList.add(msg.is_self ? 'sent' : 'received');
+
+                    msgDiv.innerHTML = `
+                        <div class="message-content">
+                            <div class="message-bubble ${msg.is_self ? 'bg-primary text-white ms-auto' : 'bg-light'} p-3 rounded">
+                                <p class="mb-1">${msg.content}</p>
+                                <small class="${msg.is_self ? 'text-white-50' : 'text-muted'}">${msg.timestamp}</small>
+                            </div>
+                            <div class="message-sender mt-1 ${msg.is_self ? 'text-end' : ''}">
+                                <small class="text-muted">${msg.is_self ? 'You' : msg.sender_name}</small>
+                            </div>
+                        </div>
+                    `;
+
+                    chatMessages.appendChild(msgDiv);
+                    lastMessageIds.add(msg.id);
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                }
+            });
+        }
+    });
+}
+
+// Start polling every 5 seconds
+setInterval(refreshChatMessages, 5000);
+</script>
+
 {% endblock %}

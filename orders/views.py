@@ -278,6 +278,31 @@ def send_chat_message(request):
 
 
 @login_required
+def fetch_chat_messages(request, order_id):
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        try:
+            order = Order.objects.get(id=order_id)
+            messages = order.chat_messages.select_related('sender').order_by('created_at')
+
+            return JsonResponse({
+                'success': True,
+                'messages': [
+                    {
+                        'id': msg.id,
+                        'sender_id': msg.sender.id,
+                        'sender_name': msg.sender.get_full_name() or msg.sender.username,
+                        'content': msg.content,
+                        'timestamp': msg.created_at.strftime('%b %d, %H:%M'),
+                        'is_self': msg.sender == request.user,
+                    }
+                    for msg in messages
+                ]
+            })
+        except Order.DoesNotExist:
+            return JsonResponse({'success': False, 'message': 'Order not found'})
+    return JsonResponse({'success': False, 'message': 'Invalid request'})
+
+@login_required
 def order_history(request):
     """Display all orders for the current user"""
     orders = Order.objects.filter(buyer=request.user).order_by('-created_at')

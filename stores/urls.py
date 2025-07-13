@@ -32,4 +32,13 @@ urlpatterns = [
     # Product image management
     path('<int:store_id>/products/<int:product_id>/images/<int:image_id>/delete/', views.delete_product_image,
          name='delete_product_image'),
+    path('store/<uuid:store_id>/order/<int:order_id>/', views.store_order_detail, name='store_order_detail'),
+    path('order/<int:order_id>/update-status/', views.update_order_status, name='update_order_status'),
+    path('<int:store_id>/chat/<int:buyer_id>/', views.start_store_chat, name='start_store_chat'),
+    path('chat/send/', views.send_chat_message, name='send_chat_message'),
+    path('chat/fetch/<int:order_id>/', views.fetch_chat_messages, name='fetch_chat_messages'),
+    path('order/item/<int:item_id>/update-quantity/', views.update_order_item_quantity, name='update_order_item_quantity'),
+    path('order/<int:order_id>/update-status/', views.update_order_status, name='update_order_status'),
+
+
 ]
