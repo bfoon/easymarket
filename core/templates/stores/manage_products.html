@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
-
+<meta name="csrf-token" content="{{ csrf_token }}">
 {% block content %}
 <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -15,7 +15,7 @@
             <i class="fas fa-box text-primary me-2"></i>Manage Products
           </h2>
           <p class="text-muted mb-0">
-            <i class="fas fa-store me-1"></i>{{ store.name }}
+            <i class="fas fa-store me-1"></i>{{ store.name }} • {{ total_products }} total products
           </p>
         </div>
         <div class="btn-group">
@@ -34,10 +34,15 @@
   <div class="row">
     <div class="col-12">
       <div class="card">
-        <div class="card-header bg-light">
+        <div class="card-header bg-light d-flex justify-content-between align-items-center">
           <h5 class="card-title mb-0">
-            <i class="fas fa-list me-2"></i>Products ({{ total_products }})
+            <i class="fas fa-list me-2"></i>Products
           </h5>
+          {% if products.has_other_pages %}
+          <small class="text-muted">
+            Showing {{ products.start_index }}-{{ products.end_index }} of {{ total_products }} products
+          </small>
+          {% endif %}
         </div>
         <div class="card-body p-0">
           {% if products %}
@@ -122,30 +127,97 @@
                     {% endif %}
                   </td>
                   <td>
-                    <div class="btn-group" role="group">
-                      <a href="{% url 'stores:edit_product' store.id product.id %}" class="btn btn-sm btn-outline-primary" title="Edit Product">
-                        <i class="fas fa-edit"></i>
-                      </a>
-                      <!-- Fix: Use a conditional URL or remove if product_detail doesn't exist -->
-                      {% comment %}
-                      <a href="{% url 'product_detail' product.id %}" class="btn btn-sm btn-outline-success" title="View Product" target="_blank">
-                        <i class="fas fa-eye"></i>
-                      </a>
-                      {% endcomment %}
-                      <!-- Temporary fix: Link to store's public product page or disable -->
-                      <a href="#" class="btn btn-sm btn-outline-success disabled" title="View Product (Not Available)" target="_blank">
-                        <i class="fas fa-eye"></i>
-                      </a>
-                      <button class="btn btn-sm btn-outline-danger" title="Delete Product" onclick="deleteProduct({{ product.id }})">
-                        <i class="fas fa-trash"></i>
-                      </button>
-                    </div>
-                  </td>
-                </tr>
+                  <div class="btn-group" role="group">
+                    <a href="{% url 'stores:edit_product' store.id product.id %}" class="btn btn-sm btn-outline-primary" title="Edit Product">
+                      <i class="fas fa-edit"></i>
+                    </a>
+                    <a class="btn btn-sm btn-outline-success" onclick="quickView({{ product.id }})" title="Quick View">
+                      <i class="fas fa-eye"></i>
+                    </a>
+                    <!-- Updated delete button with enhanced functionality -->
+                    <a href="#" class="btn btn-sm btn-outline-danger" title="Delete Product" >
+                      <i class="fas fa-trash"></i>
+                    </a>
+                  </div>
+                </td>
+                 </tr>
                 {% endfor %}
               </tbody>
             </table>
           </div>
+
+          <!-- Pagination Controls -->
+          {% if products.has_other_pages %}
+          <div class="card-footer bg-white">
+            <nav aria-label="Products pagination">
+              <ul class="pagination justify-content-center mb-0">
+                <!-- First page -->
+                {% if products.has_previous %}
+                <li class="page-item">
+                  <a class="page-link" href="?page=1" aria-label="First">
+                    <i class="fas fa-angle-double-left"></i>
+                  </a>
+                </li>
+                <li class="page-item">
+                  <a class="page-link" href="?page={{ products.previous_page_number }}" aria-label="Previous">
+                    <i class="fas fa-angle-left"></i>
+                  </a>
+                </li>
+                {% else %}
+                <li class="page-item disabled">
+                  <span class="page-link"><i class="fas fa-angle-double-left"></i></span>
+                </li>
+                <li class="page-item disabled">
+                  <span class="page-link"><i class="fas fa-angle-left"></i></span>
+                </li>
+                {% endif %}
+
+                <!-- Page numbers -->
+                {% for num in products.paginator.page_range %}
+                  {% if products.number == num %}
+                  <li class="page-item active">
+                    <span class="page-link">{{ num }}</span>
+                  </li>
+                  {% elif num > products.number|add:'-3' and num < products.number|add:'3' %}
+                  <li class="page-item">
+                    <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+                  </li>
+                  {% endif %}
+                {% endfor %}
+
+                <!-- Next page -->
+                {% if products.has_next %}
+                <li class="page-item">
+                  <a class="page-link" href="?page={{ products.next_page_number }}" aria-label="Next">
+                    <i class="fas fa-angle-right"></i>
+                  </a>
+                </li>
+                <li class="page-item">
+                  <a class="page-link" href="?page={{ products.paginator.num_pages }}" aria-label="Last">
+                    <i class="fas fa-angle-double-right"></i>
+                  </a>
+                </li>
+                {% else %}
+                <li class="page-item disabled">
+                  <span class="page-link"><i class="fas fa-angle-right"></i></span>
+                </li>
+                <li class="page-item disabled">
+                  <span class="page-link"><i class="fas fa-angle-double-right"></i></span>
+                </li>
+                {% endif %}
+              </ul>
+            </nav>
+
+            <!-- Page info -->
+            <div class="text-center mt-2">
+              <small class="text-muted">
+                Page {{ products.number }} of {{ products.paginator.num_pages }}
+                ({{ products.start_index }}-{{ products.end_index }} of {{ total_products }} products)
+              </small>
+            </div>
+          </div>
+          {% endif %}
+
           {% else %}
           <div class="text-center py-5">
             <i class="fas fa-box fa-4x text-muted mb-3"></i>
@@ -180,26 +252,180 @@
     </div>
   </div>
 </div>
+<script src="{% static 'js/main.js' %}"></script>
 
 <script>
+// Enhanced delete functionality with better UX
 let productToDelete = null;
+let currentDeleteButton = null;
 
-function deleteProduct(productId) {
+function deleteProduct(productId, buttonElement) {
   productToDelete = productId;
+  currentDeleteButton = buttonElement;
+
+  // Get product name from the row for better UX
+  const row = buttonElement.closest('tr');
+  const productName = row.querySelector('td:nth-child(2) strong').textContent;
+
+  // Update modal text with product name
+  const modalBody = document.querySelector('#deleteModal .modal-body p');
+  modalBody.innerHTML = `Are you sure you want to delete "<strong>${productName}</strong>"? This action cannot be undone and will remove all associated images and variants.`;
+
   const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
   modal.show();
 }
 
 document.getElementById('confirmDelete').addEventListener('click', function() {
-  if (productToDelete) {
-    // Add your delete logic here
-    // You can make an AJAX call to delete the product
-    console.log('Delete product:', productToDelete);
+  if (productToDelete && currentDeleteButton) {
+    // Disable the button and show loading state
+    const originalContent = this.innerHTML;
+    this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
+    this.disabled = true;
 
-    // For now, just reload the page
-    // In a real implementation, you'd make an AJAX call
-    window.location.reload();
+    // Get CSRF token
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
+                     document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
+                     getCookie('csrftoken');
+
+    // Make AJAX call to delete the product
+    fetch(``, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': csrfToken,
+        'Content-Type': 'application/json',
+      },
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        // Show success message
+        showToast('success', data.message || 'Product deleted successfully!');
+
+        // Remove the row from table with animation
+        const row = currentDeleteButton.closest('tr');
+        row.style.transition = 'opacity 0.3s ease';
+        row.style.opacity = '0';
+
+        setTimeout(() => {
+          row.remove();
+
+          // Update product count
+          updateProductCount();
+
+          // Check if this was the last product on the page
+          const remainingRows = document.querySelectorAll('tbody tr').length;
+          if (remainingRows === 0) {
+            // Reload page to show "no products" message or previous page
+            window.location.reload();
+          }
+        }, 300);
+
+        // Close modal
+        bootstrap.Modal.getInstance(document.getElementById('deleteModal')).hide();
+
+      } else {
+        showToast('error', data.message || 'Error deleting product.');
+
+        // Reset button
+        this.innerHTML = originalContent;
+        this.disabled = false;
+      }
+    })
+    .catch(error => {
+      console.error('Delete error:', error);
+      showToast('error', 'Network error occurred while deleting product.');
+
+      // Reset button
+      this.innerHTML = originalContent;
+      this.disabled = false;
+    })
+    .finally(() => {
+      productToDelete = null;
+      currentDeleteButton = null;
+    });
   }
+});
+
+// Helper function to show toast notifications
+function showToast(type, message) {
+  // Create toast element if it doesn't exist
+  let toastContainer = document.getElementById('toast-container');
+  if (!toastContainer) {
+    toastContainer = document.createElement('div');
+    toastContainer.id = 'toast-container';
+    toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+    toastContainer.style.zIndex = '9999';
+    document.body.appendChild(toastContainer);
+  }
+
+  const toastId = 'toast-' + Date.now();
+  const bgClass = type === 'success' ? 'bg-success' : 'bg-danger';
+  const icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
+
+  const toastHTML = `
+    <div id="${toastId}" class="toast align-items-center text-white ${bgClass} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+      <div class="d-flex">
+        <div class="toast-body">
+          <i class="fas ${icon} me-2"></i>${message}
+        </div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+      </div>
+    </div>
+  `;
+
+  toastContainer.insertAdjacentHTML('beforeend', toastHTML);
+
+  const toastElement = document.getElementById(toastId);
+  const toast = new bootstrap.Toast(toastElement, { delay: 5000 });
+  toast.show();
+
+  // Remove toast element after it's hidden
+  toastElement.addEventListener('hidden.bs.toast', () => {
+    toastElement.remove();
+  });
+}
+
+// Helper function to update product count in header
+function updateProductCount() {
+  const countElement = document.querySelector('.text-muted');
+  if (countElement && countElement.textContent.includes('total products')) {
+    const currentCount = parseInt(countElement.textContent.match(/(\d+) total products/)?.[1] || 0);
+    if (currentCount > 0) {
+      countElement.textContent = countElement.textContent.replace(/\d+ total products/, `${currentCount - 1} total products`);
+    }
+  }
+}
+
+// Helper function to get CSRF cookie
+function getCookie(name) {
+  let cookieValue = null;
+  if (document.cookie && document.cookie !== '') {
+    const cookies = document.cookie.split(';');
+    for (let i = 0; i < cookies.length; i++) {
+      const cookie = cookies[i].trim();
+      if (cookie.substring(0, name.length + 1) === (name + '=')) {
+        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+        break;
+      }
+    }
+  }
+  return cookieValue;
+}
+
+// Reset modal when it's hidden
+document.getElementById('deleteModal').addEventListener('hidden.bs.modal', function() {
+  // Reset button state
+  const confirmButton = document.getElementById('confirmDelete');
+  confirmButton.innerHTML = 'Delete Product';
+  confirmButton.disabled = false;
+
+  // Reset variables
+  productToDelete = null;
+  currentDeleteButton = null;
+
+  // Reset modal body text
+  const modalBody = document.querySelector('#deleteModal .modal-body p');
+  modalBody.innerHTML = 'Are you sure you want to delete this product? This action cannot be undone.';
 });
 </script>
 
@@ -224,6 +450,22 @@ document.getElementById('confirmDelete').addEventListener('click', function() {
   margin-right: 0;
 }
 
+.pagination .page-link {
+  color: #6c757d;
+  border: 1px solid #dee2e6;
+}
+
+.pagination .page-item.active .page-link {
+  background-color: #007bff;
+  border-color: #007bff;
+}
+
+.pagination .page-link:hover {
+  color: #0056b3;
+  background-color: #e9ecef;
+  border-color: #dee2e6;
+}
+
 @media (max-width: 768px) {
   .btn-group {
     flex-direction: column;
@@ -237,6 +479,14 @@ document.getElementById('confirmDelete').addEventListener('click', function() {
   .d-flex.justify-content-between {
     flex-direction: column;
     gap: 1rem;
+  }
+
+  .pagination {
+    flex-wrap: wrap;
+  }
+
+  .pagination .page-item {
+    margin: 2px;
   }
 }
 </style>

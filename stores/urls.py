@@ -27,4 +27,9 @@ urlpatterns = [
     path('<slug:slug>/products/', views.store_products, name='store_products'),
 
     path('product/<int:product_id>/', views.product_detail, name='product_detail'),
+    path('<int:store_id>/products/<int:product_id>/delete/', views.delete_product, name='delete_product'),
+
+    # Product image management
+    path('<int:store_id>/products/<int:product_id>/images/<int:image_id>/delete/', views.delete_product_image,
+         name='delete_product_image'),
 ]
