@@ -15,6 +15,9 @@ class User(AbstractUser):
         full_name = f"{self.first_name} {self.last_name}".strip()
         return full_name if full_name else self.username
 
+    def get_store_name(self):
+        return self.owned_stores.first().name if self.owned_stores.exists() else "Unknown"
+
     def __str__(self):
         return self.get_full_name() or self.username
 

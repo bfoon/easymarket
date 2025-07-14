@@ -1,0 +1,364 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Invoice #{{ order.id }}{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+<link rel="stylesheet" type="text/css" href="{% static 'css/order_invoice.css' %}">
+<link rel="stylesheet" type="text/css" href="{% static 'css/order_invoice_store.css' %}">
+
+<div id="invoice-area" class="invoice-wrapper">
+  <div class="container py-5">
+    <div class="row justify-content-center">
+      <div class="col-lg-10">
+        <div class="card shadow">
+          <div class="card-body">
+
+            <!-- Header -->
+            <div class="row mb-4 align-items-center">
+              <div class="col-md-6">
+                <h2 class="text-primary fw-bold mb-1">{{ company_name }}</h2>
+                <p class="mb-0 text-muted">{{ company_address }}</p>
+                <p class="mb-0 text-muted">{{ company_email }}</p>
+                <p class="mb-0 text-muted">{{ company_phone }}</p>
+              </div>
+              <div class="col-md-6 text-md-end">
+                <h1 class="mb-1 text-dark">INVOICE</h1>
+                <p class="mb-1 text-muted">Invoice #: INV-{{ order.id|stringformat:"05d" }}</p>
+                <p class="mb-0 text-muted">Order #: {{ order.id }}</p>
+              </div>
+            </div>
+
+            <hr>
+
+            <!-- Billing Details -->
+            <div class="row mb-4">
+              <div class="col-md-6">
+                <h5 class="fw-bold">Bill To:</h5>
+                <p class="mb-1 fw-medium">{{ order.buyer.get_full_name|default:order.buyer.username }}</p>
+                <p class="mb-1 text-muted">{{ order.buyer.email }}</p>
+                {% if order.shipping_address %}
+                <address class="mb-0 text-muted small">
+                  {{ order.shipping_address.full_name }}<br>
+                  {{ order.shipping_address.street }}<br>
+                  {{ order.shipping_address.city }}, {{ order.shipping_address.state }} {{ order.shipping_address.zip_code }}<br>
+                  {{ order.shipping_address.country }}<br>
+                  {% if order.shipping_address.phone_number %}
+                  Phone: {{ order.shipping_address.phone_number }}
+                  {% endif %}
+                </address>
+                {% endif %}
+              </div>
+
+              <div class="col-md-6">
+                <div class="row">
+                  <div class="col-6 text-muted small">
+                    <p class="mb-1">Invoice Date:</p>
+                    <p class="mb-1">Order Date:</p>
+                    <p class="mb-1">Payment Method:</p>
+                    <p class="mb-1">Status:</p>
+                    {% if order.expected_delivery_date %}
+                    <p class="mb-1">Expected Delivery:</p>
+                    {% endif %}
+                  </div>
+                  <div class="col-6 text-end small">
+                    <p class="mb-1">{{ order.shipped_date|date:"F d, Y"|default:"Not specified" }}</p>
+                    <p class="mb-1">{{ order.created_at|date:"F d, Y"|default:"Not specified"  }}</p>
+                    <p class="mb-1">{{ order.get_payment_method_display|default:"Not specified" }}</p>
+                    <p class="mb-1">
+                      {% if order.status == "pending" %}
+                        {% with "warning" as status_class %}
+                          <span class="badge bg-{{ status_class }}">{{ order.get_status_display }}</span>
+                        {% endwith %}
+                      {% elif order.status == "processing" %}
+                        {% with "info" as status_class %}
+                          <span class="badge bg-{{ status_class }}">{{ order.get_status_display }}</span>
+                        {% endwith %}
+                      {% elif order.status == "shipped" %}
+                        {% with "primary" as status_class %}
+                          <span class="badge bg-{{ status_class }}">{{ order.get_status_display }}</span>
+                        {% endwith %}
+                      {% elif order.status == "delivered" %}
+                        {% with "success" as status_class %}
+                          <span class="badge bg-{{ status_class }}">{{ order.get_status_display }}</span>
+                        {% endwith %}
+                      {% elif order.status == "cancelled" %}
+                        {% with "danger" as status_class %}
+                          <span class="badge bg-{{ status_class }}">{{ order.get_status_display }}</span>
+                        {% endwith %}
+                      {% else %}
+                        {% with "secondary" as status_class %}
+                          <span class="badge bg-{{ status_class }}">{{ order.get_status_display }}</span>
+                        {% endwith %}
+                      {% endif %}
+                    </p>
+                    {% if order.expected_delivery_date %}
+                    <p class="mb-1">{{ order.expected_delivery_date|date:"F d, Y"|default:"Not specified"  }}</p>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Order Items -->
+            <div class="table-responsive mb-4">
+              <table class="table table-bordered align-middle">
+                <thead class="table-light">
+                  <tr>
+                    <th>Item</th>
+                    <th class="text-center">Qty</th>
+                    <th class="text-end">Unit Price</th>
+                    <th class="text-end">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for item in order_items %}
+                <tr>
+                    <td>
+                        <div class="d-flex align-items-start">
+                            {% if item.product.image %}
+                                <img src="{{ item.product.image.url }}" alt="{{ item.product.name }}" class="me-3 rounded" style="width: 40px; height: 40px; object-fit: cover;">
+                            {% endif %}
+                            <div>
+                                <strong>{{ item.product.name }}</strong><br>
+
+                                {# Badge showing the store name (you already have the store) #}
+                                <span class="badge text-white px-2 py-1 small" style="background: linear-gradient(135deg, #007bff, #6610f2);">
+                                    From: {{ store.name }}
+                                </span>
+
+                                {% if item.product.description %}
+                                    <div class="text-muted small mt-1">{{ item.product.description|truncatewords:10 }}</div>
+                                {% endif %}
+
+                                {% if item.selected_features %}
+                                    <ul class="list-unstyled small text-muted mt-1 mb-0 ps-3">
+                                        {% for key, value in item.selected_features.items %}
+                                            <li><strong>{{ key|title }}:</strong> {{ value }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </td>
+                    <td class="text-center">{{ item.quantity }}</td>
+                    <td class="text-end">D{{ item.price_at_time|floatformat:2 }}</td>
+                    <td class="text-end"><strong>D{{ item.get_total_price|floatformat:2 }}</strong></td>
+                </tr>
+                {% endfor %}
+                </tbody>
+              </table>
+            </div>
+
+           <!-- Totals & Payment Summary -->
+          <div class="row g-4 align-items-start mt-4">
+            <!-- Payment Details -->
+            <div class="col-md-6">
+              {% if order.payment_method %}
+              <div class="card shadow-sm border-0 bg-light h-100">
+                <div class="card-body">
+                  <h6 class="card-title mb-3 text-dark">
+                    <i class="fas fa-wallet me-2 text-primary"></i> Payment Information
+                  </h6>
+                  <ul class="list-unstyled mb-0 small text-muted">
+                    <li><strong>Method:</strong> {{ order.get_payment_method_display }}</li>
+                    {% if order.payment_date %}
+                    <li><strong>Date:</strong> {{ order.payment_date|date:"F d, Y g:i A" }}</li>
+                    {% endif %}
+                    {% if order.tracking_number %}
+                    <li><strong>Tracking #:</strong> {{ order.tracking_number }}</li>
+                    {% endif %}
+                  </ul>
+                </div>
+              </div>
+              {% endif %}
+            </div>
+
+           <!-- Invoice Totals -->
+            <div class="col-md-6">
+              <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                  <h6 class="card-title mb-3 text-dark">
+                    <i class="fas fa-store me-2 text-gradient"></i> {{ store.name }} Summary powered by EasyMarket
+                  </h6>
+                  <table class="table table-borderless table-sm mb-0 small">
+                    <tbody>
+                      <tr>
+                        <td class="text-muted">Subtotal:</td>
+                        <td class="text-end">D{{ subtotal|floatformat:2 }}</td>
+                      </tr>
+
+                      {% if shipping %}
+                      <tr>
+                        <td class="text-muted">Shipping:</td>
+                        <td class="text-end">D{{ shipping|floatformat:2 }}</td>
+                      </tr>
+                      {% endif %}
+
+                      {% if discount %}
+                      <tr class="text-success">
+                        <td class="text-muted">Discount:</td>
+                        <td class="text-end">-D{{ discount|floatformat:2 }}</td>
+                      </tr>
+                      {% endif %}
+
+                      <tr>
+                        <td class="text-muted">Tax ({{ order.tax_rate|floatformat:1 }}%):</td>
+                        <td class="text-end">D{{ tax_amount|floatformat:2 }}</td>
+                      </tr>
+
+                      <tr class="fw-bold fs-6 border-top pt-2">
+                        <td>Total:</td>
+                        <td class="text-end text-primary">D{{ total|floatformat:2 }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- Notes -->
+            {% if order.order_notes %}
+            <div class="alert alert-info mt-4">
+              <h6 class="mb-1">Order Notes</h6>
+              <p class="mb-0">{{ order.order_notes }}</p>
+            </div>
+            {% endif %}
+
+            <!-- Terms -->
+            <div class="text-muted small mt-3">
+              <p class="mb-1"><strong>Terms:</strong></p>
+              <ul class="mb-0 ps-3">
+                <li>All sales are final unless stated otherwise.</li>
+                <li>Returns must be requested within 30 days of delivery.</li>
+                <li>Contact customer service for any billing questions.</li>
+              </ul>
+            </div>
+            </div>
+
+
+      <!-- Actions -->
+      <div class="mt-4 d-print-none">
+        <div class="d-flex justify-content-between flex-wrap gap-3">
+          <div>
+
+            <button onclick="printInvoiceNewWindow()" class="btn btn-outline-primary">
+              <i class="fas fa-external-link-alt me-2"></i> Print Invoice
+            </button>
+
+            <a href="{% url 'orders:download_invoice' order.id %}" class="btn btn-outline-primary">
+              <i class="fas fa-download me-2"></i>Download PDF
+            </a>
+          </div>
+          <div class="text-md-end">
+            <a href="{% url 'stores:store_order_detail' store.id order.id %}" class="btn btn-outline-secondary">
+              <i class="fas fa-arrow-left me-2"></i>Back to Order
+            </a>
+            <a href="{% url 'stores:store_orders' store.id  %}" class="btn btn-outline-secondary">
+              <i class="fas fa-list me-2"></i>All Orders
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+ </div>
+ </div>
+</div>
+
+<script src="{% static 'js/main.js' %}"></script>
+<script src="{% static 'js/order_invoice.js' %}"></script>
+<script>
+// Method 1: Print directly from the current page (Recommended)
+function printInvoiceDirectly() {
+  // Store the current body content
+  const originalContent = document.body.innerHTML;
+
+  // Get only the invoice area content
+  const invoiceContent = document.getElementById("invoice-area").innerHTML;
+
+  // Replace body content with just the invoice
+  document.body.innerHTML = invoiceContent;
+
+  // Trigger print
+  window.print();
+
+  // Restore original content after print dialog
+  document.body.innerHTML = originalContent;
+
+  // Re-run any necessary scripts
+  location.reload();
+}
+
+// Method 2: Enhanced new window approach (Alternative)
+function printInvoiceNewWindow() {
+  const printContent = document.getElementById("invoice-area").innerHTML;
+  const win = window.open('', '', 'height=800,width=1000');
+
+  win.document.write(`
+    <html>
+      <head>
+        <title>Invoice #{{ order.id }}</title>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: white;
+          }
+          .text-gradient {
+            background: linear-gradient(45deg, #007bff, #6610f2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+          }
+          .badge {
+            padding: 0.35em 0.6em;
+            font-size: 0.75rem;
+            font-weight: 600;
+            border-radius: 0.35rem;
+          }
+          .bg-warning { background-color: #ffc107 !important; color: black !important; }
+          .bg-primary { background-color: #0d6efd !important; color: white !important; }
+          .bg-success { background-color: #198754 !important; color: white !important; }
+          .bg-info { background-color: #0dcaf0 !important; color: black !important; }
+          .bg-danger { background-color: #dc3545 !important; color: white !important; }
+          .bg-secondary { background-color: #6c757d !important; color: white !important; }
+          @media print {
+            body { margin: 0; }
+            .no-print { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        ${printContent}
+      </body>
+    </html>
+  `);
+
+  win.document.close();
+
+  // Wait for content to load then print
+  win.onload = function() {
+    win.print();
+    win.close();
+  };
+}
+
+// Method 3: Simple browser print with CSS media queries (Current page)
+function simplePrint() {
+  window.print();
+}
+
+// Keyboard shortcut for printing (Ctrl+P)
+document.addEventListener('keydown', function(e) {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+    e.preventDefault();
+    printInvoiceDirectly();
+  }
+});
+</script>
+
+{% endblock %}

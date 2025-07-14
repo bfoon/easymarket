@@ -1,4 +1,5 @@
-from django.urls import path
+from django.urls import path, register_converter
+from uuid import UUID
 from . import views
 
 app_name = 'orders'
@@ -19,6 +20,8 @@ urlpatterns = [
     path('track/<int:order_id>/', views.track_order, name='track_order'),
     path('reorder/<int:order_id>/', views.reorder_items, name='reorder_items'),
     path('cancel/<int:order_id>/', views.cancel_order, name='cancel_order'),
+    path('store/<uuid:store_id>/invoice/<int:order_id>/', views.store_order_invoice, name='store_order_invoice'),
+
 
     # Public tracking (no login required)
     path('track/', views.track_order_public, name='track_order_public'),

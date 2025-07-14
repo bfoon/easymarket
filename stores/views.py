@@ -4,6 +4,7 @@ from django.db.models import Sum, Count, Q
 from django.utils import timezone
 from django.db import models
 from datetime import datetime, timedelta
+import calendar
 import json
 from django.views.decorators.http import require_http_methods
 from django.http import Http404
@@ -399,11 +400,13 @@ def validate_product_data(data, files=None):
 
 @login_required
 def manage_store_products(request, store_id):
-    """Manage products for a specific store with pagination."""
+    """Manage products for a specific store with pagination and review/sales stats."""
     store = get_object_or_404(Store, id=store_id, owner=request.user)
 
-    # Get all products for this store, ordered by creation date (newest first)
-    products_list = Product.objects.filter(seller=request.user).order_by('-created_at')
+    # Annotate each product with review info and quantity sold
+    products_list = Product.objects.filter(seller=request.user).annotate(
+        total_sold=Sum('order_items__quantity')
+    ).order_by('-created_at')
 
     # Set up pagination - 12 products per page
     paginator = Paginator(products_list, 12)
@@ -412,13 +415,10 @@ def manage_store_products(request, store_id):
     try:
         products = paginator.page(page_number)
     except PageNotAnInteger:
-        # If page is not an integer, deliver first page
         products = paginator.page(1)
     except EmptyPage:
-        # If page is out of range, deliver last page
         products = paginator.page(paginator.num_pages)
 
-    # Get total count for display
     total_products = products_list.count()
 
     context = {
@@ -426,11 +426,10 @@ def manage_store_products(request, store_id):
         'products': products,
         'total_products': total_products,
         'paginator': paginator,
-        'page_obj': products,  # For template compatibility
+        'page_obj': products,
     }
 
     return render(request, 'stores/manage_products.html', context)
-
 @login_required
 def store_orders(request, store_id):
     store = get_object_or_404(Store, id=store_id, owner=request.user)
@@ -1028,17 +1027,25 @@ def store_dashboard(request, store_id):
         category_counts = [cat['count'] for cat in category_data] if category_data else [1]
 
         # Monthly sales chart data
+        now = datetime.now()
+
         monthly_sales_data = []
-        for i in range(12):
-            month_start = (now.replace(day=1) - timedelta(days=30 * i)).replace(day=1)
-            month_end = (month_start + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+        monthly_labels = []
+
+        for i in range(11, -1, -1):  # Go backwards 12 months
+            month_date = (now.replace(day=15) - timedelta(days=30 * i))  # Use middle of the month for stability
+            month_start = month_date.replace(day=1)
+            next_month = (month_start + timedelta(days=32)).replace(day=1)
+            month_end = next_month - timedelta(days=1)
+
             sales = sum(
                 item.get_total_price() for item in seller_order_items.filter(
                     order__created_at__gte=month_start,
                     order__created_at__lte=month_end
                 )
             )
-            monthly_sales_data.insert(0, float(sales))
+            monthly_sales_data.append(float(sales))
+            monthly_labels.append(month_start.strftime('%b'))
 
         store_views = 0
         weekly_views = 0
@@ -1051,6 +1058,7 @@ def store_dashboard(request, store_id):
         total_revenue = monthly_revenue = 0
         store_views = weekly_views = 0
         monthly_sales_data = [0] * 12
+        monthly_labels = [''] * 12
         category_labels = ['No Data']
         category_counts = [1]
         review_count = 0
@@ -1070,6 +1078,7 @@ def store_dashboard(request, store_id):
         'recent_orders': recent_orders,
         'top_products': top_products,
         'monthly_sales_data': json.dumps(monthly_sales_data),
+        'monthly_labels': json.dumps(monthly_labels),
         'category_labels': json.dumps(category_labels),
         'category_data': json.dumps(category_counts),
         'review_count': review_count,

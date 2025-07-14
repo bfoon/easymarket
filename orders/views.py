@@ -9,6 +9,7 @@ from django.utils import timezone
 from datetime import timedelta
 from stock.utils import reduce_stock
 from stock.models import Stock
+from stores.models import Store
 from .models import Order, OrderItem, PromoCode, ChatMessage
 from marketplace.models import Cart, CartItem, Product
 from utils.qr import generate_invoice_qr_code
@@ -682,6 +683,46 @@ def order_invoice(request, order_id):
 
     return render(request, 'orders/order_invoice.html', context)
 
+@login_required
+def store_order_invoice(request, store_id, order_id):
+    """Generate invoice for a store owner – only their items."""
+    store = get_object_or_404(Store, id=store_id, owner=request.user)
+    order = get_object_or_404(Order, id=order_id)
+
+    # Filter only items sold by this store
+    store_order_items = order.items.filter(product__seller=store.owner).select_related('product')
+
+    if not store_order_items.exists():
+        return render(request, 'orders/access_denied.html', {
+            'message': "You do not have any products in this order."
+        })
+
+    # Calculate total for just the store's items
+    subtotal = sum(item.get_total_price() for item in store_order_items)
+    tax_amount = (order.tax_rate / 100) * subtotal
+    discount = order.discount_amount or 0
+    shipping = order.shipping_cost or 0  # Optional: split proportionally if multi-store shipping
+    total = subtotal + tax_amount + shipping - discount
+
+    qr_code = generate_invoice_qr_code(order)
+
+    context = {
+        'store': store,
+        'order': order,
+        'order_items': store_order_items,
+        'invoice_qr_code': qr_code,
+        'company_name': store.name or 'EasyMarket',
+        'company_address': store.address_line_1 and store.address_line_2 or store.address_line_1,
+        'company_email': store.email,
+        'company_phone': store.phone,
+        'subtotal': subtotal,
+        'tax_amount': tax_amount,
+        'discount': discount,
+        'shipping': shipping,
+        'total': total,
+    }
+
+    return render(request, 'stores/store_order_invoice.html', context)
 
 @login_required
 def update_order_status(request, order_id):
