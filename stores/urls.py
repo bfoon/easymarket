@@ -34,11 +34,20 @@ urlpatterns = [
          name='delete_product_image'),
     path('store/<uuid:store_id>/order/<int:order_id>/', views.store_order_detail, name='store_order_detail'),
     path('order/<int:order_id>/update-status/', views.update_order_status, name='update_order_status'),
-    path('<int:store_id>/chat/<int:buyer_id>/', views.start_store_chat, name='start_store_chat'),
+    path('<uuid:store_id>/chat/<int:buyer_id>/', views.start_store_chat, name='start_store_chat'),
+
+
     path('chat/send/', views.send_chat_message, name='send_chat_message'),
     path('chat/fetch/<int:order_id>/', views.fetch_chat_messages, name='fetch_chat_messages'),
+
+
     path('order/item/<int:item_id>/update-quantity/', views.update_order_item_quantity, name='update_order_item_quantity'),
     path('order/<int:order_id>/update-status/', views.update_order_status, name='update_order_status'),
 
+    path('store/<uuid:store_id>/chat/<int:thread_id>/', views.chat_thread_detail, name='chat_thread_detail'),
+    path('<uuid:store_id>/chats/<int:thread_id>/', views.chat_thread_detail, name='chat_thread_detail'),
+    path('<uuid:store_id>/chat/', views.store_chat_panel, name='store_chat_panel'),
+path('chat/send/order', views.send_store_chat_message, name='send_store_chat_message'),
+    path('chat/fetch/order/<int:order_id>/', views.fetch_store_chat_messages, name='fetch_store_chat_messages'),
 
 ]

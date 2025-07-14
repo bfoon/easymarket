@@ -1,0 +1,291 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+<link rel="stylesheet" type="text/css" href="{% static 'css/chat_thread_detail.css' %}">
+
+
+    <div class="chat-app">
+      <!-- Sidebar with Thread List -->
+      <div class="chat-sidebar" id="chatSidebar">
+       <div class="sidebar-header d-flex justify-content-between align-items-center">
+      <div>
+        <h3 class="sidebar-title mb-0">
+          <i class="fas fa-comments me-2"></i>Messages
+        </h3>
+        <p class="sidebar-subtitle mb-0">{{ threads|length }} conversation{{ threads|length|pluralize }}</p>
+      </div>
+      <div>
+        <a href="{% url 'stores:store_dashboard' store.id %}" class="btn btn-sm btn-light text-dark shadow-sm" style="white-space: nowrap;">
+          <i class="fas fa-arrow-left me-1"></i>Dashboard
+        </a>
+      </div>
+    </div>
+
+
+    <div class="search-box">
+      <input type="text" class="search-input" placeholder="Search conversations..." id="searchInput">
+    </div>
+
+    <div class="threads-list">
+      {% for item in threads %}
+        <a href="{% url 'stores:chat_thread_detail' store.id item.thread.id %}"
+           class="thread-item {% if item.thread.id == current_thread.id %}active{% endif %}">
+          <div class="thread-avatar">
+            {{ item.participant.get_full_name|default:item.participant.username|first|upper }}
+          </div>
+          <div class="thread-info">
+            <div class="thread-name">
+              {{ item.participant.get_full_name|default:item.participant.username }}
+            </div>
+            <div class="thread-preview">
+              {{ item.last_message|default:"No messages yet"|truncatechars:40 }}
+            </div>
+          </div>
+          <div class="thread-meta">
+            {% if item.timestamp %}
+              <div class="thread-time">{{ item.timestamp|timesince|slice:":5" }}</div>
+            {% endif %}
+            {% if item.unread_count %}
+              <div class="unread-badge">{{ item.unread_count }}</div>
+            {% endif %}
+          </div>
+        </a>
+      {% empty %}
+        <div class="thread-item">
+          <div style="text-align: center; width: 100%; color: #9ca3af;">
+            <i class="fas fa-comment-slash" style="font-size: 2rem; margin-bottom: 1rem; opacity: 0.5;"></i>
+            <p>No conversations yet</p>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Mobile Overlay -->
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <!-- Main Chat Area -->
+  <div class="chat-main">
+    <!-- Chat Header -->
+    <div class="chat-header">
+      <div class="current-user-info">
+        <button class="mobile-toggle" id="mobileToggle">
+          <i class="fas fa-bars"></i>
+        </button>
+        <div class="current-user-avatar">
+          {{ other_user.get_full_name|default:other_user.username|first|upper }}
+        </div>
+        <div class="current-user-details">
+          <h4>{{ other_user.get_full_name|default:other_user.username }}</h4>
+          <p class="current-user-status">
+            <i class="fas fa-circle" style="font-size: 0.6rem;"></i>
+            Active now
+          </p>
+        </div>
+      </div>
+      <div class="chat-actions">
+        <button class="action-btn" title="Search">
+          <i class="fas fa-search"></i>
+        </button>
+        <button class="action-btn" title="Call">
+          <i class="fas fa-phone"></i>
+        </button>
+        <button class="action-btn" title="Video Call">
+          <i class="fas fa-video"></i>
+        </button>
+        <button class="action-btn" title="More Options">
+          <i class="fas fa-ellipsis-h"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Messages Area -->
+    {% if messages %}
+      <div class="chat-messages" id="messagesContainer">
+        {% for message in messages %}
+          <div class="message-group">
+            <div class="message-bubble {% if message.sender == user %}sent{% else %}received{% endif %}">
+              <div class="message-content">
+                {{ message.message }}
+              </div>
+              <div class="message-meta">
+                <div class="message-time">
+                  <i class="fas fa-clock" style="font-size: 0.7rem;"></i>
+                  {{ message.timestamp|time:"H:i" }}
+                </div>
+                {% if message.sender == user %}
+                  <div class="message-status">
+                    <i class="fas fa-check-double" style="color: #10b981;"></i>
+                  </div>
+                {% else %}
+                  <span>{{ message.sender.username }}</span>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty-chat">
+        <div class="empty-chat-content">
+          <div class="empty-chat-icon">
+            <i class="fas fa-comments"></i>
+          </div>
+          <h4>Start the conversation</h4>
+          <p>Send a message to begin chatting with {{ other_user.get_full_name|default:other_user.username }}</p>
+        </div>
+      </div>
+    {% endif %}
+
+    <!-- Input Area -->
+    <div class="chat-input">
+      <form method="POST" id="messageForm" action="{% url 'chat:send_chat_message' %}">
+        {% csrf_token %}
+        <input type="hidden" name="recipient_id" value="{{ other_user.id }}">
+        <input type="text" name="message" id="messageInput" class="message-input" placeholder="Type your message...">
+        <button type="submit" class="input-btn send-btn" id="sendBtn">
+          <i class="fas fa-paper-plane"></i>
+        </button>
+      </form>
+    </div>
+    </div>
+  </div>
+
+<<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const chatSidebar = document.getElementById('chatSidebar');
+  const sidebarOverlay = document.getElementById('sidebarOverlay');
+  const mobileToggle = document.getElementById('mobileToggle');
+  const messagesContainer = document.getElementById('messagesContainer');
+  const messageInput = document.getElementById('messageInput');
+  const sendBtn = document.getElementById('sendBtn');
+  const messageForm = document.getElementById('messageForm');
+  const searchInput = document.getElementById('searchInput');
+
+  // Toggle sidebar on mobile
+  mobileToggle?.addEventListener('click', function () {
+    chatSidebar.classList.add('open');
+    sidebarOverlay.classList.add('active');
+  });
+
+  sidebarOverlay?.addEventListener('click', function () {
+    chatSidebar.classList.remove('open');
+    sidebarOverlay.classList.remove('active');
+  });
+
+  // Scroll to bottom
+  function scrollToBottom() {
+    if (messagesContainer) {
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+  }
+
+  scrollToBottom();
+
+  // Search Threads
+  searchInput?.addEventListener('input', function () {
+    const searchTerm = this.value.toLowerCase();
+    const threadItems = document.querySelectorAll('.thread-item');
+
+    threadItems.forEach(item => {
+      const name = item.querySelector('.thread-name')?.textContent.toLowerCase() || '';
+      const preview = item.querySelector('.thread-preview')?.textContent.toLowerCase() || '';
+
+      if (name.includes(searchTerm) || preview.includes(searchTerm)) {
+        item.style.display = 'flex';
+      } else {
+        item.style.display = 'none';
+      }
+    });
+  });
+
+  // Enable/Disable send button
+  messageInput?.addEventListener('input', function () {
+    sendBtn.disabled = this.value.trim() === '';
+  });
+
+  // Enter key sends message
+  messageInput?.addEventListener('keypress', function (e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (this.value.trim() !== '') {
+        messageForm.dispatchEvent(new Event('submit', { cancelable: true }));
+      }
+    }
+  });
+
+  // Submit message via AJAX
+  messageForm?.addEventListener('submit', function (e) {
+    e.preventDefault();
+
+    const messageText = messageInput.value.trim();
+    const recipientId = messageForm.querySelector('[name="recipient_id"]').value;
+    const csrfToken = messageForm.querySelector('[name="csrfmiddlewaretoken"]').value;
+
+    if (!messageText || !recipientId) return;
+
+    // Spinner icon
+    sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    sendBtn.disabled = true;
+
+    fetch("{% url 'chat:send_chat_message' %}", {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': csrfToken,
+        'X-Requested-With': 'XMLHttpRequest',
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: new URLSearchParams({
+        message: messageText,
+        recipient_id: recipientId
+      })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        const bubble = document.createElement('div');
+        bubble.className = 'message-group';
+        bubble.innerHTML = `
+          <div class="message-bubble sent">
+            <div class="message-content">${messageText}</div>
+            <div class="message-meta">
+              <div class="message-time">
+                <i class="fas fa-clock" style="font-size: 0.7rem;"></i> just now
+              </div>
+              <div class="message-status">
+                <i class="fas fa-check-double" style="color: #10b981;"></i>
+              </div>
+            </div>
+          </div>
+        `;
+        messagesContainer.appendChild(bubble);
+        messageInput.value = '';
+        scrollToBottom();
+      } else {
+        alert(data.message || "Error sending message.");
+      }
+    })
+    .catch(() => alert("Something went wrong."))
+    .finally(() => {
+      sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i>';
+      sendBtn.disabled = false;
+    });
+  });
+
+  // Focus on message input
+  messageInput?.focus();
+
+  // Auto-hide sidebar on desktop resize
+  window.addEventListener('resize', function () {
+    if (window.innerWidth > 768) {
+      chatSidebar.classList.remove('open');
+      sidebarOverlay.classList.remove('active');
+    }
+  });
+});
+</script>
+
+
+{% endblock %}

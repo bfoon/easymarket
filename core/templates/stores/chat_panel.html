@@ -1,0 +1,409 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+<link rel="stylesheet" href="{% static 'css/chat.css' %}">
+
+<style>
+  .chat-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem;
+  }
+
+  .header-section {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 20px;
+    padding: 2.5rem;
+    margin-bottom: 2rem;
+    color: white;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .header-section::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -20%;
+    width: 300px;
+    height: 300px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    animation: float 6s ease-in-out infinite;
+  }
+
+  .header-section::after {
+    content: '';
+    position: absolute;
+    bottom: -30%;
+    left: -10%;
+    width: 200px;
+    height: 200px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 50%;
+    animation: float 8s ease-in-out infinite reverse;
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0px) rotate(0deg); }
+    50% { transform: translateY(-20px) rotate(180deg); }
+  }
+
+  .header-content {
+    position: relative;
+    z-index: 2;
+  }
+
+  .header-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+
+  .header-subtitle {
+    font-size: 1.1rem;
+    opacity: 0.9;
+    margin-bottom: 0;
+  }
+
+  .threads-grid {
+    display: grid;
+    gap: 1.5rem;
+    margin-top: 2rem;
+  }
+
+  .thread-card {
+    background: white;
+    border-radius: 16px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .thread-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    transform: scaleY(0);
+    transition: transform 0.3s ease;
+  }
+
+  .thread-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .thread-card:hover::before {
+    transform: scaleY(1);
+  }
+
+  .thread-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+
+  .avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 600;
+    font-size: 1.2rem;
+    margin-right: 1rem;
+    flex-shrink: 0;
+    position: relative;
+  }
+
+  .avatar::after {
+    content: '';
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    width: 12px;
+    height: 12px;
+    background: #10b981;
+    border: 2px solid white;
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+  }
+
+  .thread-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .thread-name {
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: #1f2937;
+    margin-bottom: 0.25rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .thread-preview {
+    color: #6b7280;
+    font-size: 0.9rem;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .thread-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #f3f4f6;
+  }
+
+  .timestamp {
+    background: linear-gradient(135deg, #f3f4f6, #e5e7eb);
+    color: #6b7280;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 500;
+  }
+
+  .message-indicator {
+    display: flex;
+    align-items: center;
+    color: #667eea;
+    font-size: 0.8rem;
+  }
+
+  .message-indicator i {
+    margin-right: 0.5rem;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  }
+
+  .empty-icon {
+    width: 120px;
+    height: 120px;
+    margin: 0 auto 2rem;
+    background: linear-gradient(135deg, #f3f4f6, #e5e7eb);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 3rem;
+    color: #9ca3af;
+    animation: bob 3s ease-in-out infinite;
+  }
+
+  @keyframes bob {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
+  }
+
+  .empty-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 1rem;
+  }
+
+  .empty-subtitle {
+    color: #6b7280;
+    font-size: 1rem;
+    line-height: 1.6;
+  }
+
+  .stats-bar {
+    display: flex;
+    gap: 2rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .stat-item {
+    display: flex;
+    align-items: center;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 0.9rem;
+  }
+
+  .stat-item i {
+    margin-right: 0.5rem;
+    opacity: 0.8;
+  }
+
+  /* Responsive Design */
+  @media (max-width: 768px) {
+    .chat-container {
+      padding: 1rem;
+    }
+
+    .header-section {
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .header-title {
+      font-size: 2rem;
+    }
+
+    .threads-grid {
+      gap: 1rem;
+    }
+
+    .thread-card {
+      padding: 1rem;
+    }
+
+    .stats-bar {
+      gap: 1rem;
+    }
+  }
+
+  /* Loading animation for new threads */
+  .thread-card {
+    animation: slideInUp 0.5s ease-out;
+  }
+
+  @keyframes slideInUp {
+    from {
+      opacity: 0;
+      transform: translateY(30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+</style>
+
+<div class="chat-container">
+  <!-- Enhanced Header -->
+  <div class="header-section">
+    <div class="header-content">
+      <h1 class="header-title">
+        <i class="fas fa-comments me-3"></i>Customer Conversations
+      </h1>
+      <p class="header-subtitle">Manage and respond to customer inquiries in real-time</p>
+      <div class="stats-bar">
+        <div class="stat-item">
+          <i class="fas fa-message"></i>
+          <span>{{ threads|length }} Active Thread{{ threads|length|pluralize }}</span>
+        </div>
+        <div class="stat-item">
+          <i class="fas fa-clock"></i>
+          <span>Live Updates</span>
+        </div>
+        <div class="stat-item">
+          <i class="fas fa-users"></i>
+          <span>Customer Support</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Threads Grid -->
+  <div class="threads-grid">
+    {% for item in threads %}
+      <a href="{% url 'stores:chat_thread_detail' store.id item.thread.id %}" class="thread-card">
+        <div class="thread-header">
+          <div class="avatar">
+            {{ item.participant.get_full_name|default:item.participant.username|first|upper }}
+          </div>
+          <div class="thread-info">
+            <div class="thread-name">
+              {{ item.participant.get_full_name|default:item.participant.username }}
+            </div>
+            <div class="thread-preview">
+              {{ item.last_message|default:"No messages yet"|truncatechars:80 }}
+            </div>
+          </div>
+        </div>
+
+        <div class="thread-meta">
+          <div class="message-indicator">
+            <i class="fas fa-comment-dots"></i>
+            <span>Latest Activity</span>
+          </div>
+          {% if item.timestamp %}
+          <div class="timestamp">
+            {{ item.timestamp|timesince }} ago
+          </div>
+          {% else %}
+          <div class="timestamp">
+            Just now
+          </div>
+          {% endif %}
+        </div>
+      </a>
+    {% empty %}
+      <!-- Enhanced Empty State -->
+      <div class="empty-state">
+        <div class="empty-icon">
+          <i class="fas fa-comment-slash"></i>
+        </div>
+        <h3 class="empty-title">No conversations yet</h3>
+        <p class="empty-subtitle">
+          When customers start conversations, they'll appear here.<br>
+          Ready to provide amazing customer support!
+        </p>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- Add subtle animations on scroll -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Add staggered animation to thread cards
+  const cards = document.querySelectorAll('.thread-card');
+  cards.forEach((card, index) => {
+    card.style.animationDelay = `${index * 0.1}s`;
+  });
+
+  // Add hover sound effect (optional)
+  cards.forEach(card => {
+    card.addEventListener('mouseenter', function() {
+      this.style.transform = 'translateY(-8px) scale(1.02)';
+    });
+
+    card.addEventListener('mouseleave', function() {
+      this.style.transform = 'translateY(0) scale(1)';
+    });
+  });
+});
+</script>
+{% endblock %}

@@ -29,32 +29,37 @@
         <i class="fas fa-shopping-cart me-2 text-primary"></i>
         Orders Management
       </h2>
-      <p class="text-muted mb-0">{{ store.name }} - {{ page_obj.paginator.count }} order{{ page_obj.paginator.count|pluralize }}</p>
+      <p class="text-muted mb-0">{{ store.name }} - <span id="orderCount">{{ page_obj.paginator.count }}</span> order{{ page_obj.paginator.count|pluralize }}</p>
     </div>
     <div class="col-lg-6">
       <div class="d-flex justify-content-end align-items-center gap-2">
         <div class="search-container-order">
           <i class="fas fa-search"></i>
-          <input type="text" class="form-control search-input-order" placeholder="Search orders..." id="orderSearch">
+          <input type="text" class="form-control search-input-order" placeholder="Search orders..." id="orderSearch" onkeyup="performSearch()">
         </div>
         <div class="dropdown">
-          <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-            <i class="fas fa-filter me-1"></i>Filter
+          <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" id="filterButton">
+            <i class="fas fa-filter me-1"></i>All Orders
           </button>
           <ul class="dropdown-menu">
-            <li><a class="dropdown-item" href="#" data-filter="all">All Orders</a></li>
-            <li><a class="dropdown-item" href="#" data-filter="pending">Pending</a></li>
-            <li><a class="dropdown-item" href="#" data-filter="completed">Completed</a></li>
-            <li><a class="dropdown-item" href="#" data-filter="cancelled">Cancelled</a></li>
+            <li><a class="dropdown-item" href="#" onclick="applyFilter('all', 'All Orders')">All Orders</a></li>
+            <li><a class="dropdown-item" href="#" onclick="applyFilter('pending', 'Pending')">Pending</a></li>
+            <li><a class="dropdown-item" href="#" onclick="applyFilter('processing', 'Processing')">Processing</a></li>
+            <li><a class="dropdown-item" href="#" onclick="applyFilter('shipped', 'Shipped')">Shipped</a></li>
+            <li><a class="dropdown-item" href="#" onclick="applyFilter('completed', 'Completed')">Completed</a></li>
+            <li><a class="dropdown-item" href="#" onclick="applyFilter('cancelled', 'Cancelled')">Cancelled</a></li>
           </ul>
         </div>
+        <button class="btn btn-outline-secondary" onclick="clearAllFilters()" title="Clear all filters">
+          <i class="fas fa-times"></i>
+        </button>
       </div>
     </div>
   </div>
 
   {% if page_obj %}
   <!-- Desktop Table View -->
-  <div class="card shadow-sm d-none d-md-block">
+  <div class="card shadow-sm d-none d-md-block" id="ordersCard">
     <div class="card-body p-0">
       <div class="table-responsive">
         <table class="table table-hover mb-0" id="ordersTable">
@@ -71,7 +76,12 @@
           </thead>
           <tbody>
             {% for order in page_obj %}
-            <tr class="order-row" data-status="{{ order.status }}">
+            <tr class="order-row"
+                data-status="{{ order.status|lower }}"
+                data-order-id="{{ order.id }}"
+                data-customer="{{ order.buyer.get_full_name|lower }}"
+                data-amount="{{ order.get_total|floatformat:2 }}"
+                data-date="{{ order.created_at|date:'M d, Y H:i'|lower }}">
               <td class="px-4 py-3">
                 <strong class="text-primary">#{{ order.id }}</strong>
               </td>
@@ -93,7 +103,7 @@
                           {% with has_shipped=True %}{% endwith %}
                         {% endif %}
                       {% endfor %}
-                      {% if  order_items.0.shipped_to_warehouse %}
+                      {% if order_items.0.shipped_to_warehouse %}
                         <span class="badge bg-success"><i class="fas fa-warehouse me-1"></i>Shipped</span>
                       {% else %}
                         <span class="badge bg-secondary">Not Shipped</span>
@@ -116,9 +126,16 @@
     </div>
   </div>
 
+  <!-- No Results Message -->
+  <div id="noResults" class="text-center py-5" style="display: none;">
+    <i class="fas fa-search fa-3x text-muted mb-3"></i>
+    <h4 class="text-muted">No orders found</h4>
+    <p class="text-muted">Try adjusting your search or filter criteria</p>
+  </div>
+
   <!-- Pagination -->
   {% if page_obj.has_other_pages %}
-  <nav aria-label="Orders pagination" class="mt-4">
+  <nav aria-label="Orders pagination" class="mt-4" id="paginationNav">
     <ul class="pagination justify-content-center">
       {% if page_obj.has_previous %}
       <li class="page-item">
@@ -148,37 +165,7 @@
   {% endif %}
   {% endif %}
 </div>
+<script src="{% static 'js/orders-filter.js' %}"></script>
 
-{% endblock %}
 
-{% block extra_js %}
-<script src="{% static 'js/main.js' %}"></script>
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-  const searchInput = document.getElementById('orderSearch');
-  const table = document.getElementById('ordersTable');
-  const rows = table ? table.querySelectorAll('tbody tr') : [];
-
-  if (searchInput) {
-    searchInput.addEventListener('input', function () {
-      const searchTerm = this.value.toLowerCase();
-      rows.forEach(row => {
-        const text = row.textContent.toLowerCase();
-        row.style.display = text.includes(searchTerm) ? '' : 'none';
-      });
-    });
-  }
-
-  document.querySelectorAll('[data-filter]').forEach(filter => {
-    filter.addEventListener('click', function (e) {
-      e.preventDefault();
-      const filterValue = this.getAttribute('data-filter');
-      rows.forEach(row => {
-        const status = row.getAttribute('data-status');
-        row.style.display = (filterValue === 'all' || status === filterValue) ? '' : 'none';
-      });
-    });
-  });
-});
-</script>
 {% endblock %}

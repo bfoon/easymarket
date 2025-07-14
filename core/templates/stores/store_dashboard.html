@@ -3,6 +3,7 @@
 
 {% block content %}
 <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+<link rel="stylesheet" type="text/css" href="{% static 'css/store_dashboard.css' %}">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
 <div class="container-fluid py-4">
@@ -336,9 +337,10 @@
             <a href="{% url 'stores:store_orders' store.id %}" class="btn btn-outline-info">
               <i class="fas fa-shipping-fast me-2"></i>View Orders
             </a>
-            <a href="#" class="btn btn-outline-warning">
-              <i class="fas fa-chart-bar me-2"></i>Analytics
-            </a>
+            <a href="{% url 'stores:store_chat_panel' store.id %}" class="btn btn-outline-warning" id="openCustomerChat">
+  <i class="fas fa-comments me-2"></i>Customer Chats
+</a>
+
             <hr>
             <a href="{% url 'stores:update_store' store.id %}" class="btn btn-outline-secondary">
               <i class="fas fa-cog me-2"></i>Store Settings
@@ -395,163 +397,17 @@
   </div>
 </div>
 
-<script src="{% static 'js/main.js' %}"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Update last updated timestamp
-    document.getElementById('lastUpdated').textContent = new Date().toLocaleDateString();
+window.chartData = {
+    monthlyLabels: {{ monthly_labels|safe }},
+    monthlySalesData: {{ monthly_sales_data|default:"[0,0,0,0,0,0,0,0,0,0,0,0]"|safe }},
+    categoryLabels: {{ category_labels|default:"['No Data']"|safe }},
+    categoryData: {{ category_data|default:"[1]"|safe }}
+};
 
-    // Sales Chart
-    const salesCtx = document.getElementById('salesChart').getContext('2d');
-    new Chart(salesCtx, {
-        type: 'line',
-        data: {
-            labels: {{ monthly_labels|safe }},
-            datasets: [{
-                label: 'Sales (D)',
-                data: {{ monthly_sales_data|default:"[0,0,0,0,0,0,0,0,0,0,0,0]"|safe }},
-                borderColor: '#007bff',
-                backgroundColor: 'rgba(0, 123, 255, 0.1)',
-                borderWidth: 2,
-                fill: true,
-                tension: 0.4
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    display: false
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        callback: function(value) {
-                            return 'D' + value;
-                        }
-                    }
-                }
-            }
-        }
-    });
-
-    // Category Chart
-    const categoryCtx = document.getElementById('categoryChart').getContext('2d');
-    new Chart(categoryCtx, {
-        type: 'doughnut',
-        data: {
-            labels: {{ category_labels|default:"['No Data']"|safe }},
-            datasets: [{
-                data: {{ category_data|default:"[1]"|safe }},
-                backgroundColor: [
-                    '#007bff',
-                    '#28a745',
-                    '#ffc107',
-                    '#dc3545',
-                    '#6c757d',
-                    '#17a2b8'
-                ]
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'bottom'
-                }
-            }
-        }
-    });
-
-    // Auto-refresh dashboard every 5 minutes
-    setInterval(function() {
-        location.reload();
-    }, 300000);
-});
 </script>
+<script src="{% static 'js/main.js' %}"></script>
+<script src="{% static 'js/store_dashboard.js' %}"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
 
-<style>
-.card {
-    border: none;
-    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
-    transition: box-shadow 0.15s ease-in-out;
-}
-
-.card:hover {
-    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
-}
-
-.bg-primary {
-    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%) !important;
-}
-
-.bg-success {
-    background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%) !important;
-}
-
-.bg-warning {
-    background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%) !important;
-}
-
-.bg-info {
-    background: linear-gradient(135deg, #17a2b8 0%, #138496 100%) !important;
-}
-
-.table th {
-    border-top: none;
-    font-weight: 600;
-    font-size: 0.875rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.badge {
-    font-size: 0.75rem;
-}
-
-.rating-breakdown .progress {
-    height: 8px;
-}
-
-@media (max-width: 768px) {
-    .btn-group {
-        flex-direction: column;
-        width: 100%;
-    }
-
-    .btn-group .btn {
-        margin-bottom: 0.5rem;
-    }
-
-    .d-flex.justify-content-between {
-        flex-direction: column;
-        gap: 1rem;
-    }
-}
-
-.opacity-75 {
-    opacity: 0.75;
-}
-
-.text-primary-light {
-    color: rgba(255, 255, 255, 0.8) !important;
-}
-
-.text-success-light {
-    color: rgba(255, 255, 255, 0.8) !important;
-}
-
-.text-warning-light {
-    color: rgba(255, 255, 255, 0.8) !important;
-}
-
-.text-info-light {
-    color: rgba(255, 255, 255, 0.8) !important;
-}
-</style>
 {% endblock %}

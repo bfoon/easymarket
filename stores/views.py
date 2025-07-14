@@ -11,6 +11,7 @@ from django.http import Http404
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
+from django.http import HttpResponseRedirect
 from django.utils.text import slugify
 from django.db.models import Q, Avg, F, FloatField, DecimalField, ExpressionWrapper
 from django.db.models.functions import Coalesce
@@ -849,6 +850,56 @@ def start_store_chat(request, store_id, buyer_id, order_id=None):
     return redirect('stores:store_dashboard', store_id=store.id)
 
 @login_required
+def store_chat_panel(request, store_id):
+    store = get_object_or_404(Store, id=store_id, owner=request.user)
+
+    # Get all threads involving the store owner
+    threads = ChatThread.objects.filter(participants=request.user).order_by('-updated_at')
+
+    # Optional: preload the latest message per thread
+    thread_data = []
+    for thread in threads:
+        other = thread.participants.exclude(id=request.user.id).first()
+        last_msg = thread.messages.last()
+        thread_data.append({
+            'thread': thread,
+            'participant': other,
+            'last_message': last_msg.message if last_msg else 'No messages yet',
+            'timestamp': last_msg.timestamp if last_msg else None
+        })
+
+    context = {
+        'store': store,
+        'threads': thread_data,
+    }
+    return render(request, 'stores/chat_panel.html', context)
+
+@login_required
+def chat_thread_detail(request, store_id, thread_id):
+    store = get_object_or_404(Store, id=store_id, owner=request.user)
+    thread = get_object_or_404(ChatThread, id=thread_id, participants=request.user)
+
+    if request.method == 'POST':
+        msg = request.POST.get('message')
+        if msg:
+            ChatMessage.objects.create(
+                thread=thread,
+                sender=request.user,
+                message=msg
+            )
+            thread.save()  # triggers `updated_at`
+        return HttpResponseRedirect(reverse('stores:chat_thread_detail', args=[store.id, thread.id]))
+
+    messages = thread.messages.select_related('sender').order_by('timestamp')
+    context = {
+        'store': store,
+        'thread': thread,
+        'messages': messages,
+        'other_user': thread.participants.exclude(id=request.user.id).first()
+    }
+    return render(request, 'stores/chat_thread_detail.html', context)
+
+@login_required
 def store_order_detail(request, store_id, order_id):
     store = get_object_or_404(Store, id=store_id, owner=request.user)
     order = get_object_or_404(Order, id=order_id)
@@ -922,6 +973,90 @@ def fetch_chat_messages(request, order_id):
             return JsonResponse({'success': True, 'messages': data})
         except Order.DoesNotExist:
             return JsonResponse({'success': False, 'message': 'Order not found'})
+    return JsonResponse({'success': False, 'message': 'Invalid request'})
+
+@login_required
+def chat_thread_detail(request, store_id, thread_id):
+    store = get_object_or_404(Store, id=store_id, owner=request.user)
+    thread = get_object_or_404(ChatThread, id=thread_id, participants=request.user)
+
+    messages = thread.messages.select_related('sender').order_by('timestamp')
+
+    # Determine other participant
+    other_user = thread.participants.exclude(id=request.user.id).first()
+
+    # Prepare thread summaries
+    threads = []
+    for t in ChatThread.objects.filter(participants=request.user).order_by('-updated_at'):
+        last_msg = t.messages.last()
+        other = t.participants.exclude(id=request.user.id).first()
+        unread_count = t.messages.filter(sender=other, thread=t).exclude(sender=request.user).count()
+        threads.append({
+            'thread': t,
+            'participant': other,
+            'last_message': last_msg.message if last_msg else '',
+            'timestamp': last_msg.timestamp if last_msg else None,
+            'unread_count': unread_count,
+        })
+
+    return render(request, 'stores/chat_thread_detail.html', {
+        'store': store,
+        'threads': threads,
+        'current_thread': thread,
+        'other_user': other_user,
+        'messages': messages,
+    })
+
+@require_POST
+@login_required
+def send_store_chat_message(request):
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        recipient_id = request.POST.get('recipient_id')
+        content = request.POST.get('message', '').strip()
+
+        if not content or not recipient_id:
+            return JsonResponse({'success': False, 'message': 'Missing recipient or message.'})
+
+        try:
+            recipient = User.objects.get(id=recipient_id)
+            thread, _ = ChatThread.objects.get_or_create_between(request.user, recipient)
+
+            ChatMessage.objects.create(
+                thread=thread,
+                sender=request.user,
+                message=content
+            )
+
+            return JsonResponse({'success': True})
+        except User.DoesNotExist:
+            return JsonResponse({'success': False, 'message': 'User not found.'})
+    return JsonResponse({'success': False, 'message': 'Invalid request.'})
+
+
+@login_required
+def fetch_store_chat_messages(request, recipient_id):
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        try:
+            recipient = User.objects.get(id=recipient_id)
+            thread, _ = ChatThread.objects.get_or_create_between(request.user, recipient)
+
+            messages = thread.messages.select_related('sender').order_by('timestamp')
+
+            data = [
+                {
+                    'sender_id': msg.sender.id,
+                    'sender_name': msg.sender.get_full_name() or msg.sender.username,
+                    'content': msg.message,
+                    'timestamp': msg.timestamp.strftime('%b %d, %H:%M'),
+                    'is_self': msg.sender == request.user,
+                }
+                for msg in messages
+            ]
+
+            return JsonResponse({'success': True, 'messages': data})
+
+        except User.DoesNotExist:
+            return JsonResponse({'success': False, 'message': 'User not found.'})
     return JsonResponse({'success': False, 'message': 'Invalid request'})
 
 @require_POST

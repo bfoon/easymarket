@@ -1,8 +1,10 @@
 from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_POST
 from .models import ChatThread, ChatMessage
 from marketplace.models import Product
 from django.contrib.auth import get_user_model
+from django.http import JsonResponse
+from django.contrib.auth.decorators import login_required
 from django.urls import reverse
 
 User = get_user_model()
@@ -39,3 +41,28 @@ def start_chat(request):
 
 
     return redirect('marketplace:product_list')
+
+@require_POST
+@login_required
+def send_chat_message(request):
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        recipient_id = request.POST.get('recipient_id')
+        content = request.POST.get('message', '').strip()
+
+        if not content or not recipient_id:
+            return JsonResponse({'success': False, 'message': 'Missing recipient or message.'})
+
+        try:
+            recipient = User.objects.get(id=recipient_id)
+            thread, _ = ChatThread.objects.get_or_create_between(request.user, recipient)
+
+            ChatMessage.objects.create(
+                thread=thread,
+                sender=request.user,
+                message=content
+            )
+
+            return JsonResponse({'success': True})
+        except User.DoesNotExist:
+            return JsonResponse({'success': False, 'message': 'User not found.'})
+    return JsonResponse({'success': False, 'message': 'Invalid request.'})
