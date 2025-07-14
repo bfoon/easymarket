@@ -11,6 +11,12 @@ function initializePaymentFeatures() {
             showPaymentFields(this.value);
         });
     }
+
+    const shippingSelect = document.getElementById('shippingSelect');
+    if (shippingSelect) {
+        shippingSelect.addEventListener('change', toggleNewAddressForm);
+    }
+
     setupCardInputFormatting();
     setupMobileInputFormatting();
 }
@@ -24,12 +30,12 @@ function showPaymentFields(method) {
     if (cardFields) cardFields.classList.add('d-none');
     if (cashNote) cashNote.classList.add('d-none');
 
-    if (['wave', 'qmoney', 'afrimoney'].includes(method) && mobileFields) {
-        mobileFields.classList.remove('d-none');
-    } else if (method === 'verve_card' && cardFields) {
-        cardFields.classList.remove('d-none');
-    } else if (method === 'cash' && cashNote) {
-        cashNote.classList.remove('d-none');
+    if (['wave', 'qmoney', 'afrimoney'].includes(method)) {
+        mobileFields?.classList.remove('d-none');
+    } else if (method === 'verve_card') {
+        cardFields?.classList.remove('d-none');
+    } else if (method === 'cash') {
+        cashNote?.classList.remove('d-none');
     }
 }
 
@@ -88,7 +94,7 @@ async function processPayment(orderId) {
 
     if (!validatePaymentForm(formData)) return;
 
-    const submitBtn = event.target;
+    const submitBtn = document.querySelector(`#paymentModal button.btn-primary`);
     const originalText = submitBtn.innerHTML;
     submitBtn.innerHTML = `<i class="fas fa-spinner fa-spin me-2"></i>Processing...`;
     submitBtn.disabled = true;
@@ -96,6 +102,7 @@ async function processPayment(orderId) {
     const paymentMethod = formData.get('payment_method');
     const paymentData = { payment_method: paymentMethod };
 
+    // Add payment method details
     if (['wave', 'qmoney', 'afrimoney'].includes(paymentMethod)) {
         paymentData.phone_number = formData.get('mobile_number');
         paymentData.pin = formData.get('pin');
@@ -106,10 +113,28 @@ async function processPayment(orderId) {
         paymentData.cardholder_name = formData.get('cardholder_name') || 'Card Holder';
     }
 
+    // Add shipping information
+    const shippingValue = formData.get('shipping_address');
+    paymentData.shipping_address = shippingValue;
+
+    if (shippingValue === 'new') {
+        const shippingFields = [
+            'new_full_name', 'new_phone_number',
+            'new_street', 'new_city',
+            'new_region', 'new_geo_code', 'new_country'
+        ];
+        for (const field of shippingFields) {
+            paymentData[field] = formData.get(field);
+        }
+    }
+
     try {
         const res = await fetch(`/payments/process/${orderId}/`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRFToken() },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
             body: JSON.stringify(paymentData)
         });
         const result = await res.json();
@@ -134,21 +159,57 @@ async function processPayment(orderId) {
 function validatePaymentForm(formData) {
     const method = formData.get('payment_method');
     if (!method) return showAlert('Select a payment method', 'danger'), false;
+
+    const shippingValue = formData.get('shipping_address');
+    if (!shippingValue) return showAlert('Select or enter a shipping address', 'danger'), false;
+
+    if (shippingValue === 'new') {
+        const requiredFields = [
+            'new_full_name', 'new_phone_number',
+            'new_street', 'new_city',
+            'new_region', 'new_geo_code', 'new_country'
+        ];
+        for (const field of requiredFields) {
+            const val = formData.get(field);
+            if (!val || !val.trim()) {
+                return showAlert('Please fill all fields for the new shipping address.', 'danger'), false;
+            }
+        }
+    }
+
     const agreeTerms = document.getElementById('agreeTerms');
-    if (agreeTerms && !agreeTerms.checked) return showAlert('Agree to terms', 'danger'), false;
+    if (agreeTerms && !agreeTerms.checked)
+        return showAlert('You must agree to the terms.', 'danger'), false;
 
     if (['wave', 'qmoney', 'afrimoney'].includes(method)) {
         const phone = formData.get('mobile_number'), pin = formData.get('pin');
-        if (!phone || !pin || !/^\+?[\d\s-()]+$/.test(phone))
-            return showAlert('Enter valid mobile details', 'danger'), false;
-    } else if (method === 'verve_card') {
-        const card = formData.get('card_number'), exp = formData.get('card_expiry'),
-              cvv = formData.get('card_cvv'), name = formData.get('cardholder_name');
-        if (!card || !exp || !cvv || !name || !/^\d{13,19}$/.test(card.replace(/\s/g, '')) ||
-            !/^\d{2}\/\d{2}$/.test(exp) || !/^\d{3,4}$/.test(cvv))
-            return showAlert('Enter valid card details', 'danger'), false;
+        if (!phone || !pin || !/^\+?[\d\s-()]+$/.test(phone)) {
+            return showAlert('Enter valid mobile payment details.', 'danger'), false;
+        }
     }
+
+    if (method === 'verve_card') {
+        const card = formData.get('card_number');
+        const exp = formData.get('card_expiry');
+        const cvv = formData.get('card_cvv');
+        const name = formData.get('cardholder_name');
+        if (!card || !exp || !cvv || !name ||
+            !/^\d{13,19}$/.test(card.replace(/\s/g, '')) ||
+            !/^\d{2}\/\d{2}$/.test(exp) ||
+            !/^\d{3,4}$/.test(cvv)) {
+            return showAlert('Enter valid card details.', 'danger'), false;
+        }
+    }
+
     return true;
+}
+
+function toggleNewAddressForm() {
+    const select = document.getElementById('shippingSelect');
+    const newForm = document.getElementById('newAddressForm');
+    if (select && newForm) {
+        newForm.classList.toggle('d-none', select.value !== 'new');
+    }
 }
 
 function cancelOrder(orderId) {
@@ -177,10 +238,10 @@ function confirmCancelOrder() {
     fetch(`/orders/cancel/${orderId}/`, {
         method: 'POST',
         headers: {
-        'X-CSRFToken': getCSRFToken(),
-        'Content-Type': 'application/json',
-         'X-Requested-With': 'XMLHttpRequest'
-         }
+            'X-CSRFToken': getCSRFToken(),
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
     })
     .then(res => res.json())
     .then(data => {

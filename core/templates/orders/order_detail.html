@@ -305,7 +305,7 @@
 
 <!-- Payment Modal -->
 <div class="modal fade" id="paymentModal" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <form id="paymentForm" novalidate>
                 {% csrf_token %}
@@ -314,6 +314,7 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
+                    <!-- Payment Method -->
                     <div class="mb-3">
                         <label class="form-label">Payment Method</label>
                         <select class="form-select" name="payment_method" id="paymentMethod" required>
@@ -326,6 +327,7 @@
                         </select>
                     </div>
 
+                    <!-- Mobile Payment -->
                     <div id="mobilePaymentFields" class="d-none">
                         <div class="mb-3">
                             <label class="form-label">Mobile Number</label>
@@ -337,6 +339,7 @@
                         </div>
                     </div>
 
+                    <!-- Verve Card Payment -->
                     <div id="verveCardFields" class="d-none">
                         <div class="mb-3">
                             <label class="form-label">Card Number</label>
@@ -354,10 +357,64 @@
                         </div>
                     </div>
 
+                    <!-- Cash Note -->
                     <div id="cashNote" class="alert alert-info d-none">
                         You selected cash payment. Please prepare the exact amount upon delivery.
                     </div>
-                </div>
+
+                    <!-- Shipping Info -->
+                    <hr>
+                    <div class="mb-3">
+                        <label class="form-label">Shipping Address</label>
+                        <select class="form-select" name="shipping_address" id="shippingSelect" onchange="toggleNewAddressForm()" required>
+                            <option value="">-- Select a shipping address --</option>
+                            {% for address in user.shipping_addresses.all %}
+                                <option value="{{ address.id }}" {% if address.is_default %}selected{% endif %}>
+                                    {{ address.full_name }} - {{ address.street }}, {{ address.city }}
+                                </option>
+                            {% endfor %}
+                            <option value="new">+ Enter a new address</option>
+                        </select>
+                    </div>
+
+
+                    <!-- New Address Form -->
+                    <div id="newAddressForm" class="border p-3 rounded d-none">
+                        <h6 class="mb-3">New Shipping Address</h6>
+                        <div class="row g-2">
+                            <div class="col-md-6">
+                                <label class="form-label">Full Name</label>
+                                <input type="text" class="form-control" name="new_full_name" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Phone Number</label>
+                                <input type="text" class="form-control" name="new_phone_number" required>
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Street Address</label>
+                            <input type="text" class="form-control" name="new_street" required>
+                        </div>
+                        <div class="row g-2">
+                            <div class="col-md-4">
+                                <label class="form-label">City</label>
+                                <input type="text" class="form-control" name="new_city" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Region</label>
+                                <input type="text" class="form-control" name="new_region" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Geo Code</label>
+                                <input type="text" class="form-control" name="new_geo_code" required>
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label">Country</label>
+                            <input type="text" class="form-control" name="new_country" value="Gambia" required>
+                        </div>
+                    </div>
+
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="button" class="btn btn-primary" onclick="processPayment({{ order.id }})">
@@ -400,6 +457,8 @@
 <script src="{% static 'js/main.js' %}"></script>
 <script src="{% static 'js/order_detail.js' %}"></script>
 <script src="{% static 'js/order2_chat.js' %}"></script>
+
+
 
 
 
