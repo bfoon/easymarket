@@ -1,29 +1,769 @@
-<div class="product-quick-view p-4 rounded-4 shadow-lg bg-white">
-  <div class="row align-items-center">
+<style>
+  :root {
+    --primary-color: #0d6efd;
+    --primary-hover: #0b5ed7;
+    --success-color: #198754;
+    --warning-color: #fd7e14;
+    --danger-color: #dc3545;
+    --text-primary: #212529;
+    --text-secondary: #6c757d;
+    --border-color: #dee2e6;
+    --shadow-sm: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    --shadow-md: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    --shadow-lg: 0 1rem 3rem rgba(0, 0, 0, 0.175);
+    --radius-sm: 0.375rem;
+    --radius-md: 0.5rem;
+    --radius-lg: 0.75rem;
+    --radius-xl: 1rem;
+  }
 
-    <!-- Product Image -->
-    <div class="col-md-5 text-center mb-3 mb-md-0">
-      <img src="{{ product.image.url }}" class="img-fluid rounded-3 border" alt="{{ product.name }}" style="max-height: 250px; object-fit: contain;">
-    </div>
+  .product-quick-view {
+    background: #ffffff;
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--border-color);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+    position: relative;
+  }
 
-    <!-- Product Info -->
-    <div class="col-md-7">
-      <h4 class="fw-bold text-dark mb-2">{{ product.name }}</h4>
-      <p class="text-muted small mb-3">{{ product.description|truncatewords:25 }}</p>
-      <p class="fs-5 mb-3">
-        <span class="text-secondary">Price:</span>
-        <span class="fw-semibold text-success">D{{ product.price }}</span>
-      </p>
+  .product-quick-view:hover {
+    box-shadow: 0 1.25rem 1.5625rem -0.3125rem rgba(0, 0, 0, 0.1), 0 0.5rem 0.625rem -0.375rem rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+  }
 
-      <!-- Call to Action -->
-      <div class="d-flex gap-2">
-        <a href="{% url 'marketplace:product_detail' product.id %}" class="btn btn-dark px-4 rounded-pill">
-          View Full Product
+  /* Enhanced Image Container */
+  .product-image-container {
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--radius-lg);
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    transition: all 0.3s ease;
+  }
+
+  .product-image-container:hover {
+    background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+  }
+
+  #mainProductImage {
+    max-height: 250px;
+    object-fit: contain;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: var(--radius-md);
+    width: 100%;
+  }
+
+  #mainProductImage:hover {
+    transform: scale(1.05);
+  }
+
+  .image-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.1) 100%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    border-radius: var(--radius-md);
+  }
+
+  .product-image-container:hover .image-overlay {
+    opacity: 1;
+  }
+
+  /* Enhanced Trending Badge */
+  .badge-trending {
+    background: linear-gradient(135deg, var(--danger-color), #ff6b6b);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.5rem 1rem;
+    border-radius: 2rem;
+    box-shadow: var(--shadow-md);
+    backdrop-filter: blur(10px);
+    animation: pulse-glow 2s infinite;
+    z-index: 10;
+    border: none;
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% {
+      box-shadow: var(--shadow-md);
+      transform: scale(1);
+    }
+    50% {
+      box-shadow: 0 0 20px rgba(220, 53, 69, 0.4), var(--shadow-md);
+      transform: scale(1.02);
+    }
+  }
+
+  /* Enhanced Thumbnails */
+  .thumbnail-container {
+    gap: 0.5rem;
+    padding: 0.75rem 0;
+  }
+
+  .thumbnail-img {
+    height: 60px;
+    width: 60px;
+    object-fit: cover;
+    cursor: pointer;
+    border: 2px solid transparent;
+    border-radius: var(--radius-md);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .thumbnail-img::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(13, 110, 253, 0.1), rgba(13, 110, 253, 0.2));
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .thumbnail-img:hover {
+    border-color: var(--primary-color);
+    transform: translateY(-2px) scale(1.05);
+    box-shadow: var(--shadow-md);
+  }
+
+  .thumbnail-img:hover::before {
+    opacity: 1;
+  }
+
+  .thumbnail-img.active {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.2);
+    transform: scale(1.05);
+  }
+
+  .thumbnail-img:focus {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+  }
+
+  /* Enhanced Product Info */
+  .product-title {
+    color: var(--text-primary);
+    font-weight: 700;
+    font-size: 1.5rem;
+    line-height: 1.3;
+    margin-bottom: 0.75rem;
+    transition: color 0.3s ease;
+  }
+
+  .product-title:hover {
+    color: var(--primary-color);
+  }
+
+  .product-description {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    line-height: 1.6;
+    margin-bottom: 1rem;
+  }
+
+  /* Enhanced Price Container */
+  .price-container {
+    background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+    border: 1px solid #6ee7b7;
+    border-radius: var(--radius-lg);
+    padding: 1rem;
+    margin-bottom: 1rem;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .price-container::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+    transition: left 0.5s ease;
+  }
+
+  .price-container:hover::before {
+    left: 100%;
+  }
+
+  .price-label {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin: 0 0 0.25rem 0;
+    font-weight: 500;
+  }
+
+  .price-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--success-color);
+    margin: 0;
+  }
+
+  /* Enhanced Rating */
+  .rating-container {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+    padding: 0.75rem;
+    background: linear-gradient(135deg, #fef3c7, #fde68a);
+    border: 1px solid #fcd34d;
+    border-radius: var(--radius-md);
+    transition: all 0.3s ease;
+  }
+
+  .rating-container:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .rating-stars {
+    display: flex;
+    gap: 0.125rem;
+  }
+
+  .rating-stars i {
+    color: var(--warning-color);
+    font-size: 1.1rem;
+    transition: transform 0.2s ease;
+  }
+
+  .rating-stars:hover i {
+    transform: scale(1.1);
+  }
+
+  .rating-text {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+  }
+
+  /* Enhanced Features */
+  .features-container {
+    background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+    border-radius: var(--radius-md);
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--border-color);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .features-title {
+    color: var(--text-primary);
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+    font-size: 1rem;
+  }
+
+  .features-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .feature-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+    padding: 0.25rem;
+    border-radius: var(--radius-sm);
+  }
+
+  .feature-item:hover {
+    transform: translateX(4px);
+    background: rgba(13, 110, 253, 0.05);
+  }
+
+  .feature-item:last-child {
+    margin-bottom: 0;
+  }
+
+  .feature-icon {
+    color: var(--success-color);
+    font-size: 0.875rem;
+    flex-shrink: 0;
+  }
+
+  .feature-name {
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .feature-value {
+    color: var(--text-secondary);
+  }
+
+  /* Enhanced Buttons */
+  .action-buttons {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .btn-enhanced {
+    padding: 0.75rem 1.5rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+    border-radius: 2rem;
+    border: none;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+  }
+
+  .btn-enhanced::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    transition: left 0.5s ease;
+  }
+
+  .btn-enhanced:hover::before {
+    left: 100%;
+  }
+
+  .btn-enhanced:focus {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+  }
+
+  .btn-dark.btn-enhanced {
+    background: linear-gradient(135deg, #343a40, #495057);
+    color: white;
+    box-shadow: var(--shadow-md);
+  }
+
+  .btn-dark.btn-enhanced:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0.625rem 0.9375rem -0.1875rem rgba(52, 58, 64, 0.3), 0 0.25rem 0.375rem -0.25rem rgba(52, 58, 64, 0.3);
+    color: white;
+    text-decoration: none;
+  }
+
+  .btn-outline-secondary.btn-enhanced {
+    background: white;
+    color: var(--text-primary);
+    border: 2px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .btn-outline-secondary.btn-enhanced:hover:not(:disabled) {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+  }
+
+  .btn-outline-secondary.btn-enhanced:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  /* Loading State */
+  .loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+    border-radius: var(--radius-md);
+    backdrop-filter: blur(4px);
+  }
+
+  .loading-overlay.active {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  .loading-spinner {
+    width: 24px;
+    height: 24px;
+    border: 2px solid var(--border-color);
+    border-top-color: var(--primary-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* Button Loading State */
+  .btn-loading {
+    pointer-events: none;
+    position: relative;
+  }
+
+  .btn-loading .btn-text {
+    opacity: 0;
+  }
+
+  .btn-loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 16px;
+    height: 16px;
+    margin: -8px 0 0 -8px;
+    border: 2px solid transparent;
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  /* Responsive Design */
+  @media (max-width: 768px) {
+    .product-quick-view {
+      margin: 0.5rem;
+      border-radius: var(--radius-lg);
+    }
+
+    #mainProductImage {
+      max-height: 200px;
+    }
+
+    .price-value {
+      font-size: 1.5rem;
+    }
+
+    .action-buttons {
+      flex-direction: column;
+    }
+
+    .btn-enhanced {
+      justify-content: center;
+      width: 100%;
+    }
+
+    .thumbnail-container {
+      justify-content: center;
+    }
+  }
+
+  /* Animation Classes */
+  .fade-in {
+    animation: fadeIn 0.5s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .slide-in {
+    animation: slideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  @keyframes slideIn {
+    from { transform: translateX(-20px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+
+  /* Accessibility improvements */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  /* Focus visible for better keyboard navigation */
+  .btn-enhanced:focus-visible,
+  .thumbnail-img:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+  }
+
+  /* Ensure proper vertical alignment for icons */
+  ul li i {
+    vertical-align: middle;
+  }
+
+  /* Success state for cart button */
+  .btn-success-state {
+    background: linear-gradient(135deg, var(--success-color), #20c997) !important;
+    border-color: var(--success-color) !important;
+    color: white !important;
+  }
+</style>
+
+<div class="product-quick-view p-4 fade-in">
+  <div class="row g-4 align-items-start">
+
+    <!-- Product Image Section -->
+    <div class="col-md-5 text-center">
+      <!-- Main Image Container -->
+      <div class="product-image-container position-relative d-inline-block" style="max-height: 250px;">
+        {% if product.is_trending %}
+          <span class="badge-trending position-absolute top-0 start-0 m-2">
+            <i class="fas fa-fire me-1"></i>Trending
+          </span>
+        {% endif %}
+
+        <a href="{% url 'marketplace:product_detail' product.id %}" id="mainImageLink" class="d-block text-decoration-none">
+          <img id="mainProductImage"
+               src="{{ product.image.url }}"
+               alt="{{ product.name }}"
+               class="img-fluid border shadow-sm"
+               loading="lazy">
+          <div class="image-overlay"></div>
         </a>
-        <button class="btn btn-outline-primary rounded-pill px-4">
-          <i class="fas fa-heart me-1"></i> Wishlist
-        </button>
+
+        <!-- Loading Overlay -->
+        <div class="loading-overlay" id="imageLoadingOverlay">
+          <div class="loading-spinner"></div>
+        </div>
+      </div>
+
+      <!-- Thumbnails -->
+      <div class="thumbnail-container d-flex justify-content-center flex-wrap mt-3">
+        {% for image in product.images.all %}
+          <img src="{{ image.image.url }}"
+               alt="Preview {{ forloop.counter }}"
+               class="thumbnail-img"
+               onclick="switchMainImage(this)"
+               tabindex="0"
+               role="button"
+               aria-label="View product image {{ forloop.counter }}"
+               onkeydown="handleThumbnailKeydown(event, this)">
+        {% endfor %}
       </div>
     </div>
+
+    <!-- Product Info Section -->
+    <div class="col-md-7 slide-in">
+      <h1 class="product-title">{{ product.name }}</h1>
+      <p class="product-description">{{ product.description|truncatewords:30 }}</p>
+
+      <!-- Enhanced Price -->
+      <div class="price-container">
+        <p class="price-label">Price</p>
+        <p class="price-value">D{{ product.price }}</p>
+      </div>
+
+      <!-- Enhanced Rating -->
+      <div class="rating-container">
+        <div class="rating-stars" role="img" aria-label="{{ product.average_rating|floatformat:1 }} out of 5 stars">
+          {% for i in "12345" %}
+            {% if product.average_rating|floatformat:1 >= i %}
+              <i class="fas fa-star"></i>
+            {% elif product.average_rating|floatformat:1 >= i|add:"-0.5" %}
+              <i class="fas fa-star-half-alt"></i>
+            {% else %}
+              <i class="far fa-star"></i>
+            {% endif %}
+          {% endfor %}
+        </div>
+        <span class="rating-text">
+          ({{ product.review_count }} review{{ product.review_count|pluralize }})
+        </span>
+      </div>
+
+      <!-- Enhanced Features -->
+      {% with product.variants.all as variants %}
+        {% if variants %}
+          <div class="features-container">
+            <h3 class="features-title">Key Features</h3>
+            <ul class="features-list">
+              {% for variant in variants|slice:":5" %}
+                <li class="feature-item">
+                  <i class="fas fa-check-circle feature-icon"></i>
+                  <span class="feature-name">{{ variant.feature_option.feature.name }}:</span>
+                  <span class="feature-value">{{ variant.feature_option.value }}</span>
+                </li>
+              {% endfor %}
+              {% if variants|length > 5 %}
+                <li class="feature-item text-muted">
+                  <i class="fas fa-ellipsis-h feature-icon"></i>
+                  <span>And {{ variants|length|add:"-5" }} more feature{{ variants|length|add:"-5"|pluralize }}...</span>
+                </li>
+              {% endif %}
+            </ul>
+          </div>
+        {% endif %}
+      {% endwith %}
+
+      <!-- Enhanced Actions -->
+      <div class="action-buttons">
+        <a href="{% url 'marketplace:product_detail' product.id %}"
+           class="btn btn-dark btn-enhanced"
+           aria-label="View detailed information for {{ product.name }}">
+          <i class="fas fa-eye"></i>
+          <span class="btn-text">View Details</span>
+        </a>
+
+        <button class="btn btn-outline-secondary btn-enhanced"
+                onclick="{% if product.is_in_stock %}addToCart({{ product.id }}, this){% else %}return false;{% endif %}"
+                {% if not product.is_in_stock %} disabled {% endif %}
+                aria-label="{% if product.is_in_stock %}Add {{ product.name }} to cart{% else %}Out of stock{% endif %}">
+          <i class="fas fa-cart-plus"></i>
+          <span class="btn-text">
+            {% if product.is_in_stock %}Add to Cart{% else %}Out of Stock{% endif %}
+          </span>
+        </button>
+
+      </div>
+    </div>
+
   </div>
 </div>
+
+<script>
+  // Enhanced image switching with loading states and error handling
+  function switchMainImage(thumbnail) {
+    const mainImage = document.getElementById('mainProductImage');
+    const loadingOverlay = document.getElementById('imageLoadingOverlay');
+    const newSrc = thumbnail.getAttribute('src');
+
+    // Don't switch if it's the same image
+    if (mainImage.src === newSrc) return;
+
+    // Show loading state
+    loadingOverlay.classList.add('active');
+
+    // Create new image to preload
+    const newImage = new Image();
+    newImage.onload = function() {
+      // Hide loading state
+      loadingOverlay.classList.remove('active');
+
+      // Update main image with fade effect
+      mainImage.style.opacity = '0.5';
+      setTimeout(() => {
+        mainImage.src = newSrc;
+        mainImage.alt = thumbnail.alt.replace('Preview', 'Main view of');
+        mainImage.style.opacity = '1';
+      }, 150);
+
+      // Update thumbnails active state
+      document.querySelectorAll('.thumbnail-img').forEach(img => {
+        img.classList.remove('active');
+      });
+      thumbnail.classList.add('active');
+    };
+
+    newImage.onerror = function() {
+      loadingOverlay.classList.remove('active');
+      console.error('Failed to load image:', newSrc);
+      // You could show an error message here
+    };
+
+    newImage.src = newSrc;
+  }
+
+  // Keyboard navigation for thumbnails
+  function handleThumbnailKeydown(event, thumbnail) {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      switchMainImage(thumbnail);
+    }
+  }
+
+  // CSRF token helper
+  function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+      const cookies = document.cookie.split(';');
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+          break;
+        }
+      }
+    }
+    return cookieValue;
+  }
+
+  // Enhanced initialization
+  document.addEventListener('DOMContentLoaded', function() {
+    // Set first thumbnail as active if none are active
+    const thumbnails = document.querySelectorAll('.thumbnail-img');
+    const activeThumbnail = document.querySelector('.thumbnail-img.active');
+
+    if (!activeThumbnail && thumbnails.length > 0) {
+      thumbnails[0].classList.add('active');
+    }
+
+    // Add intersection observer for progressive animations
+    if ('IntersectionObserver' in window) {
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('fade-in');
+            observer.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.1 });
+
+      document.querySelectorAll('.feature-item').forEach(item => {
+        observer.observe(item);
+      });
+    }
+
+    // Add smooth scrolling for any internal links
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+      anchor.addEventListener('click', function (e) {
+        e.preventDefault();
+        const target = document.querySelector(this.getAttribute('href'));
+        if (target) {
+          target.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start'
+          });
+        }
+      });
+    });
+
+    // Preload images for better performance
+    const mainImage = document.getElementById('mainProductImage');
+    if (mainImage && thumbnails.length > 0) {
+      thumbnails.forEach(thumbnail => {
+        const img = new Image();
+        img.src = thumbnail.src;
+      });
+    }
+  });
+
+  // Legacy function for backwards compatibility
+  function addToCart(productId, button) {
+    addToCartEnhanced(productId, button);
+  }
+</script>

@@ -2,9 +2,13 @@ from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import login, get_user_model
 from django.contrib.auth import authenticate, login, logout
+from .models import User
 from .models import Address
 from marketplace.utils import migrate_session_cart_to_user
 from django.contrib import messages
+from .forms import UserRegisterForm
+from django.contrib.auth.hashers import make_password
+from django.utils.text import slugify
 
 
 def login_view(request):
@@ -34,16 +38,50 @@ def custom_logout(request):
     logout(request)
     return redirect('marketplace:product_list')
 
-def register_buyer(request):
-    UserModel = get_user_model()
+def generate_unique_username(email):
+    base_username = slugify(email.split('@')[0])
+    username = base_username
+    counter = 1
+    while User.objects.filter(username=username).exists():
+        username = f"{base_username}{counter}"
+        counter += 1
+    return username
+
+
+def register_view(request):
     if request.method == 'POST':
-        username = request.POST.get('username')
+        first_name = request.POST.get('first_name')
+        last_name = request.POST.get('last_name')
+        email = request.POST.get('email')
         password = request.POST.get('password')
-        if username and password:
-            user = UserModel.objects.create_user(username=username, password=password, is_buyer=True)
-            login(request, user)
-            return redirect('marketplace:product_list')
-    return render(request, 'accounts/register_buyer.html')
+        password_confirm = request.POST.get('password_confirm')
+        telephone = request.POST.get('phone')
+        profile_pic = request.FILES.get('profile_picture')
+
+        if password != password_confirm:
+            messages.error(request, "Passwords do not match.")
+            return redirect('accounts:register')
+
+        if User.objects.filter(email=email).exists():
+            messages.error(request, "Email is already in use.")
+            return redirect('accounts:register')
+
+        username = generate_unique_username(email)
+
+        user = User.objects.create(
+            username=username,
+            email=email,
+            first_name=first_name,
+            last_name=last_name,
+            telephone=telephone,
+            profile_pic=profile_pic,
+            is_buyer=True,
+            password=make_password(password)
+        )
+
+        login(request, user)
+        messages.success(request, "Account created successfully.")
+        return redirect('/')
 
 @login_required
 def edit_address_modal(request):

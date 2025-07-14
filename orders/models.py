@@ -55,13 +55,6 @@ class Order(models.Model):
         ('cancelled', 'Cancelled'),
     ]
 
-    # PAYMENT_METHOD_CHOICES = [
-    #     ('credit_card', 'Credit Card'),
-    #     ('paypal', 'PayPal'),
-    #     ('bank_transfer', 'Bank Transfer'),
-    #     ('cash_on_delivery', 'Cash on Delivery'),
-    # ]
-
     buyer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='orders')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     created_at = models.DateTimeField(auto_now_add=True)
@@ -151,6 +144,14 @@ class Order(models.Model):
             }
             return method_map.get(self.payment_record.method, 'Unknown')
         return 'Not specified'
+
+    def mark_as_shipped(self):
+        """Mark the order as shipped and set shipped_date if not already set."""
+        self.status = 'shipped'
+        if not self.shipped_date:
+            self.shipped_date = timezone.now()
+        self.save()
+
 
     def save(self, *args, **kwargs):
         # Auto-set dates based on status changes

@@ -1,0 +1,523 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block content %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+
+<div class="shipments-dashboard">
+  <!-- Header Section -->
+  <div class="dashboard-header">
+    <div class="header-content">
+      <div class="title-section">
+        <h1 class="dashboard-title">
+          <svg class="title-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M16 3h5v5"></path>
+            <path d="M8 3H3v5"></path>
+            <path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3"></path>
+            <path d="M21 3l-7.828 7.828A4 4 0 0 0 12 13.828V22"></path>
+          </svg>
+          Shipments Management
+        </h1>
+        <p class="dashboard-subtitle">Track and manage all your shipments</p>
+      </div>
+      <div class="header-actions">
+        <a href="{% url 'logistics:create_shipment' %}" class="btn-primary-ship">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          New Shipment
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filters Section -->
+  <div class="filters-section">
+    <div class="search-container-ship">
+      <svg class="search-icon-ship" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"></circle>
+        <path d="M21 21l-4.35-4.35"></path>
+      </svg>
+      <input type="text" class="search-input-ship" placeholder="Search shipments..." id="shipmentSearch">
+    </div>
+    <div class="filter-container">
+      <select class="filter-select" id="statusFilter">
+        <option value="">All Status</option>
+        <option value="pending">Pending</option>
+        <option value="in_transit">In Transit</option>
+        <option value="delivered">Delivered</option>
+        <option value="cancelled">Cancelled</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Shipments Grid -->
+  <div class="shipments-grid">
+    {% for shipment in shipments %}
+    <div class="shipment-card" data-status="{{ shipment.status|lower }}">
+      <div class="card-header">
+        <div class="shipment-id">
+          <span class="id-label">ID</span>
+          <span class="id-value">#{{ shipment.id }}</span>
+        </div>
+        <div class="status-badge status-{{ shipment.status|lower }}">
+          {% if shipment.status|lower == 'pending' %}
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <path d="M12 6v6l4 2"></path>
+            </svg>
+          {% elif shipment.status|lower == 'in_transit' %}
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"></path>
+              <path d="M15 18H9"></path>
+              <path d="M19 18h2a1 1 0 0 0 1-1v-3.28a1 1 0 0 0-.684-.948l-1.923-.641a1 1 0 0 1-.578-.502l-1.539-3.076A1 1 0 0 0 16.382 8H14"></path>
+              <circle cx="17" cy="18" r="2"></circle>
+              <circle cx="7" cy="18" r="2"></circle>
+            </svg>
+          {% elif shipment.status|lower == 'delivered' %}
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 12l2 2 4-4"></path>
+              <circle cx="12" cy="12" r="10"></circle>
+            </svg>
+          {% else %}
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="15" y1="9" x2="9" y2="15"></line>
+              <line x1="9" y1="9" x2="15" y2="15"></line>
+            </svg>
+          {% endif %}
+          {{ shipment.status|title }}
+        </div>
+      </div>
+
+      <div class="card-content">
+        <div class="address-section">
+          <svg class="address-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+            <circle cx="12" cy="10" r="3"></circle>
+          </svg>
+          <div class="address-text">
+            <span class="address-label">Destination</span>
+            <span class="address-value">{{ shipment.shipping_address }}</span>
+          </div>
+        </div>
+
+        <div class="cost-section">
+          <svg class="cost-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="1" x2="12" y2="23"></line>
+            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+          </svg>
+          <div class="cost-details">
+            <span class="cost-label">Shipping Cost</span>
+            <span class="cost-value">${{ shipment.order.shipping_cost }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card-actions">
+        <a href="{% url 'logistics:shipment_detail' shipment.id %}" class="btn-view">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+          </svg>
+          View Details
+        </a>
+      </div>
+    </div>
+    {% empty %}
+    <div class="empty-state">
+      <svg class="empty-icon" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M16 3h5v5"></path>
+        <path d="M8 3H3v5"></path>
+        <path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3"></path>
+        <path d="M21 3l-7.828 7.828A4 4 0 0 0 12 13.828V22"></path>
+      </svg>
+      <h3>No shipments yet</h3>
+      <p>Get started by creating your first shipment</p>
+      <a href="{% url 'logistics:create_shipment' %}" class="btn-primary">Create Shipment</a>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<style>
+.shipments-dashboard {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem;
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  min-height: 100vh;
+}
+
+.dashboard-header {
+  margin-bottom: 2rem;
+}
+
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 2rem;
+  background: white;
+  padding: 2rem;
+  border-radius: 16px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.title-section {
+  flex: 1;
+}
+
+.dashboard-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 2rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 0.5rem 0;
+}
+
+.title-icon {
+  color: #3b82f6;
+}
+
+.dashboard-subtitle {
+  color: #64748b;
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+.header-actions {
+  display: flex;
+  gap: 1rem;
+}
+
+.btn-primary-ship {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: 12px;
+  text-decoration: none;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.3);
+}
+
+.btn-primary-ship:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px -1px rgba(59, 130, 246, 0.4);
+  color: white;
+  text-decoration: none;
+}
+
+.filters-section {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+}
+
+.search-container-ship {
+  position: relative;
+  flex: 1;
+  min-width: 300px;
+}
+
+.search-icon-ship {
+  position: absolute;
+  left: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #9ca3af;
+  pointer-events: none;
+}
+
+.search-input-ship {
+  width: 100%;
+  padding: 0.75rem 1rem 0.75rem 3rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  font-size: 1rem;
+  background: white;
+  transition: all 0.2s ease;
+}
+
+.search-input-ship:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.filter-container {
+  min-width: 200px;
+}
+
+.filter-select {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  background: white;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.shipments-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  gap: 1.5rem;
+}
+
+.shipment-card {
+  background: white;
+  border-radius: 16px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  transition: all 0.3s ease;
+  border: 1px solid #f1f5f9;
+}
+
+.shipment-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.shipment-id {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.id-label {
+  font-size: 0.75rem;
+  color: #64748b;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.id-value {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.status-pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-in_transit {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.status-delivered {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.status-cancelled {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.address-section, .cost-section {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.address-icon, .cost-icon {
+  color: #6b7280;
+  margin-top: 0.125rem;
+  flex-shrink: 0;
+}
+
+.address-text, .cost-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+}
+
+.address-label, .cost-label {
+  font-size: 0.875rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.address-value {
+  color: #1f2937;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.cost-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #059669;
+}
+
+.card-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.btn-view {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #f8fafc;
+  color: #475569;
+  padding: 0.625rem 1.25rem;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 0.875rem;
+  transition: all 0.2s ease;
+  border: 1px solid #e2e8f0;
+  flex: 1;
+  justify-content: center;
+}
+
+.btn-view:hover {
+  background: #e2e8f0;
+  color: #334155;
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+
+.empty-state {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 4rem 2rem;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.empty-icon {
+  color: #9ca3af;
+  margin-bottom: 1.5rem;
+}
+
+.empty-state h3 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 0.5rem;
+}
+
+.empty-state p {
+  color: #6b7280;
+  margin-bottom: 2rem;
+}
+
+@media (max-width: 768px) {
+  .shipments-dashboard {
+    padding: 1rem;
+  }
+
+  .header-content {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+  }
+
+  .filters-section {
+    flex-direction: column;
+  }
+
+  .search-container {
+    min-width: unset;
+  }
+
+  .shipments-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-title {
+    font-size: 1.75rem;
+  }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const searchInput = document.getElementById('shipmentSearch');
+  const statusFilter = document.getElementById('statusFilter');
+  const shipmentCards = document.querySelectorAll('.shipment-card');
+
+  function filterShipments() {
+    const searchTerm = searchInput.value.toLowerCase();
+    const statusValue = statusFilter.value.toLowerCase();
+
+    shipmentCards.forEach(card => {
+      const cardText = card.textContent.toLowerCase();
+      const cardStatus = card.dataset.status;
+
+      const matchesSearch = cardText.includes(searchTerm);
+      const matchesStatus = !statusValue || cardStatus === statusValue;
+
+      if (matchesSearch && matchesStatus) {
+        card.style.display = 'block';
+        card.style.animation = 'fadeIn 0.3s ease-in';
+      } else {
+        card.style.display = 'none';
+      }
+    });
+  }
+
+  searchInput.addEventListener('input', filterShipments);
+  statusFilter.addEventListener('change', filterShipments);
+
+  // Add fade-in animation
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  `;
+  document.head.appendChild(style);
+});
+</script>
+
+<script src="{% static 'js/main.js' %}"></script>
+{% endblock %}
