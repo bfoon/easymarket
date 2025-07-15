@@ -285,9 +285,10 @@ def add_product(request, store_id):
             })
 
         try:
-            # Create the product
+            # Create the product with seller and store
             product = Product.objects.create(
                 seller=request.user,
+                store=store,  # ✅ Ensure store is assigned here
                 name=request.POST.get('name').strip(),
                 category_id=request.POST.get('category') if request.POST.get('category') else None,
                 price=request.POST.get('price'),
@@ -585,7 +586,13 @@ def store_products(request, slug):
 
     # Get all products by this store owner
     products = Product.objects.filter(seller=store.owner).order_by('-created_at')
-
+    # Get all categories used by this store's products
+    categories = (
+        Category.objects
+        .filter(product__seller=store.owner)
+        .annotate(product_count=Count('product'))
+        .distinct()
+    )
     # Add pagination
     from django.core.paginator import Paginator
     paginator = Paginator(products, 12)
@@ -595,6 +602,8 @@ def store_products(request, slug):
     context = {
         'store': store,
         'products': page_obj,
+        'categories': categories,
+
     }
     return render(request, 'stores/store_products.html', context)
 

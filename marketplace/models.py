@@ -178,6 +178,8 @@ class Product(models.Model):
     original_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
     video = models.FileField(upload_to='product_videos/', blank=True, null=True)
     sold_count = models.PositiveIntegerField(default=0)
+    store = models.ForeignKey('stores.Store', on_delete=models.CASCADE, related_name='products' , blank=True, null=True)
+    is_active = models.BooleanField(default=True)
 
     # Remove this line:
     # stock = models.PositiveIntegerField(default=0)
