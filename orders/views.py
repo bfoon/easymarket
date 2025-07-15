@@ -461,7 +461,7 @@ def track_order_ajax(request):
                     'created_at': order.created_at.strftime('%B %d, %Y'),
                     'expected_delivery': order.expected_delivery_date.strftime(
                         '%B %d, %Y') if order.expected_delivery_date else None,
-                    'total': float(order.get_total()),
+                    'total': float(order.get_total),
                     'item_count': order.get_item_count(),
                 },
                 'tracking_updates': tracking_updates,
@@ -469,8 +469,8 @@ def track_order_ajax(request):
                     'full_name': order.shipping_address.full_name if order.shipping_address else '',
                     'street': order.shipping_address.street if order.shipping_address else '',
                     'city': order.shipping_address.city if order.shipping_address else '',
-                    'state': order.shipping_address.state if order.shipping_address else '',
-                    'zip_code': order.shipping_address.zip_code if order.shipping_address else '',
+                    'state': order.shipping_address.region if order.shipping_address else '',
+                    'zip_code': order.shipping_address.geo_code if order.shipping_address else '',
                 } if order.shipping_address else None
             })
 

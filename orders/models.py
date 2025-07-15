@@ -100,11 +100,13 @@ class Order(models.Model):
     @property
     def get_total(self):
         """Calculate the final total including tax and shipping"""
-        subtotal = self.get_subtotal()
-        tax = self.get_tax_amount()
-        shipping = self.shipping_cost or Decimal('0.00')
-        discount = self.discount_amount or Decimal('0.00')
-        return round(subtotal + tax + shipping - discount, 2)
+        subtotal = Decimal(self.get_subtotal() or 0)
+        tax = Decimal(self.get_tax_amount() or 0)
+        shipping = Decimal(self.shipping_cost or 0)
+        discount = Decimal(self.discount_amount or 0)
+
+        total = subtotal + tax + shipping - discount
+        return total.quantize(Decimal("0.01"))
 
     def get_item_count(self):
         """Get total number of items in the order"""
@@ -148,8 +150,8 @@ class Order(models.Model):
     def mark_as_shipped(self):
         """Mark the order as shipped and set shipped_date if not already set."""
         self.status = 'shipped'
-        if not self.shipped_date:
-            self.shipped_date = timezone.now()
+        if not self.collect_time:
+            self.collect_time = timezone.now()
         self.save()
 
 
@@ -158,8 +160,8 @@ class Order(models.Model):
         if self.pk:  # Only for existing orders
             old_order = Order.objects.get(pk=self.pk)
             if old_order.status != self.status:
-                if self.status == 'shipped' and not self.shipped_date:
-                    self.shipped_date = timezone.now()
+                if self.status == 'shipped' and not self.collect_time:
+                    self.collect_time = timezone.now()
                 elif self.status == 'delivered' and not self.delivered_date:
                     self.delivered_date = timezone.now()
 
