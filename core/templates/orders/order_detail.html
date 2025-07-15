@@ -6,55 +6,141 @@
 <link rel="stylesheet" type="text/css" href="{% static 'css/order_detail.css' %}">
 
 <div class="container py-5">
-    <div class="row">
+    <!-- Breadcrumb Navigation -->
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'marketplace:all_products' %}">Home</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'orders:order_history' %}">My Orders</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Order #{{ order.id }}</li>
+        </ol>
+    </nav>
 
+    <!-- Success/Error Messages -->
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                <i class="fas fa-{% if message.tags == 'success' %}check-circle{% elif message.tags == 'error' %}exclamation-triangle{% else %}info-circle{% endif %} me-2"></i>
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="row">
         <!-- Main Order Section -->
         <div class="col-lg-8">
+            <!-- Order Header -->
             <div class="card mb-4">
                 <div class="card-header d-flex justify-content-between align-items-center">
-                    <h4 class="mb-0">Order #{{ order.id }}</h4>
-                    <span class="badge badge-{{ order.status|lower }} fs-6">{{ order.get_status_display }}</span>
+                    <div>
+                        <h4 class="mb-1">Order #{{ order.id }}</h4>
+                        <small class="text-muted">
+                            <i class="fas fa-calendar me-1"></i>
+                            Placed on {{ order.created_at|date:"F d, Y \a\t g:i A" }}
+                        </small>
+                    </div>
+                    <div class="text-end">
+                        <span class="badge badge-{{ order.status|lower }} fs-6 mb-2">
+                            <i class="fas fa-{% if order.status == 'pending' %}clock{% elif order.status == 'processing' %}cog{% elif order.status == 'shipped' %}truck{% elif order.status == 'delivered' %}check-circle{% else %}times-circle{% endif %} me-1"></i>
+                            {{ order.get_status_display }}
+                        </span>
+                        {% if order.tracking_number %}
+                            <br><small class="text-muted">Tracking: {{ order.tracking_number }}</small>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Order Progress -->
+                <div class="card-body">
+                    <div class="progress-container mb-4">
+                        <div class="d-flex justify-content-between position-relative">
+                            <div class="text-center {% if order.status != 'cancelled' %}text-primary{% else %}text-muted{% endif %}">
+                                <i class="fas fa-shopping-cart fa-lg mb-2"></i>
+                                <div><small>Ordered</small></div>
+                            </div>
+                            <div class="text-center {% if order.status in 'processing,shipped,delivered' %}text-primary{% else %}text-muted{% endif %}">
+                                <i class="fas fa-cog fa-lg mb-2"></i>
+                                <div><small>Processing</small></div>
+                            </div>
+                            <div class="text-center {% if order.status in 'shipped,delivered' %}text-primary{% else %}text-muted{% endif %}">
+                                <i class="fas fa-truck fa-lg mb-2"></i>
+                                <div><small>Shipped</small></div>
+                            </div>
+                            <div class="text-center {% if order.status == 'delivered' %}text-primary{% else %}text-muted{% endif %}">
+                                <i class="fas fa-check-circle fa-lg mb-2"></i>
+                                <div><small>Delivered</small></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Order Items -->
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-box me-2"></i>Order Items
+                    </h5>
+                    <span class="badge bg-secondary">{{ order.items.count }} item{{ order.items.count|pluralize }}</span>
                 </div>
                 <div class="card-body">
                     <div class="table-responsive">
-                        <table class="table table-borderless">
+                        <table class="table table-borderless" role="table" aria-label="Order items">
                             <thead class="table-light">
                                 <tr>
-                                    <th>Product</th>
-                                    <th>Quantity</th>
-                                    <th>Price</th>
-                                    <th>Total</th>
+                                    <th scope="col">Product</th>
+                                    <th scope="col">Quantity</th>
+                                    <th scope="col">Unit Price</th>
+                                    <th scope="col">Total</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for item in order.items.all %}
                                 <tr>
                                     <td>
-                                    <div class="d-flex align-items-center">
-                                        {% if item.product.image %}
-                                            <img src="{{ item.product.image.url }}" alt="{{ item.product.name }}" class="rounded me-3" style="width: 50px; height: 50px; object-fit: cover;">
-                                        {% endif %}
-                                        <div>
-                                            <h6 class="mb-0">{{ item.product.name }}</h6>
-                                            <small class="text-muted">{{ item.product.description|truncatewords:5 }}</small>
+                                        <div class="d-flex align-items-center">
+                                            {% if item.product.image %}
+                                                <img src="{{ item.product.image.url }}"
+                                                     alt="{{ item.product.name }}"
+                                                     class="rounded me-3"
+                                                     style="width: 60px; height: 60px; object-fit: cover;"
+                                                     loading="lazy">
+                                            {% else %}
+                                                <div class="bg-light rounded me-3 d-flex align-items-center justify-content-center"
+                                                     style="width: 60px; height: 60px;">
+                                                    <i class="fas fa-image text-muted"></i>
+                                                </div>
+                                            {% endif %}
+                                            <div class="flex-grow-1">
+                                                <h6 class="mb-1">
+                                                    <a href="{% url 'marketplace:product_detail' item.product.id %}"
+                                                       class="text-decoration-none text-dark">
+                                                        {{ item.product.name }}
+                                                    </a>
+                                                </h6>
+                                                {% if item.product.description %}
+                                                    <p class="text-muted small mb-2">{{ item.product.description|truncatewords:8 }}</p>
+                                                {% endif %}
 
-                                            {% if item.selected_features %}
-                                                <ul class="list-unstyled mb-1 small text-muted ps-1" style="font-size: 0.85rem;">
-                                                    {% for key, value in item.selected_features.items %}
-                                                        <li>
-                                                            <span class="badge bg-light text-dark border">
+                                                {% if item.selected_features %}
+                                                    <div class="selected-features">
+                                                        {% for key, value in item.selected_features.items %}
+                                                            <span class="badge bg-light text-dark border me-1 mb-1">
                                                                 <strong>{{ key|title }}:</strong> {{ value }}
                                                             </span>
-                                                        </li>
-                                                    {% endfor %}
-                                                </ul>
-                                            {% endif %}
+                                                        {% endfor %}
+                                                    </div>
+                                                {% endif %}
+                                            </div>
                                         </div>
-                                    </div>
-                                </td>
-                                    <td>{{ item.quantity }}</td>
-                                    <td>D{{ item.product.price|floatformat:2 }}</td>
-                                    <td><strong>D{{ item.get_total_price|floatformat:2 }}</strong></td>
+                                    </td>
+                                    <td class="align-middle">
+                                        <span class="fw-medium">{{ item.quantity }}</span>
+                                    </td>
+                                    <td class="align-middle">D{{ item.product.price|floatformat:2 }}</td>
+                                    <td class="align-middle">
+                                        <strong class="text-primary">D{{ item.get_total_price|floatformat:2 }}</strong>
+                                    </td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -65,23 +151,62 @@
 
             <!-- Order Details Card -->
             <div class="card mb-4">
-                <div class="card-body row">
-                    <div class="col-md-6">
-                        <p><strong>Order Date:</strong> {{ order.created_at|date:"F d, Y" }}</p>
-                        <p><strong>Expected Delivery:</strong> {{ order.expected_delivery_date|date:"F d, Y"|default:"TBD" }}</p>
-                        {% if order.promo_code %}
-                            <p><strong>Promo Code:</strong> <span class="badge bg-success">{{ order.promo_code.code }}</span> <small class="text-muted">({{ order.promo_code.discount_percentage }}% off)</small></p>
-                        {% endif %}
-                    </div>
-                    <div class="col-md-6">
-                        {% if order.shipping_address %}
-                            <p><strong>Shipping Address:</strong></p>
-                            <address class="small">
-                                {{ order.shipping_address.street }}<br>
-                                {{ order.shipping_address.city }}, {{ order.shipping_address.region }}, {{ order.shipping_address.geo_code }}<br>
-                                {{ order.shipping_address.phone_number }}
-                            </address>
-                        {% endif %}
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-info-circle me-2"></i>Order Details
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <dl class="row">
+                                <dt class="col-sm-5">Order Date:</dt>
+                                <dd class="col-sm-7">{{ order.created_at|date:"F d, Y" }}</dd>
+
+                                <dt class="col-sm-5">Expected Delivery:</dt>
+                                <dd class="col-sm-7">
+                                    {% if order.expected_delivery_date %}
+                                        {{ order.expected_delivery_date|date:"F d, Y" }}
+                                        {% if order.status == 'shipped' %}
+                                            <small class="text-success">
+                                                <i class="fas fa-truck me-1"></i>On the way
+                                            </small>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-muted">To be determined</span>
+                                    {% endif %}
+                                </dd>
+
+                                {% if order.promo_code %}
+                                    <dt class="col-sm-5">Promo Code:</dt>
+                                    <dd class="col-sm-7">
+                                        <span class="badge bg-success me-2">{{ order.promo_code.code }}</span>
+                                        <small class="text-success">({{ order.promo_code.discount_percentage }}% off)</small>
+                                    </dd>
+                                {% endif %}
+                            </dl>
+                        </div>
+                        <div class="col-md-6">
+                            {% if order.shipping_address %}
+                                <h6 class="fw-bold mb-2">
+                                    <i class="fas fa-map-marker-alt me-2"></i>Shipping Address
+                                </h6>
+                                <address class="mb-0">
+                                    <strong>{{ order.shipping_address.full_name|default:"" }}</strong><br>
+                                    {{ order.shipping_address.street }}<br>
+                                    {{ order.shipping_address.city }}, {{ order.shipping_address.region }}<br>
+                                    {{ order.shipping_address.geo_code }}<br>
+                                    {% if order.shipping_address.phone_number %}
+                                        <i class="fas fa-phone me-1"></i>{{ order.shipping_address.phone_number }}
+                                    {% endif %}
+                                </address>
+                            {% else %}
+                                <div class="alert alert-warning">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>
+                                    No shipping address provided
+                                </div>
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -92,22 +217,39 @@
                     <h5 class="mb-0">
                         <i class="fas fa-comments me-2"></i>Chat with Supplier
                     </h5>
-                    <small class="text-muted">Order #{{ order.id }}</small>
+                    <div class="d-flex align-items-center">
+                        <span class="badge bg-success me-2" id="chatStatus">
+                            <i class="fas fa-circle me-1" style="font-size: 0.5rem;"></i>
+                            Online
+                        </span>
+                        <small class="text-muted">Order #{{ order.id }}</small>
+                    </div>
                 </div>
                 <div class="card-body p-0">
                     <!-- Chat Messages -->
                     <div id="chatMessages" class="chat-messages p-3"
-                     data-fetch-url="{% url 'orders:fetch_chat_messages' order.id %}"
-                     style="height: 400px; overflow-y: auto; border-bottom: 1px solid #dee2e6;">
+                         data-fetch-url="{% url 'orders:fetch_chat_messages' order.id %}"
+                         style="height: 400px; overflow-y: auto; border-bottom: 1px solid #dee2e6;"
+                         role="log" aria-live="polite" aria-label="Chat messages">
+
+                        <div id="loadingMessages" class="text-center py-3 d-none">
+                            <div class="spinner-border spinner-border-sm me-2" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            Loading messages...
+                        </div>
 
                         {% if chat_messages %}
                             {% for message in chat_messages %}
                                 <div class="message mb-3 {% if message.sender == request.user %}sent{% else %}received{% endif %}">
                                     <div class="message-content">
-                                        <div class="message-bubble {% if message.sender == request.user %}bg-primary text-white ms-auto{% else %}bg-light{% endif %} p-3 rounded">
-                                            <p class="mb-1">{{ message.content }}</p>
+                                        <div class="message-bubble {% if message.sender == request.user %}bg-primary text-white ms-auto{% else %}bg-light{% endif %} p-3 rounded" style="max-width: 80%;">
+                                            <p class="mb-1">{{ message.content|linebreaks }}</p>
                                             <small class="{% if message.sender == request.user %}text-white-50{% else %}text-muted{% endif %}">
                                                 {{ message.created_at|date:"M d, Y H:i" }}
+                                                {% if message.sender == request.user and message.read %}
+                                                    <i class="fas fa-check-double ms-1" title="Read"></i>
+                                                {% endif %}
                                             </small>
                                         </div>
                                         <div class="message-sender mt-1 {% if message.sender == request.user %}text-end{% endif %}">
@@ -123,35 +265,53 @@
                                 </div>
                             {% endfor %}
                         {% else %}
-                            <div class="text-center text-muted py-5">
-                                <i class="fas fa-comments fa-3x mb-3"></i>
-                                <p>No messages yet. Start a conversation with your supplier!</p>
+                            <div class="text-center text-muted py-5" id="emptyChat">
+                                <i class="fas fa-comments fa-3x mb-3 opacity-50"></i>
+                                <h6>No messages yet</h6>
+                                <p>Start a conversation with your supplier about this order!</p>
                             </div>
                         {% endif %}
                     </div>
 
                     <!-- Chat Input -->
-                    <div class="chat-input p-3">
+                    <div class="chat-input p-3 bg-light">
                         <form id="chatForm" class="d-flex" data-send-url="{% url 'orders:send_chat_message' %}">
                             {% csrf_token %}
                             <input type="hidden" name="order_id" value="{{ order.id }}">
                             <div class="flex-grow-1 me-3">
-                                <textarea
-                                    class="form-control"
-                                    name="message"
-                                    id="chatMessage"
-                                    placeholder="Type your message about this order..."
-                                    rows="2"
-                                    required
-                                ></textarea>
+                                <div class="position-relative">
+                                    <textarea
+                                        class="form-control"
+                                        name="message"
+                                        id="chatMessage"
+                                        placeholder="Type your message about this order..."
+                                        rows="2"
+                                        required
+                                        maxlength="1000"
+                                        aria-label="Chat message"
+                                    ></textarea>
+                                    <small class="position-absolute bottom-0 end-0 text-muted me-2 mb-1"
+                                           id="charCount" style="font-size: 0.7rem;">0/1000</small>
+                                </div>
                             </div>
                             <div class="d-flex flex-column">
                                 <button type="submit" class="btn btn-primary h-100" id="sendMessageBtn">
-                                    <i class="fas fa-paper-plane"></i>
-                                    <span class="d-none d-sm-inline ms-1">Send</span>
+                                    <span class="d-none" id="sendingSpinner">
+                                        <div class="spinner-border spinner-border-sm" role="status">
+                                            <span class="visually-hidden">Sending...</span>
+                                        </div>
+                                    </span>
+                                    <span id="sendIcon">
+                                        <i class="fas fa-paper-plane"></i>
+                                        <span class="d-none d-sm-inline ms-1">Send</span>
+                                    </span>
                                 </button>
                             </div>
                         </form>
+                        <small class="text-muted mt-2 d-block">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Messages are sent directly to your supplier for this order.
+                        </small>
                     </div>
                 </div>
             </div>
@@ -159,9 +319,12 @@
 
         <!-- Summary & Actions Section -->
         <div class="col-lg-4">
+            <!-- Order Summary -->
             <div class="card mb-4">
                 <div class="card-header">
-                    <h5 class="mb-0">Order Summary</h5>
+                    <h5 class="mb-0">
+                        <i class="fas fa-receipt me-2"></i>Order Summary
+                    </h5>
                 </div>
                 <div class="card-body">
                     <div class="d-flex justify-content-between mb-2">
@@ -170,7 +333,13 @@
                     </div>
                     <div class="d-flex justify-content-between mb-2">
                         <span>Shipping:</span>
-                        <span>D{{ order.shipping_cost|floatformat:2|default:"0.00" }}</span>
+                        <span>
+                            {% if order.shipping_cost %}
+                                D{{ order.shipping_cost|floatformat:2 }}
+                            {% else %}
+                                <span class="text-success">Free</span>
+                            {% endif %}
+                        </span>
                     </div>
                     {% if order.promo_code and order.discount_amount %}
                         <div class="d-flex justify-content-between mb-2 text-success">
@@ -189,59 +358,69 @@
                             <small class="text-decoration-line-through">D{{ order.get_subtotal_with_tax_and_shipping|floatformat:2 }}</small>
                         </div>
                         <div class="d-flex justify-content-between mb-3">
-                            <strong>Final Total:</strong>
-                            <strong class="text-primary">D{{ order.get_total|floatformat:2 }}</strong>
+                            <strong class="fs-5">Final Total:</strong>
+                            <strong class="text-primary fs-5">D{{ order.get_total|floatformat:2 }}</strong>
                         </div>
                         <div class="alert alert-success py-2 mb-3">
                             <small><i class="fas fa-check-circle me-1"></i> You saved D{{ order.discount_amount|floatformat:2 }}!</small>
                         </div>
                     {% else %}
                         <div class="d-flex justify-content-between mb-3">
-                            <strong>Total:</strong>
-                            <strong class="text-primary">D{{ order.get_total|floatformat:2 }}</strong>
+                            <strong class="fs-5">Total:</strong>
+                            <strong class="text-primary fs-5">D{{ order.get_total|floatformat:2 }}</strong>
                         </div>
                     {% endif %}
 
                     <!-- Order Action Buttons -->
-                    {% if order.status == 'pending' %}
-                        <button class="btn btn-primary btn-lg w-100 mb-3" onclick="proceedToPayment({{ order.id }})">
-                            <i class="fas fa-credit-card me-2"></i> Proceed to Payment
-                        </button>
-                        <button class="btn btn-outline-danger w-100 mb-3" onclick="cancelOrder({{ order.id }})">
-                            <i class="fas fa-times me-2"></i> Cancel Order
-                        </button>
+                    <div class="d-grid gap-2">
+                        {% if order.status == 'pending' %}
+                            <button class="btn btn-primary btn-lg" onclick="proceedToPayment({{ order.id }})">
+                                <i class="fas fa-credit-card me-2"></i> Proceed to Payment
+                            </button>
+                            <button class="btn btn-outline-danger" onclick="cancelOrder({{ order.id }})">
+                                <i class="fas fa-times me-2"></i> Cancel Order
+                            </button>
 
-                    {% elif order.status == 'processing' %}
-                        <button class="btn btn-info btn-lg w-100 mb-3" disabled>
-                            <i class="fas fa-clock me-2"></i> Processing Order
-                        </button>
-                        <button class="btn btn-outline-danger w-100 mb-3" onclick="cancelOrder({{ order.id }})">
-                            <i class="fas fa-times me-2"></i> Cancel Order
-                        </button>
-                    {% elif order.status == 'shipped' %}
-                        <button class="btn btn-success btn-lg w-100 mb-3" onclick="trackOrder({{ order.id }})">
-                            <i class="fas fa-truck me-2"></i> Track Order
-                        </button>
-                    {% elif order.status == 'delivered' %}
-                        <button class="btn btn-outline-primary btn-lg w-100 mb-3" onclick="reorderItems({{ order.id }})">
-                            <i class="fas fa-redo me-2"></i> Reorder Items
-                        </button>
-                    {% elif order.status == 'cancelled' %}
-                        <div class="alert alert-danger text-center mb-3">
-                            <i class="fas fa-times-circle me-2"></i> This order has been cancelled
-                        </div>
-                        <button class="btn btn-outline-primary btn-lg w-100 mb-3" onclick="reorderItems({{ order.id }})">
-                            <i class="fas fa-redo me-2"></i> Reorder Items
-                        </button>
-                    {% endif %}
+                        {% elif order.status == 'processing' %}
+                            <button class="btn btn-info btn-lg" disabled>
+                                <i class="fas fa-clock me-2"></i> Processing Order
+                            </button>
+                            <small class="text-muted text-center">Your order is being prepared</small>
+                            <button class="btn btn-outline-danger" onclick="cancelOrder({{ order.id }})">
+                                <i class="fas fa-times me-2"></i> Cancel Order
+                            </button>
 
-                    <a href="{% url 'marketplace:all_products' %}" class="btn btn-outline-secondary w-100">
-                        <i class="fas fa-shopping-bag me-2"></i> Continue Shopping
-                    </a>
+                        {% elif order.status == 'shipped' %}
+                            <button class="btn btn-success btn-lg" onclick="trackOrder({{ order.id }})">
+                                <i class="fas fa-truck me-2"></i> Track Package
+                            </button>
+                            <small class="text-muted text-center">Expected delivery: {{ order.expected_delivery_date|date:"M d, Y"|default:"Soon" }}</small>
+
+                        {% elif order.status == 'delivered' %}
+                            <div class="alert alert-success text-center mb-3">
+                                <i class="fas fa-check-circle me-2"></i> Order delivered successfully!
+                            </div>
+                            <button class="btn btn-outline-primary btn-lg" onclick="reorderItems({{ order.id }})">
+                                <i class="fas fa-redo me-2"></i> Reorder Items
+                            </button>
+
+                        {% elif order.status == 'cancelled' %}
+                            <div class="alert alert-danger text-center mb-3">
+                                <i class="fas fa-times-circle me-2"></i> This order has been cancelled
+                            </div>
+                            <button class="btn btn-outline-primary btn-lg" onclick="reorderItems({{ order.id }})">
+                                <i class="fas fa-redo me-2"></i> Reorder Items
+                            </button>
+                        {% endif %}
+
+                        <a href="{% url 'marketplace:all_products' %}" class="btn btn-outline-secondary">
+                            <i class="fas fa-shopping-bag me-2"></i> Continue Shopping
+                        </a>
+                    </div>
                 </div>
             </div>
 
-            <!-- Chat Status Card -->
+            <!-- Quick Actions Card -->
             <div class="card mb-4">
                 <div class="card-body text-center">
                     <div class="mb-3">
@@ -251,52 +430,75 @@
                     <p class="text-muted small mb-3">
                         Use the chat feature to communicate directly with your supplier about this order.
                     </p>
-                    <div class="d-flex justify-content-center">
+                    <div class="d-flex justify-content-center gap-2">
                         <span class="badge bg-success">
                             <i class="fas fa-circle me-1" style="font-size: 0.5rem;"></i>
                             Support Available
                         </span>
+                        {% if order.status == 'shipped' %}
+                            <span class="badge bg-info">
+                                <i class="fas fa-truck me-1"></i>
+                                In Transit
+                            </span>
+                        {% endif %}
                     </div>
                 </div>
             </div>
 
-            <!-- Other Orders -->
+            <!-- Recent Orders -->
             <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">Your Other Orders</h5>
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Recent Orders</h5>
+                    {% if other_orders %}
+                        <a href="{% url 'orders:order_history' %}" class="btn btn-sm btn-outline-primary">View All</a>
+                    {% endif %}
                 </div>
                 <div class="card-body">
                     {% if other_orders %}
                         <div class="list-group list-group-flush">
-                            {% for other_order in other_orders %}
-                                <div class="list-group-item px-0 py-2">
-                                    <div class="d-flex justify-content-between">
-                                        <div>
+                            {% for other_order in other_orders|slice:":3" %}
+                                <div class="list-group-item px-0 py-3 border-bottom">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div class="flex-grow-1">
                                             <h6 class="mb-1">Order #{{ other_order.id }}</h6>
-                                            <small class="text-muted">{{ other_order.created_at|date:"M d, Y" }}</small>
+                                            <small class="text-muted d-block">
+                                                <i class="fas fa-calendar me-1"></i>
+                                                {{ other_order.created_at|date:"M d, Y" }}
+                                            </small>
                                             {% if other_order.promo_code %}
-                                                <br><span class="badge bg-success">{{ other_order.promo_code.code }}</span>
+                                                <span class="badge bg-success mt-1">{{ other_order.promo_code.code }}</span>
                                             {% endif %}
                                         </div>
-                                        <div class="text-end">
-                                            <span class="badge badge-{{ other_order.status|lower }} mb-1">{{ other_order.get_status_display }}</span>
-                                            <br><small class="text-muted">D{{ other_order.get_total|floatformat:2 }}</small>
+                                        <div class="text-end ms-3">
+                                            <span class="badge badge-{{ other_order.status|lower }} mb-1">
+                                                {{ other_order.get_status_display }}
+                                            </span>
+                                            <div class="fw-bold">D{{ other_order.get_total|floatformat:2 }}</div>
                                         </div>
                                     </div>
-                                    <div class="mt-2">
-                                        <a href="{% url 'orders:order_detail' other_order.id %}" class="btn btn-sm btn-outline-primary me-2">View</a>
+                                    <div class="mt-2 d-flex gap-2">
+                                        <a href="{% url 'orders:order_detail' other_order.id %}"
+                                           class="btn btn-sm btn-outline-primary flex-fill">
+                                            View Details
+                                        </a>
                                         {% if other_order.status == 'pending' %}
-                                            <a href="{% url 'orders:complete_order' other_order.id %}" class="btn btn-sm btn-primary">Complete</a>
+                                            <a href="{% url 'orders:complete_order' other_order.id %}"
+                                               class="btn btn-sm btn-primary">
+                                                Complete
+                                            </a>
                                         {% endif %}
                                     </div>
                                 </div>
                             {% endfor %}
                         </div>
-                        <div class="mt-3">
-                            <a href="{% url 'orders:order_history' %}" class="btn btn-outline-secondary btn-sm w-100">View All Orders</a>
-                        </div>
                     {% else %}
-                        <p class="text-muted mb-0">No other orders found.</p>
+                        <div class="text-center text-muted py-4">
+                            <i class="fas fa-shopping-cart fa-2x mb-3 opacity-50"></i>
+                            <p class="mb-0">No other orders found.</p>
+                            <a href="{% url 'marketplace:all_products' %}" class="btn btn-primary btn-sm mt-2">
+                                Start Shopping
+                            </a>
+                        </div>
                     {% endif %}
                 </div>
             </div>
@@ -304,39 +506,59 @@
     </div>
 </div>
 
-<!-- Payment Modal -->
-<div class="modal fade" id="paymentModal" tabindex="-1">
+<!-- Enhanced Payment Modal -->
+<div class="modal fade" id="paymentModal" tabindex="-1" aria-labelledby="paymentModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <form id="paymentForm" novalidate>
                 {% csrf_token %}
                 <div class="modal-header">
-                    <h5 class="modal-title">Complete Payment</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <h5 class="modal-title" id="paymentModalLabel">
+                        <i class="fas fa-credit-card me-2"></i>Complete Payment
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <!-- Payment Method -->
-                    <div class="mb-3">
-                        <label class="form-label">Payment Method</label>
-                        <select class="form-select" name="payment_method" id="paymentMethod" required>
-                            <option value="">Select payment method</option>
-                            <option value="wave">Wave</option>
-                            <option value="qmoney">Qmoney</option>
-                            <option value="afrimoney">Afrimoney</option>
-                            <option value="cash">Cash Payment</option>
-                            <option value="verve_card">Verve Card</option>
-                        </select>
+                    <!-- Order Summary in Modal -->
+                    <div class="alert alert-light border">
+                        <div class="d-flex justify-content-between">
+                            <span><strong>Order #{{ order.id }}</strong></span>
+                            <span><strong>D{{ order.get_total|floatformat:2 }}</strong></span>
+                        </div>
                     </div>
 
-                    <!-- Mobile Payment -->
+                    <!-- Payment Method -->
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">
+                            <i class="fas fa-wallet me-2"></i>Payment Method
+                        </label>
+                        <select class="form-select" name="payment_method" id="paymentMethod" required>
+                            <option value="">Select payment method</option>
+                            <option value="wave">Wave Money</option>
+                            <option value="qmoney">QMoney</option>
+                            <option value="afrimoney">AfriMoney</option>
+                            <option value="cash">Cash on Delivery</option>
+                            <option value="verve_card">Verve Card</option>
+                        </select>
+                        <div class="invalid-feedback">Please select a payment method.</div>
+                    </div>
+
+                    <!-- Mobile Payment Fields -->
                     <div id="mobilePaymentFields" class="d-none">
-                        <div class="mb-3">
-                            <label class="form-label">Mobile Number</label>
-                            <input type="text" class="form-control" name="mobile_number" placeholder="Enter your number">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">PIN</label>
-                            <input type="password" class="form-control" name="pin" placeholder="Enter your PIN">
+                        <div class="row">
+                            <div class="col-md-8 mb-3">
+                                <label class="form-label">Mobile Number</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">+220</span>
+                                    <input type="tel" class="form-control" name="mobile_number"
+                                           placeholder="Enter your number" pattern="[0-9]{7,8}">
+                                </div>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">PIN</label>
+                                <input type="password" class="form-control" name="pin"
+                                       placeholder="Enter PIN" maxlength="6">
+                            </div>
                         </div>
                     </div>
 
@@ -344,81 +566,99 @@
                     <div id="verveCardFields" class="d-none">
                         <div class="mb-3">
                             <label class="form-label">Card Number</label>
-                            <input type="text" class="form-control" name="card_number" placeholder="1234 5678 9012 3456">
+                            <input type="text" class="form-control" name="card_number"
+                                   placeholder="1234 5678 9012 3456" maxlength="19">
                         </div>
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">Expiry Date</label>
-                                <input type="text" class="form-control" name="card_expiry" placeholder="MM/YY">
+                                <input type="text" class="form-control" name="card_expiry"
+                                       placeholder="MM/YY" maxlength="5">
                             </div>
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">CVV</label>
-                                <input type="text" class="form-control" name="card_cvv" placeholder="123">
+                                <input type="password" class="form-control" name="card_cvv"
+                                       placeholder="123" maxlength="3">
                             </div>
                         </div>
                     </div>
 
-                    <!-- Cash Note -->
+                    <!-- Cash Payment Note -->
                     <div id="cashNote" class="alert alert-info d-none">
-                        You selected cash payment. Please prepare the exact amount upon delivery.
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Cash on Delivery:</strong> Please prepare the exact amount (D{{ order.get_total|floatformat:2 }}) upon delivery.
+                        Additional delivery charges may apply.
                     </div>
 
-                    <!-- Shipping Info -->
+                    <!-- Shipping Information -->
                     <hr>
                     <div class="mb-3">
-                        <label class="form-label">Shipping Address</label>
-                        <select class="form-select" name="shipping_address" id="shippingSelect" onchange="toggleNewAddressForm()" required>
+                        <label class="form-label fw-bold">
+                            <i class="fas fa-map-marker-alt me-2"></i>Shipping Address
+                        </label>
+                        <select class="form-select" name="shipping_address" id="shippingSelect"
+                                onchange="toggleNewAddressForm()" required>
                             <option value="">-- Select a shipping address --</option>
                             {% for address in user.shipping_addresses.all %}
                                 <option value="{{ address.id }}" {% if address.is_default %}selected{% endif %}>
                                     {{ address.full_name }} - {{ address.street }}, {{ address.city }}
                                 </option>
                             {% endfor %}
-                            <option value="new">+ Enter a new address</option>
+                            <option value="new">+ Add a new address</option>
                         </select>
+                        <div class="invalid-feedback">Please select a shipping address.</div>
                     </div>
 
-
                     <!-- New Address Form -->
-                    <div id="newAddressForm" class="border p-3 rounded d-none">
-                        <h6 class="mb-3">New Shipping Address</h6>
-                        <div class="row g-2">
+                    <div id="newAddressForm" class="border p-3 rounded bg-light d-none">
+                        <h6 class="mb-3">
+                            <i class="fas fa-plus me-2"></i>New Shipping Address
+                        </h6>
+                        <div class="row g-3">
                             <div class="col-md-6">
-                                <label class="form-label">Full Name</label>
+                                <label class="form-label">Full Name <span class="text-danger">*</span></label>
                                 <input type="text" class="form-control" name="new_full_name" required>
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label">Phone Number</label>
-                                <input type="text" class="form-control" name="new_phone_number" required>
+                                <label class="form-label">Phone Number <span class="text-danger">*</span></label>
+                                <input type="tel" class="form-control" name="new_phone_number" required>
                             </div>
-                        </div>
-                        <div class="mb-2">
-                            <label class="form-label">Street Address</label>
-                            <input type="text" class="form-control" name="new_street" required>
-                        </div>
-                        <div class="row g-2">
+                            <div class="col-12">
+                                <label class="form-label">Street Address <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" name="new_street"
+                                       placeholder="House number and street name" required>
+                            </div>
                             <div class="col-md-4">
-                                <label class="form-label">City</label>
+                                <label class="form-label">City <span class="text-danger">*</span></label>
                                 <input type="text" class="form-control" name="new_city" required>
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label">Region</label>
+                                <label class="form-label">Region <span class="text-danger">*</span></label>
                                 <input type="text" class="form-control" name="new_region" required>
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label">Geo Code</label>
-                                <input type="text" class="form-control" name="new_geo_code" required>
+                                <label class="form-label">Postal Code</label>
+                                <input type="text" class="form-control" name="new_geo_code">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Country</label>
+                                <input type="text" class="form-control" name="new_country" value="Gambia" readonly>
                             </div>
                         </div>
-                        <div class="mb-2">
-                            <label class="form-label">Country</label>
-                            <input type="text" class="form-control" name="new_country" value="Gambia" required>
-                        </div>
                     </div>
+                </div>
 
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary" onclick="processPayment({{ order.id }})">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-2"></i>Cancel
+                    </button>
+                    <button type="button" class="btn btn-primary btn-lg" onclick="processPayment({{ order.id }})" id="paymentBtn">
+                        <span id="paymentSpinner" class="d-none">
+                            <div class="spinner-border spinner-border-sm me-2" role="status">
+                                <span class="visually-hidden">Processing...</span>
+                            </div>
+                        </span>
+                        <i class="fas fa-lock me-2" id="paymentIcon"></i>
                         Pay D{{ order.get_total|floatformat:2 }}
                     </button>
                 </div>
@@ -427,40 +667,107 @@
     </div>
 </div>
 
-<!-- Cancel Order Modal -->
-<div class="modal fade" id="cancelOrderModal" tabindex="-1">
+<!-- Enhanced Cancel Order Modal -->
+<div class="modal fade" id="cancelOrderModal" tabindex="-1" aria-labelledby="cancelOrderModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title text-danger">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title text-danger" id="cancelOrderModalLabel">
                     <i class="fas fa-exclamation-triangle me-2"></i> Cancel Order
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <div class="alert alert-warning">
-                    <strong>Warning:</strong> Cancelling this order will restore product stock and cannot be undone.
+                <div class="text-center mb-4">
+                    <i class="fas fa-exclamation-triangle fa-3x text-warning mb-3"></i>
+                    <h6>Are you sure you want to cancel this order?</h6>
                 </div>
-                <p>Are you sure you want to cancel Order #{{ order.id }}?</p>
+
+                <div class="alert alert-warning">
+                    <ul class="mb-0 ps-3">
+                        <li>Product stock will be restored</li>
+                        <li>Any applied promo codes will be voided</li>
+                        <li>This action cannot be undone</li>
+                    </ul>
+                </div>
+
+                <div class="border rounded p-3 bg-light">
+                    <strong>Order #{{ order.id }}</strong><br>
+                    <small class="text-muted">Total: D{{ order.get_total|floatformat:2 }}</small>
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                    Keep Order
+                    <i class="fas fa-arrow-left me-2"></i>Keep Order
                 </button>
                 <button type="button" class="btn btn-danger" id="confirmCancelBtn" onclick="confirmCancelOrder()">
-                    Yes, Cancel Order
+                    <i class="fas fa-trash me-2"></i>Yes, Cancel Order
                 </button>
             </div>
         </div>
     </div>
 </div>
 
+<!-- Scripts -->
 <script src="{% static 'js/main.js' %}"></script>
 <script src="{% static 'js/order_detail.js' %}"></script>
 <script src="{% static 'js/order2_chat.js' %}"></script>
 
+<script>
+// Enhanced chat functionality
+document.addEventListener('DOMContentLoaded', function() {
+    const chatMessage = document.getElementById('chatMessage');
+    const charCount = document.getElementById('charCount');
 
+    // Character counter
+    if (chatMessage && charCount) {
+        chatMessage.addEventListener('input', function() {
+            const count = this.value.length;
+            charCount.textContent = `${count}/1000`;
+            charCount.className = count > 900 ? 'position-absolute bottom-0 end-0 text-warning me-2 mb-1' :
+                                  'position-absolute bottom-0 end-0 text-muted me-2 mb-1';
+        });
 
+        // Auto-resize textarea
+        chatMessage.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = this.scrollHeight + 'px';
+        });
+    }
 
+    // Auto-scroll to bottom of chat
+    const chatMessages = document.getElementById('chatMessages');
+    if (chatMessages) {
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+});
+
+// Enhanced payment method handling
+document.getElementById('paymentMethod')?.addEventListener('change', function() {
+    const mobileFields = document.getElementById('mobilePaymentFields');
+    const cardFields = document.getElementById('verveCardFields');
+    const cashNote = document.getElementById('cashNote');
+
+    // Hide all fields first
+    [mobileFields, cardFields, cashNote].forEach(el => {
+        if (el) el.classList.add('d-none');
+    });
+
+    // Show relevant fields
+    switch(this.value) {
+        case 'wave':
+        case 'qmoney':
+        case 'afrimoney':
+            mobileFields?.classList.remove('d-none');
+            break;
+        case 'verve_card':
+            cardFields?.classList.remove('d-none');
+            break;
+        case 'cash':
+            cashNote?.classList.remove('d-none');
+            break;
+    }
+});
+</script>
 
 {% endblock %}

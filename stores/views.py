@@ -628,7 +628,7 @@ def edit_product(request, store_id, product_id):
     stock, created = Stock.objects.get_or_create(product=product)
 
     ImageFormSet = modelformset_factory(ProductImage, form=ProductImageForm, extra=5, can_delete=False)
-    VariantFormSet = modelformset_factory(ProductVariant, form=ProductVariantForm, extra=10, can_delete=True)
+    VariantFormSet = modelformset_factory(ProductVariant, form=ProductVariantForm, extra=10, can_delete=False)
 
     if request.method == 'POST':
         product_form = ProductForm(request.POST, request.FILES, instance=product)

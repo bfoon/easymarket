@@ -12,141 +12,256 @@
     <div class="col-12">
       <div class="d-flex justify-content-between align-items-center">
         <div>
-          <h2 class="mb-1">
-            <i class="fas fa-edit text-primary me-2"></i>Edit Product
-          </h2>
-          <p class="text-muted mb-0">
-            <i class="fas fa-store me-1"></i>{{ store.name }} • {{ product.name }}
-          </p>
+          <h1 class="h2 mb-1">
+            <i class="fas fa-edit text-primary me-2" aria-hidden="true"></i>Edit Product
+          </h1>
+          <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-0">
+              <li class="breadcrumb-item">
+                <i class="fas fa-store me-1" aria-hidden="true"></i>{{ store.name }}
+              </li>
+              <li class="breadcrumb-item active" aria-current="page">{{ product.name }}</li>
+            </ol>
+          </nav>
         </div>
-        <div class="btn-group">
-          <a href="{% url 'stores:product_detail' product.id %}" class="btn btn-outline-success" target="_blank">
-            <i class="fas fa-eye"></i> View Product
+        <div class="btn-group" role="group" aria-label="Product actions">
+          <a href="{% url 'stores:product_detail' product.id %}"
+             class="btn btn-outline-success"
+             target="_blank"
+             rel="noopener"
+             aria-label="View product in new tab">
+            <i class="fas fa-eye" aria-hidden="true"></i> View Product
           </a>
-          <a href="{% url 'stores:manage_store_products' store.id %}" class="btn btn-outline-secondary">
-            <i class="fas fa-arrow-left"></i> Back to Products
+          <a href="{% url 'stores:manage_store_products' store.id %}"
+             class="btn btn-outline-secondary"
+             aria-label="Back to products list">
+            <i class="fas fa-arrow-left" aria-hidden="true"></i> Back to Products
           </a>
         </div>
       </div>
     </div>
   </div>
 
-  <form method="post" enctype="multipart/form-data">
+  <!-- Loading Overlay -->
+  <div id="loadingOverlay" class="d-none position-fixed top-0 start-0 w-100 h-100 bg-dark bg-opacity-50" style="z-index: 9999;">
+    <div class="d-flex justify-content-center align-items-center h-100">
+      <div class="text-center text-white">
+        <div class="spinner-border text-primary mb-3" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p>Saving changes...</p>
+      </div>
+    </div>
+  </div>
+
+  <form method="post" enctype="multipart/form-data" id="productForm" novalidate>
     {% csrf_token %}
 
     <div class="row">
       <!-- Product Details -->
       <div class="col-lg-8">
+        <!-- Basic Information -->
         <div class="card mb-4">
           <div class="card-header bg-light">
-            <h5 class="card-title mb-0">
-              <i class="fas fa-info-circle me-2"></i>Product Details ({{product.sold_count}} Sold)
-            </h5>
+            <h2 class="h5 card-title mb-0">
+              <i class="fas fa-info-circle me-2 text-primary" aria-hidden="true"></i>
+              Product Information
+              {% if product.sold_count %}
+                <span class="badge bg-success ms-2">{{ product.sold_count }} Sold</span>
+              {% endif %}
+            </h2>
           </div>
           <div class="card-body">
             <div class="row">
               <div class="col-md-6">
-                <!-- Name, Category, Price -->
+                <!-- Name -->
                 <div class="mb-3">
-                  <label for="{{ product_form.name.id_for_label }}" class="form-label">Product Name *</label>
+                  <label for="{{ product_form.name.id_for_label }}" class="form-label">
+                    Product Name <span class="text-danger" aria-label="required">*</span>
+                  </label>
                   {{ product_form.name }}
-                  {% if product_form.name.errors %}
-                  <div class="text-danger small">{{ product_form.name.errors }}</div>
-                  {% endif %}
+                  <div id="{{ product_form.name.id_for_label }}-feedback" class="invalid-feedback">
+                    {% if product_form.name.errors %}
+                      {{ product_form.name.errors.0 }}
+                    {% endif %}
+                  </div>
+                  <div class="form-text">
+                    <small><span id="nameCounter">0</span>/100 characters</small>
+                  </div>
                 </div>
+
+                <!-- Category -->
                 <div class="mb-3">
                   <label for="{{ product_form.category.id_for_label }}" class="form-label">Category</label>
                   {{ product_form.category }}
-                  {% if product_form.category.errors %}
-                  <div class="text-danger small">{{ product_form.category.errors }}</div>
-                  {% endif %}
+                  <div id="{{ product_form.category.id_for_label }}-feedback" class="invalid-feedback">
+                    {% if product_form.category.errors %}
+                      {{ product_form.category.errors.0 }}
+                    {% endif %}
+                  </div>
                 </div>
+
+                <!-- Pricing -->
                 <div class="row">
                   <div class="col-md-6">
                     <div class="mb-3">
-                      <label for="{{ product_form.price.id_for_label }}" class="form-label">Price (D) *</label>
-                      {{ product_form.price }}
-                      {% if product_form.price.errors %}
-                      <div class="text-danger small">{{ product_form.price.errors }}</div>
-                      {% endif %}
-                    </div>
-                    {% if product.promo_codes.exists %}
-                    <div class="mt-3">
-                      <label class="form-label">Active Promo Codes</label>
-                      <div class="form-check">
-                        {% for promo in product.promo_codes.all %}
-                          <div class="form-check mb-2">
-                            <input class="form-check-input" type="checkbox" name="remove_promo_{{ promo.id }}" id="remove_promo_{{ promo.id }}">
-                            <label class="form-check-label text-success" for="remove_promo_{{ promo.id }}">
-                              Remove <strong>{{ promo.code }}</strong> ({{ promo.discount_percentage }}% off)
-                            </label>
-                          </div>
-                        {% endfor %}
+                      <label for="{{ product_form.price.id_for_label }}" class="form-label">
+                        Current Price (D) <span class="text-danger" aria-label="required">*</span>
+                      </label>
+                      <div class="input-group">
+                        <span class="input-group-text">D</span>
+                        {{ product_form.price }}
+                      </div>
+                      <div id="{{ product_form.price.id_for_label }}-feedback" class="invalid-feedback">
+                        {% if product_form.price.errors %}
+                          {{ product_form.price.errors.0 }}
+                        {% endif %}
                       </div>
                     </div>
-                  {% endif %}
                   </div>
                   <div class="col-md-6">
                     <div class="mb-3">
-                      <label for="{{ product_form.original_price.id_for_label }}" class="form-label">Original Price (D)</label>
-                      {{ product_form.original_price }}
-                      {% if product_form.original_price.errors %}
-                      <div class="text-danger small">{{ product_form.original_price.errors }}</div>
-                      {% endif %}
+                      <label for="{{ product_form.original_price.id_for_label }}" class="form-label">
+                        Original Price (D)
+                      </label>
+                      <div class="input-group">
+                        <span class="input-group-text">D</span>
+                        {{ product_form.original_price }}
+                      </div>
+                      <div id="{{ product_form.original_price.id_for_label }}-feedback" class="invalid-feedback">
+                        {% if product_form.original_price.errors %}
+                          {{ product_form.original_price.errors.0 }}
+                        {% endif %}
+                      </div>
+                      <div class="form-text">
+                        <small id="discountInfo"></small>
+                      </div>
                     </div>
                   </div>
                 </div>
+
+                <!-- Active Promo Codes -->
+                {% if product.promo_codes.exists %}
+                <div class="mb-3">
+                  <label class="form-label">Active Promo Codes</label>
+                  <div class="border rounded p-3 bg-light">
+                    {% for promo in product.promo_codes.all %}
+                      <div class="form-check mb-2">
+                        <input class="form-check-input"
+                               type="checkbox"
+                               name="remove_promo_{{ promo.id }}"
+                               id="remove_promo_{{ promo.id }}"
+                               aria-describedby="promo_{{ promo.id }}_desc">
+                        <label class="form-check-label text-success" for="remove_promo_{{ promo.id }}">
+                          Remove <strong>{{ promo.code }}</strong>
+                          <span id="promo_{{ promo.id }}_desc" class="text-muted">({{ promo.discount_percentage }}% off)</span>
+                        </label>
+                      </div>
+                    {% endfor %}
+                  </div>
+                </div>
+                {% endif %}
               </div>
 
               <div class="col-md-6">
-                <!-- Main Image + Video -->
+                <!-- Main Image -->
                 <div class="mb-3">
                   <label for="{{ product_form.image.id_for_label }}" class="form-label">Main Product Image</label>
                   {% if product.image %}
                   <div class="mb-2">
-                    <img src="{{ product.image.url }}" alt="{{ product.name }}" class="img-thumbnail" style="max-width: 150px;">
+                    <img src="{{ product.image.url }}"
+                         alt="{{ product.name }}"
+                         class="img-thumbnail"
+                         style="max-width: 150px;"
+                         id="currentMainImage">
                   </div>
                   {% endif %}
                   {{ product_form.image }}
-                  {% if product_form.image.errors %}
-                  <div class="text-danger small">{{ product_form.image.errors }}</div>
-                  {% endif %}
+                  <div id="{{ product_form.image.id_for_label }}-feedback" class="invalid-feedback">
+                    {% if product_form.image.errors %}
+                      {{ product_form.image.errors.0 }}
+                    {% endif %}
+                  </div>
+                  <div class="form-text">
+                    <small>Recommended size: 800x800px, Max size: 5MB</small>
+                  </div>
+                  <!-- Image preview -->
+                  <div id="imagePreview" class="mt-2 d-none">
+                    <img id="previewImg" src="" alt="Preview" class="img-thumbnail" style="max-width: 150px;">
+                  </div>
                 </div>
 
+                <!-- Product Video -->
                 <div class="mb-3">
                   <label for="{{ product_form.video.id_for_label }}" class="form-label">Product Video</label>
                   {{ product_form.video }}
-                  {% if product_form.video.errors %}
-                  <div class="text-danger small">{{ product_form.video.errors }}</div>
-                  {% endif %}
+                  <div id="{{ product_form.video.id_for_label }}-feedback" class="invalid-feedback">
+                    {% if product_form.video.errors %}
+                      {{ product_form.video.errors.0 }}
+                    {% endif %}
+                  </div>
+                  <div class="form-text">
+                    <small>Max size: 50MB, Supported formats: MP4, WebM</small>
+                  </div>
                 </div>
               </div>
             </div>
+          </div>
+        </div>
 
-            <!-- Description + Specs -->
+        <!-- Description & Specifications -->
+        <div class="card mb-4">
+          <div class="card-header bg-light">
+            <h2 class="h5 card-title mb-0">
+              <i class="fas fa-file-text me-2 text-primary" aria-hidden="true"></i>Product Description
+            </h2>
+          </div>
+          <div class="card-body">
             <div class="mb-3">
-              <label for="{{ product_form.description.id_for_label }}" class="form-label">Description *</label>
+              <label for="{{ product_form.description.id_for_label }}" class="form-label">
+                Description <span class="text-danger" aria-label="required">*</span>
+              </label>
               {{ product_form.description }}
-              {% if product_form.description.errors %}
-              <div class="text-danger small">{{ product_form.description.errors }}</div>
-              {% endif %}
+              <div id="{{ product_form.description.id_for_label }}-feedback" class="invalid-feedback">
+                {% if product_form.description.errors %}
+                  {{ product_form.description.errors.0 }}
+                {% endif %}
+              </div>
+              <div class="form-text">
+                <small><span id="descCounter">0</span>/1000 characters</small>
+              </div>
             </div>
+
             <div class="mb-3">
               <label for="{{ product_form.specifications.id_for_label }}" class="form-label">Specifications</label>
               {{ product_form.specifications }}
-              {% if product_form.specifications.errors %}
-              <div class="text-danger small">{{ product_form.specifications.errors }}</div>
-              {% endif %}
+              <div id="{{ product_form.specifications.id_for_label }}-feedback" class="invalid-feedback">
+                {% if product_form.specifications.errors %}
+                  {{ product_form.specifications.errors.0 }}
+                {% endif %}
+              </div>
+              <div class="form-text">
+                <small>Add detailed specifications (dimensions, materials, etc.)</small>
+              </div>
             </div>
+          </div>
+        </div>
 
-            <!-- Boolean Feature Toggles -->
+        <!-- Product Features -->
+        <div class="card mb-4">
+          <div class="card-header bg-light">
+            <h2 class="h5 card-title mb-0">
+              <i class="fas fa-star me-2 text-primary" aria-hidden="true"></i>Product Features
+            </h2>
+          </div>
+          <div class="card-body">
             <div class="row">
               {% for item in boolean_fields %}
-              <div class="col-md-3">
+              <div class="col-md-3 col-sm-6">
                 <div class="form-check mb-3">
                   {{ item.field }}
                   <label class="form-check-label" for="{{ item.field.id_for_label }}">
-                    <i class="fas {{ item.icon }} text-{{ item.color }} me-1"></i>{{ item.text }}
+                    <i class="fas {{ item.icon }} text-{{ item.color }} me-1" aria-hidden="true"></i>{{ item.text }}
                   </label>
                 </div>
               </div>
@@ -158,60 +273,76 @@
         <!-- Product Variants -->
         <div class="card mb-4">
           <div class="card-header bg-light">
-            <h5 class="card-title mb-0">
-              <i class="fas fa-layer-group me-2"></i>Product Variants
-            </h5>
+            <h2 class="h5 card-title mb-0">
+              <i class="fas fa-layer-group me-2 text-primary" aria-hidden="true"></i>Product Variants
+            </h2>
           </div>
           <div class="card-body">
             {{ variant_formset.management_form }}
-            <div class="row">
+            <div class="row" id="variantContainer">
               {% for form in variant_formset %}
-              <div class="col-md-6 mb-3">
-                <label>{{ form.feature_option.label }}</label>
-                {{ form.feature_option }}
-                {% if form.feature_option.errors %}
-                <div class="text-danger small">{{ form.feature_option.errors }}</div>
-                {% endif %}
-                <div class="form-check mt-1">
-                  {{ form.DELETE }}
-                  <label class="form-check-label">Delete</label>
+              <div class="col-md-6 mb-3 variant-form">
+                <div class="border rounded p-3">
+                  <div class="mb-2">
+                    <label class="form-label">{{ form.feature_option.label }}</label>
+                    {{ form.feature_option }}
+                    {% if form.feature_option.errors %}
+                    <div class="text-danger small">{{ form.feature_option.errors.0 }}</div>
+                    {% endif %}
+                  </div>
+                  <div class="form-check">
+                    {{ form.DELETE }}
+                    <label class="form-check-label text-danger">
+                      <i class="fas fa-trash me-1" aria-hidden="true"></i>Delete this variant
+                    </label>
+                  </div>
                 </div>
               </div>
               {% endfor %}
             </div>
-            <div class="alert alert-info mt-3">
-              <i class="fas fa-info-circle me-2"></i>
-              <small>Add product variations (e.g., color, size, material, etc.)</small>
+            <div class="alert alert-info">
+              <i class="fas fa-info-circle me-2" aria-hidden="true"></i>
+              <strong>Tip:</strong> Add product variations like color, size, material, etc. to give customers more options.
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Product Images -->
+      <!-- Sidebar -->
       <div class="col-lg-4">
-        <div class="card">
+        <!-- Product Images -->
+        <div class="card mb-4">
           <div class="card-header bg-light">
-            <h5 class="card-title mb-0">
-              <i class="fas fa-images me-2"></i>Product Images
-            </h5>
+            <h2 class="h5 card-title mb-0">
+              <i class="fas fa-images me-2 text-primary" aria-hidden="true"></i>Product Gallery
+            </h2>
           </div>
           <div class="card-body">
             <!-- Existing Images -->
             <div class="mb-3">
               <h6 class="text-muted">Current Images</h6>
-              <div class="row" id="currentImages">
+              <div class="row g-2" id="currentImages">
                 {% for image in product.images.all %}
-                <div class="col-6 mb-2" id="image-{{ image.id }}">
+                <div class="col-6" id="image-{{ image.id }}">
                   <div class="position-relative">
-                    <img src="{{ image.image.url }}" alt="Product Image" class="img-thumbnail w-100">
-                    <button type="button" class="btn btn-danger btn-sm position-absolute top-0 end-0 m-1" onclick="deleteImage({{ image.id }})">
-                      <i class="fas fa-times"></i>
+                    <img src="{{ image.image.url }}"
+                         alt="Product Image {{ forloop.counter }}"
+                         class="img-thumbnail w-100"
+                         style="aspect-ratio: 1; object-fit: cover;">
+                    <button type="button"
+                            class="btn btn-danger btn-sm position-absolute top-0 end-0 m-1"
+                            onclick="deleteImage({{ image.id }})"
+                            aria-label="Delete image {{ forloop.counter }}">
+                      <i class="fas fa-times" aria-hidden="true"></i>
                     </button>
                   </div>
                 </div>
                 {% empty %}
                 <div class="col-12">
-                  <p class="text-muted text-center">No additional images</p>
+                  <div class="text-center py-4">
+                    <i class="fas fa-image text-muted fa-3x mb-3"></i>
+                    <p class="text-muted">No additional images</p>
+                  </div>
                 </div>
                 {% endfor %}
               </div>
@@ -226,7 +357,7 @@
               <div class="mb-2">
                 {{ form.image }}
                 {% if form.image.errors %}
-                <div class="text-danger small">{{ form.image.errors }}</div>
+                <div class="text-danger small">{{ form.image.errors.0 }}</div>
                 {% endif %}
               </div>
               {% endif %}
@@ -234,87 +365,154 @@
             </div>
 
             <div class="alert alert-info">
-              <i class="fas fa-info-circle me-2"></i>
-              <small>You can upload up to 3 additional images. Recommended size: 800x800px</small>
+              <i class="fas fa-info-circle me-2" aria-hidden="true"></i>
+              <small><strong>Guidelines:</strong> Upload up to 3 additional images. Recommended size: 800x800px</small>
             </div>
           </div>
         </div>
-        {% if product.stock %}
-         <div class="mb-3">
-            <label for="stock_quantity" class="form-label">Stock Quantity</label>
-            <input type="number" name="stock_quantity" id="stock_quantity" value="{{ stock_quantity }}" class="form-control" min="0">
-          </div>
-        {% else %}
-          <div class="alert alert-warning">
-            <i class="fas fa-exclamation-circle"></i> No stock record found for this product.
-          </div>
-        {% endif %}
 
-         <!-- Assign Existing Promo Code -->
-        <div class="mb-3">
-          <label for="existing_promo" class="form-label">Assign Existing Promo Code</label>
-          <select name="existing_promo" id="existing_promo" class="form-select">
-            <option value="">-- None --</option>
-            {% for promo in all_promos %}
-              <option value="{{ promo.id }}">{{ promo.code }} ({{ promo.discount_percentage }}%)</option>
-            {% endfor %}
-          </select>
+        <!-- Stock Management -->
+        <div class="card mb-4">
+          <div class="card-header bg-light">
+            <h2 class="h5 card-title mb-0">
+              <i class="fas fa-boxes me-2 text-primary" aria-hidden="true"></i>Inventory
+            </h2>
+          </div>
+          <div class="card-body">
+            {% if product.stock %}
+            <div class="mb-3">
+              <label for="stock_quantity" class="form-label">Stock Quantity</label>
+              <input type="number"
+                     name="stock_quantity"
+                     id="stock_quantity"
+                     value="{{ stock_quantity }}"
+                     class="form-control"
+                     min="0"
+                     aria-describedby="stockHelp">
+              <div id="stockHelp" class="form-text">
+                <small>Current stock level</small>
+              </div>
+            </div>
+            {% else %}
+            <div class="alert alert-warning">
+              <i class="fas fa-exclamation-triangle me-2" aria-hidden="true"></i>
+              <strong>No stock record found</strong><br>
+              <small>Contact support to set up inventory tracking for this product.</small>
+            </div>
+            {% endif %}
+          </div>
         </div>
 
-        <hr>
+        <!-- Promo Codes -->
+        <div class="card mb-4">
+          <div class="card-header bg-light">
+            <h2 class="h5 card-title mb-0">
+              <i class="fas fa-tags me-2 text-primary" aria-hidden="true"></i>Promo Codes
+            </h2>
+          </div>
+          <div class="card-body">
+            <!-- Assign Existing Promo Code -->
+            <div class="mb-3">
+              <label for="existing_promo" class="form-label">Assign Existing Promo Code</label>
+              <select name="existing_promo" id="existing_promo" class="form-select">
+                <option value="">-- Select a promo code --</option>
+                {% for promo in all_promos %}
+                  <option value="{{ promo.id }}" data-discount="{{ promo.discount_percentage }}">
+                    {{ promo.code }} ({{ promo.discount_percentage }}% off)
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
 
-        <!-- Or Create New Promo Code -->
-        <div class="mb-3">
-          <label for="promo_code" class="form-label">New Promo Code</label>
-          <input type="text" name="promo_code" id="promo_code" class="form-control" placeholder="Enter new code (e.g., SUMMER20)">
-        </div>
+            <div class="text-center my-3">
+              <span class="text-muted">— OR —</span>
+            </div>
 
-        <div class="mb-3">
-          <label for="promo_discount" class="form-label">Discount (%)</label>
-          <input type="number" name="promo_discount" id="promo_discount" class="form-control" placeholder="e.g., 20">
+            <!-- Create New Promo Code -->
+            <div class="mb-3">
+              <label for="promo_code" class="form-label">Create New Promo Code</label>
+              <input type="text"
+                     name="promo_code"
+                     id="promo_code"
+                     class="form-control"
+                     placeholder="e.g., SUMMER20"
+                     maxlength="20"
+                     pattern="[A-Z0-9]+"
+                     aria-describedby="promoHelp">
+              <div id="promoHelp" class="form-text">
+                <small>Use uppercase letters and numbers only</small>
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label for="promo_discount" class="form-label">Discount Percentage</label>
+              <div class="input-group">
+                <input type="number"
+                       name="promo_discount"
+                       id="promo_discount"
+                       class="form-control"
+                       placeholder="20"
+                       min="1"
+                       max="99">
+                <span class="input-group-text">%</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-          </div>
+    </div>
 
-
-    <!-- Submit -->
+    <!-- Form Actions -->
     <div class="row mt-4">
-      <div class="col-12 d-flex justify-content-between">
-        <a href="{% url 'stores:manage_store_products' store.id %}" class="btn btn-secondary">
-          <i class="fas fa-times me-1"></i>Cancel
-        </a>
-        <button type="submit" class="btn btn-primary">
-          <i class="fas fa-save me-1"></i>Save Changes
-        </button>
+      <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+          <a href="{% url 'stores:manage_store_products' store.id %}" class="btn btn-secondary">
+            <i class="fas fa-times me-1" aria-hidden="true"></i>Cancel
+          </a>
+          <div>
+            <button type="button" class="btn btn-outline-primary me-2" id="saveAsDraftBtn">
+              <i class="fas fa-save me-1" aria-hidden="true"></i>Save as Draft
+            </button>
+            <button type="submit" class="btn btn-primary" id="saveChangesBtn">
+              <i class="fas fa-check me-1" aria-hidden="true"></i>Save Changes
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </form>
 </div>
 
 <!-- Floating Chat Button -->
-<div class="chat-toggle-btn" id="chatToggleBtn">
-  <i class="fas fa-comments"></i>
-  <span class="chat-notification" id="chatNotification">1</span>
-</div>
+<button class="chat-toggle-btn"
+        id="chatToggleBtn"
+        aria-label="Open support chat"
+        aria-expanded="false"
+        aria-controls="chatContainer">
+  <i class="fas fa-comments" aria-hidden="true"></i>
+  <span class="chat-notification" id="chatNotification" aria-label="1 unread message">1</span>
+</button>
 
 <!-- Chat Box -->
-<div class="chat-container" id="chatContainer">
+<div class="chat-container" id="chatContainer" role="dialog" aria-labelledby="chatTitle" aria-hidden="true">
   <div class="chat-header">
     <div class="d-flex align-items-center">
       <div class="chat-avatar">
-        <i class="fas fa-headset"></i>
+        <i class="fas fa-headset" aria-hidden="true"></i>
       </div>
       <div class="chat-info">
-        <h6 class="mb-0">Support Chat</h6>
-        <small class="text-success"><i class="fas fa-circle me-1"></i>Online</small>
+        <h3 id="chatTitle" class="h6 mb-0">Support Chat</h3>
+        <small class="text-success">
+          <i class="fas fa-circle me-1" aria-hidden="true"></i>Online
+        </small>
       </div>
     </div>
-    <button class="btn btn-sm" id="closeChatBtn">
-      <i class="fas fa-times"></i>
+    <button class="btn btn-sm" id="closeChatBtn" aria-label="Close chat">
+      <i class="fas fa-times" aria-hidden="true"></i>
     </button>
   </div>
 
-  <div class="chat-messages" id="chatMessages">
+  <div class="chat-messages" id="chatMessages" role="log" aria-live="polite" aria-label="Chat messages">
     <div class="message bot-message">
       <div class="message-content">
         <p>Hi! I'm here to help you with your product management. How can I assist you today?</p>
@@ -324,30 +522,51 @@
   </div>
 
   <div class="chat-input-container">
-    <div class="input-group">
-      <input type="text" class="form-control" id="chatInput" placeholder="Type your message..." maxlength="500">
-      <button class="btn btn-primary" id="sendChatBtn">
-        <i class="fas fa-paper-plane"></i>
+    <form id="chatForm">
+      <div class="input-group">
+        <label for="chatInput" class="visually-hidden">Type your message</label>
+        <input type="text"
+               class="form-control"
+               id="chatInput"
+               placeholder="Type your message..."
+               maxlength="500"
+               aria-describedby="chatHelp">
+        <button class="btn btn-primary" type="submit" id="sendChatBtn" aria-label="Send message">
+          <i class="fas fa-paper-plane" aria-hidden="true"></i>
+        </button>
+      </div>
+      <div id="chatHelp" class="form-text">
+        <small>Press Enter to send or click the quick actions below</small>
+      </div>
+    </form>
+
+    <div class="chat-quick-actions mt-2" role="group" aria-label="Quick chat actions">
+      <button class="btn btn-sm btn-outline-secondary quick-action"
+              data-message="How do I optimize my product listing?"
+              type="button">
+        <i class="fas fa-star me-1" aria-hidden="true"></i>Optimize Listing
       </button>
-    </div>
-    <div class="chat-quick-actions mt-2">
-      <button class="btn btn-sm btn-outline-secondary quick-action" data-message="How do I optimize my product listing?">
-        <i class="fas fa-star me-1"></i>Optimize Listing
+      <button class="btn btn-sm btn-outline-secondary quick-action"
+              data-message="Help with pricing strategy"
+              type="button">
+        <i class="fas fa-dollar-sign me-1" aria-hidden="true"></i>Pricing Help
       </button>
-      <button class="btn btn-sm btn-outline-secondary quick-action" data-message="Help with pricing strategy">
-        <i class="fas fa-dollar-sign me-1"></i>Pricing Help
-      </button>
-      <button class="btn btn-sm btn-outline-secondary quick-action" data-message="SEO tips for my product">
-        <i class="fas fa-search me-1"></i>SEO Tips
+      <button class="btn btn-sm btn-outline-secondary quick-action"
+              data-message="SEO tips for my product"
+              type="button">
+        <i class="fas fa-search me-1" aria-hidden="true"></i>SEO Tips
       </button>
     </div>
   </div>
 </div>
 
+<!-- Enhanced JavaScript -->
 <script>
-  const storeId = "{{ store.id }}";
-  const productId = "{{ product.id }}";
+  window.storeId = "{{ store.id }}";
+  window.productId = "{{ product.id }}";
 </script>
+<script src="{% static 'js/product_form.js' %}"></script>
+
 <script src="{% static 'js/product-page-manager.js' %}"></script>
 
 {% endblock %}

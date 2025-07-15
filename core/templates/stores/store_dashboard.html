@@ -6,56 +6,134 @@
 <link rel="stylesheet" type="text/css" href="{% static 'css/store_dashboard.css' %}">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
+<style>
+/* Chart container fixes */
+.chart-container {
+    position: relative;
+    overflow: hidden;
+    z-index: 1;
+}
+
+.chart-container canvas {
+    position: relative;
+    z-index: 2;
+}
+
+/* Ensure cards don't overlap */
+.card {
+    position: relative;
+    z-index: 10;
+    overflow: hidden;
+}
+
+/* Fix for chart responsiveness */
+.card-body .chart-container {
+    margin-bottom: 10px;
+}
+
+/* Ensure proper spacing */
+.row.mb-4 {
+    margin-bottom: 2rem !important;
+}
+</style>
+
 <div class="container-fluid py-4">
   <!-- Dashboard Header -->
- <div class="row mb-4">
-  <div class="col-12">
-    <div class="d-flex justify-content-between align-items-center flex-wrap">
-      <div>
-        <h2 class="mb-1">
-          <i class="fas fa-chart-bar text-primary me-2"></i>{{ store.name }} Dashboard
-        </h2>
-        <p class="text-muted mb-0">
-          <i class="fas fa-calendar me-1"></i>Last updated: <span id="lastUpdated">Today</span>
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="d-flex justify-content-between align-items-center flex-wrap">
+        <div>
+          <h2 class="mb-1">
+            <i class="fas fa-chart-bar text-primary me-2"></i>{{ store.name }} Dashboard
+          </h2>
+          <p class="text-muted mb-0">
+            <i class="fas fa-calendar me-1"></i>Last updated: <span id="lastUpdated">{{ last_updated|default:"Today" }}</span>
+            {% if store.status == 'active' %}
+            <span class="badge bg-success ms-2">
+              <i class="fas fa-check-circle"></i> Active
+            </span>
+            {% else %}
+            <span class="badge bg-warning ms-2">
+              <i class="fas fa-pause-circle"></i> {{ store.status|title }}
+            </span>
+            {% endif %}
+            <span class="badge bg-info ms-2" title="Store Age">
+              <i class="fas fa-clock"></i> {{ store.created_at|timesince }} old
+            </span>
+          </p>
+        </div>
+        <div class="btn-group" role="group">
+          <button class="btn btn-outline-info" id="refreshDashboard" title="Refresh Data">
+            <i class="fas fa-sync-alt"></i>
+          </button>
+          <button class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+            <i class="fas fa-download"></i> Export
+          </button>
+          <ul class="dropdown-menu">
+            <li><a class="dropdown-item" href="#" id="exportPDF"><i class="fas fa-file-pdf me-2"></i>Export as PDF</a></li>
+            <li><a class="dropdown-item" href="#" id="exportExcel"><i class="fas fa-file-excel me-2"></i>Export as Excel</a></li>
+          </ul>
+          <a href="{% url 'stores:update_store' store.id %}" class="btn btn-outline-primary">
+            <i class="fas fa-edit"></i> Edit Store
+          </a>
           {% if store.status == 'active' %}
-          <span class="badge bg-success ms-2">
-            <i class="fas fa-check-circle"></i> Active
-          </span>
-          {% else %}
-          <span class="badge bg-warning ms-2">
-            <i class="fas fa-pause-circle"></i> {{ store.status|title }}
-          </span>
+          <a href="{% url 'stores:store_detail' store.slug %}" class="btn btn-outline-success" target="_blank">
+            <i class="fas fa-eye"></i> View Live
+          </a>
           {% endif %}
-        </p>
-      </div>
-      <div class="btn-group" role="group">
-        <a href="{% url 'stores:update_store' store.id %}" class="btn btn-outline-primary">
-          <i class="fas fa-edit"></i> Edit Store
-        </a>
-        {% if store.status == 'active' %}
-        <a href="{% url 'stores:store_detail' store.slug %}" class="btn btn-outline-success" target="_blank">
-          <i class="fas fa-eye"></i> View Live
-        </a>
-        {% endif %}
-        <a href="{% url 'stores:manage_stores' %}" class="btn btn-outline-secondary">
-          <i class="fas fa-arrow-left"></i> Back
-        </a>
+          <a href="{% url 'stores:manage_stores' %}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> Back
+          </a>
+        </div>
       </div>
     </div>
   </div>
-</div>
+
+  <!-- Time Period Filter -->
+  <div class="row mb-3">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-body py-2">
+          <div class="d-flex justify-content-between align-items-center">
+            <div class="btn-group btn-group-sm" role="group" aria-label="Time period filter">
+              <input type="radio" class="btn-check" name="timePeriod" id="period7" value="7" checked>
+              <label class="btn btn-outline-primary" for="period7">7 Days</label>
+
+              <input type="radio" class="btn-check" name="timePeriod" id="period30" value="30">
+              <label class="btn btn-outline-primary" for="period30">30 Days</label>
+
+              <input type="radio" class="btn-check" name="timePeriod" id="period90" value="90">
+              <label class="btn btn-outline-primary" for="period90">90 Days</label>
+
+              <input type="radio" class="btn-check" name="timePeriod" id="period365" value="365">
+              <label class="btn btn-outline-primary" for="period365">1 Year</label>
+            </div>
+            <div class="text-muted small">
+              <i class="fas fa-info-circle me-1"></i>
+              Data from {{ date_range_start|date:"M d, Y" }} to {{ date_range_end|date:"M d, Y" }}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Key Metrics Row -->
   <div class="row mb-4">
     <div class="col-lg-3 col-md-6 mb-3">
-      <div class="card bg-primary text-white h-100">
+      <div class="card bg-primary text-white h-100 metric-card" data-bs-toggle="tooltip" data-bs-placement="top" title="Total products in your store">
         <div class="card-body">
           <div class="d-flex justify-content-between align-items-center">
             <div>
               <h6 class="card-title text-uppercase mb-1">Total Products</h6>
-              <h3 class="mb-0">{{ total_products|default:0 }}</h3>
+              <h3 class="mb-0 counter" data-target="{{ total_products|default:0 }}">0</h3>
               <small class="opacity-75">
                 <i class="fas fa-arrow-up me-1"></i>Active: {{ store.products.count|default:0 }}
+                {% if products_change %}
+                <span class="ms-1 badge bg-light text-dark">
+                  {% if products_change > 0 %}+{% endif %}{{ products_change }}%
+                </span>
+                {% endif %}
               </small>
             </div>
             <div class="text-primary-light">
@@ -63,18 +141,26 @@
             </div>
           </div>
         </div>
+        <div class="card-footer bg-primary-dark">
+          <small><i class="fas fa-chart-line me-1"></i>{{ products_this_week|default:0 }} added this week</small>
+        </div>
       </div>
     </div>
 
     <div class="col-lg-3 col-md-6 mb-3">
-      <div class="card bg-success text-white h-100">
+      <div class="card bg-success text-white h-100 metric-card" data-bs-toggle="tooltip" data-bs-placement="top" title="Total orders received">
         <div class="card-body">
           <div class="d-flex justify-content-between align-items-center">
             <div>
               <h6 class="card-title text-uppercase mb-1">Total Orders</h6>
-              <h3 class="mb-0">{{ total_orders|default:0 }}</h3>
+              <h3 class="mb-0 counter" data-target="{{ total_orders|default:0 }}">0</h3>
               <small class="opacity-75">
                 <i class="fas fa-arrow-up me-1"></i>This month: {{ monthly_orders|default:0 }}
+                {% if orders_change %}
+                <span class="ms-1 badge bg-light text-dark">
+                  {% if orders_change > 0 %}+{% endif %}{{ orders_change }}%
+                </span>
+                {% endif %}
               </small>
             </div>
             <div class="text-success-light">
@@ -82,18 +168,26 @@
             </div>
           </div>
         </div>
+        <div class="card-footer bg-success-dark">
+          <small><i class="fas fa-clock me-1"></i>{{ pending_orders|default:0 }} pending orders</small>
+        </div>
       </div>
     </div>
 
     <div class="col-lg-3 col-md-6 mb-3">
-      <div class="card bg-warning text-white h-100">
+      <div class="card bg-warning text-white h-100 metric-card" data-bs-toggle="tooltip" data-bs-placement="top" title="Total revenue earned">
         <div class="card-body">
           <div class="d-flex justify-content-between align-items-center">
             <div>
               <h6 class="card-title text-uppercase mb-1">Revenue</h6>
-              <h3 class="mb-0">D{{ total_revenue|default:0|floatformat:0 }}</h3>
+              <h3 class="mb-0">D<span class="counter" data-target="{{ total_revenue|default:0|floatformat:0 }}">0</span></h3>
               <small class="opacity-75">
                 <i class="fas fa-arrow-up me-1"></i>This month: D{{ monthly_revenue|default:0|floatformat:0 }}
+                {% if revenue_change %}
+                <span class="ms-1 badge bg-light text-dark">
+                  {% if revenue_change > 0 %}+{% endif %}{{ revenue_change }}%
+                </span>
+                {% endif %}
               </small>
             </div>
             <div class="text-warning-light">
@@ -101,22 +195,84 @@
             </div>
           </div>
         </div>
+        <div class="card-footer bg-warning-dark">
+          <small><i class="fas fa-trending-up me-1"></i>Avg order: D{{ average_order_value|default:0|floatformat:0 }}</small>
+        </div>
       </div>
     </div>
 
     <div class="col-lg-3 col-md-6 mb-3">
-      <div class="card bg-info text-white h-100">
+      <div class="card bg-info text-white h-100 metric-card" data-bs-toggle="tooltip" data-bs-placement="top" title="Average customer rating">
         <div class="card-body">
           <div class="d-flex justify-content-between align-items-center">
             <div>
               <h6 class="card-title text-uppercase mb-1">Average Rating</h6>
-              <h3 class="mb-0">{{ average_rating|default:0 }}</h3>
+              <h3 class="mb-0">{{ average_rating|default:"0.0"|floatformat:1 }}</h3>
               <small class="opacity-75">
                 <i class="fas fa-star me-1"></i>{{ review_count|default:0 }} reviews
+                {% if rating_change %}
+                <span class="ms-1 badge bg-light text-dark">
+                  {% if rating_change > 0 %}+{% endif %}{{ rating_change|floatformat:1 }}
+                </span>
+                {% endif %}
               </small>
             </div>
             <div class="text-info-light">
               <i class="fas fa-star fa-2x opacity-75"></i>
+            </div>
+          </div>
+        </div>
+        <div class="card-footer bg-info-dark">
+          <small><i class="fas fa-comments me-1"></i>{{ recent_reviews|default:0 }} reviews this week</small>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Performance Indicators -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header bg-light">
+          <h6 class="card-title mb-0">
+            <i class="fas fa-tachometer-alt text-primary me-2"></i>Performance Indicators
+          </h6>
+        </div>
+        <div class="card-body py-3">
+          <div class="row text-center">
+            <div class="col-md-2 col-6 mb-2">
+              <div class="border-end">
+                <h6 class="mb-1">{{ conversion_rate|default:"0.0"|floatformat:1 }}%</h6>
+                <small class="text-muted">Conversion Rate</small>
+              </div>
+            </div>
+            <div class="col-md-2 col-6 mb-2">
+              <div class="border-end">
+                <h6 class="mb-1">{{ bounce_rate|default:"0.0"|floatformat:1 }}%</h6>
+                <small class="text-muted">Bounce Rate</small>
+              </div>
+            </div>
+            <div class="col-md-2 col-6 mb-2">
+              <div class="border-end">
+                <h6 class="mb-1">{{ page_views|default:0 }}</h6>
+                <small class="text-muted">Page Views</small>
+              </div>
+            </div>
+            <div class="col-md-2 col-6 mb-2">
+              <div class="border-end">
+                <h6 class="mb-1">{{ unique_visitors|default:0 }}</h6>
+                <small class="text-muted">Unique Visitors</small>
+              </div>
+            </div>
+            <div class="col-md-2 col-6 mb-2">
+              <div class="border-end">
+                <h6 class="mb-1">{{ return_customers|default:"0.0"|floatformat:1 }}%</h6>
+                <small class="text-muted">Return Customers</small>
+              </div>
+            </div>
+            <div class="col-md-2 col-6 mb-2">
+              <h6 class="mb-1">{{ cart_abandonment|default:"0.0"|floatformat:1 }}%</h6>
+              <small class="text-muted">Cart Abandonment</small>
             </div>
           </div>
         </div>
@@ -128,13 +284,32 @@
   <div class="row mb-4">
     <div class="col-lg-8 mb-3">
       <div class="card h-100">
-        <div class="card-header bg-light">
+        <div class="card-header bg-light d-flex justify-content-between align-items-center">
           <h5 class="card-title mb-0">
             <i class="fas fa-chart-line text-primary me-2"></i>Sales Overview
           </h5>
+          <div class="btn-group btn-group-sm" role="group">
+            <input type="radio" class="btn-check" name="chartType" id="salesChartRadio" value="sales" checked>
+            <label class="btn btn-outline-primary" for="salesChartRadio">Sales</label>
+
+            <input type="radio" class="btn-check" name="chartType" id="ordersChartRadio" value="orders">
+            <label class="btn btn-outline-primary" for="ordersChartRadio">Orders</label>
+
+            <input type="radio" class="btn-check" name="chartType" id="visitorsChartRadio" value="visitors">
+            <label class="btn btn-outline-primary" for="visitorsChartRadio">Visitors</label>
+          </div>
         </div>
         <div class="card-body">
-          <canvas id="salesChart" height="300"></canvas>
+          <div id="chartLoading" class="text-center py-5" style="display: none;">
+            <div class="spinner-border text-primary" role="status">
+              <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2 text-muted">Loading chart data...</p>
+          </div>
+          <!-- Fixed chart container with proper dimensions and overflow control -->
+          <div class="chart-container" style="position: relative; height: 300px; width: 100%; overflow: hidden;">
+            <canvas id="salesChart" style="max-height: 300px; max-width: 100%;"></canvas>
+          </div>
         </div>
       </div>
     </div>
@@ -147,7 +322,20 @@
           </h5>
         </div>
         <div class="card-body">
-          <canvas id="categoryChart" height="300"></canvas>
+          <!-- Fixed chart container with proper dimensions and overflow control -->
+          <div class="chart-container" style="position: relative; height: 200px; width: 100%; overflow: hidden;">
+            <canvas id="categoryChart" style="max-height: 200px; max-width: 100%;"></canvas>
+          </div>
+          <div class="mt-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <small class="text-muted">Best performing category</small>
+              <span class="badge bg-warning">{{ top_category.name|default:"N/A" }}</span>
+            </div>
+            <div class="d-flex justify-content-between align-items-center">
+              <small class="text-muted">Revenue share</small>
+              <strong>{{ top_category.percentage|default:0 }}%</strong>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -161,7 +349,19 @@
           <h5 class="card-title mb-0">
             <i class="fas fa-clock text-info me-2"></i>Recent Orders
           </h5>
-          <a href="{% url 'stores:store_orders' store.id %}" class="btn btn-sm btn-outline-info">View All</a>
+          <div>
+            <div class="btn-group btn-group-sm me-2" role="group">
+              <input type="radio" class="btn-check" name="orderFilter" id="allOrders" value="all" checked>
+              <label class="btn btn-outline-info" for="allOrders">All</label>
+
+              <input type="radio" class="btn-check" name="orderFilter" id="pendingOrders" value="pending">
+              <label class="btn btn-outline-warning" for="pendingOrders">Pending</label>
+
+              <input type="radio" class="btn-check" name="orderFilter" id="completedOrders" value="completed">
+              <label class="btn btn-outline-success" for="completedOrders">Completed</label>
+            </div>
+            <a href="{% url 'stores:store_orders' store.id %}" class="btn btn-sm btn-outline-info">View All</a>
+          </div>
         </div>
         <div class="card-body p-0">
           <div class="table-responsive">
@@ -173,24 +373,53 @@
                   <th>Amount</th>
                   <th>Status</th>
                   <th>Date</th>
+                  <th class="text-center">Actions</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody id="ordersTableBody">
                 {% for order in recent_orders|slice:":5" %}
-                <tr>
-                  <td><strong>#{{ order.id|slice:":8" }}</strong></td>
-                  <td>{{ order.buyer.first_name }} {{ order.buyer.last_name }}</td>
-                  <td>D{{ order.get_total}}</td>
+                <tr data-order-status="{{ order.status }}">
                   <td>
-                    <span class="badge bg-{% if order.status == 'completed' %}success{% elif order.status == 'pending' %}warning{% else %}secondary{% endif %}">
+                    <strong>#{{ order.id|slice:":8" }}</strong>
+                    {% if order.is_urgent %}
+                    <i class="fas fa-exclamation-triangle text-warning ms-1" title="Urgent order"></i>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <div>
+                      {{ order.buyer.first_name }} {{ order.buyer.last_name }}
+                      {% if order.buyer.is_vip %}
+                      <i class="fas fa-crown text-warning ms-1" title="VIP Customer"></i>
+                      {% endif %}
+                    </div>
+                    <small class="text-muted">{{ order.buyer.email }}</small>
+                  </td>
+                  <td><strong>D{{ order.get_total}}</strong></td>
+                  <td>
+                    <span class="badge bg-{% if order.status == 'completed' %}success{% elif order.status == 'pending' %}warning{% elif order.status == 'processing' %}info{% else %}secondary{% endif %}">
                       {{ order.status|title }}
                     </span>
                   </td>
-                  <td>{{ order.created_at|date:"M d" }}</td>
+                  <td>
+                    {{ order.created_at|date:"M d" }}
+                    <br><small class="text-muted">{{ order.created_at|time:"H:i" }}</small>
+                  </td>
+                  <td class="text-center">
+                    <div class="btn-group btn-group-sm">
+                      <a href="{% url 'stores:store_order_detail' store.id order.id %}" class="btn btn-outline-info btn-sm" title="View Order">
+                        <i class="fas fa-eye"></i>
+                      </a>
+                      {% if order.status == 'pending' %}
+                      <button class="btn btn-outline-success btn-sm process-order" data-order-id="{{ order.id }}" title="Process Order">
+                        <i class="fas fa-check"></i>
+                      </button>
+                      {% endif %}
+                    </div>
+                  </td>
                 </tr>
                 {% empty %}
                 <tr>
-                  <td colspan="5" class="text-center text-muted py-4">
+                  <td colspan="6" class="text-center text-muted py-4">
                     <i class="fas fa-shopping-cart fa-2x mb-2"></i><br>
                     No recent orders
                   </td>
@@ -209,7 +438,15 @@
           <h5 class="card-title mb-0">
             <i class="fas fa-star text-warning me-2"></i>Top Products
           </h5>
-          <a href="{% url 'stores:manage_store_products' store.id %}" class="btn btn-sm btn-outline-warning">View All</a>
+          <div>
+            <select class="form-select form-select-sm me-2" id="productSortBy" style="width: auto; display: inline-block;">
+              <option value="sales">By Sales</option>
+              <option value="revenue">By Revenue</option>
+              <option value="rating">By Rating</option>
+              <option value="views">By Views</option>
+            </select>
+            <a href="{% url 'stores:manage_store_products' store.id %}" class="btn btn-sm btn-outline-warning">View All</a>
+          </div>
         </div>
         <div class="card-body p-0">
           <div class="table-responsive">
@@ -220,6 +457,7 @@
                   <th>Sold</th>
                   <th>Revenue</th>
                   <th>Rating</th>
+                  <th class="text-center">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -235,13 +473,22 @@
                       </div>
                       {% endif %}
                       <div>
-                        <strong>{{ product.name|truncatechars:20 }}</strong><br>
-                        <small class="text-muted">D{{ product.price }}</small>
+                        <strong>{{ product.name|truncatechars:20 }}</strong>
+                        {% if product.is_featured %}
+                        <i class="fas fa-star text-warning ms-1" title="Featured Product"></i>
+                        {% endif %}
+                        <br>
+                        <small class="text-muted">D{{ product.price }} • {{ product.stock }} in stock</small>
                       </div>
                     </div>
                   </td>
                   <td>
                     <span class="badge bg-primary">{{ product.total_sold|default:0 }}</span>
+                    {% if product.sales_trend > 0 %}
+                    <i class="fas fa-arrow-up text-success ms-1" title="Sales increasing"></i>
+                    {% elif product.sales_trend < 0 %}
+                    <i class="fas fa-arrow-down text-danger ms-1" title="Sales decreasing"></i>
+                    {% endif %}
                   </td>
                   <td>
                     <strong>D{{ product.total_revenue|default:0|floatformat:2 }}</strong>
@@ -251,15 +498,26 @@
                     <div class="d-flex align-items-center">
                       <i class="fas fa-star text-warning me-1"></i>
                       <span>{{ product.avg_rating|floatformat:1 }}</span>
+                      <small class="text-muted ms-1">({{ product.review_count }})</small>
                     </div>
                     {% else %}
                     <span class="text-muted">No rating</span>
                     {% endif %}
                   </td>
+                  <td class="text-center">
+                    <div class="btn-group btn-group-sm">
+                      <a href="{% url 'stores:product_detail' product.id %}" class="btn btn-outline-info btn-sm" title="View Product">
+                        <i class="fas fa-eye"></i>
+                      </a>
+                      <a href="{% url 'stores:edit_product' store.id product.id %}" class="btn btn-outline-primary btn-sm" title="Edit Product">
+                        <i class="fas fa-edit"></i>
+                      </a>
+                    </div>
+                  </td>
                 </tr>
                 {% empty %}
                 <tr>
-                  <td colspan="4" class="text-center text-muted py-4">
+                  <td colspan="5" class="text-center text-muted py-4">
                     <i class="fas fa-box fa-2x mb-2"></i><br>
                     No products yet
                   </td>
@@ -272,6 +530,49 @@
       </div>
     </div>
   </div>
+
+  <!-- Notifications and Alerts -->
+  {% if notifications or alerts %}
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="card border-warning">
+        <div class="card-header bg-warning text-dark">
+          <h6 class="card-title mb-0">
+            <i class="fas fa-bell me-2"></i>Notifications & Alerts
+          </h6>
+        </div>
+        <div class="card-body">
+          {% if low_stock_products %}
+          <div class="alert alert-warning alert-dismissible fade show" role="alert">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            <strong>Low Stock Alert:</strong> {{ low_stock_products.count }} product{{ low_stock_products.count|pluralize }} running low on stock.
+            <a href="{% url 'stores:manage_store_products' store.id %}?filter=low_stock" class="alert-link">View products</a>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+          </div>
+          {% endif %}
+
+          {% if pending_orders_count > 10 %}
+          <div class="alert alert-info alert-dismissible fade show" role="alert">
+            <i class="fas fa-clock me-2"></i>
+            <strong>Order Backlog:</strong> You have {{ pending_orders_count }} pending orders that need attention.
+            <a href="{% url 'stores:store_orders' store.id %}?status=pending" class="alert-link">Process orders</a>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+          </div>
+          {% endif %}
+
+          {% if unread_messages %}
+          <div class="alert alert-primary alert-dismissible fade show" role="alert">
+            <i class="fas fa-envelope me-2"></i>
+            <strong>New Messages:</strong> You have {{ unread_messages }} unread customer message{{ unread_messages|pluralize }}.
+            <a href="{% url 'stores:store_chat_panel' store.id %}" class="alert-link">View messages</a>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
 
   <!-- Store Information and Quick Actions -->
   <div class="row">
@@ -292,10 +593,19 @@
               <div class="mb-3">
                 <strong>Email:</strong><br>
                 <span class="text-muted">{{ store.email }}</span>
+                {% if store.email_verified %}
+                <i class="fas fa-check-circle text-success ms-1" title="Email verified"></i>
+                {% else %}
+                <i class="fas fa-exclamation-circle text-warning ms-1" title="Email not verified"></i>
+                {% endif %}
               </div>
               <div class="mb-3">
                 <strong>Phone:</strong><br>
                 <span class="text-muted">{{ store.phone|default:"Not provided" }}</span>
+              </div>
+              <div class="mb-3">
+                <strong>Business Type:</strong><br>
+                <span class="text-muted">{{ store.business_type|default:"Not specified" }}</span>
               </div>
             </div>
             <div class="col-md-6">
@@ -311,7 +621,19 @@
                 <strong>Store URL:</strong><br>
                 <a href="{% url 'stores:store_detail' store.slug %}" target="_blank" class="text-primary">
                   yoursite.com/store/{{ store.slug }}
+                  <i class="fas fa-external-link-alt ms-1"></i>
                 </a>
+                <button class="btn btn-sm btn-outline-secondary ms-2" onclick="copyToClipboard('{% url 'stores:store_detail' store.slug %}')" title="Copy URL">
+                  <i class="fas fa-copy"></i>
+                </button>
+              </div>
+              <div class="mb-3">
+                <strong>Store Health Score:</strong><br>
+                <div class="progress" style="height: 8px;">
+                  <div class="progress-bar bg-{% if store_health_score >= 80 %}success{% elif store_health_score >= 60 %}warning{% else %}danger{% endif %}"
+                       style="width: {{ store_health_score|default:0 }}%"></div>
+                </div>
+                <small class="text-muted">{{ store_health_score|default:0 }}% - Based on completeness and activity</small>
               </div>
             </div>
           </div>
@@ -331,19 +653,32 @@
             <a href="{% url 'stores:add_product' store.id %}" class="btn btn-outline-primary">
               <i class="fas fa-plus me-2"></i>Add Product
             </a>
+            <a href="#" class="btn btn-outline-info">
+              <i class="fas fa-upload me-2"></i>Bulk Import Products
+            </a>
             <a href="{% url 'stores:manage_store_products' store.id %}" class="btn btn-outline-success">
               <i class="fas fa-box me-2"></i>Manage Products
             </a>
             <a href="{% url 'stores:store_orders' store.id %}" class="btn btn-outline-info">
               <i class="fas fa-shipping-fast me-2"></i>View Orders
             </a>
-            <a href="{% url 'stores:store_chat_panel' store.id %}" class="btn btn-outline-warning" id="openCustomerChat">
-  <i class="fas fa-comments me-2"></i>Customer Chats
-</a>
-
+            <a href="{% url 'stores:store_chat_panel' store.id %}" class="btn btn-outline-warning position-relative" id="openCustomerChat">
+              <i class="fas fa-comments me-2"></i>Customer Chats
+              {% if unread_messages > 0 %}
+              <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                {{ unread_messages }}
+              </span>
+              {% endif %}
+            </a>
+            <a href="#" class="btn btn-outline-primary">
+              <i class="fas fa-chart-bar me-2"></i>Advanced Analytics
+            </a>
             <hr>
             <a href="{% url 'stores:update_store' store.id %}" class="btn btn-outline-secondary">
               <i class="fas fa-cog me-2"></i>Store Settings
+            </a>
+            <a href="#" class="btn btn-outline-success">
+              <i class="fas fa-bullhorn me-2"></i>Promote Store
             </a>
           </div>
         </div>
@@ -355,29 +690,37 @@
   <div class="row mb-4">
     <div class="col-12">
       <div class="card">
-        <div class="card-header bg-light">
+        <div class="card-header bg-light d-flex justify-content-between align-items-center">
           <h5 class="card-title mb-0">
             <i class="fas fa-comments text-info me-2"></i>Customer Reviews Overview
           </h5>
+          <a href="#" class="btn btn-sm btn-outline-info">View All Reviews</a>
         </div>
         <div class="card-body">
           <div class="row">
-            <div class="col-md-6">
-              <div class="d-flex align-items-center mb-3">
-                <h3 class="mb-0 me-2">{{ average_rating|default:0 }}</h3>
-                <div>
-                  {% for i in "12345" %}
-                    {% if forloop.counter <= average_rating %}
-                      <i class="fas fa-star text-warning"></i>
-                    {% else %}
-                      <i class="far fa-star text-warning"></i>
-                    {% endif %}
-                  {% endfor %}
+            <div class="col-md-4">
+              <div class="text-center">
+                <div class="d-flex align-items-center justify-content-center mb-3">
+                  <h2 class="mb-0 me-2">{{ average_rating|default:"0.0"|floatformat:1 }}</h2>
+                  <div>
+                    {% for i in "12345" %}
+                      {% if forloop.counter <= average_rating %}
+                        <i class="fas fa-star text-warning"></i>
+                      {% else %}
+                        <i class="far fa-star text-warning"></i>
+                      {% endif %}
+                    {% endfor %}
+                  </div>
                 </div>
+                <p class="text-muted mb-0">Based on {{ review_count }} review{{ review_count|pluralize }}</p>
+                {% if review_trend > 0 %}
+                <small class="text-success"><i class="fas fa-arrow-up"></i> Trending up</small>
+                {% elif review_trend < 0 %}
+                <small class="text-danger"><i class="fas fa-arrow-down"></i> Trending down</small>
+                {% endif %}
               </div>
-              <p class="text-muted">Based on {{ review_count }} reviews</p>
             </div>
-            <div class="col-md-6">
+            <div class="col-md-4">
               <div class="rating-breakdown">
                 {% for rating, count in rating_breakdown.items %}
                 <div class="d-flex align-items-center mb-2">
@@ -390,6 +733,33 @@
                 {% endfor %}
               </div>
             </div>
+            <div class="col-md-4">
+              <div class="recent-review">
+                {% if latest_review %}
+                <h6 class="mb-2">Latest Review</h6>
+                <blockquote class="blockquote-sm">
+                  <p class="mb-1">{{ latest_review.comment|truncatechars:100 }}</p>
+                  <footer class="blockquote-footer">
+                    {{ latest_review.reviewer_name }} •
+                    <span class="text-warning">
+                      {% for i in "12345" %}
+                        {% if forloop.counter <= latest_review.rating %}
+                          <i class="fas fa-star"></i>
+                        {% else %}
+                          <i class="far fa-star"></i>
+                        {% endif %}
+                      {% endfor %}
+                    </span>
+                  </footer>
+                </blockquote>
+                {% else %}
+                <div class="text-center text-muted">
+                  <i class="fas fa-comments fa-2x mb-2"></i>
+                  <p class="mb-0">No reviews yet</p>
+                </div>
+                {% endif %}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -397,15 +767,44 @@
   </div>
 </div>
 
+<!-- Loading Modal -->
+<div class="modal fade" id="loadingModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-body text-center">
+        <div class="spinner-border text-primary" role="status">
+          <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-2 mb-0">Updating data...</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast Container -->
+<div id="toastContainer" class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1055;"></div>
+
 <script>
+// Chart data - keeping it simple and stable
 window.chartData = {
     monthlyLabels: {{ monthly_labels|safe }},
     monthlySalesData: {{ monthly_sales_data|default:"[0,0,0,0,0,0,0,0,0,0,0,0]"|safe }},
+    monthlyOrdersData: {{ monthly_orders_data|default:"[0,0,0,0,0,0,0,0,0,0,0,0]"|safe }},
+    monthlyVisitorsData: {{ monthly_visitors_data|default:"[0,0,0,0,0,0,0,0,0,0,0,0]"|safe }},
     categoryLabels: {{ category_labels|default:"['No Data']"|safe }},
     categoryData: {{ category_data|default:"[1]"|safe }}
 };
 
+// Fallback data if backend doesn't provide enhanced datasets
+if (!window.chartData.monthlyOrdersData || window.chartData.monthlyOrdersData.length === 0) {
+    window.chartData.monthlyOrdersData = window.chartData.monthlySalesData.map(val => Math.floor(val / 100));
+}
+
+if (!window.chartData.monthlyVisitorsData || window.chartData.monthlyVisitorsData.length === 0) {
+    window.chartData.monthlyVisitorsData = window.chartData.monthlySalesData.map(val => Math.floor(val / 50));
+}
 </script>
+
 <script src="{% static 'js/main.js' %}"></script>
 <script src="{% static 'js/store_dashboard.js' %}"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>

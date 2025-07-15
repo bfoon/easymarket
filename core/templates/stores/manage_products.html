@@ -1,17 +1,20 @@
 {% extends 'base.html' %}
 {% load static %}
 <meta name="csrf-token" content="{{ csrf_token }}">
+
 {% block content %}
-<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+<link rel="stylesheet" href="{% static 'css/main.css' %}">
+<link rel="stylesheet" href="{% static 'css/store_product.css' %}">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-<div class="container-fluid py-4">
+
+<div class="container-fluid py-4 glass-container shadow">
   <!-- Header -->
   <div class="row mb-4">
     <div class="col-12">
-      <div class="d-flex justify-content-between align-items-center">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
         <div>
-          <h2 class="mb-1">
+          <h2 class="mb-1 fw-bold">
             <i class="fas fa-box text-primary me-2"></i>Manage Products
           </h2>
           <p class="text-muted mb-0">
@@ -19,10 +22,10 @@
           </p>
         </div>
         <div class="btn-group">
-          <a href="{% url 'stores:add_product' store.id %}" class="btn btn-primary">
+          <a href="{% url 'stores:add_product' store.id %}" class="btn btn-primary shadow-sm">
             <i class="fas fa-plus"></i> Add New Product
           </a>
-          <a href="{% url 'stores:store_dashboard' store.id %}" class="btn btn-outline-secondary">
+          <a href="{% url 'stores:store_dashboard' store.id %}" class="btn btn-outline-secondary shadow-sm">
             <i class="fas fa-arrow-left"></i> Back to Dashboard
           </a>
         </div>
@@ -30,13 +33,20 @@
     </div>
   </div>
 
+  <!-- Search -->
+  <div class="row mb-3">
+    <div class="col-md-4">
+      <input type="search" class="form-control form-control-sm shadow-sm" placeholder="Search products..." oninput="filterProducts(this.value)">
+    </div>
+  </div>
+
   <!-- Products List -->
   <div class="row">
     <div class="col-12">
-      <div class="card">
+      <div class="card border-0 rounded-4 shadow-sm">
         <div class="card-header bg-light d-flex justify-content-between align-items-center">
           <h5 class="card-title mb-0">
-            <i class="fas fa-list me-2"></i>Products
+            <i class="fas fa-list me-2 text-primary"></i>Products
           </h5>
           {% if products.has_other_pages %}
           <small class="text-muted">
@@ -44,14 +54,15 @@
           </small>
           {% endif %}
         </div>
+
         <div class="card-body p-0">
           {% if products %}
           <div class="table-responsive">
-            <table class="table table-hover mb-0">
+            <table class="table table-hover mb-0 align-middle">
               <thead class="bg-light">
                 <tr>
                   <th>Image</th>
-                  <th>Product Name</th>
+                  <th>Product</th>
                   <th>Category</th>
                   <th>Price</th>
                   <th>Stock</th>
@@ -65,7 +76,7 @@
                 <tr>
                   <td>
                     {% if product.image %}
-                    <img src="{{ product.image.url }}" alt="{{ product.name }}" class="rounded" style="width: 50px; height: 50px; object-fit: cover;">
+                    <img src="{{ product.image.url }}" alt="{{ product.name }}" class="rounded" width="50" height="50" style="object-fit: cover;">
                     {% else %}
                     <div class="bg-light rounded d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;">
                       <i class="fas fa-image text-muted"></i>
@@ -73,17 +84,16 @@
                     {% endif %}
                   </td>
                   <td>
-                    <div>
-                      <strong>{{ product.name }}</strong>
-                      {% if product.is_featured %}
-                      <span class="badge bg-warning ms-1">Featured</span>
-                      {% endif %}
-                      {% if product.is_trending %}
-                      <span class="badge bg-info ms-1">Trending</span>
-                      {% endif %}
-                      <div class="mt-2">
+                    <strong>{{ product.name }}</strong>
+                    {% if product.is_featured %}
+                    <span class="badge bg-warning bg-opacity-75 ms-1">Featured</span>
+                    {% endif %}
+                    {% if product.is_trending %}
+                    <span class="badge bg-info bg-opacity-75 ms-1">Trending</span>
+                    {% endif %}
+                    <div class="rating-stars mt-2">
                       {% if product.average_rating %}
-                        <div class="d-inline-flex align-items-center gap-1 px-2 py-1 rounded-pill bg-light shadow-sm" style="font-size: 0.85rem;">
+                        <span class="d-inline-flex align-items-center gap-1 px-2 py-1 rounded-pill bg-light shadow-sm" style="font-size: 0.85rem;" data-bs-toggle="tooltip" title="{{ product.average_rating|floatformat:2 }} / 5">
                           {% for i in "12345" %}
                             {% if i|add:'0' <= product.average_rating %}
                               <i class="fas fa-star text-warning"></i>
@@ -95,13 +105,12 @@
                           {% endfor %}
                           <span class="ms-2 text-dark fw-semibold">{{ product.average_rating|floatformat:1 }}</span>
                           <span class="text-muted">({{ product.review_count }})</span>
-                        </div>
+                        </span>
                       {% else %}
                         <span class="text-muted small fst-italic">No reviews yet</span>
                       {% endif %}
                     </div>
-                      <small class="text-muted">{{ product.description|truncatechars:50 }}</small>
-                    </div>
+                    <div class="text-muted small mt-1">{{ product.description|truncatechars:50 }}</div>
                   </td>
                   <td>
                     {% if product.category %}
@@ -113,14 +122,12 @@
                   <td>
                     <strong>D{{ product.price }}</strong>
                     {% if product.original_price and product.original_price > product.price %}
-                    <br>
-                    <small class="text-muted text-decoration-line-through">D{{ product.original_price }}</small>
+                    <br><small class="text-muted text-decoration-line-through">D{{ product.original_price }}</small>
                     <span class="badge bg-success">{{ product.discount_percentage }}% OFF</span>
                     {% endif %}
                     {% for promo in product.promo_codes.all %}
-                      <div class="mt-1 small text-success">
-                        <i class="fas fa-tag me-1"></i>Promo Code: <strong>{{ promo.code }}</strong>
-                        ({{ promo.discount_percentage }}% off)
+                      <div class="small text-success mt-1">
+                        <i class="fas fa-tag me-1"></i>Promo: <strong>{{ promo.code }}</strong> ({{ promo.discount_percentage }}%)
                       </div>
                     {% endfor %}
                   </td>
@@ -132,30 +139,22 @@
                     {% else %}
                     <span class="badge bg-success">{{ product.stock_quantity }}</span>
                     {% endif %}
-                    <!-- Number Sold -->
-                      {% if product.total_sold %}
-                        <div class="mt-2 d-flex align-items-center gap-2 text-muted small">
-                          <span class="badge bg-light border text-dark">
-                            <i class="fas fa-calculator me-1 text-primary"></i>
-                            Est. <strong>{{ product.total_sold }}</strong> sold
-                          </span>
-                          <span class="badge bg-light border text-dark">
-                            <i class="fas fa-shopping-bag me-1 text-success"></i>
-                            Act. <strong>{{ product.sold_count }}</strong> sold
-                          </span>
-                        </div>
-                      {% endif %}
-
+                    {% if product.total_sold %}
+                    <div class="mt-2 small text-muted">
+                      <span class="badge bg-light border text-dark">
+                        <i class="fas fa-calculator me-1 text-primary"></i>Est. {{ product.total_sold }} sold
+                      </span>
+                      <span class="badge bg-light border text-dark">
+                        <i class="fas fa-shopping-bag me-1 text-success"></i>Act. {{ product.sold_count }}
+                      </span>
+                    </div>
+                    {% endif %}
                   </td>
                   <td>
                     {% if product.is_in_stock %}
-                    <span class="badge bg-success">
-                      <i class="fas fa-check"></i> In Stock
-                    </span>
+                    <span class="badge bg-success"><i class="fas fa-check"></i> In Stock</span>
                     {% else %}
-                    <span class="badge bg-danger">
-                      <i class="fas fa-times"></i> Out of Stock
-                    </span>
+                    <span class="badge bg-danger"><i class="fas fa-times"></i> Out of Stock</span>
                     {% endif %}
                   </td>
                   <td>
@@ -165,101 +164,24 @@
                     {% endif %}
                   </td>
                   <td>
-                  <div class="btn-group" role="group">
-                    <a href="{% url 'stores:edit_product' store.id product.id %}" class="btn btn-sm btn-outline-primary" title="Edit Product">
-                      <i class="fas fa-edit"></i>
-                    </a>
-                    <a class="btn btn-sm btn-outline-success" onclick="quickView({{ product.id }})" title="Quick View">
-                      <i class="fas fa-eye"></i>
-                    </a>
-                    <!-- Delete button  -->
-                    <a href="#" class="btn btn-sm btn-outline-danger" title="Delete Product" >
-                      <i class="fas fa-trash"></i>
-                    </a>
-                  </div>
-                </td>
-                 </tr>
+                    <div class="btn-group">
+                      <a href="{% url 'stores:edit_product' store.id product.id %}" class="btn btn-sm btn-outline-primary" title="Edit">
+                        <i class="fas fa-edit"></i>
+                      </a>
+                      <a class="btn btn-sm btn-outline-success" onclick="quickView({{ product.id }})" title="Quick View">
+                        <i class="fas fa-eye"></i>
+                      </a>
+                      <a class="btn btn-sm btn-outline-danger" onclick="deleteProduct({{ product.id }}, this)" title="Delete">
+                        <i class="fas fa-trash"></i>
+                      </a>
+                    </div>
+                  </td>
+                </tr>
                 {% endfor %}
               </tbody>
             </table>
           </div>
-
-          <!-- Pagination Controls -->
-          {% if products.has_other_pages %}
-          <div class="card-footer bg-white border-top pt-3">
-            <div class="d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
-
-              <!-- Page Info -->
-              <div class="text-muted small fw-medium">
-                <i class="fas fa-layer-group me-1 text-primary"></i>
-                Page <strong>{{ products.number }}</strong> of <strong>{{ products.paginator.num_pages }}</strong> &mdash;
-                Showing <strong>{{ products.start_index }} to {{ products.end_index }}</strong> of <strong>{{ total_products }}</strong> products
-              </div>
-
-              <!-- Pagination Controls -->
-              <nav aria-label="Product pagination">
-                <ul class="pagination pagination-sm mb-0 shadow-sm rounded-pill bg-light px-2 py-1">
-
-                  <!-- First & Previous -->
-                  {% if products.has_previous %}
-                    <li class="page-item">
-                      <a class="page-link rounded-circle" href="?page=1" title="First">
-                        <i class="fas fa-angle-double-left"></i>
-                      </a>
-                    </li>
-                    <li class="page-item">
-                      <a class="page-link rounded-circle" href="?page={{ products.previous_page_number }}" title="Previous">
-                        <i class="fas fa-angle-left"></i>
-                      </a>
-                    </li>
-                  {% else %}
-                    <li class="page-item disabled">
-                      <span class="page-link rounded-circle"><i class="fas fa-angle-double-left"></i></span>
-                    </li>
-                    <li class="page-item disabled">
-                      <span class="page-link rounded-circle"><i class="fas fa-angle-left"></i></span>
-                    </li>
-                  {% endif %}
-
-                  <!-- Page Numbers -->
-                  {% for num in products.paginator.page_range %}
-                    {% if num == products.number %}
-                      <li class="page-item active">
-                        <span class="page-link rounded-circle bg-primary border-0 text-white">{{ num }}</span>
-                      </li>
-                    {% elif num > products.number|add:'-3' and num < products.number|add:'3' %}
-                      <li class="page-item">
-                        <a class="page-link rounded-circle" href="?page={{ num }}">{{ num }}</a>
-                      </li>
-                    {% endif %}
-                  {% endfor %}
-
-                  <!-- Next & Last -->
-                  {% if products.has_next %}
-                    <li class="page-item">
-                      <a class="page-link rounded-circle" href="?page={{ products.next_page_number }}" title="Next">
-                        <i class="fas fa-angle-right"></i>
-                      </a>
-                    </li>
-                    <li class="page-item">
-                      <a class="page-link rounded-circle" href="?page={{ products.paginator.num_pages }}" title="Last">
-                        <i class="fas fa-angle-double-right"></i>
-                      </a>
-                    </li>
-                  {% else %}
-                    <li class="page-item disabled">
-                      <span class="page-link rounded-circle"><i class="fas fa-angle-right"></i></span>
-                    </li>
-                    <li class="page-item disabled">
-                      <span class="page-link rounded-circle"><i class="fas fa-angle-double-right"></i></span>
-                    </li>
-                  {% endif %}
-                </ul>
-              </nav>
-            </div>
-          </div>
-        {% endif %}
-
+          {% include 'stores/partials/pagination.html' with page_obj=products %}
           {% else %}
           <div class="text-center py-5">
             <i class="fas fa-box fa-4x text-muted mb-3"></i>
@@ -276,260 +198,21 @@
   </div>
 </div>
 
-<!-- Delete Confirmation Modal -->
-<div class="modal fade" id="deleteModal" tabindex="-1">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Confirm Delete</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <p>Are you sure you want to delete this product? This action cannot be undone.</p>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button type="button" class="btn btn-danger" id="confirmDelete">Delete Product</button>
-      </div>
-    </div>
-  </div>
-</div>
-<script src="{% static 'js/main.js' %}"></script>
-
 <script>
-// Enhanced delete functionality with better UX
-let productToDelete = null;
-let currentDeleteButton = null;
-
-function deleteProduct(productId, buttonElement) {
-  productToDelete = productId;
-  currentDeleteButton = buttonElement;
-
-  // Get product name from the row for better UX
-  const row = buttonElement.closest('tr');
-  const productName = row.querySelector('td:nth-child(2) strong').textContent;
-
-  // Update modal text with product name
-  const modalBody = document.querySelector('#deleteModal .modal-body p');
-  modalBody.innerHTML = `Are you sure you want to delete "<strong>${productName}</strong>"? This action cannot be undone and will remove all associated images and variants.`;
-
-  const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
-  modal.show();
-}
-
-document.getElementById('confirmDelete').addEventListener('click', function() {
-  if (productToDelete && currentDeleteButton) {
-    // Disable the button and show loading state
-    const originalContent = this.innerHTML;
-    this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
-    this.disabled = true;
-
-    // Get CSRF token
-    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
-                     document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
-                     getCookie('csrftoken');
-
-    // Make AJAX call to delete the product
-    fetch(``, {
-      method: 'POST',
-      headers: {
-        'X-CSRFToken': csrfToken,
-        'Content-Type': 'application/json',
-      },
-    })
-    .then(response => response.json())
-    .then(data => {
-      if (data.success) {
-        // Show success message
-        showToast('success', data.message || 'Product deleted successfully!');
-
-        // Remove the row from table with animation
-        const row = currentDeleteButton.closest('tr');
-        row.style.transition = 'opacity 0.3s ease';
-        row.style.opacity = '0';
-
-        setTimeout(() => {
-          row.remove();
-
-          // Update product count
-          updateProductCount();
-
-          // Check if this was the last product on the page
-          const remainingRows = document.querySelectorAll('tbody tr').length;
-          if (remainingRows === 0) {
-            // Reload page to show "no products" message or previous page
-            window.location.reload();
-          }
-        }, 300);
-
-        // Close modal
-        bootstrap.Modal.getInstance(document.getElementById('deleteModal')).hide();
-
-      } else {
-        showToast('error', data.message || 'Error deleting product.');
-
-        // Reset button
-        this.innerHTML = originalContent;
-        this.disabled = false;
-      }
-    })
-    .catch(error => {
-      console.error('Delete error:', error);
-      showToast('error', 'Network error occurred while deleting product.');
-
-      // Reset button
-      this.innerHTML = originalContent;
-      this.disabled = false;
-    })
-    .finally(() => {
-      productToDelete = null;
-      currentDeleteButton = null;
-    });
-  }
-});
-
-// Helper function to show toast notifications
-function showToast(type, message) {
-  // Create toast element if it doesn't exist
-  let toastContainer = document.getElementById('toast-container');
-  if (!toastContainer) {
-    toastContainer = document.createElement('div');
-    toastContainer.id = 'toast-container';
-    toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
-    toastContainer.style.zIndex = '9999';
-    document.body.appendChild(toastContainer);
-  }
-
-  const toastId = 'toast-' + Date.now();
-  const bgClass = type === 'success' ? 'bg-success' : 'bg-danger';
-  const icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
-
-  const toastHTML = `
-    <div id="${toastId}" class="toast align-items-center text-white ${bgClass} border-0" role="alert" aria-live="assertive" aria-atomic="true">
-      <div class="d-flex">
-        <div class="toast-body">
-          <i class="fas ${icon} me-2"></i>${message}
-        </div>
-        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
-      </div>
-    </div>
-  `;
-
-  toastContainer.insertAdjacentHTML('beforeend', toastHTML);
-
-  const toastElement = document.getElementById(toastId);
-  const toast = new bootstrap.Toast(toastElement, { delay: 5000 });
-  toast.show();
-
-  // Remove toast element after it's hidden
-  toastElement.addEventListener('hidden.bs.toast', () => {
-    toastElement.remove();
+function filterProducts(query) {
+  const rows = document.querySelectorAll("tbody tr");
+  rows.forEach(row => {
+    const name = row.querySelector("td:nth-child(2)").textContent.toLowerCase();
+    row.style.display = name.includes(query.toLowerCase()) ? '' : 'none';
   });
 }
 
-// Helper function to update product count in header
-function updateProductCount() {
-  const countElement = document.querySelector('.text-muted');
-  if (countElement && countElement.textContent.includes('total products')) {
-    const currentCount = parseInt(countElement.textContent.match(/(\d+) total products/)?.[1] || 0);
-    if (currentCount > 0) {
-      countElement.textContent = countElement.textContent.replace(/\d+ total products/, `${currentCount - 1} total products`);
-    }
-  }
-}
-
-// Helper function to get CSRF cookie
-function getCookie(name) {
-  let cookieValue = null;
-  if (document.cookie && document.cookie !== '') {
-    const cookies = document.cookie.split(';');
-    for (let i = 0; i < cookies.length; i++) {
-      const cookie = cookies[i].trim();
-      if (cookie.substring(0, name.length + 1) === (name + '=')) {
-        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-        break;
-      }
-    }
-  }
-  return cookieValue;
-}
-
-// Reset modal when it's hidden
-document.getElementById('deleteModal').addEventListener('hidden.bs.modal', function() {
-  // Reset button state
-  const confirmButton = document.getElementById('confirmDelete');
-  confirmButton.innerHTML = 'Delete Product';
-  confirmButton.disabled = false;
-
-  // Reset variables
-  productToDelete = null;
-  currentDeleteButton = null;
-
-  // Reset modal body text
-  const modalBody = document.querySelector('#deleteModal .modal-body p');
-  modalBody.innerHTML = 'Are you sure you want to delete this product? This action cannot be undone.';
+document.addEventListener('DOMContentLoaded', function () {
+  document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
+    new bootstrap.Tooltip(el);
+  });
 });
 </script>
 
-<style>
-.table th {
-  border-top: none;
-  font-weight: 600;
-  font-size: 0.875rem;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.badge {
-  font-size: 0.7rem;
-}
-
-.btn-group .btn {
-  margin-right: 2px;
-}
-
-.btn-group .btn:last-child {
-  margin-right: 0;
-}
-
-.pagination .page-link {
-  color: #6c757d;
-  border: 1px solid #dee2e6;
-}
-
-.pagination .page-item.active .page-link {
-  background-color: #007bff;
-  border-color: #007bff;
-}
-
-.pagination .page-link:hover {
-  color: #0056b3;
-  background-color: #e9ecef;
-  border-color: #dee2e6;
-}
-
-@media (max-width: 768px) {
-  .btn-group {
-    flex-direction: column;
-    width: 100%;
-  }
-
-  .btn-group .btn {
-    margin-bottom: 0.5rem;
-  }
-
-  .d-flex.justify-content-between {
-    flex-direction: column;
-    gap: 1rem;
-  }
-
-  .pagination {
-    flex-wrap: wrap;
-  }
-
-  .pagination .page-item {
-    margin: 2px;
-  }
-}
-</style>
+<script src="{% static 'js/product_delete.js' %}"></script>
 {% endblock %}
