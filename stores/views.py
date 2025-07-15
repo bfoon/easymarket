@@ -29,7 +29,7 @@ from .models import Store
 from reviews.models import Review
 from marketplace.models import Product, Category, ProductImage
 from orders.models import ChatMessage
-from orders.models import Order, OrderItem
+from orders.models import Order, OrderItem, PromoCode
 from django.http import HttpResponseForbidden
 from functools import wraps
 from .forms import ProductForm, ProductImageForm
@@ -627,14 +627,50 @@ def edit_product(request, store_id, product_id):
     product = get_object_or_404(Product, id=product_id, seller=request.user)
     stock, created = Stock.objects.get_or_create(product=product)
 
-    ImageFormSet = modelformset_factory(ProductImage, form=ProductImageForm, extra=3, can_delete=False)
-    VariantFormSet = modelformset_factory(ProductVariant, form=ProductVariantForm, extra=3, can_delete=True)
+    ImageFormSet = modelformset_factory(ProductImage, form=ProductImageForm, extra=5, can_delete=False)
+    VariantFormSet = modelformset_factory(ProductVariant, form=ProductVariantForm, extra=10, can_delete=True)
 
     if request.method == 'POST':
         product_form = ProductForm(request.POST, request.FILES, instance=product)
         image_formset = ImageFormSet(request.POST, request.FILES, queryset=ProductImage.objects.none())
         variant_formset = VariantFormSet(request.POST, queryset=ProductVariant.objects.filter(product=product))
         stock_quantity = request.POST.get('stock_quantity')
+
+        # Remove selected promo codes
+        for promo in product.promo_codes.all():
+            if request.POST.get(f'remove_promo_{promo.id}'):
+                product.promo_codes.remove(promo)
+
+        # Promo code creation
+        promo_code_value = request.POST.get('promo_code')
+        promo_discount = request.POST.get('promo_discount')
+
+        # Handle assigning existing promo
+        existing_promo_id = request.POST.get('existing_promo')
+        if existing_promo_id:
+            try:
+                promo = PromoCode.objects.get(id=existing_promo_id)
+                promo.products.add(product)
+            except PromoCode.DoesNotExist:
+                pass  # silently ignore
+
+        # Handle creating new promo
+        new_code = request.POST.get('promo_code')
+        new_discount = request.POST.get('promo_discount')
+        if new_code and new_discount:
+            promo = PromoCode.objects.create(
+                code=new_code.strip(),
+                discount_percentage=int(new_discount),
+                is_active=True
+            )
+            promo.products.add(product)
+
+        if promo_code_value and promo_discount:
+            PromoCode.objects.create(
+                code=promo_code_value.strip(),
+                discount_percentage=int(promo_discount),
+                is_active=True,
+            ).products.add(product)
 
         if product_form.is_valid() and image_formset.is_valid() and variant_formset.is_valid():
             with transaction.atomic():
@@ -654,15 +690,15 @@ def edit_product(request, store_id, product_id):
                             image.product = product
                             image.save()
 
-                # Save variants
+                # First delete all existing variants for this product
+                ProductVariant.objects.filter(product=product).delete()
+
+                # Then save only new ones from the formset
                 for form in variant_formset:
-                    if form.is_valid() and form.cleaned_data:
-                        if form.cleaned_data.get('DELETE') and form.instance.pk:
-                            form.instance.delete()
-                        elif form.cleaned_data.get('feature_option') or form.instance.pk:
-                            variant = form.save(commit=False)
-                            variant.product = product
-                            variant.save()
+                    if form.cleaned_data and form.cleaned_data.get('feature_option'):
+                        variant = form.save(commit=False)
+                        variant.product = product
+                        variant.save()
 
             messages.success(request, 'Product and stock updated successfully!')
             return redirect('stores:manage_store_products', store_id=store.id)
@@ -687,6 +723,8 @@ def edit_product(request, store_id, product_id):
         {"field": product_form['free_shipping'], "icon": "fa-shipping-fast", "text": "Free Shipping", "color": "success"},
     ]
 
+    all_promos = PromoCode.objects.filter(is_active=True)
+
     context = {
         'store': store,
         'product': product,
@@ -694,6 +732,7 @@ def edit_product(request, store_id, product_id):
         'image_formset': image_formset,
         'variant_formset': variant_formset,
         'boolean_fields': boolean_fields,
+        'all_promos': all_promos,
         'stock_quantity': stock.quantity,  # Pass current stock to template
     }
 
@@ -703,39 +742,42 @@ def edit_product(request, store_id, product_id):
 @login_required
 @require_POST
 def delete_product(request, store_id, product_id):
-    """Delete a product via AJAX."""
+    """Delete a product via AJAX call."""
+
     try:
         store = get_object_or_404(Store, id=store_id, owner=request.user)
         product = get_object_or_404(Product, id=product_id, seller=request.user)
 
-        # Store product name for success message
-        product_name = product.name
+        if product.seller != request.user or product.seller != store.owner:
+            return JsonResponse({'success': False, 'message': 'Unauthorized to delete this product.'}, status=403)
 
-        # Delete the product (this will also delete related images and variants due to CASCADE)
+        product_name = product.name
         product.delete()
 
         return JsonResponse({
             'success': True,
-            'message': f'Product "{product_name}" has been deleted successfully.'
+            'message': f'Product "{product_name}" was deleted successfully.'
         })
+
+    except Product.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'Product not found.'}, status=404)
 
     except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'message': 'An error occurred while deleting the product.'
-        })
-
+        # Optional: log the error if needed
+        print(f"Error deleting product: {e}")
+        return JsonResponse({'success': False, 'message': 'Server error occurred.'}, status=500)
 
 @login_required
 @require_POST
 def delete_product_image(request, store_id, product_id, image_id):
-    """Delete a product image via AJAX."""
+    """Delete a product image via AJAX request."""
     try:
         store = get_object_or_404(Store, id=store_id, owner=request.user)
-        product = get_object_or_404(Product, id=product_id, seller=request.user)
+        product = get_object_or_404(Product, id=product_id, seller=store.owner)
+
+        # Ensure the image belongs to this product
         image = get_object_or_404(ProductImage, id=image_id, product=product)
 
-        # Delete the image file and database record
         image.delete()
 
         return JsonResponse({
@@ -743,11 +785,18 @@ def delete_product_image(request, store_id, product_id, image_id):
             'message': 'Image deleted successfully.'
         })
 
+    except ProductImage.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'message': 'Image not found.'
+        }, status=404)
+
     except Exception as e:
+        print(f"Image deletion error: {e}")  # optional logging
         return JsonResponse({
             'success': False,
             'message': 'An error occurred while deleting the image.'
-        })
+        }, status=500)
 
 
 @login_required
