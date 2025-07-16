@@ -35,11 +35,24 @@ urlpatterns = [
 
     # Drivers
     path('drivers/', views.DriverListView.as_view(), name='driver_list'),
+    path('drivers/create/', views.DriverCreateView.as_view(), name='driver_create'),
     path('drivers/<int:pk>/', views.DriverDetailView.as_view(), name='driver_detail'),
+    path('drivers/<int:pk>/edit/', views.DriverUpdateView.as_view(), name='driver_edit'),
 
     # Vehicles
     path('vehicles/', views.VehicleListView.as_view(), name='vehicle_list'),
+    path('vehicles/create/', views.VehicleCreateView.as_view(), name='vehicle_create'),
+    path('vehicles/<int:pk>/', views.VehicleDetailView.as_view(), name='vehicle_detail'),
+    path('vehicles/<int:pk>/edit/', views.VehicleUpdateView.as_view(), name='vehicle_edit'),
 
     # Warehouses
     path('warehouses/', views.WarehouseListView.as_view(), name='warehouse_list'),
+    path('warehouses/create/', views.WarehouseCreateView.as_view(), name='warehouse_create'),
+    path('warehouses/<int:pk>/', views.WarehouseDetailView.as_view(), name='warehouse_detail'),
+    path('warehouses/<int:pk>/edit/', views.WarehouseUpdateView.as_view(), name='warehouse_edit'),
+
+    # Logistic Offices
+    path('offices/', views.LogisticOfficeListView.as_view(), name='logistic_office_list'),
+    path('offices/create/', views.LogisticOfficeCreateView.as_view(), name='logistic_office_create'),
+    path('offices/<int:pk>/edit/', views.LogisticOfficeUpdateView.as_view(), name='logistic_office_edit'),
 ]

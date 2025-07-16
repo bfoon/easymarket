@@ -203,6 +203,236 @@ class DriverDetailView(LoginRequiredMixin, DetailView):
         return context
 
 
+class DriverCreateView(LoginRequiredMixin, CreateView):
+    model = Driver
+    form_class = None  # We'll set this in get_form_class
+    template_name = 'logistics/driver_form.html'
+
+    def get_form_class(self):
+        from .forms import DriverForm
+        return DriverForm
+
+    def get_success_url(self):
+        return reverse_lazy('logistics:driver_detail', kwargs={'pk': self.object.pk})
+
+    def form_valid(self, form):
+        messages.success(self.request, f'Driver {form.instance.user.get_full_name()} created successfully!')
+        return super().form_valid(form)
+
+
+class DriverUpdateView(LoginRequiredMixin, UpdateView):
+    model = Driver
+    form_class = None
+    template_name = 'logistics/driver_form.html'
+
+    def get_form_class(self):
+        from .forms import DriverForm
+        return DriverForm
+
+    def get_success_url(self):
+        return reverse_lazy('logistics:driver_detail', kwargs={'pk': self.object.pk})
+
+    def form_valid(self, form):
+        messages.success(self.request, f'Driver {form.instance.user.get_full_name()} updated successfully!')
+        return super().form_valid(form)
+
+
+class VehicleCreateView(LoginRequiredMixin, CreateView):
+    model = Vehicle
+    form_class = None
+    template_name = 'logistics/vehicle_form.html'
+
+    def get_form_class(self):
+        from .forms import VehicleForm
+        return VehicleForm
+
+    def get_success_url(self):
+        return reverse_lazy('logistics:vehicle_list')
+
+    def form_valid(self, form):
+        messages.success(self.request, f'Vehicle {form.instance.plate_number} created successfully!')
+        return super().form_valid(form)
+
+
+class VehicleUpdateView(LoginRequiredMixin, UpdateView):
+    model = Vehicle
+    form_class = None
+    template_name = 'logistics/vehicle_form.html'
+
+    def get_form_class(self):
+        from .forms import VehicleForm
+        return VehicleForm
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        if self.object:
+            context['active_shipments_count'] = self.object.shipment_set.exclude(status='shipped').count()
+        return context
+
+    def get_success_url(self):
+        return reverse_lazy('logistics:vehicle_list')
+
+    def form_valid(self, form):
+        messages.success(self.request, f'Vehicle {form.instance.plate_number} updated successfully!')
+        return super().form_valid(form)
+
+
+class VehicleDetailView(LoginRequiredMixin, DetailView):
+    model = Vehicle
+    template_name = 'logistics/vehicle_detail.html'
+    context_object_name = 'vehicle'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        vehicle = self.get_object()
+
+        # Get shipment statistics
+        context['total_shipments'] = vehicle.shipment_set.count()
+        context['active_shipments'] = vehicle.shipment_set.exclude(status='shipped').count()
+        context['completed_shipments'] = vehicle.shipment_set.filter(status='shipped').count()
+
+        # Get recent shipments
+        context['recent_shipments'] = vehicle.shipment_set.select_related(
+            'shipping_address', 'driver'
+        ).order_by('-created_at')[:10]
+
+        return context
+
+
+class WarehouseCreateView(LoginRequiredMixin, CreateView):
+    model = Warehouse
+    form_class = None
+    template_name = 'logistics/warehouse_form.html'
+
+    def get_form_class(self):
+        from .forms import WarehouseForm
+        return WarehouseForm
+
+    def get_success_url(self):
+        return reverse_lazy('logistics:warehouse_list')
+
+    def form_valid(self, form):
+        messages.success(self.request, f'Warehouse {form.instance.name} created successfully!')
+        return super().form_valid(form)
+
+
+class WarehouseUpdateView(LoginRequiredMixin, UpdateView):
+    model = Warehouse
+    form_class = None
+    template_name = 'logistics/warehouse_form.html'
+
+    def get_form_class(self):
+        from .forms import WarehouseForm
+        return WarehouseForm
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        if self.object:
+            context['active_shipments_count'] = self.object.shipment_set.exclude(status='shipped').count()
+            context['completed_shipments_count'] = self.object.shipment_set.filter(status='shipped').count()
+        return context
+
+    def get_success_url(self):
+        return reverse_lazy('logistics:warehouse_list')
+
+    def form_valid(self, form):
+        messages.success(self.request, f'Warehouse {form.instance.name} updated successfully!')
+        return super().form_valid(form)
+
+
+class WarehouseDetailView(LoginRequiredMixin, DetailView):
+    model = Warehouse
+    template_name = 'logistics/warehouse_detail.html'
+    context_object_name = 'warehouse'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        warehouse = self.get_object()
+
+        # Get shipment statistics
+        context['total_shipments'] = warehouse.shipment_set.count()
+        context['active_shipments'] = warehouse.shipment_set.exclude(status='shipped').count()
+        context['completed_shipments'] = warehouse.shipment_set.filter(status='shipped').count()
+
+        # Get recent shipments
+        context['recent_shipments'] = warehouse.shipment_set.select_related(
+            'shipping_address', 'driver', 'vehicle'
+        ).order_by('-created_at')[:10]
+
+        return context
+
+
+class LogisticOfficeCreateView(LoginRequiredMixin, CreateView):
+    model = LogisticOffice
+    form_class = None
+    template_name = 'logistics/logistic_office_form.html'
+
+    def get_form_class(self):
+        from .forms import LogisticOfficeForm
+        return LogisticOfficeForm
+
+    def get_success_url(self):
+        return reverse_lazy('logistics:logistic_office_list')
+
+    def form_valid(self, form):
+        messages.success(self.request, f'Logistic Office {form.instance.name} created successfully!')
+        return super().form_valid(form)
+
+
+class LogisticOfficeUpdateView(LoginRequiredMixin, UpdateView):
+    model = LogisticOffice
+    form_class = None
+    template_name = 'logistics/logistic_office_form.html'
+
+    def get_form_class(self):
+        from .forms import LogisticOfficeForm
+        return LogisticOfficeForm
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        if self.object:
+            context['active_shipments_count'] = self.object.shipment_set.exclude(status='shipped').count()
+            context['completed_shipments_count'] = self.object.shipment_set.filter(status='shipped').count()
+        return context
+
+    def get_success_url(self):
+        return reverse_lazy('logistics:logistic_office_list')
+
+    def form_valid(self, form):
+        messages.success(self.request, f'Logistic Office {form.instance.name} updated successfully!')
+        return super().form_valid(form)
+
+
+class LogisticOfficeListView(LoginRequiredMixin, ListView):
+    model = LogisticOffice
+    template_name = 'logistics/logistic_office_list.html'
+    context_object_name = 'offices'
+    paginate_by = 20
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        # Add office statistics
+        total_shipments_sum = 0
+        active_shipments_sum = 0
+        completed_shipments_sum = 0
+
+        for office in context['offices']:
+            office.total_shipments_count = office.shipment_set.count()
+            office.active_shipments_count = office.shipment_set.exclude(status='shipped').count()
+            office.completed_shipments_count = office.shipment_set.filter(status='shipped').count()
+
+            total_shipments_sum += office.total_shipments_count
+            active_shipments_sum += office.active_shipments_count
+            completed_shipments_sum += office.completed_shipments_count
+
+        context['total_shipments_sum'] = total_shipments_sum
+        context['active_shipments_sum'] = active_shipments_sum
+        context['completed_shipments_sum'] = completed_shipments_sum
+
+        return context
+
+
 class VehicleListView(LoginRequiredMixin, ListView):
     model = Vehicle
     template_name = 'logistics/vehicle_list.html'
