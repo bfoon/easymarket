@@ -1,1029 +1,341 @@
-{% extends 'base.html' %}
-{% load static %}
+{% extends 'logistics/base.html' %}
+
+{% block title %}
+    {% if object %}Edit Shipment #{{ object.id }}{% else %}Create New Shipment{% endif %} - Logistics Management
+{% endblock %}
 
 {% block content %}
-<link rel="stylesheet" href="{% static 'css/main.css' %}">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
-<style>
-  .shipment-form-wrapper {
-    --shipment-primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    --shipment-success-gradient: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-    --shipment-danger-gradient: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
-    --shipment-card-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-    --shipment-hover-shadow: 0 15px 40px rgba(0, 0, 0, 0.15);
-    --shipment-border-radius: 16px;
-    --shipment-transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
-  .shipment-form-wrapper .shipment-container {
-    max-width: 900px;
-    margin: 0 auto;
-    padding: 2rem;
-    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-    min-height: 100vh;
-  }
-
-  .shipment-form-wrapper .form-card {
-    background: white;
-    border-radius: var(--shipment-border-radius);
-    box-shadow: var(--shipment-card-shadow);
-    overflow: hidden;
-    position: relative;
-    transform: translateY(20px);
-    opacity: 0;
-    animation: shipmentSlideInUp 0.6s ease-out forwards;
-  }
-
-  @keyframes shipmentSlideInUp {
-    to {
-      transform: translateY(0);
-      opacity: 1;
-    }
-  }
-
-  .shipment-form-wrapper .form-header {
-    background: var(--shipment-primary-gradient);
-    color: white;
-    padding: 2.5rem 2rem;
-    text-align: center;
-    position: relative;
-    overflow: hidden;
-  }
-
-  .shipment-form-wrapper .form-header::before {
-    content: '';
-    position: absolute;
-    top: -50%;
-    left: -50%;
-    width: 200%;
-    height: 200%;
-    background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
-    animation: shipmentShimmer 3s ease-in-out infinite;
-  }
-
-  @keyframes shipmentShimmer {
-    0%, 100% { transform: rotate(0deg); }
-    50% { transform: rotate(180deg); }
-  }
-
-  .shipment-form-wrapper .form-header h2 {
-    margin: 0;
-    font-size: 2.2rem;
-    font-weight: 700;
-    text-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    position: relative;
-    z-index: 1;
-  }
-
-  .shipment-form-wrapper .form-header .subtitle {
-    margin-top: 0.5rem;
-    opacity: 0.9;
-    font-size: 1.1rem;
-    position: relative;
-    z-index: 1;
-  }
-
-  .shipment-form-wrapper .progress-bar {
-    height: 4px;
-    background: rgba(255,255,255,0.3);
-    position: relative;
-    overflow: hidden;
-  }
-
-  .shipment-form-wrapper .progress-fill {
-    height: 100%;
-    background: linear-gradient(90deg, #38ef7d, #11998e);
-    width: 0%;
-    transition: width 0.5s ease;
-    position: relative;
-  }
-
-  .shipment-form-wrapper .progress-fill::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
-    animation: shipmentProgressShine 2s ease-in-out infinite;
-  }
-
-  @keyframes shipmentProgressShine {
-    0% { transform: translateX(-100%); }
-    100% { transform: translateX(100%); }
-  }
-
-  .shipment-form-wrapper .form-body {
-    padding: 2.5rem;
-  }
-
-  .shipment-form-wrapper .form-section {
-    margin-bottom: 2rem;
-  }
-
-  .shipment-form-wrapper .section-title {
-    font-size: 1.3rem;
-    font-weight: 600;
-    color: #2d3748;
-    margin-bottom: 1.5rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-
-  .shipment-form-wrapper .section-title i {
-    width: 24px;
-    height: 24px;
-    background: var(--shipment-primary-gradient);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-size: 0.8rem;
-  }
-
-  .shipment-form-wrapper .form-field {
-    position: relative;
-    margin-bottom: 1.5rem;
-  }
-
-  .shipment-form-wrapper .form-field label {
-    font-weight: 600;
-    color: #4a5568;
-    margin-bottom: 0.5rem;
-    display: block;
-    transition: var(--shipment-transition);
-  }
-
-  .shipment-form-wrapper .form-field input,
-  .shipment-form-wrapper .form-field select,
-  .shipment-form-wrapper .form-field textarea {
-    width: 100%;
-    padding: 12px 16px;
-    border: 2px solid #e2e8f0;
-    border-radius: 10px;
-    font-size: 1rem;
-    transition: var(--shipment-transition);
-    background: white;
-  }
-
-  .shipment-form-wrapper .form-field input:focus,
-  .shipment-form-wrapper .form-field select:focus,
-  .shipment-form-wrapper .form-field textarea:focus {
-    outline: none;
-    border-color: #667eea;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-    transform: translateY(-2px);
-  }
-
-  .shipment-form-wrapper .form-field.has-value label {
-    color: #667eea;
-    transform: translateY(-2px);
-  }
-
-  .shipment-form-wrapper .form-field input[type="datetime-local"] {
-    font-family: inherit;
-    cursor: pointer;
-  }
-
-  .shipment-form-wrapper .form-field input[type="number"] {
-    -moz-appearance: textfield;
-  }
-
-  .shipment-form-wrapper .form-field input[type="number"]::-webkit-outer-spin-button,
-  .shipment-form-wrapper .form-field input[type="number"]::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-  }
-
-  .shipment-form-wrapper .form-field select {
-    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
-    background-position: right 12px center;
-    background-repeat: no-repeat;
-    background-size: 16px 12px;
-    appearance: none;
-    cursor: pointer;
-  }
-
-  .shipment-form-wrapper .field-icon {
-    position: absolute;
-    right: 12px;
-    top: 38px;
-    color: #a0aec0;
-    transition: var(--shipment-transition);
-  }
-
-  .shipment-form-wrapper .form-field:focus-within .field-icon {
-    color: #667eea;
-  }
-
-  .shipment-form-wrapper .address-preview-section {
-    background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
-    border-radius: 12px;
-    padding: 1.5rem;
-    margin: 1.5rem 0;
-    border: 2px dashed #cbd5e0;
-    transition: var(--shipment-transition);
-    position: relative;
-    overflow: hidden;
-  }
-
-  .shipment-form-wrapper .address-preview-section.has-address {
-    border-color: #38a169;
-    background: linear-gradient(135deg, #f0fff4 0%, #c6f6d5 100%);
-  }
-
-  .shipment-form-wrapper .address-preview-section::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
-    transition: var(--shipment-transition);
-  }
-
-  .shipment-form-wrapper .address-preview-section.loading::before {
-    animation: shipmentLoadingShine 1.5s ease-in-out infinite;
-  }
-
-  @keyframes shipmentLoadingShine {
-    0% { left: -100%; }
-    100% { left: 100%; }
-  }
-
-  .shipment-form-wrapper .address-preview {
-    background: white;
-    border-radius: 8px;
-    padding: 1rem;
-    min-height: 60px;
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    font-style: italic;
-    color: #4a5568;
-    border: 1px solid #e2e8f0;
-    position: relative;
-    transition: var(--shipment-transition);
-  }
-
-  .shipment-form-wrapper .address-preview.empty {
-    justify-content: center;
-    color: #a0aec0;
-  }
-
-  .shipment-form-wrapper .address-preview.loading {
-    background: linear-gradient(90deg, #f7fafc 25%, #edf2f7 50%, #f7fafc 75%);
-    background-size: 200% 100%;
-    animation: shipmentLoadingGradient 1.5s ease-in-out infinite;
-  }
-
-  @keyframes shipmentLoadingGradient {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
-  }
-
-  .shipment-form-wrapper .address-icon {
-    width: 40px;
-    height: 40px;
-    background: var(--shipment-success-gradient);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    flex-shrink: 0;
-    opacity: 0;
-    transform: scale(0);
-    transition: var(--shipment-transition);
-  }
-
-  .shipment-form-wrapper .address-preview.has-content .address-icon {
-    opacity: 1;
-    transform: scale(1);
-  }
-
-  .shipment-form-wrapper .form-actions {
-    display: flex;
-    gap: 1rem;
-    justify-content: center;
-    padding-top: 2rem;
-    border-top: 1px solid #e2e8f0;
-  }
-
-  .shipment-form-wrapper .btn {
-    padding: 12px 24px;
-    border-radius: 10px;
-    font-weight: 600;
-    text-decoration: none;
-    border: none;
-    cursor: pointer;
-    transition: var(--shipment-transition);
-    position: relative;
-    overflow: hidden;
-    min-width: 140px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-  }
-
-  .shipment-form-wrapper .btn::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-    transition: var(--shipment-transition);
-  }
-
-  .shipment-form-wrapper .btn:hover::before {
-    left: 100%;
-  }
-
-  .shipment-form-wrapper .btn-primary {
-    background: var(--shipment-primary-gradient);
-    color: white;
-    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
-  }
-
-  .shipment-form-wrapper .btn-primary:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
-  }
-
-  .shipment-form-wrapper .btn-success {
-    background: var(--shipment-success-gradient);
-    color: white;
-    box-shadow: 0 4px 15px rgba(56, 239, 125, 0.3);
-  }
-
-  .shipment-form-wrapper .btn-success:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(56, 239, 125, 0.4);
-  }
-
-  .shipment-form-wrapper .btn-secondary {
-    background: linear-gradient(135deg, #718096 0%, #4a5568 100%);
-    color: white;
-    box-shadow: 0 4px 15px rgba(113, 128, 150, 0.3);
-  }
-
-  .shipment-form-wrapper .btn-secondary:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(113, 128, 150, 0.4);
-  }
-
-  .shipment-form-wrapper .error-message {
-    background: linear-gradient(135deg, #fed7d7 0%, #feb2b2 100%);
-    color: #c53030;
-    padding: 0.5rem 1rem;
-    border-radius: 8px;
-    font-size: 0.875rem;
-    margin-top: 0.25rem;
-    border-left: 4px solid #e53e3e;
-    animation: shipmentErrorSlide 0.3s ease-out;
-  }
-
-  @keyframes shipmentErrorSlide {
-    from {
-      opacity: 0;
-      transform: translateX(-10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateX(0);
-    }
-  }
-
-  .shipment-form-wrapper .help-text {
-    color: #718096;
-    font-size: 0.875rem;
-    margin-top: 0.25rem;
-    font-style: italic;
-  }
-
-  .shipment-form-wrapper .floating-elements {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-    z-index: -1;
-  }
-
-  .shipment-form-wrapper .floating-element {
-    position: absolute;
-    width: 60px;
-    height: 60px;
-    background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
-    border-radius: 50%;
-    animation: shipmentFloat 6s ease-in-out infinite;
-  }
-
-  .shipment-form-wrapper .floating-element:nth-child(1) {
-    top: 20%;
-    left: 10%;
-    animation-delay: 0s;
-  }
-
-  .shipment-form-wrapper .floating-element:nth-child(2) {
-    top: 60%;
-    right: 10%;
-    animation-delay: 2s;
-  }
-
-  .shipment-form-wrapper .floating-element:nth-child(3) {
-    bottom: 20%;
-    left: 20%;
-    animation-delay: 4s;
-  }
-
-  @keyframes shipmentFloat {
-    0%, 100% {
-      transform: translateY(0px) rotate(0deg);
-    }
-    33% {
-      transform: translateY(-20px) rotate(120deg);
-    }
-    66% {
-      transform: translateY(10px) rotate(240deg);
-    }
-  }
-
-  .shipment-form-wrapper .success-animation {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: white;
-    border-radius: 50%;
-    width: 80px;
-    height: 80px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #38a169;
-    font-size: 2rem;
-    box-shadow: var(--shipment-card-shadow);
-    opacity: 0;
-    scale: 0;
-    z-index: 1000;
-  }
-
-  .shipment-form-wrapper .success-animation.show {
-    animation: shipmentSuccessPop 0.6s ease-out forwards;
-  }
-
-  @keyframes shipmentSuccessPop {
-    0% {
-      opacity: 0;
-      scale: 0;
-    }
-    50% {
-      opacity: 1;
-      scale: 1.2;
-    }
-    100% {
-      opacity: 1;
-      scale: 1;
-    }
-  }
-
-  @media (max-width: 768px) {
-    .shipment-form-wrapper .shipment-container {
-      padding: 1rem;
-    }
-
-    .shipment-form-wrapper .form-body {
-      padding: 1.5rem;
-    }
-
-    .shipment-form-wrapper .form-header {
-      padding: 2rem 1.5rem;
-    }
-
-    .shipment-form-wrapper .form-actions {
-      flex-direction: column;
-    }
-
-    .shipment-form-wrapper .btn {
-      width: 100%;
-    }
-  }
-</style>
-
-<div class="shipment-form-wrapper">
-  <div class="floating-elements">
-    <div class="floating-element"></div>
-    <div class="floating-element"></div>
-    <div class="floating-element"></div>
-  </div>
-
-  <div class="shipment-container">
-    <div class="form-card">
-      <div class="form-header">
-        <h2><i class="fas fa-shipping-fast me-2"></i>Create New Shipment</h2>
-        <p class="subtitle">Fill in the details to process your shipment</p>
-        <div class="progress-bar">
-          <div class="progress-fill" id="form-progress"></div>
-        </div>
-      </div>
-
-      <div class="form-body">
-        <form method="post" id="shipment-form">
-        {% csrf_token %}
-
-        <!-- Order & Billing Section -->
-        <div class="form-section">
-          <h3 class="section-title">
-            <i class="fas fa-shopping-cart"></i>
-            Order & Billing Information
-          </h3>
-
-          <div class="row">
-            <div class="col-md-6">
-              <div class="form-field" data-field="order">
-                <label for="{{ form.order.id_for_label }}" class="form-label">{{ form.order.label }}</label>
-                {{ form.order }}
-                <i class="fas fa-chevron-down field-icon"></i>
-                {% if form.order.help_text %}
-                  <div class="help-text">{{ form.order.help_text }}</div>
-                {% endif %}
-                {% if form.order.errors %}
-                  <div class="error-message">
-                    <i class="fas fa-exclamation-triangle me-1"></i>{{ form.order.errors }}
-                  </div>
-                {% endif %}
-              </div>
-            </div>
-
-            <div class="col-md-6">
-              <div class="form-field" data-field="shipping_cost">
-                <label for="{{ form.shipping_cost.id_for_label }}" class="form-label">{{ form.shipping_cost.label }}</label>
-                {{ form.shipping_cost }}
-                <i class="fas fa-dollar-sign field-icon"></i>
-                {% if form.shipping_cost.help_text %}
-                  <div class="help-text">{{ form.shipping_cost.help_text }}</div>
-                {% endif %}
-                {% if form.shipping_cost.errors %}
-                  <div class="error-message">
-                    <i class="fas fa-exclamation-triangle me-1"></i>{{ form.shipping_cost.errors }}
-                  </div>
-                {% endif %}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Logistics Section -->
-        <div class="form-section">
-          <h3 class="section-title">
-            <i class="fas fa-truck"></i>
-            Logistics & Assignment
-          </h3>
-
-          <div class="row">
-            <div class="col-md-6">
-              <div class="form-field" data-field="warehouse">
-                <label for="{{ form.warehouse.id_for_label }}" class="form-label">{{ form.warehouse.label }}</label>
-                {{ form.warehouse }}
-                <i class="fas fa-warehouse field-icon"></i>
-                {% if form.warehouse.help_text %}
-                  <div class="help-text">{{ form.warehouse.help_text }}</div>
-                {% endif %}
-                {% if form.warehouse.errors %}
-                  <div class="error-message">
-                    <i class="fas fa-exclamation-triangle me-1"></i>{{ form.warehouse.errors }}
-                  </div>
-                {% endif %}
-              </div>
-            </div>
-
-            <div class="col-md-6">
-              <div class="form-field" data-field="logistic_office">
-                <label for="{{ form.logistic_office.id_for_label }}" class="form-label">{{ form.logistic_office.label }}</label>
-                {{ form.logistic_office }}
-                <i class="fas fa-building field-icon"></i>
-                {% if form.logistic_office.help_text %}
-                  <div class="help-text">{{ form.logistic_office.help_text }}</div>
-                {% endif %}
-                {% if form.logistic_office.errors %}
-                  <div class="error-message">
-                    <i class="fas fa-exclamation-triangle me-1"></i>{{ form.logistic_office.errors }}
-                  </div>
-                {% endif %}
-              </div>
-            </div>
-
-            <div class="col-md-6">
-              <div class="form-field" data-field="driver">
-                <label for="{{ form.driver.id_for_label }}" class="form-label">{{ form.driver.label }}</label>
-                {{ form.driver }}
-                <i class="fas fa-user field-icon"></i>
-                {% if form.driver.help_text %}
-                  <div class="help-text">{{ form.driver.help_text }}</div>
-                {% endif %}
-                {% if form.driver.errors %}
-                  <div class="error-message">
-                    <i class="fas fa-exclamation-triangle me-1"></i>{{ form.driver.errors }}
-                  </div>
-                {% endif %}
-              </div>
-            </div>
-
-            <div class="col-md-6">
-              <div class="form-field" data-field="vehicle">
-                <label for="{{ form.vehicle.id_for_label }}" class="form-label">{{ form.vehicle.label }}</label>
-                {{ form.vehicle }}
-                <i class="fas fa-truck field-icon"></i>
-                {% if form.vehicle.help_text %}
-                  <div class="help-text">{{ form.vehicle.help_text }}</div>
-                {% endif %}
-                {% if form.vehicle.errors %}
-                  <div class="error-message">
-                    <i class="fas fa-exclamation-triangle me-1"></i>{{ form.vehicle.errors }}
-                  </div>
-                {% endif %}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Timing Section -->
-        <div class="form-section">
-          <h3 class="section-title">
-            <i class="fas fa-clock"></i>
-            Schedule & Timing
-          </h3>
-
-          <div class="row">
-            <div class="col-md-6">
-              <div class="form-field" data-field="collect_time">
-                <label for="{{ form.collect_time.id_for_label }}" class="form-label">{{ form.collect_time.label }}</label>
-                {{ form.collect_time }}
-                <i class="fas fa-calendar-plus field-icon"></i>
-                {% if form.collect_time.help_text %}
-                  <div class="help-text">{{ form.collect_time.help_text }}</div>
-                {% endif %}
-                {% if form.collect_time.errors %}
-                  <div class="error-message">
-                    <i class="fas fa-exclamation-triangle me-1"></i>{{ form.collect_time.errors }}
-                  </div>
-                {% endif %}
-              </div>
-            </div>
-
-            <div class="col-md-6">
-              <div class="form-field" data-field="estimated_dropoff_time">
-                <label for="{{ form.estimated_dropoff_time.id_for_label }}" class="form-label">{{ form.estimated_dropoff_time.label }}</label>
-                {{ form.estimated_dropoff_time }}
-                <i class="fas fa-calendar-check field-icon"></i>
-                {% if form.estimated_dropoff_time.help_text %}
-                  <div class="help-text">{{ form.estimated_dropoff_time.help_text }}</div>
-                {% endif %}
-                {% if form.estimated_dropoff_time.errors %}
-                  <div class="error-message">
-                    <i class="fas fa-exclamation-triangle me-1"></i>{{ form.estimated_dropoff_time.errors }}
-                  </div>
-                {% endif %}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Package Details Section -->
-        <div class="form-section">
-          <h3 class="section-title">
-            <i class="fas fa-box"></i>
-            Package Details
-          </h3>
-
-          <div class="row">
-            <div class="col-md-6">
-              <div class="form-field" data-field="weight_kg">
-                <label for="{{ form.weight_kg.id_for_label }}" class="form-label">{{ form.weight_kg.label }}</label>
-                {{ form.weight_kg }}
-                <i class="fas fa-weight field-icon"></i>
-                {% if form.weight_kg.help_text %}
-                  <div class="help-text">{{ form.weight_kg.help_text }}</div>
-                {% endif %}
-                {% if form.weight_kg.errors %}
-                  <div class="error-message">
-                    <i class="fas fa-exclamation-triangle me-1"></i>{{ form.weight_kg.errors }}
-                  </div>
-                {% endif %}
-              </div>
-            </div>
-
-            <div class="col-md-6">
-              <div class="form-field" data-field="size_cubic_meters">
-                <label for="{{ form.size_cubic_meters.id_for_label }}" class="form-label">{{ form.size_cubic_meters.label }}</label>
-                {{ form.size_cubic_meters }}
-                <i class="fas fa-ruler-combined field-icon"></i>
-                {% if form.size_cubic_meters.help_text %}
-                  <div class="help-text">{{ form.size_cubic_meters.help_text }}</div>
-                {% endif %}
-                {% if form.size_cubic_meters.errors %}
-                  <div class="error-message">
-                    <i class="fas fa-exclamation-triangle me-1"></i>{{ form.size_cubic_meters.errors }}
-                  </div>
-                {% endif %}
-              </div>
-            </div>
-
-            <div class="col-md-6">
-              <div class="form-field" data-field="material_type">
-                <label for="{{ form.material_type.id_for_label }}" class="form-label">{{ form.material_type.label }}</label>
-                {{ form.material_type }}
-                <i class="fas fa-cubes field-icon"></i>
-                {% if form.material_type.help_text %}
-                  <div class="help-text">{{ form.material_type.help_text }}</div>
-                {% endif %}
-                {% if form.material_type.errors %}
-                  <div class="error-message">
-                    <i class="fas fa-exclamation-triangle me-1"></i>{{ form.material_type.errors }}
-                  </div>
-                {% endif %}
-              </div>
-            </div>
-
-            <div class="col-md-6">
-              <div class="form-field" data-field="shipment_type">
-                <label for="{{ form.shipment_type.id_for_label }}" class="form-label">{{ form.shipment_type.label }}</label>
-                {{ form.shipment_type }}
-                <i class="fas fa-shipping-fast field-icon"></i>
-                {% if form.shipment_type.help_text %}
-                  <div class="help-text">{{ form.shipment_type.help_text }}</div>
-                {% endif %}
-                {% if form.shipment_type.errors %}
-                  <div class="error-message">
-                    <i class="fas fa-exclamation-triangle me-1"></i>{{ form.shipment_type.errors }}
-                  </div>
-                {% endif %}
-              </div>
-            </div>
-
-            <div class="col-md-6">
-              <div class="form-field" data-field="packing_type">
-                <label for="{{ form.packing_type.id_for_label }}" class="form-label">{{ form.packing_type.label }}</label>
-                {{ form.packing_type }}
-                <i class="fas fa-archive field-icon"></i>
-                {% if form.packing_type.help_text %}
-                  <div class="help-text">{{ form.packing_type.help_text }}</div>
-                {% endif %}
-                {% if form.packing_type.errors %}
-                  <div class="error-message">
-                    <i class="fas fa-exclamation-triangle me-1"></i>{{ form.packing_type.errors }}
-                  </div>
-                {% endif %}
-              </div>
-            </div>
-
-            <div class="col-md-6">
-              <div class="form-field" data-field="container_type">
-                <label for="{{ form.container_type.id_for_label }}" class="form-label">{{ form.container_type.label }}</label>
-                {{ form.container_type }}
-                <i class="fas fa-box field-icon"></i>
-                {% if form.container_type.help_text %}
-                  <div class="help-text">{{ form.container_type.help_text }}</div>
-                {% endif %}
-                {% if form.container_type.errors %}
-                  <div class="error-message">
-                    <i class="fas fa-exclamation-triangle me-1"></i>{{ form.container_type.errors }}
-                  </div>
-                {% endif %}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Hidden shipping_address field -->
-        {{ form.shipping_address }}
-
-        <div class="form-section">
-          <h3 class="section-title">
-            <i class="fas fa-map-marker-alt"></i>
-            Shipping Address
-          </h3>
-
-          <div class="address-preview-section" id="address-section">
-            <label class="form-label">Shipping Address Preview:</label>
-            <div class="address-preview empty" id="address-preview">
-              <i class="fas fa-map-marker-alt me-2"></i>
-              Select an order to view shipping address
-            </div>
-            <div class="address-icon" id="address-icon">
-              <i class="fas fa-check"></i>
-            </div>
-          </div>
-        </div>
-
-        <div class="form-actions">
-          <button type="submit" class="btn btn-success" id="submit-btn">
-            <i class="fas fa-paper-plane me-1"></i>
-            <span>Create Shipment</span>
-          </button>
-          <a href="{% url 'logistics:shipment_list' %}" class="btn btn-secondary">
-            <i class="fas fa-times me-1"></i>
-            Cancel
-          </a>
-        </div>
-      </form>
+<div class="page-header d-flex justify-content-between align-items-center">
+    <div>
+        <h1 class="page-title">
+            {% if object %}
+                Edit Shipment #{{ object.id }}
+            {% else %}
+                Create New Shipment
+            {% endif %}
+        </h1>
+        <p class="page-subtitle">
+            {% if object %}
+                Modify shipment details and assignments
+            {% else %}
+                Enter shipment information and assign resources
+            {% endif %}
+        </p>
     </div>
-  </div>
+    <a href="{% if object %}{% url 'logistics:shipment_detail' object.pk %}{% else %}{% url 'logistics:shipment_list' %}{% endif %}"
+       class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left me-1"></i>
+        {% if object %}Back to Details{% else %}Back to List{% endif %}
+    </a>
 </div>
 
-<div class="success-animation" id="success-animation">
-  <i class="fas fa-check"></i>
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    <i class="fas fa-edit me-2"></i>
+                    Shipment Information
+                </h6>
+            </div>
+            <div class="card-body">
+                <form method="post" novalidate>
+                    {% csrf_token %}
+
+                    <!-- Basic Information -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h6 class="text-primary border-bottom pb-2 mb-3">
+                                <i class="fas fa-info-circle me-2"></i>
+                                Basic Information
+                            </h6>
+                        </div>
+
+                        {% if not object %}
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.shipping_address.id_for_label }}" class="form-label">
+                                Shipping Address <span class="text-danger">*</span>
+                            </label>
+                            {{ form.shipping_address }}
+                            {% if form.shipping_address.errors %}
+                                <div class="text-danger small">{{ form.shipping_address.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.order.id_for_label }}" class="form-label">
+                                Related Order
+                            </label>
+                            {{ form.order }}
+                            {% if form.order.errors %}
+                                <div class="text-danger small">{{ form.order.errors.0 }}</div>
+                            {% endif %}
+                            {% if form.order.help_text %}
+                                <div class="form-text">{{ form.order.help_text }}</div>
+                            {% endif %}
+                            {% if processing_orders_count is not None %}
+                                <div class="small text-info mt-1">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    {{ processing_orders_count }} processing order(s) available
+                                </div>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.weight_kg.id_for_label }}" class="form-label">
+                                Weight (kg) <span class="text-danger">*</span>
+                            </label>
+                            {{ form.weight_kg }}
+                            {% if form.weight_kg.errors %}
+                                <div class="text-danger small">{{ form.weight_kg.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.size_cubic_meters.id_for_label }}" class="form-label">
+                                Size (cubic meters) <span class="text-danger">*</span>
+                            </label>
+                            {{ form.size_cubic_meters }}
+                            {% if form.size_cubic_meters.errors %}
+                                <div class="text-danger small">{{ form.size_cubic_meters.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Shipment Types -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h6 class="text-primary border-bottom pb-2 mb-3">
+                                <i class="fas fa-tags me-2"></i>
+                                Shipment Types
+                            </h6>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.material_type.id_for_label }}" class="form-label">
+                                Material Type <span class="text-danger">*</span>
+                            </label>
+                            {{ form.material_type }}
+                            {% if form.material_type.errors %}
+                                <div class="text-danger small">{{ form.material_type.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.shipment_type.id_for_label }}" class="form-label">
+                                Shipment Type <span class="text-danger">*</span>
+                            </label>
+                            {{ form.shipment_type }}
+                            {% if form.shipment_type.errors %}
+                                <div class="text-danger small">{{ form.shipment_type.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.packing_type.id_for_label }}" class="form-label">
+                                Packing Type <span class="text-danger">*</span>
+                            </label>
+                            {{ form.packing_type }}
+                            {% if form.packing_type.errors %}
+                                <div class="text-danger small">{{ form.packing_type.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.container_type.id_for_label }}" class="form-label">
+                                Container Type <span class="text-danger">*</span>
+                            </label>
+                            {{ form.container_type }}
+                            {% if form.container_type.errors %}
+                                <div class="text-danger small">{{ form.container_type.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Assignment -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h6 class="text-primary border-bottom pb-2 mb-3">
+                                <i class="fas fa-users me-2"></i>
+                                Resource Assignment
+                            </h6>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.warehouse.id_for_label }}" class="form-label">
+                                Warehouse
+                            </label>
+                            {{ form.warehouse }}
+                            {% if form.warehouse.errors %}
+                                <div class="text-danger small">{{ form.warehouse.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.logistic_office.id_for_label }}" class="form-label">
+                                Logistic Office
+                            </label>
+                            {{ form.logistic_office }}
+                            {% if form.logistic_office.errors %}
+                                <div class="text-danger small">{{ form.logistic_office.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.driver.id_for_label }}" class="form-label">
+                                Driver
+                            </label>
+                            {{ form.driver }}
+                            {% if form.driver.errors %}
+                                <div class="text-danger small">{{ form.driver.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.vehicle.id_for_label }}" class="form-label">
+                                Vehicle
+                            </label>
+                            {{ form.vehicle }}
+                            {% if form.vehicle.errors %}
+                                <div class="text-danger small">{{ form.vehicle.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Schedule -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h6 class="text-primary border-bottom pb-2 mb-3">
+                                <i class="fas fa-calendar me-2"></i>
+                                Schedule
+                            </h6>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.collect_time.id_for_label }}" class="form-label">
+                                Collection Time <span class="text-danger">*</span>
+                            </label>
+                            {{ form.collect_time }}
+                            {% if form.collect_time.errors %}
+                                <div class="text-danger small">{{ form.collect_time.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.estimated_dropoff_time.id_for_label }}" class="form-label">
+                                Estimated Delivery Time <span class="text-danger">*</span>
+                            </label>
+                            {{ form.estimated_dropoff_time }}
+                            {% if form.estimated_dropoff_time.errors %}
+                                <div class="text-danger small">{{ form.estimated_dropoff_time.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Status (Edit only) -->
+                    {% if object %}
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h6 class="text-primary border-bottom pb-2 mb-3">
+                                <i class="fas fa-flag me-2"></i>
+                                Status
+                            </h6>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.status.id_for_label }}" class="form-label">
+                                Shipment Status
+                            </label>
+                            {{ form.status }}
+                            {% if form.status.errors %}
+                                <div class="text-danger small">{{ form.status.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Form Actions -->
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="d-flex justify-content-end gap-2">
+                                <a href="{% if object %}{% url 'logistics:shipment_detail' object.pk %}{% else %}{% url 'logistics:shipment_list' %}{% endif %}"
+                                   class="btn btn-outline-secondary">
+                                    <i class="fas fa-times me-1"></i>
+                                    Cancel
+                                </a>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fas fa-save me-1"></i>
+                                    {% if object %}Update Shipment{% else %}Create Shipment{% endif %}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 </div>
 
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-control, .form-select {
+        border-radius: 8px;
+        border: 1px solid #d1d5db;
+        padding: 12px 16px;
+    }
+
+    .form-control:focus, .form-select:focus {
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.15);
+    }
+
+    .form-label {
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 8px;
+    }
+
+    .text-danger {
+        font-size: 14px;
+        margin-top: 4px;
+    }
+
+    .border-bottom {
+        border-color: #e5e7eb !important;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    const orderSelect = document.getElementById('id_order');
-    const addressPreview = document.getElementById('address-preview');
-    const addressInput = document.getElementById('id_shipping_address');
-    const addressSection = document.getElementById('address-section');
-    const addressIcon = document.getElementById('address-icon');
-    const form = document.getElementById('shipment-form');
-    const submitBtn = document.getElementById('submit-btn');
-    const progressFill = document.getElementById('form-progress');
-    const successAnimation = document.getElementById('success-animation');
-
-    // Form progress tracking
-    function updateProgress() {
-        const fields = form.querySelectorAll('input:not([type="hidden"]), select, textarea');
-        const filledFields = Array.from(fields).filter(field => {
-            if (field.type === 'datetime-local') {
-                return field.value !== '';
-            }
-            if (field.type === 'number') {
-                return field.value !== '' && field.value !== '0';
-            }
-            if (field.tagName === 'SELECT') {
-                return field.value !== '' && field.value !== '0';
-            }
-            return field.value.trim() !== '';
-        }).length;
-
-        const totalFields = fields.length;
-        const progress = totalFields > 0 ? (filledFields / totalFields) * 100 : 0;
-        progressFill.style.width = progress + '%';
-
-        // Update form completion status
-        if (progress === 100) {
-            progressFill.style.background = 'linear-gradient(90deg, #38ef7d, #11998e)';
-        } else if (progress >= 50) {
-            progressFill.style.background = 'linear-gradient(90deg, #f39c12, #e67e22)';
-        } else {
-            progressFill.style.background = 'linear-gradient(90deg, #667eea, #764ba2)';
-        }
-    }
-
-    // Add event listeners to all form fields
-    form.querySelectorAll('input, select, textarea').forEach(field => {
-        field.addEventListener('input', updateProgress);
-        field.addEventListener('change', updateProgress);
-
-        // Add focus effects with null check
-        field.addEventListener('focus', function() {
-            const formField = this.closest('.form-field');
-            if (formField) {
-                formField.classList.add('has-value');
-            }
-        });
-
-        field.addEventListener('blur', function() {
-            const formField = this.closest('.form-field');
-            if (formField && !this.value.trim()) {
-                formField.classList.remove('has-value');
-            }
-        });
-
-        // Check initial state with null check
-        if (field.value.trim()) {
-            const formField = field.closest('.form-field');
-            if (formField) {
-                formField.classList.add('has-value');
-            }
+document.addEventListener('DOMContentLoaded', function() {
+    // Add Bootstrap classes to form fields
+    const inputs = document.querySelectorAll('input, select, textarea');
+    inputs.forEach(input => {
+        if (input.type === 'datetime-local' || input.type === 'text' || input.type === 'number' || input.type === 'email') {
+            input.classList.add('form-control');
+        } else if (input.tagName === 'SELECT') {
+            input.classList.add('form-select');
         }
     });
 
-    // Address handling with enhanced UX
-    if (orderSelect && addressPreview && addressInput) {
-        orderSelect.addEventListener('change', function () {
-            const orderId = this.value;
+    // Driver and vehicle relationship
+    const driverSelect = document.getElementById('id_driver');
+    const vehicleSelect = document.getElementById('id_vehicle');
 
-            if (orderId) {
-                // Show loading state
-                addressSection.classList.add('loading');
-                addressPreview.classList.add('loading');
-                addressPreview.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Loading address...';
-                addressIcon.style.opacity = '0';
-
-                fetch(`/logistics/ajax/get-shipping-address/?order_id=${orderId}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        // Remove loading state
-                        addressSection.classList.remove('loading');
-                        addressPreview.classList.remove('loading');
-
-                        if (data.success) {
-                            // Set hidden address input value
-                            addressInput.value = data.address_id;
-
-                            // Show address preview with animation
-                            addressPreview.innerHTML = `
-                                <i class="fas fa-map-marker-alt me-2"></i>
-                                <span><strong>Shipping Address:</strong> ${data.address_text}</span>
-                            `;
-                            addressPreview.classList.remove('empty');
-                            addressPreview.classList.add('has-content');
-                            addressSection.classList.add('has-address');
-
-                            // Animate success icon
-                            setTimeout(() => {
-                                addressIcon.style.opacity = '1';
-                            }, 300);
-
-                        } else {
-                            addressPreview.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>No address found for this order.';
-                            addressPreview.classList.add('empty');
-                            addressPreview.classList.remove('has-content');
-                            addressSection.classList.remove('has-address');
-                            addressInput.value = "";
-                        }
-
-                        updateProgress();
-                    })
-                    .catch(() => {
-                        addressSection.classList.remove('loading');
-                        addressPreview.classList.remove('loading');
-                        addressPreview.innerHTML = '<i class="fas fa-exclamation-triangle me-2"></i>Error retrieving address. Please try again.';
-                        addressPreview.classList.add('empty');
-                        addressPreview.classList.remove('has-content');
-                        addressSection.classList.remove('has-address');
-                        addressInput.value = "";
-                        updateProgress();
-                    });
-            } else {
-                addressPreview.innerHTML = '<i class="fas fa-map-marker-alt me-2"></i>Select an order to view shipping address';
-                addressPreview.classList.add('empty');
-                addressPreview.classList.remove('has-content');
-                addressSection.classList.remove('has-address');
-                addressInput.value = "";
-                addressIcon.style.opacity = '0';
-                updateProgress();
+    if (driverSelect && vehicleSelect) {
+        driverSelect.addEventListener('change', function() {
+            const driverId = this.value;
+            if (driverId) {
+                // Here you could implement AJAX to filter vehicles by driver
+                // For now, we'll just show a simple alert
+                console.log('Driver selected:', driverId);
             }
         });
     }
-
-    // Enhanced form submission
-    form.addEventListener('submit', function(e) {
-        e.preventDefault();
-
-        // Show loading state on submit button
-        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i><span>Creating...</span>';
-        submitBtn.disabled = true;
-
-        // Show success animation after a delay (simulate processing)
-        setTimeout(() => {
-            successAnimation.classList.add('show');
-
-            setTimeout(() => {
-                // Actually submit the form
-                form.submit();
-            }, 1000);
-        }, 1500);
-    });
-
-    // Initial progress update
-    updateProgress();
-
-    // Add floating animation to form elements
-    const formFields = document.querySelectorAll('.form-field');
-    formFields.forEach((field, index) => {
-        field.style.animationDelay = (index * 100) + 'ms';
-        field.classList.add('animate-in');
-    });
 });
-
-// Add some CSS for the animate-in class
-const style = document.createElement('style');
-style.textContent = `
-    .shipment-form-wrapper .animate-in {
-        animation: shipmentSlideInUp 0.6s ease-out forwards;
-        opacity: 0;
-        transform: translateY(20px);
-    }
-`;
-document.head.appendChild(style);
 </script>
 {% endblock %}

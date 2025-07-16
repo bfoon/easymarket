@@ -82,6 +82,8 @@ def register_view(request):
         login(request, user)
         messages.success(request, "Account created successfully.")
         return redirect('/')
+    else:
+        return render(request, 'accounts/register.html')
 
 @login_required
 def edit_address_modal(request):

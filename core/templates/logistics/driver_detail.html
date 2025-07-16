@@ -1,0 +1,313 @@
+{% extends 'logistics/base.html' %}
+
+{% block title %}{{ driver.user.get_full_name }} - Driver Details{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center">
+    <div>
+        <h1 class="page-title">{{ driver.user.get_full_name }}</h1>
+        <p class="page-subtitle">Driver profile and activity overview</p>
+    </div>
+    <div>
+        <a href="#" class="btn btn-warning me-2">
+            <i class="fas fa-edit me-1"></i>
+            Edit Driver
+        </a>
+        <a href="{% url 'logistics:driver_list' %}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-1"></i>
+            Back to List
+        </a>
+    </div>
+</div>
+
+<!-- Driver Profile -->
+<div class="row mb-4">
+    <div class="col-lg-4 mb-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    <i class="fas fa-user me-2"></i>
+                    Driver Information
+                </h6>
+            </div>
+            <div class="card-body text-center">
+                <div class="avatar-large mb-3">
+                    {{ driver.user.first_name.0 }}{{ driver.user.last_name.0 }}
+                </div>
+                <h5 class="mb-1">{{ driver.user.get_full_name }}</h5>
+                <p class="text-muted mb-3">{{ driver.user.email }}</p>
+                
+                <div class="row text-start">
+                    <div class="col-12 mb-2">
+                        <strong>Phone:</strong>
+                        <div class="text-muted">{{ driver.phone }}</div>
+                    </div>
+                    <div class="col-12 mb-2">
+                        <strong>License Number:</strong>
+                        <div class="text-muted font-monospace">{{ driver.license_number }}</div>
+                    </div>
+                    <div class="col-12 mb-2">
+                        <strong>Join Date:</strong>
+                        <div class="text-muted">{{ driver.user.date_joined|date:"M d, Y" }}</div>
+                    </div>
+                    <div class="col-12">
+                        <strong>Status:</strong>
+                        <div>
+                            {% if driver.user.is_active %}
+                                <span class="badge bg-success">Active</span>
+                            {% else %}
+                                <span class="badge bg-danger">Inactive</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics -->
+    <div class="col-lg-8 mb-4">
+        <div class="row">
+            <div class="col-md-6 mb-4">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col">
+                                <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                    Total Shipments
+                                </div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                    {{ total_shipments }}
+                                </div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-shipping-fast fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6 mb-4">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col">
+                                <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                    Active Shipments
+                                </div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                    {{ active_shipments }}
+                                </div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-route fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6 mb-4">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col">
+                                <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                    Completed Deliveries
+                                </div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                    {{ completed_shipments }}
+                                </div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6 mb-4">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col">
+                                <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                    Assigned Vehicles
+                                </div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                    {{ vehicle_count }}
+                                </div>
+                            </div>
+                            <div class="col-auto">
+                                <i class="fas fa-truck fa-2x text-gray-300"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Assigned Vehicles -->
+{% if vehicles %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    <i class="fas fa-truck me-2"></i>
+                    Assigned Vehicles
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% for vehicle in vehicles %}
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="card border">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center mb-2">
+                                    <i class="fas fa-truck fa-2x text-primary me-3"></i>
+                                    <div>
+                                        <h6 class="mb-0">{{ vehicle.plate_number }}</h6>
+                                        <small class="text-muted">{{ vehicle.model }}</small>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <small class="text-muted">Capacity</small>
+                                        <div class="fw-bold">{{ vehicle.capacity_kg|floatformat:0 }} kg</div>
+                                    </div>
+                                    <div class="col-6">
+                                        <small class="text-muted">Status</small>
+                                        <div>
+                                            {% if vehicle.active_shipments_count %}
+                                                <span class="badge bg-warning">In Use</span>
+                                            {% else %}
+                                                <span class="badge bg-success">Available</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Recent Shipments -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    <i class="fas fa-history me-2"></i>
+                    Recent Shipments
+                </h6>
+                <a href="{% url 'logistics:shipment_list' %}?driver={{ driver.pk }}" class="btn btn-sm btn-outline-primary">
+                    <i class="fas fa-eye me-1"></i>
+                    View All
+                </a>
+            </div>
+            <div class="card-body">
+                {% if recent_shipments %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Destination</th>
+                                    <th>Vehicle</th>
+                                    <th>Status</th>
+                                    <th>Collection Date</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for shipment in recent_shipments %}
+                                <tr>
+                                    <td><strong>#{{ shipment.id }}</strong></td>
+                                    <td>
+                                        {{ shipment.shipping_address.city }}, {{ shipment.shipping_address.state }}
+                                        <br>
+                                        <small class="text-muted">{{ shipment.shipping_address.address|truncatechars:30 }}</small>
+                                    </td>
+                                    <td>
+                                        {% if shipment.vehicle %}
+                                            {{ shipment.vehicle.plate_number }}
+                                            <br>
+                                            <small class="text-muted">{{ shipment.vehicle.model }}</small>
+                                        {% else %}
+                                            <span class="text-muted">Not assigned</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="status-badge status-{{ shipment.status }}">
+                                            {{ shipment.get_status_display }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {{ shipment.collect_time|date:"M d, Y" }}
+                                        <br>
+                                        <small class="text-muted">{{ shipment.collect_time|time:"H:i" }}</small>
+                                    </td>
+                                    <td>
+                                        <a href="{% url 'logistics:shipment_detail' shipment.pk %}" 
+                                           class="btn btn-sm btn-outline-primary">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="fas fa-inbox fa-3x mb-3"></i>
+                        <p>No shipments assigned to this driver yet.</p>
+                        <a href="{% url 'logistics:shipment_create' %}" class="btn btn-primary">
+                            <i class="fas fa-plus me-1"></i>
+                            Create Shipment
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .avatar-large {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        background-color: var(--primary-color);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 24px;
+        margin: 0 auto;
+    }
+    
+    .text-gray-800 {
+        color: #5a5c69 !important;
+    }
+    
+    .text-gray-300 {
+        color: #dddfeb !important;
+    }
+</style>
+{% endblock %}

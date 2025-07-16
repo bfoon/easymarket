@@ -1,268 +1,592 @@
 from django.shortcuts import render, get_object_or_404, redirect
-from django.contrib.auth.decorators import login_required
-from django.views.decorators.http import require_POST
+from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib import messages
+from django.urls import reverse_lazy, reverse
+from django.db.models import Q
 from django.http import JsonResponse
-from django.core.exceptions import PermissionDenied
-from django.db import transaction
-from .models import Shipment, Driver, Vehicle, Warehouse, LogisticOffice
-from .forms import ShipmentForm
-from orders.models import Order  # Ensure your Order model is correctly imported
+from django.core.paginator import Paginator
+from django.forms import modelformset_factory
+from django.utils import timezone
+
+from .models import (
+    Shipment, ShipmentBox, BoxItem, Driver, Vehicle,
+    Warehouse, LogisticOffice
+)
+from orders.models import Order, OrderItem
+from .forms import ShipmentBoxForm, BoxItemForm
 
 
-@login_required
-def shipment_list(request):
-    """Display list of shipments with basic filtering and stats"""
-    shipments = Shipment.objects.all().order_by('-created_at')
+class ShipmentListView(LoginRequiredMixin, ListView):
+    model = Shipment
+    template_name = 'logistics/shipment_list.html'
+    context_object_name = 'shipments'
+    paginate_by = 20
 
-    # Add basic filtering if needed
-    status_filter = request.GET.get('status')
-    if status_filter:
-        shipments = shipments.filter(status=status_filter)
+    def get_queryset(self):
+        queryset = Shipment.objects.select_related(
+            'shipping_address', 'warehouse', 'driver', 'vehicle', 'order'
+        ).order_by('-created_at')
 
-    # Calculate stats
-    pending_shipments_count = Shipment.objects.filter(status='pending').count()
-    in_transit_count = Shipment.objects.filter(status='in_transit').count()
-    delivered_count = Shipment.objects.filter(status='delivered').count()
+        # Search functionality
+        search_query = self.request.GET.get('search')
+        if search_query:
+            queryset = queryset.filter(
+                Q(id__icontains=search_query) |
+                Q(shipping_address__address__icontains=search_query) |
+                Q(driver__user__first_name__icontains=search_query) |
+                Q(driver__user__last_name__icontains=search_query) |
+                Q(order__id__icontains=search_query)  # Added order ID search
+            )
 
-    context = {
-        'shipments': shipments,
-        'pending_shipments_count': pending_shipments_count,
-        'in_transit_count': in_transit_count,
-        'delivered_count': delivered_count,
-        'current_filter': status_filter,
-    }
-    return render(request, 'logistics/shipment_list.html', context)
+        # Status filter
+        status_filter = self.request.GET.get('status')
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+
+        # Order status filter
+        order_status_filter = self.request.GET.get('order_status')
+        if order_status_filter:
+            queryset = queryset.filter(order__status=order_status_filter)
+
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['status_choices'] = Shipment.STATUS_CHOICES
+        context['order_status_choices'] = [
+            ('pending', 'Pending'),
+            ('processing', 'Processing'),
+            ('shipped', 'Shipped'),
+            ('delivered', 'Delivered'),
+            ('cancelled', 'Cancelled'),
+        ]
+        context['current_status'] = self.request.GET.get('status', '')
+        context['current_order_status'] = self.request.GET.get('order_status', '')
+        context['search_query'] = self.request.GET.get('search', '')
+        return context
 
 
-@login_required
-def shipment_detail(request, shipment_id):
-    """Display detailed information for a specific shipment"""
-    shipment = get_object_or_404(Shipment, id=shipment_id)
+class ShipmentDetailView(LoginRequiredMixin, DetailView):
+    model = Shipment
+    template_name = 'logistics/shipment_detail.html'
+    context_object_name = 'shipment'
 
-    # Add authorization check if needed
-    # if not user_can_view_shipment(request.user, shipment):
-    #     raise PermissionDenied("You don't have permission to view this shipment")
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        shipment = self.get_object()
+        context['boxes'] = shipment.boxes.prefetch_related('items__order_item__product')
+        context['total_boxes'] = shipment.boxes.count()
 
-    context = {
-        'shipment': shipment,
-        'can_edit': True,  # Add your permission logic here
-        'status_choices': Shipment.STATUS_CHOICES if hasattr(Shipment, 'STATUS_CHOICES') else [],
-    }
-    return render(request, 'logistics/shipment_detail.html', context)
+        # Add order status information
+        if shipment.order:
+            order = shipment.order
+            context['order'] = order
+            context['order_status'] = order.status
+            context['order_status_display'] = order.get_status_display()
+            context['is_order_delivered'] = order.status == 'delivered'
+            context['can_mark_delivered'] = (
+                    order.status in ['shipped'] and
+                    shipment.status == 'shipped'
+            )
+            context['delivered_date'] = order.delivered_date
+            # Make boxes read-only if order is delivered
+            context['boxes_readonly'] = order.status == 'delivered'
+        else:
+            context['order'] = None
+            context['boxes_readonly'] = False
+
+        return context
 
 
-@login_required
-def create_shipment(request):
-    """Create a new shipment"""
+class ShipmentCreateView(LoginRequiredMixin, CreateView):
+    model = Shipment
+    template_name = 'logistics/shipment_form.html'
+    form_class = None  # We'll set this in get_form_class
+
+    def get_form_class(self):
+        """Use our custom form with filtered orders"""
+        from .forms import ShipmentForm
+        return ShipmentForm
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Add available processing orders count for debugging
+        processing_orders_count = Order.objects.filter(status='processing').count()
+        context['processing_orders_count'] = processing_orders_count
+        return context
+
+    def get_success_url(self):
+        return reverse_lazy('logistics:shipment_detail', kwargs={'pk': self.object.pk})
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Shipment created successfully!')
+        return super().form_valid(form)
+
+
+class ShipmentUpdateView(LoginRequiredMixin, UpdateView):
+    model = Shipment
+    template_name = 'logistics/shipment_form.html'
+    fields = [
+        'warehouse', 'driver', 'vehicle', 'logistic_office',
+        'collect_time', 'estimated_dropoff_time', 'weight_kg',
+        'size_cubic_meters', 'material_type', 'shipment_type', 'packing_type',
+        'container_type', 'status'
+    ]
+
+    def get_success_url(self):
+        return reverse_lazy('logistics:shipment_detail', kwargs={'pk': self.object.pk})
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Shipment updated successfully!')
+        return super().form_valid(form)
+
+
+class DriverListView(LoginRequiredMixin, ListView):
+    model = Driver
+    template_name = 'logistics/driver_list.html'
+    context_object_name = 'drivers'
+    paginate_by = 20
+
+    def get_queryset(self):
+        queryset = Driver.objects.select_related('user').prefetch_related(
+            'vehicle_set', 'shipment_set'
+        ).order_by('user__first_name')
+
+        search_query = self.request.GET.get('search')
+        if search_query:
+            queryset = queryset.filter(
+                Q(user__first_name__icontains=search_query) |
+                Q(user__last_name__icontains=search_query) |
+                Q(license_number__icontains=search_query) |
+                Q(phone__icontains=search_query)
+            )
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        # Add driver statistics
+        for driver in context['drivers']:
+            driver.active_shipments_count = driver.shipment_set.exclude(status='shipped').count()
+            driver.total_shipments_count = driver.shipment_set.count()
+            driver.vehicle_count = driver.vehicle_set.count()
+
+        return context
+
+
+class DriverDetailView(LoginRequiredMixin, DetailView):
+    model = Driver
+    template_name = 'logistics/driver_detail.html'
+    context_object_name = 'driver'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        driver = self.get_object()
+
+        # Get vehicles with computed status
+        vehicles = driver.vehicle_set.all()
+        for vehicle in vehicles:
+            vehicle.active_shipments_count = vehicle.shipment_set.exclude(status='shipped').count()
+
+        context['vehicles'] = vehicles
+        context['recent_shipments'] = Shipment.objects.filter(
+            driver=driver
+        ).select_related('shipping_address', 'vehicle').order_by('-created_at')[:10]
+
+        # Add computed statistics
+        context['total_shipments'] = driver.shipment_set.count()
+        context['active_shipments'] = driver.shipment_set.exclude(status='shipped').count()
+        context['completed_shipments'] = driver.shipment_set.filter(status='shipped').count()
+        context['vehicle_count'] = driver.vehicle_set.count()
+
+        return context
+
+
+class VehicleListView(LoginRequiredMixin, ListView):
+    model = Vehicle
+    template_name = 'logistics/vehicle_list.html'
+    context_object_name = 'vehicles'
+    paginate_by = 20
+
+    def get_queryset(self):
+        queryset = Vehicle.objects.select_related('driver__user').prefetch_related(
+            'shipment_set'
+        ).order_by('plate_number')
+
+        search_query = self.request.GET.get('search')
+        if search_query:
+            queryset = queryset.filter(
+                Q(plate_number__icontains=search_query) |
+                Q(model__icontains=search_query) |
+                Q(driver__user__first_name__icontains=search_query) |
+                Q(driver__user__last_name__icontains=search_query)
+            )
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        # Add vehicle statistics
+        active_count = 0
+        available_count = 0
+
+        for vehicle in context['vehicles']:
+            vehicle.active_shipments_count = vehicle.shipment_set.exclude(status='shipped').count()
+            vehicle.total_shipments_count = vehicle.shipment_set.count()
+            # Calculate current load (you might want to implement this based on your business logic)
+            vehicle.current_load = 0  # Placeholder - implement based on active shipments
+            vehicle.current_usage_percent = 0  # Placeholder
+
+            if vehicle.active_shipments_count > 0:
+                active_count += 1
+            else:
+                available_count += 1
+
+        context['active_vehicles_count'] = active_count
+        context['available_vehicles_count'] = available_count
+
+        return context
+
+
+class WarehouseListView(LoginRequiredMixin, ListView):
+    model = Warehouse
+    template_name = 'logistics/warehouse_list.html'
+    context_object_name = 'warehouses'
+    paginate_by = 20
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        # Add warehouse statistics
+        total_shipments_sum = 0
+        active_shipments_sum = 0
+        completed_shipments_sum = 0
+
+        for warehouse in context['warehouses']:
+            warehouse.total_shipments_count = warehouse.shipment_set.count()
+            warehouse.active_shipments_count = warehouse.shipment_set.exclude(status='shipped').count()
+            warehouse.completed_shipments_count = warehouse.shipment_set.filter(status='shipped').count()
+
+            total_shipments_sum += warehouse.total_shipments_count
+            active_shipments_sum += warehouse.active_shipments_count
+            completed_shipments_sum += warehouse.completed_shipments_count
+
+        context['total_shipments_sum'] = total_shipments_sum
+        context['active_shipments_sum'] = active_shipments_sum
+        context['completed_shipments_sum'] = completed_shipments_sum
+
+        return context
+
+
+def update_shipment_status(request, pk):
+    """AJAX view to update shipment status"""
     if request.method == 'POST':
-        form = ShipmentForm(request.POST)
-        if form.is_valid():
-            try:
-                with transaction.atomic():
-                    shipment = form.save(commit=False)
+        shipment = get_object_or_404(Shipment, pk=pk)
+        new_status = request.POST.get('status')
 
-                    # Set shipping address from order if available
-                    if shipment.order and shipment.order.shipping_address:
-                        shipment.shipping_address = shipment.order.shipping_address
+        if new_status in dict(Shipment.STATUS_CHOICES):
+            shipment.status = new_status
+            shipment.save()
 
-                    # Set created by user if your model has this field
-                    # shipment.created_by = request.user
+            if new_status == 'shipped':
+                shipment.mark_as_shipped()
 
-                    shipment.save()
-
-                    messages.success(request, f"Shipment #{shipment.id} created successfully!")
-                    return redirect('logistics:shipment_detail', shipment_id=shipment.id)
-
-            except Exception as e:
-                messages.error(request, f"Error creating shipment: {str(e)}")
-
-    else:
-        form = ShipmentForm()
-
-        # Pre-populate with order if provided in URL
-        order_id = request.GET.get('order_id')
-        if order_id:
-            try:
-                order = Order.objects.get(id=order_id)
-                form.fields['order'].initial = order
-            except Order.DoesNotExist:
-                messages.warning(request, "Specified order not found.")
-
-    context = {
-        'form': form,
-        'title': 'Create New Shipment',
-    }
-    return render(request, 'logistics/shipment_form.html', context)
-
-
-@login_required
-def get_shipping_address(request):
-    """AJAX endpoint to get shipping address for selected order"""
-    if not request.headers.get('x-requested-with') == 'XMLHttpRequest':
-        return JsonResponse({'success': False, 'error': 'Invalid request'})
-
-    order_id = request.GET.get('order_id')
-
-    if not order_id:
-        return JsonResponse({'success': False, 'error': 'Order ID is required'})
-
-    try:
-        order = get_object_or_404(Order, id=order_id)
-
-        # Add authorization check if needed
-        # if not user_can_access_order(request.user, order):
-        #     return JsonResponse({'success': False, 'error': 'Permission denied'})
-
-        if order.shipping_address:
             return JsonResponse({
                 'success': True,
-                'address_id': order.shipping_address.id,
-                'address_text': str(order.shipping_address),
-                'order_total': str(order.total) if hasattr(order, 'total') else None,
+                'message': f'Shipment status updated to {shipment.get_status_display()}'
             })
-        else:
+
+    return JsonResponse({'success': False, 'message': 'Invalid request'})
+
+
+def generate_box_label(request, shipment_id, box_id):
+    """Generate QR code label for a box"""
+    shipment = get_object_or_404(Shipment, pk=shipment_id)
+    box = get_object_or_404(ShipmentBox, pk=box_id, shipment=shipment)
+
+    box.generate_qr_label()
+    box.save()
+
+    messages.success(request, f'QR label generated for Box #{box.box_number}')
+    return redirect('logistics:shipment_detail', pk=shipment_id)
+
+
+def mark_order_as_delivered(request, shipment_pk):
+    """Mark the associated order as delivered and update shipment status"""
+    if request.method == 'POST':
+        shipment = get_object_or_404(Shipment, pk=shipment_pk)
+
+        if not shipment.order:
             return JsonResponse({
                 'success': False,
-                'error': 'No shipping address found for this order'
+                'message': 'No order associated with this shipment'
             })
 
-    except Order.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Order not found'})
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        # Check if shipment is shipped
+        if shipment.status != 'shipped':
+            return JsonResponse({
+                'success': False,
+                'message': 'Shipment must be shipped before marking as delivered'
+            })
+
+        # Update order status to delivered
+        order = shipment.order
+        old_status = order.status
+        order.status = 'delivered'
+
+        # Set delivered date if not already set
+        if not order.delivered_date:
+            order.delivered_date = timezone.now()
+
+        order.save()
+
+        # Update shipment status (you might want to add a 'delivered' status to Shipment model)
+        # For now, we'll keep it as 'shipped' since the shipment itself is complete
+
+        # Create order status history
+        from orders.models import OrderStatusHistory
+        OrderStatusHistory.objects.create(
+            order=order,
+            status='delivered',
+            changed_by=request.user,
+            notes=f'Marked as delivered via logistics app - Shipment #{shipment.id}'
+        )
+
+        return JsonResponse({
+            'success': True,
+            'message': f'Order #{order.id} marked as delivered successfully',
+            'new_status': order.get_status_display(),
+            'delivered_date': order.delivered_date.strftime('%B %d, %Y at %I:%M %p') if order.delivered_date else None
+        })
+
+    return JsonResponse({'success': False, 'message': 'Invalid request method'})
 
 
-@require_POST
-@login_required
-def mark_shipment_as_shipped(request, shipment_id):
-    """Mark a shipment as shipped - this is for shipments, not orders"""
-    shipment = get_object_or_404(Shipment, id=shipment_id)
+def get_shipment_order_status(request, shipment_pk):
+    """Get the current order status for a shipment"""
+    shipment = get_object_or_404(Shipment, pk=shipment_pk)
 
-    # Add authorization check
-    # if not user_can_edit_shipment(request.user, shipment):
-    #     messages.error(request, "You are not authorized to update this shipment.")
-    #     return redirect('logistics:shipment_detail', shipment_id=shipment.id)
+    if not shipment.order:
+        return JsonResponse({
+            'has_order': False,
+            'message': 'No order associated with this shipment'
+        })
 
-    try:
-        # Check current status
-        if shipment.status == 'shipped':
-            messages.warning(request, f"Shipment #{shipment.id} is already marked as shipped.")
-        elif shipment.status == 'delivered':
-            messages.warning(request, f"Shipment #{shipment.id} is already delivered.")
-        else:
-            # Update shipment status
-            shipment.status = 'shipped'
-            shipment.save(update_fields=['status'])
-
-            # Also update the related order if it exists
-            if shipment.order:
-                shipment.order.status = 'shipped'
-                shipment.order.save(update_fields=['status'])
-
-            messages.success(request, f"Shipment #{shipment.id} has been marked as shipped.")
-
-    except Exception as e:
-        messages.error(request, f"Failed to update shipment status: {str(e)}")
-
-    return redirect('logistics:shipment_detail', shipment_id=shipment.id)
+    order = shipment.order
+    return JsonResponse({
+        'has_order': True,
+        'order_id': order.id,
+        'order_status': order.status,
+        'order_status_display': order.get_status_display(),
+        'can_mark_delivered': order.status == 'shipped' and shipment.status == 'shipped',
+        'delivered_date': order.delivered_date.strftime('%B %d, %Y at %I:%M %p') if order.delivered_date else None,
+        'is_delivered': order.status == 'delivered'
+    })
 
 
-@require_POST
-@login_required
-def mark_order_as_shipped(request, order_id):
-    """Mark an order as shipped - this is for orders, not shipments"""
-    order = get_object_or_404(Order, id=order_id)
+class DashboardView(LoginRequiredMixin, ListView):
+    template_name = 'logistics/dashboard.html'
 
-    # Check if order has a store and user is authorized
-    if not hasattr(order, 'store') or order.store is None:
-        messages.error(request, "This order is not associated with any store.")
-        return redirect('logistics:shipment_list')
-
-    if hasattr(order.store, 'owner') and order.store.owner != request.user:
-        messages.error(request, "You are not authorized to mark this order as shipped.")
-        return redirect('logistics:shipment_list')
-
-    try:
-        with transaction.atomic():
-            # Check if order can be marked as shipped
-            if hasattr(order, 'status') and order.status == 'shipped':
-                messages.warning(request, f"Order #{order.id} is already marked as shipped.")
-            else:
-                # Mark order as shipped
-                if hasattr(order, 'mark_as_shipped'):
-                    order.mark_as_shipped()
-                else:
-                    order.status = 'shipped'
-                    order.save(update_fields=['status'])
-
-                # Update related shipment if it exists
-                try:
-                    shipment = Shipment.objects.get(order=order)
-                    shipment.status = 'shipped'
-                    shipment.save(update_fields=['status'])
-                except Shipment.DoesNotExist:
-                    pass  # No shipment exists for this order
-
-                messages.success(request, f"Order #{order.id} has been successfully marked as shipped.")
-
-    except Exception as e:
-        messages.error(request, f"Failed to mark order as shipped: {str(e)}")
-
-    # Redirect back to shipment list or detail as appropriate
-    try:
-        shipment = Shipment.objects.get(order=order)
-        return redirect('logistics:shipment_detail', shipment_id=shipment.id)
-    except Shipment.DoesNotExist:
-        return redirect('logistics:shipment_list')
+    def get(self, request, *args, **kwargs):
+        context = {
+            'total_shipments': Shipment.objects.count(),
+            'pending_shipments': Shipment.objects.filter(status='pending').count(),
+            'in_transit_shipments': Shipment.objects.filter(status='in_transit').count(),
+            'shipped_shipments': Shipment.objects.filter(status='shipped').count(),
+            'total_drivers': Driver.objects.count(),
+            'total_vehicles': Vehicle.objects.count(),
+            'total_warehouses': Warehouse.objects.count(),
+            'recent_shipments': Shipment.objects.select_related(
+                'shipping_address', 'driver', 'vehicle'
+            ).order_by('-created_at')[:10],
+        }
+        return render(request, self.template_name, context)
 
 
-@require_POST
-@login_required
-def mark_shipment_as_delivered(request, shipment_id):
-    """Mark a shipment as delivered"""
-    shipment = get_object_or_404(Shipment, id=shipment_id)
+# Box Management Views
+class ShipmentBoxCreateView(LoginRequiredMixin, CreateView):
+    model = ShipmentBox
+    form_class = ShipmentBoxForm
+    template_name = 'logistics/box_form.html'
 
-    try:
-        if shipment.status == 'delivered':
-            messages.warning(request, f"Shipment #{shipment.id} is already marked as delivered.")
-        else:
-            shipment.status = 'delivered'
-            shipment.save(update_fields=['status'])
+    def dispatch(self, request, *args, **kwargs):
+        self.shipment = get_object_or_404(Shipment, pk=kwargs['shipment_pk'])
+        return super().dispatch(request, *args, **kwargs)
 
-            # Update related order if it exists
-            if shipment.order:
-                shipment.order.status = 'delivered'
-                shipment.order.save(update_fields=['status'])
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['shipment'] = self.shipment
+        return kwargs
 
-            messages.success(request, f"Shipment #{shipment.id} has been marked as delivered.")
+    def form_valid(self, form):
+        form.instance.shipment = self.shipment
+        messages.success(self.request, f'Box #{form.instance.box_number} created successfully!')
+        return super().form_valid(form)
 
-    except Exception as e:
-        messages.error(request, f"Failed to mark shipment as delivered: {str(e)}")
+    def get_success_url(self):
+        return reverse('logistics:shipment_detail', kwargs={'pk': self.shipment.pk})
 
-    return redirect('logistics:shipment_detail', shipment_id=shipment.id)
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['shipment'] = self.shipment
+        context['action'] = 'Create'
+        return context
 
 
-@login_required
-def edit_shipment(request, shipment_id):
-    """Edit an existing shipment"""
-    shipment = get_object_or_404(Shipment, id=shipment_id)
+class ShipmentBoxUpdateView(LoginRequiredMixin, UpdateView):
+    model = ShipmentBox
+    form_class = ShipmentBoxForm
+    template_name = 'logistics/box_form.html'
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['shipment'] = self.object.shipment
+        return kwargs
+
+    def form_valid(self, form):
+        messages.success(self.request, f'Box #{form.instance.box_number} updated successfully!')
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse('logistics:shipment_detail', kwargs={'pk': self.object.shipment.pk})
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['shipment'] = self.object.shipment
+        context['action'] = 'Edit'
+        return context
+
+
+class ShipmentBoxDeleteView(LoginRequiredMixin, DeleteView):
+    model = ShipmentBox
+    template_name = 'logistics/box_confirm_delete.html'
+
+    def delete(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        shipment_pk = self.object.shipment.pk
+        box_number = self.object.box_number
+
+        success_url = reverse('logistics:shipment_detail', kwargs={'pk': shipment_pk})
+        result = super().delete(request, *args, **kwargs)
+
+        messages.success(request, f'Box #{box_number} deleted successfully!')
+        return result
+
+    def get_success_url(self):
+        return reverse('logistics:shipment_detail', kwargs={'pk': self.object.shipment.pk})
+
+
+class BoxItemCreateView(LoginRequiredMixin, CreateView):
+    model = BoxItem
+    form_class = BoxItemForm
+    template_name = 'logistics/box_item_form.html'
+
+    def dispatch(self, request, *args, **kwargs):
+        self.box = get_object_or_404(ShipmentBox, pk=kwargs['box_pk'])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['box'] = self.box
+        return kwargs
+
+    def form_valid(self, form):
+        form.instance.box = self.box
+        messages.success(self.request, 'Item added to box successfully!')
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse('logistics:shipment_detail', kwargs={'pk': self.box.shipment.pk})
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['box'] = self.box
+        context['shipment'] = self.box.shipment
+        context['action'] = 'Add'
+        return context
+
+
+class BoxItemUpdateView(LoginRequiredMixin, UpdateView):
+    model = BoxItem
+    form_class = BoxItemForm
+    template_name = 'logistics/box_item_form.html'
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['box'] = self.object.box
+        return kwargs
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Box item updated successfully!')
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        return reverse('logistics:shipment_detail', kwargs={'pk': self.object.box.shipment.pk})
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['box'] = self.object.box
+        context['shipment'] = self.object.box.shipment
+        context['action'] = 'Edit'
+        return context
+
+
+class BoxItemDeleteView(LoginRequiredMixin, DeleteView):
+    model = BoxItem
+    template_name = 'logistics/box_item_confirm_delete.html'
+
+    def delete(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        shipment_pk = self.object.box.shipment.pk
+
+        success_url = reverse('logistics:shipment_detail', kwargs={'pk': shipment_pk})
+        result = super().delete(request, *args, **kwargs)
+
+        messages.success(request, 'Item removed from box successfully!')
+        return result
+
+    def get_success_url(self):
+        return reverse('logistics:shipment_detail', kwargs={'pk': self.object.box.shipment.pk})
+
+
+def manage_shipment_boxes(request, shipment_pk):
+    """Bulk manage boxes for a shipment"""
+    shipment = get_object_or_404(Shipment, pk=shipment_pk)
+
+    BoxFormSet = modelformset_factory(
+        ShipmentBox,
+        form=ShipmentBoxForm,
+        extra=3,  # Allow 3 new boxes by default
+        can_delete=True
+    )
 
     if request.method == 'POST':
-        form = ShipmentForm(request.POST, instance=shipment)
-        if form.is_valid():
-            try:
-                form.save()
-                messages.success(request, f"Shipment #{shipment.id} updated successfully!")
-                return redirect('logistics:shipment_detail', shipment_id=shipment.id)
-            except Exception as e:
-                messages.error(request, f"Error updating shipment: {str(e)}")
+        formset = BoxFormSet(request.POST, queryset=shipment.boxes.all())
+
+        if formset.is_valid():
+            instances = formset.save(commit=False)
+
+            for instance in instances:
+                instance.shipment = shipment
+                instance.save()
+
+            # Delete marked instances
+            for instance in formset.deleted_objects:
+                instance.delete()
+
+            messages.success(request, 'Boxes updated successfully!')
+            return redirect('logistics:shipment_detail', pk=shipment.pk)
     else:
-        form = ShipmentForm(instance=shipment)
+        formset = BoxFormSet(queryset=shipment.boxes.all())
+
+    # Modify each form to include the shipment reference
+    for form in formset:
+        if hasattr(form, 'instance') and form.instance.pk is None:
+            form.instance.shipment = shipment
 
     context = {
-        'form': form,
         'shipment': shipment,
-        'title': f'Edit Shipment #{shipment.id}',
+        'formset': formset,
     }
-    return render(request, 'logistics/shipment_form.html', context)
+    return render(request, 'logistics/manage_boxes.html', context)

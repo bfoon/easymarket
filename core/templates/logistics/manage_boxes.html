@@ -1,0 +1,242 @@
+{% extends 'logistics/base.html' %}
+
+{% block title %}Manage Boxes - Shipment #{{ shipment.id }}{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center">
+    <div>
+        <h1 class="page-title">Manage Boxes</h1>
+        <p class="page-subtitle">Shipment #{{ shipment.id }} - {{ shipment.shipping_address.city }}, {{ shipment.shipping_address.state }}</p>
+    </div>
+    <a href="{% url 'logistics:shipment_detail' shipment.pk %}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left me-1"></i>
+        Back to Shipment
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    <i class="fas fa-boxes me-2"></i>
+                    Bulk Box Management
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <h6 class="alert-heading">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Instructions
+                    </h6>
+                    <ul class="mb-0">
+                        <li>Edit existing boxes or add new ones using the form below</li>
+                        <li>Check the "Delete" checkbox to remove a box</li>
+                        <li>Box numbers must be unique within this shipment</li>
+                        <li>Click "Save Changes" to apply all modifications</li>
+                    </ul>
+                </div>
+
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    {{ formset.management_form }}
+                    
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Box Number</th>
+                                    <th>Weight (kg)</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="box-formset">
+                                {% for form in formset %}
+                                    <tr class="box-form-row" data-form-index="{{ forloop.counter0 }}">
+                                        <td>
+                                            {% for hidden in form.hidden_fields %}
+                                                {{ hidden }}
+                                            {% endfor %}
+                                            {{ form.box_number }}
+                                            {% if form.box_number.errors %}
+                                                <div class="text-danger small">{{ form.box_number.errors.0 }}</div>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {{ form.weight_kg }}
+                                            {% if form.weight_kg.errors %}
+                                                <div class="text-danger small">{{ form.weight_kg.errors.0 }}</div>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <div class="d-flex align-items-center gap-2">
+                                                {% if form.instance.pk %}
+                                                    <span class="badge bg-success">Existing</span>
+                                                {% else %}
+                                                    <span class="badge bg-primary">New</span>
+                                                {% endif %}
+                                                
+                                                {% if form.DELETE %}
+                                                    <div class="form-check">
+                                                        {{ form.DELETE }}
+                                                        <label class="form-check-label text-danger" for="{{ form.DELETE.id_for_label }}">
+                                                            Delete
+                                                        </label>
+                                                    </div>
+                                                {% endif %}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Form errors -->
+                    {% if formset.non_form_errors %}
+                        <div class="alert alert-danger">
+                            <h6 class="alert-heading">Form Errors:</h6>
+                            {{ formset.non_form_errors }}
+                        </div>
+                    {% endif %}
+
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <button type="button" class="btn btn-outline-primary" id="add-box-form">
+                                <i class="fas fa-plus me-1"></i>
+                                Add Another Box
+                            </button>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <a href="{% url 'logistics:shipment_detail' shipment.pk %}" class="btn btn-outline-secondary">
+                                <i class="fas fa-times me-1"></i>
+                                Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-1"></i>
+                                Save Changes
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-control {
+        border-radius: 6px;
+        border: 1px solid #d1d5db;
+        padding: 8px 12px;
+    }
+    
+    .form-control:focus {
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.15);
+    }
+    
+    .text-danger {
+        font-size: 12px;
+        margin-top: 2px;
+    }
+    
+    .box-form-row.to-delete {
+        background-color: #fef2f2;
+        opacity: 0.7;
+    }
+    
+    .box-form-row.to-delete input {
+        text-decoration: line-through;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add Bootstrap classes to form fields
+    const inputs = document.querySelectorAll('input[type="number"], input[type="text"]');
+    inputs.forEach(input => {
+        input.classList.add('form-control');
+    });
+    
+    const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+    checkboxes.forEach(checkbox => {
+        checkbox.classList.add('form-check-input');
+    });
+    
+    // Handle delete checkbox changes
+    const deleteCheckboxes = document.querySelectorAll('input[name$="-DELETE"]');
+    deleteCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const row = this.closest('.box-form-row');
+            if (this.checked) {
+                row.classList.add('to-delete');
+            } else {
+                row.classList.remove('to-delete');
+            }
+        });
+        
+        // Set initial state
+        if (checkbox.checked) {
+            checkbox.closest('.box-form-row').classList.add('to-delete');
+        }
+    });
+    
+    // Add new form functionality
+    const addButton = document.getElementById('add-box-form');
+    const formsetContainer = document.getElementById('box-formset');
+    let formIndex = {{ formset.total_form_count }};
+    
+    addButton.addEventListener('click', function() {
+        // Clone the last empty form
+        const emptyForm = document.querySelector('.box-form-row:last-child');
+        const newForm = emptyForm.cloneNode(true);
+        
+        // Update form index in the new form
+        const formRegex = new RegExp(`form-${formIndex-1}`, 'g');
+        newForm.innerHTML = newForm.innerHTML.replace(formRegex, `form-${formIndex}`);
+        newForm.setAttribute('data-form-index', formIndex);
+        
+        // Clear values in the new form
+        const inputs = newForm.querySelectorAll('input');
+        inputs.forEach(input => {
+            if (input.type !== 'hidden') {
+                input.value = '';
+            }
+        });
+        
+        // Add badge for new form
+        const badge = newForm.querySelector('.badge');
+        if (badge) {
+            badge.className = 'badge bg-primary';
+            badge.textContent = 'New';
+        }
+        
+        // Add to container
+        formsetContainer.appendChild(newForm);
+        
+        // Update total forms count
+        const totalFormsInput = document.querySelector('input[name$="-TOTAL_FORMS"]');
+        totalFormsInput.value = parseInt(totalFormsInput.value) + 1;
+        
+        // Add classes to new inputs
+        const newInputs = newForm.querySelectorAll('input[type="number"], input[type="text"]');
+        newInputs.forEach(input => {
+            input.classList.add('form-control');
+        });
+        
+        const newCheckboxes = newForm.querySelectorAll('input[type="checkbox"]');
+        newCheckboxes.forEach(checkbox => {
+            checkbox.classList.add('form-check-input');
+        });
+        
+        formIndex++;
+    });
+});
+</script>
+{% endblock %}

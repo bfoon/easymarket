@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <title>{% block title %}Logistics Management System{% endblock %}</title>
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #64748b;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+        }
+
+        body {
+            background-color: #f8fafc;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .navbar-brand {
+            font-weight: 600;
+            color: var(--primary-color) !important;
+        }
+
+        .sidebar {
+            background: white;
+            min-height: calc(100vh - 60px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .sidebar .nav-link {
+            color: var(--secondary-color);
+            padding: 12px 20px;
+            border-radius: 8px;
+            margin: 2px 0;
+            transition: all 0.3s ease;
+        }
+
+        .sidebar .nav-link:hover,
+        .sidebar .nav-link.active {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .sidebar .nav-link i {
+            width: 20px;
+            margin-right: 10px;
+        }
+
+        .main-content {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 30px;
+            margin-left: 20px;
+        }
+
+        .card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .card-header {
+            background-color: #f8fafc;
+            border-bottom: 1px solid #e2e8f0;
+            font-weight: 600;
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+            border-radius: 8px;
+        }
+
+        .btn-primary:hover {
+            background-color: #1d4ed8;
+            border-color: #1d4ed8;
+        }
+
+        .status-badge {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-pending {
+            background-color: #fef3c7;
+            color: #92400e;
+        }
+
+        .status-in-transit {
+            background-color: #dbeafe;
+            color: #1e40af;
+        }
+
+        .status-shipped {
+            background-color: #d1fae5;
+            color: #065f46;
+        }
+
+        .table th {
+            border-top: none;
+            font-weight: 600;
+            color: var(--secondary-color);
+            font-size: 14px;
+        }
+
+        .page-header {
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .page-title {
+            font-size: 28px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 8px;
+        }
+
+        .page-subtitle {
+            color: var(--secondary-color);
+            font-size: 16px;
+        }
+    </style>
+
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{% url 'logistics:dashboard' %}">
+                <i class="fas fa-truck me-2"></i>
+                Logistics System
+            </a>
+
+            <div class="navbar-nav ms-auto">
+                {% if user.is_authenticated %}
+                    <div class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-user-circle me-1"></i>
+                            {{ user.get_full_name|default:user.username }}
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="#"><i class="fas fa-user me-2"></i>Profile</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="#"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
+                        </ul>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-3 col-lg-2 px-0">
+                <div class="sidebar p-3">
+                    <nav class="nav flex-column">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}"
+                           href="{% url 'logistics:dashboard' %}">
+                            <i class="fas fa-tachometer-alt"></i>
+                            Dashboard
+                        </a>
+                        <a class="nav-link {% if 'shipment' in request.resolver_match.url_name %}active{% endif %}"
+                           href="{% url 'logistics:shipment_list' %}">
+                            <i class="fas fa-shipping-fast"></i>
+                            Shipments
+                        </a>
+                        <a class="nav-link {% if 'driver' in request.resolver_match.url_name %}active{% endif %}"
+                           href="{% url 'logistics:driver_list' %}">
+                            <i class="fas fa-user-tie"></i>
+                            Drivers
+                        </a>
+                        <a class="nav-link {% if 'vehicle' in request.resolver_match.url_name %}active{% endif %}"
+                           href="{% url 'logistics:vehicle_list' %}">
+                            <i class="fas fa-truck"></i>
+                            Vehicles
+                        </a>
+                        <a class="nav-link {% if 'warehouse' in request.resolver_match.url_name %}active{% endif %}"
+                           href="{% url 'logistics:warehouse_list' %}">
+                            <i class="fas fa-warehouse"></i>
+                            Warehouses
+                        </a>
+                    </nav>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="col-md-9 col-lg-10">
+                <div class="main-content">
+                    {% if messages %}
+                        {% for message in messages %}
+                            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+
+                    {% block content %}{% endblock %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,85 @@
+{% extends 'logistics/base.html' %}
+
+{% block title %}Delete Box #{{ object.box_number }} - Confirmation{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Delete Box #{{ object.box_number }}</h1>
+    <p class="page-subtitle">Shipment #{{ object.shipment.id }} - Confirm deletion</p>
+</div>
+
+<div class="row">
+    <div class="col-lg-6 mx-auto">
+        <div class="card border-danger">
+            <div class="card-header bg-danger text-white">
+                <h6 class="m-0">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Confirm Deletion
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-warning">
+                    <h6 class="alert-heading">
+                        <i class="fas fa-warning me-1"></i>
+                        Warning
+                    </h6>
+                    <p class="mb-0">
+                        This action will permanently delete Box #{{ object.box_number }} and all its contents.
+                        This cannot be undone.
+                    </p>
+                </div>
+
+                <!-- Box details -->
+                <div class="card bg-light mb-3">
+                    <div class="card-body">
+                        <h6 class="card-title">Box #{{ object.box_number }}</h6>
+                        {% if object.weight_kg %}
+                            <p class="card-text">Weight: {{ object.weight_kg }} kg</p>
+                        {% endif %}
+                        <p class="card-text">
+                            <small class="text-muted">
+                                Created: {{ object.created_at|date:"M d, Y H:i" }}
+                            </small>
+                        </p>
+                        
+                        {% if object.items.exists %}
+                            <p class="text-danger">
+                                <i class="fas fa-exclamation-circle me-1"></i>
+                                <strong>This box contains {{ object.items.count }} item(s):</strong>
+                            </p>
+                            <ul class="list-unstyled">
+                                {% for item in object.items.all %}
+                                    <li>
+                                        <i class="fas fa-cube me-1"></i>
+                                        {{ item.quantity }}x {{ item.order_item.product.name }}
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        {% else %}
+                            <p class="text-muted">
+                                <i class="fas fa-info-circle me-1"></i>
+                                This box is empty.
+                            </p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="d-flex justify-content-end gap-2">
+                        <a href="{% url 'logistics:shipment_detail' object.shipment.pk %}" class="btn btn-outline-secondary">
+                            <i class="fas fa-times me-1"></i>
+                            Cancel
+                        </a>
+                        <button type="submit" class="btn btn-danger">
+                            <i class="fas fa-trash me-1"></i>
+                            Yes, Delete Box
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

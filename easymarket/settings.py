@@ -25,7 +25,7 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-=8goozz#9*r621mccr6m4
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = bool(int(os.environ.get('DEBUG', 1)))
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0', '192.168.1.142']
+ALLOWED_HOSTS = ['*']
 
 # Authentication settings
 LOGIN_URL = '/'
@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.humanize',
     'crispy_forms',
     'crispy_bootstrap5',
     'widget_tweaks',

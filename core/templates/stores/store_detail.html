@@ -1,41 +1,100 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load humanize %}
 
-{% block title %}{{ store.name }} - Store{% endblock %}
+{% block title %}{{ store.name }} - {{ store.short_description|default:"Premium Store" }}{% endblock %}
 
 {% block extra_head %}
+<!-- Optimized Font Loading -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-<meta name="description" content="{{ store.short_description|default:'Discover amazing products at '|add:store.name }}">
-<meta property="og:title" content="{{ store.name }} - Store">
-<meta property="og:description" content="{{ store.short_description|default:'Discover amazing products' }}">
+<link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"></noscript>
+
+<!-- Enhanced SEO Meta Tags -->
+<meta name="description" content="{{ store.description|striptags|truncatewords:30|default:'Discover amazing products at '|add:store.name }}">
+<meta name="keywords" content="{{ store.name }}, {{ store.city }}, {{ store.country }}, online store, shopping">
+<meta name="author" content="{{ store.name }}">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="{{ request.build_absolute_uri }}">
+
+<!-- Enhanced Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="{{ store.name }} - {{ store.short_description|default:'Premium Store' }}">
+<meta property="og:description" content="{{ store.description|striptags|truncatewords:30|default:'Discover amazing products' }}">
 <meta property="og:image" content="{{ store.banner.url|default:store.logo.url }}">
 <meta property="og:url" content="{{ request.build_absolute_uri }}">
+<meta property="og:site_name" content="{{ store.name }}">
+<meta property="og:locale" content="en_US">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{ store.name }} - {{ store.short_description|default:'Premium Store' }}">
+<meta name="twitter:description" content="{{ store.description|striptags|truncatewords:30|default:'Discover amazing products' }}">
+<meta name="twitter:image" content="{{ store.banner.url|default:store.logo.url }}">
+
+<!-- Structured Data -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Store",
+  "name": "{{ store.name }}",
+  "description": "{{ store.description|striptags|default:'Quality products and service' }}",
+  "image": "{{ store.logo.url|default:store.banner.url }}",
+  "url": "{{ request.build_absolute_uri }}",
+  "address": {
+    "@type": "PostalAddress",
+    "streetAddress": "{{ store.address_line_1 }}",
+    "addressLocality": "{{ store.city }}",
+    "addressRegion": "{{ store.region }}",
+    "postalCode": "{{ store.postal_code }}",
+    "addressCountry": "{{ store.country }}"
+  },
+  "geo": {
+    "@type": "GeoCoordinates",
+    "latitude": "{{ store.latitude|default:'' }}",
+    "longitude": "{{ store.longitude|default:'' }}"
+  },
+  "telephone": "{{ store.phone }}",
+  "email": "{{ store.email }}",
+  "priceRange": "$$",
+  "aggregateRating": {
+    "@type": "AggregateRating",
+    "ratingValue": "{{ average_rating|floatformat:1 }}",
+    "reviewCount": "{{ review_count }}"
+  },
+  "foundingDate": "{{ store.created_at|date:'Y-m-d' }}"
+}
+</script>
 {% endblock %}
 
 {% block content %}
 <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
 <link rel="stylesheet" type="text/css" href="{% static 'css/store.css' %}">
 
-<!-- Wrap everything in store-page class to scope CSS -->
-<div class="store-page">
+<!-- Enhanced store page with better accessibility and performance -->
+<div class="store-page" itemscope itemtype="https://schema.org/Store">
 
-<!-- Store Header Section -->
+<!-- Store Header Section with enhanced accessibility -->
 <header class="store-header" role="banner">
   <div class="store-banner-container">
     {% if store.banner %}
     <div class="store-banner position-relative">
       <picture>
-        <source media="(max-width: 768px)" srcset="{{ store.banner.url }}?w=768">
-        <source media="(max-width: 1200px)" srcset="{{ store.banner.url }}?w=1200">
-        <img src="{{ store.banner.url }}" alt="{{ store.name }} store banner" class="banner-image" loading="eager">
+        <source media="(max-width: 480px)" srcset="{{ store.banner.url }}?w=480&q=75">
+        <source media="(max-width: 768px)" srcset="{{ store.banner.url }}?w=768&q=80">
+        <source media="(max-width: 1200px)" srcset="{{ store.banner.url }}?w=1200&q=85">
+        <img src="{{ store.banner.url }}?w=1920&q=90"
+             alt="{{ store.name }} store banner showcasing our products and brand"
+             class="banner-image"
+             loading="eager"
+             itemprop="image">
       </picture>
       <div class="banner-overlay" aria-hidden="true"></div>
     </div>
     {% else %}
-    <div class="store-banner-placeholder" aria-label="Store banner placeholder">
+    <div class="store-banner-placeholder" role="img" aria-label="Store banner placeholder for {{ store.name }}">
       <div class="placeholder-content">
         <i class="fas fa-store" aria-hidden="true"></i>
         <span class="visually-hidden">{{ store.name }} store</span>
@@ -43,7 +102,7 @@
     </div>
     {% endif %}
 
-    <!-- Store Information Overlay -->
+    <!-- Enhanced Store Information Overlay -->
     <div class="store-info-overlay">
       <div class="container">
         <div class="row align-items-end">
@@ -51,32 +110,44 @@
             <div class="store-identity">
               <div class="store-logo-container">
                 {% if store.logo %}
-                <img src="{{ store.logo.url }}" alt="{{ store.name }} logo" class="store-logo" loading="eager">
+                <img src="{{ store.logo.url }}"
+                     alt="{{ store.name }} logo"
+                     class="store-logo"
+                     loading="eager"
+                     itemprop="logo">
                 {% else %}
-                <div class="store-logo store-logo-placeholder" aria-label="Store logo placeholder">
+                <div class="store-logo store-logo-placeholder" role="img" aria-label="Store logo placeholder for {{ store.name }}">
                   <i class="fas fa-store" aria-hidden="true"></i>
                 </div>
                 {% endif %}
               </div>
 
               <div class="store-details">
-                <h1 class="store-name">{{ store.name }}</h1>
+                <h1 class="store-name" itemprop="name">{{ store.name }}</h1>
                 {% if store.short_description %}
-                <p class="store-tagline">{{ store.short_description }}</p>
+                <p class="store-tagline" itemprop="description">{{ store.short_description }}</p>
                 {% endif %}
 
                 <div class="store-meta">
-                  <span class="meta-item">
+                  <span class="meta-item" itemprop="address" itemscope itemtype="https://schema.org/PostalAddress">
                     <i class="fas fa-map-marker-alt" aria-hidden="true"></i>
-                    <span>{{ store.city }}, {{ store.country }}</span>
+                    <span>
+                      <span itemprop="addressLocality">{{ store.city }}</span>,
+                      <span itemprop="addressCountry">{{ store.country }}</span>
+                    </span>
                   </span>
                   <span class="meta-item">
                     <i class="fas fa-calendar" aria-hidden="true"></i>
-                    <span>Since {{ store.created_at|date:"Y" }}</span>
+                    <span>Since <time datetime="{{ store.created_at|date:'Y' }}" itemprop="foundingDate">{{ store.created_at|date:"Y" }}</time></span>
                   </span>
-                  <span class="meta-item">
+                  <span class="meta-item" itemprop="aggregateRating" itemscope itemtype="https://schema.org/AggregateRating">
                     <i class="fas fa-star" aria-hidden="true"></i>
-                    <span>{{ average_rating|floatformat:1|default:"New" }} {% if review_count %}({{ review_count }} reviews){% endif %}</span>
+                    <span>
+                      <span itemprop="ratingValue">{{ average_rating|floatformat:1|default:"New" }}</span>
+                      {% if review_count %}
+                        (<span itemprop="reviewCount">{{ review_count }}</span> review{{ review_count|pluralize }})
+                      {% endif %}
+                    </span>
                   </span>
                 </div>
               </div>
@@ -85,11 +156,17 @@
 
           <div class="col-lg-4">
             <div class="store-actions">
-              <button class="btn btn-outline-light btn-follow" onclick="toggleFavorite()" aria-label="Follow store">
+              <button class="btn btn-outline-light btn-follow"
+                      onclick="toggleFavorite({{ store.id }})"
+                      aria-label="Follow {{ store.name }} store"
+                      data-store-id="{{ store.id }}">
                 <i class="fas fa-heart" id="favoriteIcon" aria-hidden="true"></i>
                 <span class="btn-text">Follow</span>
               </button>
-              <button class="btn btn-primary btn-contact" data-bs-toggle="modal" data-bs-target="#contactModal" aria-label="Contact store">
+              <button class="btn btn-primary btn-contact"
+                      data-bs-toggle="modal"
+                      data-bs-target="#contactModal"
+                      aria-label="Contact {{ store.name }} store">
                 <i class="fas fa-envelope" aria-hidden="true"></i>
                 <span class="btn-text">Contact</span>
               </button>
@@ -101,59 +178,102 @@
   </div>
 </header>
 
-<!-- Store Navigation -->
-<nav class="store-navigation" role="navigation" aria-label="Store sections">
+<!-- Enhanced Store Navigation with skip links -->
+<nav class="store-navigation" role="navigation" aria-label="Store sections navigation">
   <div class="container">
     <ul class="nav nav-pills" id="storeNav" role="tablist">
       <li class="nav-item" role="presentation">
-        <a class="nav-link active" href="#products" data-section="products" role="tab" aria-selected="true">
+        <button class="nav-link active"
+                type="button"
+                data-section="products"
+                role="tab"
+                aria-selected="true"
+                aria-controls="products"
+                id="products-tab">
           <i class="fas fa-box" aria-hidden="true"></i>
           <span>Products</span>
-        </a>
+        </button>
       </li>
       <li class="nav-item" role="presentation">
-        <a class="nav-link" href="#about" data-section="about" role="tab" aria-selected="false">
+        <button class="nav-link"
+                type="button"
+                data-section="about"
+                role="tab"
+                aria-selected="false"
+                aria-controls="about"
+                id="about-tab">
           <i class="fas fa-info-circle" aria-hidden="true"></i>
           <span>About</span>
-        </a>
+        </button>
       </li>
       <li class="nav-item" role="presentation">
-        <a class="nav-link" href="#reviews" data-section="reviews" role="tab" aria-selected="false">
+        <button class="nav-link"
+                type="button"
+                data-section="reviews"
+                role="tab"
+                aria-selected="false"
+                aria-controls="reviews"
+                id="reviews-tab">
           <i class="fas fa-star" aria-hidden="true"></i>
           <span>Reviews</span>
-        </a>
+        </button>
       </li>
       <li class="nav-item" role="presentation">
-        <a class="nav-link" href="#contact" data-section="contact" role="tab" aria-selected="false">
+        <button class="nav-link"
+                type="button"
+                data-section="contact"
+                role="tab"
+                aria-selected="false"
+                aria-controls="contact"
+                id="contact-tab">
           <i class="fas fa-phone" aria-hidden="true"></i>
           <span>Contact</span>
-        </a>
+        </button>
       </li>
     </ul>
   </div>
 </nav>
 
-<!-- Main Content -->
+<!-- Enhanced Main Content -->
 <main class="store-main">
   <div class="container">
     <div class="row">
       <div class="col-lg-9">
 
-        <!-- Products Section -->
-        <section id="products" class="store-section" aria-labelledby="products-heading">
+        <!-- Enhanced Products Section -->
+        <section id="products"
+                 class="store-section"
+                 aria-labelledby="products-heading"
+                 role="tabpanel"
+                 aria-describedby="products-tab">
           <header class="section-header">
             <h2 id="products-heading" class="section-title">
               <i class="fas fa-box text-primary" aria-hidden="true"></i>
               Our Products
             </h2>
             <div class="section-controls">
-              <label for="sortProducts" class="visually-hidden">Sort products</label>
-              <select class="form-select" id="sortProducts" aria-label="Sort products">
+              <label for="sortProducts" class="visually-hidden">Sort products by</label>
+              <select class="form-select" id="sortProducts" aria-label="Sort products by">
                 <option value="newest">Newest First</option>
                 <option value="price-low">Price: Low to High</option>
                 <option value="price-high">Price: High to Low</option>
                 <option value="popular">Most Popular</option>
+                <option value="rating">Highest Rated</option>
               </select>
+              <div class="view-toggle" role="group" aria-label="View options">
+                <button class="btn btn-outline-secondary active"
+                        data-view="grid"
+                        aria-label="Grid view"
+                        title="Grid view">
+                  <i class="fas fa-th" aria-hidden="true"></i>
+                </button>
+                <button class="btn btn-outline-secondary"
+                        data-view="list"
+                        aria-label="List view"
+                        title="List view">
+                  <i class="fas fa-list" aria-hidden="true"></i>
+                </button>
+              </div>
               <a href="{% url 'stores:store_products' store.slug %}" class="btn btn-outline-primary">
                 <span>View All Products</span>
                 <i class="fas fa-arrow-right" aria-hidden="true"></i>
@@ -162,65 +282,98 @@
           </header>
 
           {% if products %}
-          <div class="products-grid" id="productsContainer" role="grid" aria-label="Products">
+          <div class="products-grid" id="productsContainer" role="grid" aria-label="Products grid">
             {% for product in products %}
-            <article class="product-card" role="gridcell">
+            <article class="product-card" role="gridcell" itemscope itemtype="https://schema.org/Product">
               <div class="product-image-container">
                 {% if product.image %}
-                <img src="{{ product.image.url }}" alt="{{ product.name }}" class="product-image" loading="lazy">
+                <img src="{{ product.image.url }}?w=300&q=80"
+                     alt="{{ product.name }}"
+                     class="product-image"
+                     loading="lazy"
+                     itemprop="image"
+                     data-src="{{ product.image.url }}?w=600&q=90">
                 {% else %}
-                <div class="product-image product-image-placeholder" aria-label="Product image placeholder">
+                <div class="product-image product-image-placeholder" role="img" aria-label="Product image placeholder">
                   <i class="fas fa-image" aria-hidden="true"></i>
                 </div>
                 {% endif %}
 
-                <!-- Product Badges -->
+                <!-- Enhanced Product Badges -->
                 <div class="product-badges" aria-label="Product badges">
                   {% if product.is_new %}
-                  <span class="badge badge-new">New</span>
+                  <span class="badge badge-new" aria-label="New product">New</span>
                   {% endif %}
                   {% if product.is_featured %}
-                  <span class="badge badge-featured">Featured</span>
+                  <span class="badge badge-featured" aria-label="Featured product">Featured</span>
                   {% endif %}
                   {% if product.discount_percentage %}
-                  <span class="badge badge-discount">{{ product.discount_percentage }}% OFF</span>
+                  <span class="badge badge-discount" aria-label="{{ product.discount_percentage }}% discount">{{ product.discount_percentage }}% OFF</span>
                   {% endif %}
                 </div>
 
-                <!-- Quick Actions -->
+                <!-- Enhanced Quick Actions -->
                 <div class="product-actions">
-                  <button class="btn btn-action" title="Add to wishlist" aria-label="Add {{ product.name }} to wishlist">
+                  <button class="btn btn-action"
+                          title="Add {{ product.name }} to wishlist"
+                          aria-label="Add {{ product.name }} to wishlist"
+                          onclick="addToWishlist({{ product.id }}, this)"
+                          data-product-id="{{ product.id }}">
                     <i class="fas fa-heart" aria-hidden="true"></i>
                   </button>
-                  <button class="btn btn-action" title="Quick view" aria-label="Quick view of {{ product.name }}"
-                          onclick="quickView({{ product.id }})">
+                  <button class="btn btn-action"
+                          title="Quick view of {{ product.name }}"
+                          aria-label="Quick view of {{ product.name }}"
+                          onclick="quickView({{ product.id }}, this)"
+                          data-product-id="{{ product.id }}">
                     <i class="fas fa-eye" aria-hidden="true"></i>
                   </button>
-
+                  <button class="btn btn-action"
+                          title="Share {{ product.name }}"
+                          aria-label="Share {{ product.name }}"
+                          onclick="shareProduct({{ product.id }})"
+                          data-product-id="{{ product.id }}">
+                    <i class="fas fa-share-alt" aria-hidden="true"></i>
+                  </button>
                 </div>
 
-                <!-- Stock Status -->
+                <!-- Enhanced Stock Status -->
                 {% if not product.is_in_stock %}
                 <div class="stock-status out-of-stock" aria-label="Out of stock">
                   <span>Out of Stock</span>
+                </div>
+                {% elif product.stock_quantity <= 5 %}
+                <div class="stock-status low-stock bg-warning" aria-label="Low stock">
+                  <span>Only {{ product.stock_quantity }} left!</span>
                 </div>
                 {% endif %}
               </div>
 
               <div class="product-info">
-                <h3 class="product-name">
-                  <a href="#" class="product-link">{{ product.name|truncatechars:50 }}</a>
+                <h3 class="product-name" itemprop="name">
+                  <a href="{% url 'marketplace:product_detail' product.id %}"
+                     class="product-link">{{ product.name|truncatechars:50 }}</a>
                 </h3>
 
-                <div class="product-pricing">
-                  <span class="price-current">D{{ product.price }}</span>
+                <div class="product-pricing" itemprop="offers" itemscope itemtype="https://schema.org/Offer">
+                  <span class="price-current" itemprop="price" content="{{ product.price }}">
+                    <span class="currency">D</span>{{ product.price|floatformat:2 }}
+                  </span>
                   {% if product.original_price %}
-                  <span class="price-original">D{{ product.original_price }}</span>
+                  <span class="price-original">
+                    <span class="currency">D</span>{{ product.original_price|floatformat:2 }}
+                  </span>
                   {% endif %}
+                  <meta itemprop="priceCurrency" content="GMD">
+                  <meta itemprop="availability" content="{% if product.is_in_stock %}https://schema.org/InStock{% else %}https://schema.org/OutOfStock{% endif %}">
                 </div>
 
-                <div class="product-rating" aria-label="Product rating">
-                  <div class="stars" aria-label="{{ product.average_rating|floatformat:1 }} out of 5 stars">
+                <div class="product-rating"
+                     aria-label="Product rating: {{ product.average_rating|floatformat:1 }} out of 5 stars"
+                     itemprop="aggregateRating"
+                     itemscope
+                     itemtype="https://schema.org/AggregateRating">
+                  <div class="stars" role="img" aria-label="{{ product.average_rating|floatformat:1 }} out of 5 stars">
                     {% for i in "12345" %}
                       {% if forloop.counter <= product.average_rating %}
                         <i class="fas fa-star" aria-hidden="true"></i>
@@ -229,11 +382,16 @@
                       {% endif %}
                     {% endfor %}
                   </div>
-                  <span class="rating-count">({{ product.review_count|default:0 }})</span>
+                  <span class="rating-count">
+                    (<span itemprop="reviewCount">{{ product.review_count|default:0 }}</span>)
+                  </span>
+                  <meta itemprop="ratingValue" content="{{ product.average_rating|floatformat:1 }}">
+                  <meta itemprop="bestRating" content="5">
+                  <meta itemprop="worstRating" content="1">
                 </div>
 
                 {% if product.free_shipping %}
-                <div class="shipping-info">
+                <div class="shipping-info" aria-label="Free shipping available">
                   <i class="fas fa-shipping-fast" aria-hidden="true"></i>
                   <span>Free Shipping</span>
                 </div>
@@ -241,12 +399,17 @@
 
                 <div class="product-action">
                   {% if product.is_in_stock %}
-                  <button class="btn btn-primary btn-add-cart" onclick="addToCart({{ product.id }})" aria-label="Add {{ product.name }} to cart">
+                  <button class="btn btn-primary btn-add-cart"
+                          onclick="addToCart({{ product.id }}, this)"
+                          aria-label="Add {{ product.name }} to cart"
+                          data-product-id="{{ product.id }}">
                     <i class="fas fa-shopping-cart" aria-hidden="true"></i>
                     <span>Add to Cart</span>
                   </button>
                   {% else %}
-                  <button class="btn btn-secondary" disabled aria-label="Out of stock">
+                  <button class="btn btn-secondary"
+                          disabled
+                          aria-label="{{ product.name }} is out of stock">
                     <i class="fas fa-times" aria-hidden="true"></i>
                     <span>Out of Stock</span>
                   </button>
@@ -256,17 +419,56 @@
             </article>
             {% endfor %}
           </div>
+
+          <!-- Pagination -->
+          {% if products.has_other_pages %}
+          <nav aria-label="Products pagination" class="mt-4">
+            <ul class="pagination justify-content-center">
+              {% if products.has_previous %}
+                <li class="page-item">
+                  <a class="page-link" href="?page={{ products.previous_page_number }}" aria-label="Previous page">
+                    <i class="fas fa-chevron-left" aria-hidden="true"></i>
+                  </a>
+                </li>
+              {% endif %}
+
+              {% for num in products.paginator.page_range %}
+                {% if products.number == num %}
+                  <li class="page-item active" aria-current="page">
+                    <span class="page-link">{{ num }}</span>
+                  </li>
+                {% else %}
+                  <li class="page-item">
+                    <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+                  </li>
+                {% endif %}
+              {% endfor %}
+
+              {% if products.has_next %}
+                <li class="page-item">
+                  <a class="page-link" href="?page={{ products.next_page_number }}" aria-label="Next page">
+                    <i class="fas fa-chevron-right" aria-hidden="true"></i>
+                  </a>
+                </li>
+              {% endif %}
+            </ul>
+          </nav>
+          {% endif %}
           {% else %}
           <div class="empty-state" role="status" aria-label="No products available">
             <i class="fas fa-box" aria-hidden="true"></i>
             <h3>No products available</h3>
-            <p>This store hasn't added any products yet.</p>
+            <p>This store hasn't added any products yet. Check back soon!</p>
           </div>
           {% endif %}
         </section>
 
-        <!-- About Section -->
-        <section id="about" class="store-section" aria-labelledby="about-heading">
+        <!-- Enhanced About Section -->
+        <section id="about"
+                 class="store-section"
+                 aria-labelledby="about-heading"
+                 role="tabpanel"
+                 aria-describedby="about-tab">
           <h2 id="about-heading" class="section-title">
             <i class="fas fa-info-circle text-primary" aria-hidden="true"></i>
             About Our Store
@@ -276,7 +478,7 @@
             <div class="col-md-8">
               <div class="store-description">
                 {% if store.description %}
-                <p class="lead">{{ store.description|linebreaks }}</p>
+                <div class="lead" itemprop="description">{{ store.description|linebreaks }}</div>
                 {% else %}
                 <p class="text-muted">No store description available.</p>
                 {% endif %}
@@ -287,27 +489,45 @@
                 <div class="features-grid">
                   <div class="feature-item">
                     <i class="fas fa-shield-alt" aria-hidden="true"></i>
-                    <span>Secure Shopping</span>
+                    <div>
+                      <strong>Secure Shopping</strong>
+                      <p>Your data is protected with SSL encryption</p>
+                    </div>
                   </div>
                   <div class="feature-item">
                     <i class="fas fa-truck" aria-hidden="true"></i>
-                    <span>Fast Delivery</span>
+                    <div>
+                      <strong>Fast Delivery</strong>
+                      <p>Quick and reliable shipping options</p>
+                    </div>
                   </div>
                   <div class="feature-item">
                     <i class="fas fa-undo" aria-hidden="true"></i>
-                    <span>Easy Returns</span>
+                    <div>
+                      <strong>Easy Returns</strong>
+                      <p>30-day hassle-free return policy</p>
+                    </div>
                   </div>
                   <div class="feature-item">
                     <i class="fas fa-headset" aria-hidden="true"></i>
-                    <span>24/7 Support</span>
+                    <div>
+                      <strong>24/7 Support</strong>
+                      <p>Round-the-clock customer service</p>
+                    </div>
                   </div>
                   <div class="feature-item">
                     <i class="fas fa-medal" aria-hidden="true"></i>
-                    <span>Quality Guarantee</span>
+                    <div>
+                      <strong>Quality Guarantee</strong>
+                      <p>All products meet our high standards</p>
+                    </div>
                   </div>
                   <div class="feature-item">
                     <i class="fas fa-credit-card" aria-hidden="true"></i>
-                    <span>Secure Payments</span>
+                    <div>
+                      <strong>Secure Payments</strong>
+                      <p>Multiple payment options available</p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -315,19 +535,23 @@
 
             <div class="col-md-4">
               <div class="store-stats-card">
-                <h4>Store Stats</h4>
+                <h4>Store Statistics</h4>
                 <div class="stats-grid">
                   <div class="stat-item">
-                    <div class="stat-number">{{ products.count|default:0 }}</div>
-                    <div class="stat-label">Products</div>
+                    <div class="stat-number">{{ products.count|default:0|intcomma }}</div>
+                    <div class="stat-label">Product{{ products.count|pluralize }}</div>
                   </div>
                   <div class="stat-item">
-                    <div class="stat-number">{{ review_count|default:0 }}</div>
-                    <div class="stat-label">Reviews</div>
+                    <div class="stat-number">{{ review_count|default:0|intcomma }}</div>
+                    <div class="stat-label">Review{{ review_count|pluralize }}</div>
                   </div>
                   <div class="stat-item stat-rating">
                     <div class="stat-number">{{ average_rating|floatformat:1|default:"0.0" }}/5</div>
                     <div class="stat-label">Average Rating</div>
+                  </div>
+                  <div class="stat-item">
+                    <div class="stat-number">{{ store.created_at|timesince }}</div>
+                    <div class="stat-label">In Business</div>
                   </div>
                 </div>
               </div>
@@ -335,8 +559,12 @@
           </div>
         </section>
 
-        <!-- Reviews Section -->
-        <section id="reviews" class="store-section" aria-labelledby="reviews-heading">
+        <!-- Enhanced Reviews Section -->
+        <section id="reviews"
+                 class="store-section"
+                 aria-labelledby="reviews-heading"
+                 role="tabpanel"
+                 aria-describedby="reviews-tab">
           <h2 id="reviews-heading" class="section-title">
             <i class="fas fa-star text-primary" aria-hidden="true"></i>
             Customer Reviews
@@ -346,7 +574,9 @@
             <div class="rating-summary">
               <div class="overall-rating">
                 <div class="rating-number">{{ average_rating|floatformat:1|default:"0.0" }}</div>
-                <div class="rating-stars" aria-label="{{ average_rating|floatformat:1|default:'0' }} out of 5 stars">
+                <div class="rating-stars"
+                     aria-label="{{ average_rating|floatformat:1|default:'0' }} out of 5 stars"
+                     role="img">
                   {% for i in "12345" %}
                     {% if forloop.counter <= average_rating|floatformat:0 %}
                       <i class="fas fa-star" aria-hidden="true"></i>
@@ -357,7 +587,7 @@
                     {% endif %}
                   {% endfor %}
                 </div>
-                <p class="rating-text">Based on {{ review_count|default:0 }} reviews</p>
+                <p class="rating-text">Based on {{ review_count|default:0|intcomma }} review{{ review_count|pluralize }}</p>
               </div>
             </div>
 
@@ -372,7 +602,7 @@
                   <div class="rating-bar" aria-label="{{ star }} star: {{ count }} reviews">
                     <span class="star-label">{{ star }} <i class="fas fa-star" aria-hidden="true"></i></span>
                     <div class="progress-bar-container">
-                      <div class="progress-bar" style="width: {{ percent }}%"></div>
+                      <div class="progress-bar" style="width: {{ percent }}%" role="progressbar" aria-valuenow="{{ percent }}" aria-valuemin="0" aria-valuemax="100"></div>
                     </div>
                     <span class="count-label">{{ count }}</span>
                   </div>
@@ -383,19 +613,26 @@
 
           <div class="reviews-list">
             {% for review in recent_reviews %}
-            <article class="review-card">
+            <article class="review-card" itemscope itemtype="https://schema.org/Review">
               <header class="review-header">
                 <div class="reviewer-info">
-                  <div class="reviewer-avatar">
+                  <div class="reviewer-avatar" aria-hidden="true">
                     <span>{{ review.user.first_name|default:"C"|slice:":1" }}</span>
                   </div>
                   <div class="reviewer-details">
-                    <h4 class="reviewer-name">{{ review.user.get_full_name|default:"Customer" }}</h4>
-                    <span class="verified-badge">Verified Purchase</span>
+                    <h4 class="reviewer-name" itemprop="author">{{ review.user.get_full_name|default:"Anonymous Customer" }}</h4>
+                    <span class="verified-badge" aria-label="Verified purchase">
+                      <i class="fas fa-check-circle" aria-hidden="true"></i>
+                      Verified Purchase
+                    </span>
                   </div>
                 </div>
                 <div class="review-meta">
-                  <div class="review-rating" aria-label="{{ review.rating }} out of 5 stars">
+                  <div class="review-rating"
+                       aria-label="{{ review.rating }} out of 5 stars"
+                       itemprop="reviewRating"
+                       itemscope
+                       itemtype="https://schema.org/Rating">
                     {% for i in "12345" %}
                       {% if forloop.counter <= review.rating %}
                         <i class="fas fa-star" aria-hidden="true"></i>
@@ -403,13 +640,18 @@
                         <i class="far fa-star" aria-hidden="true"></i>
                       {% endif %}
                     {% endfor %}
+                    <meta itemprop="ratingValue" content="{{ review.rating }}">
+                    <meta itemprop="bestRating" content="5">
+                    <meta itemprop="worstRating" content="1">
                   </div>
-                  <time class="review-date" datetime="{{ review.created_at|date:'c' }}">
+                  <time class="review-date"
+                        datetime="{{ review.created_at|date:'c' }}"
+                        itemprop="datePublished">
                     {{ review.created_at|timesince }} ago
                   </time>
                 </div>
               </header>
-              <div class="review-content">
+              <div class="review-content" itemprop="reviewBody">
                 <p>{{ review.comment|default:"No comment provided." }}</p>
               </div>
             </article>
@@ -418,52 +660,72 @@
               <i class="fas fa-star" aria-hidden="true"></i>
               <h3>No reviews yet</h3>
               <p>Be the first to review this store!</p>
+              <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#reviewModal">
+                Write a Review
+              </button>
             </div>
             {% endfor %}
           </div>
+
+          {% if recent_reviews %}
+          <div class="text-center mt-4">
+            <a href="#" class="btn btn-outline-primary">
+              View All Reviews
+            </a>
+          </div>
+          {% endif %}
         </section>
       </div>
 
-      <!-- Sidebar -->
+      <!-- Enhanced Sidebar -->
       <aside class="col-lg-3" role="complementary">
         <div class="sidebar-sticky">
 
-          <!-- Contact Card -->
+          <!-- Enhanced Contact Card -->
           <div class="sidebar-card" id="contact">
             <h3 class="sidebar-title">
               <i class="fas fa-phone text-primary" aria-hidden="true"></i>
               Contact Store
             </h3>
-            <div class="contact-info">
+            <div class="contact-info" itemprop="contactPoint" itemscope itemtype="https://schema.org/ContactPoint">
               {% if store.phone %}
               <div class="contact-item">
                 <i class="fas fa-phone" aria-hidden="true"></i>
-                <a href="tel:{{ store.phone }}">{{ store.phone }}</a>
+                <a href="tel:{{ store.phone }}" itemprop="telephone">{{ store.phone }}</a>
               </div>
               {% endif %}
 
               <div class="contact-item">
                 <i class="fas fa-envelope" aria-hidden="true"></i>
-                <a href="mailto:{{ store.email }}">{{ store.email }}</a>
+                <a href="mailto:{{ store.email }}" itemprop="email">{{ store.email }}</a>
               </div>
 
               <div class="contact-item">
                 <i class="fas fa-map-marker-alt" aria-hidden="true"></i>
-                <address>
-                  {{ store.address_line_1 }}<br>
-                  {% if store.address_line_2 %}{{ store.address_line_2 }}<br>{% endif %}
-                  {{ store.city }}, {{ store.region }}<br>
-                  {{ store.country }} {{ store.postal_code }}
+                <address itemprop="address" itemscope itemtype="https://schema.org/PostalAddress">
+                  <span itemprop="streetAddress">{{ store.address_line_1 }}</span><br>
+                  {% if store.address_line_2 %}<span itemprop="streetAddress">{{ store.address_line_2 }}</span><br>{% endif %}
+                  <span itemprop="addressLocality">{{ store.city }}</span>, <span itemprop="addressRegion">{{ store.region }}</span><br>
+                  <span itemprop="addressCountry">{{ store.country }}</span> <span itemprop="postalCode">{{ store.postal_code }}</span>
                 </address>
               </div>
 
               {% if store.website %}
               <div class="contact-item">
                 <i class="fas fa-globe" aria-hidden="true"></i>
-                <a href="{{ store.website }}" target="_blank" rel="noopener noreferrer">
+                <a href="{{ store.website }}" target="_blank" rel="noopener noreferrer" itemprop="url">
                   Visit Website
                   <i class="fas fa-external-link-alt" aria-hidden="true"></i>
                 </a>
+              </div>
+              {% endif %}
+
+              {% if store.hours %}
+              <div class="contact-item">
+                <i class="fas fa-clock" aria-hidden="true"></i>
+                <div class="opening-hours" itemprop="openingHours">
+                  {{ store.hours|linebreaks }}
+                </div>
               </div>
               {% endif %}
             </div>
@@ -474,7 +736,7 @@
             </button>
           </div>
 
-          <!-- Categories -->
+          <!-- Enhanced Categories -->
           <div class="sidebar-card">
             <h3 class="sidebar-title">
               <i class="fas fa-tags text-primary" aria-hidden="true"></i>
@@ -483,7 +745,8 @@
             <nav class="category-nav" aria-label="Product categories">
               {% for category in categories %}
                 <a href="{% url 'marketplace:category_detail' category.id %}" class="category-link">
-                  {{ category.name }} <span class="count">({{ category.product_count }})</span>
+                  {{ category.name }}
+                  <span class="count" aria-label="{{ category.product_count }} products">({{ category.product_count }})</span>
                 </a>
               {% empty %}
                 <p class="text-muted">No categories available for this store.</p>
@@ -491,7 +754,7 @@
             </nav>
           </div>
 
-          <!-- Social Media -->
+          <!-- Enhanced Social Media -->
           <div class="sidebar-card">
             <h3 class="sidebar-title">
               <i class="fas fa-share-alt text-primary" aria-hidden="true"></i>
@@ -499,18 +762,39 @@
             </h3>
             <div class="social-links">
               {% if store.facebook_url %}
-              <a href="{{ store.facebook_url }}" class="social-link facebook" target="_blank" rel="noopener noreferrer" aria-label="Follow on Facebook">
+              <a href="{{ store.facebook_url }}"
+                 class="social-link facebook"
+                 target="_blank"
+                 rel="noopener noreferrer"
+                 aria-label="Follow {{ store.name }} on Facebook">
                 <i class="fab fa-facebook" aria-hidden="true"></i>
               </a>
               {% endif %}
               {% if store.twitter_url %}
-              <a href="{{ store.twitter_url }}" class="social-link twitter" target="_blank" rel="noopener noreferrer" aria-label="Follow on Twitter">
+              <a href="{{ store.twitter_url }}"
+                 class="social-link twitter"
+                 target="_blank"
+                 rel="noopener noreferrer"
+                 aria-label="Follow {{ store.name }} on Twitter">
                 <i class="fab fa-twitter" aria-hidden="true"></i>
               </a>
               {% endif %}
               {% if store.instagram_url %}
-              <a href="{{ store.instagram_url }}" class="social-link instagram" target="_blank" rel="noopener noreferrer" aria-label="Follow on Instagram">
+              <a href="{{ store.instagram_url }}"
+                 class="social-link instagram"
+                 target="_blank"
+                 rel="noopener noreferrer"
+                 aria-label="Follow {{ store.name }} on Instagram">
                 <i class="fab fa-instagram" aria-hidden="true"></i>
+              </a>
+              {% endif %}
+              {% if store.linkedin_url %}
+              <a href="{{ store.linkedin_url }}"
+                 class="social-link linkedin"
+                 target="_blank"
+                 rel="noopener noreferrer"
+                 aria-label="Follow {{ store.name }} on LinkedIn">
+                <i class="fab fa-linkedin" aria-hidden="true"></i>
               </a>
               {% endif %}
             </div>
@@ -520,13 +804,34 @@
               <span>Share Store</span>
             </button>
           </div>
+
+          <!-- Newsletter Signup -->
+          <div class="sidebar-card">
+            <h3 class="sidebar-title">
+              <i class="fas fa-bell text-primary" aria-hidden="true"></i>
+              Stay Updated
+            </h3>
+            <p class="small text-muted">Get notified about new products and special offers.</p>
+            <form class="newsletter-form" onsubmit="subscribeNewsletter(event)">
+              <div class="input-group">
+                <input type="email"
+                       class="form-control"
+                       placeholder="Your email"
+                       required
+                       aria-label="Email address for newsletter">
+                <button class="btn btn-primary" type="submit">
+                  <i class="fas fa-paper-plane" aria-hidden="true"></i>
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       </aside>
     </div>
   </div>
 </main>
 
-<!-- Contact Modal -->
+<!-- Enhanced Contact Modal -->
 <div class="modal fade" id="contactModal" tabindex="-1" aria-labelledby="contactModalLabel" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">
@@ -536,37 +841,93 @@
       </div>
       <div class="modal-body">
         <form id="contactForm" novalidate>
+          {% csrf_token %}
           <div class="mb-3">
-            <label for="contactName" class="form-label">Your Name <span class="required">*</span></label>
-            <input type="text" class="form-control" id="contactName" name="name" required>
-            <div class="invalid-feedback">Please provide your name.</div>
+            <label for="contactName" class="form-label">Your Name <span class="required" aria-label="required">*</span></label>
+            <input type="text"
+                   class="form-control"
+                   id="contactName"
+                   name="name"
+                   required
+                   aria-describedby="contactNameError">
+            <div id="contactNameError" class="invalid-feedback">Please provide your name.</div>
           </div>
           <div class="mb-3">
-            <label for="contactEmail" class="form-label">Email <span class="required">*</span></label>
-            <input type="email" class="form-control" id="contactEmail" name="email" required>
-            <div class="invalid-feedback">Please provide a valid email address.</div>
+            <label for="contactEmail" class="form-label">Email <span class="required" aria-label="required">*</span></label>
+            <input type="email"
+                   class="form-control"
+                   id="contactEmail"
+                   name="email"
+                   required
+                   aria-describedby="contactEmailError">
+            <div id="contactEmailError" class="invalid-feedback">Please provide a valid email address.</div>
           </div>
           <div class="mb-3">
-            <label for="contactSubject" class="form-label">Subject <span class="required">*</span></label>
-            <input type="text" class="form-control" id="contactSubject" name="subject" required>
-            <div class="invalid-feedback">Please provide a subject.</div>
+            <label for="contactPhone" class="form-label">Phone (Optional)</label>
+            <input type="tel"
+                   class="form-control"
+                   id="contactPhone"
+                   name="phone">
           </div>
           <div class="mb-3">
-            <label for="contactMessage" class="form-label">Message <span class="required">*</span></label>
-            <textarea class="form-control" id="contactMessage" name="message" rows="4" required></textarea>
-            <div class="invalid-feedback">Please provide a message.</div>
+            <label for="contactSubject" class="form-label">Subject <span class="required" aria-label="required">*</span></label>
+            <select class="form-select" id="contactSubject" name="subject" required aria-describedby="contactSubjectError">
+              <option value="">Select a subject</option>
+              <option value="general">General Inquiry</option>
+              <option value="product">Product Question</option>
+              <option value="order">Order Support</option>
+              <option value="complaint">Complaint</option>
+              <option value="other">Other</option>
+            </select>
+            <div id="contactSubjectError" class="invalid-feedback">Please select a subject.</div>
+          </div>
+          <div class="mb-3">
+            <label for="contactMessage" class="form-label">Message <span class="required" aria-label="required">*</span></label>
+            <textarea class="form-control"
+                      id="contactMessage"
+                      name="message"
+                      rows="4"
+                      required
+                      aria-describedby="contactMessageError"></textarea>
+            <div id="contactMessageError" class="invalid-feedback">Please provide a message.</div>
+          </div>
+          <div class="mb-3 form-check">
+            <input type="checkbox"
+                   class="form-check-input"
+                   id="contactConsent"
+                   name="consent"
+                   required>
+            <label class="form-check-label" for="contactConsent">
+              I agree to be contacted regarding my inquiry <span class="required" aria-label="required">*</span>
+            </label>
           </div>
         </form>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button type="submit" class="btn btn-primary" form="contactForm">Send Message</button>
+        <button type="submit" class="btn btn-primary" form="contactForm">
+          <span class="btn-text">Send Message</span>
+          <i class="fas fa-paper-plane" aria-hidden="true"></i>
+        </button>
       </div>
     </div>
   </div>
 </div>
 
-
+<!-- Quick View Modal -->
+<div class="modal fade" id="quickViewModal" tabindex="-1" aria-labelledby="quickViewModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h1 class="modal-title fs-5" id="quickViewModalLabel">Quick View</h1>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="quickViewContent">
+        <!-- Content will be loaded dynamically -->
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- Loading Spinner -->
 <div id="loadingSpinner" class="loading-spinner" aria-hidden="true" role="status">
@@ -574,12 +935,25 @@
   <span class="visually-hidden">Loading...</span>
 </div>
 
-<!-- Success Toast -->
-<div class="toast-container position-fixed bottom-0 end-0 p-3">
+<!-- Enhanced Toast Notifications -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3" aria-live="polite" aria-atomic="true">
   <div id="successToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
     <div class="toast-header">
       <i class="fas fa-check-circle text-success me-2" aria-hidden="true"></i>
       <strong class="me-auto">Success</strong>
+      <small class="text-muted">just now</small>
+      <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+    </div>
+    <div class="toast-body">
+      <!-- Message will be inserted here -->
+    </div>
+  </div>
+
+  <div id="errorToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="toast-header">
+      <i class="fas fa-exclamation-circle text-danger me-2" aria-hidden="true"></i>
+      <strong class="me-auto">Error</strong>
+      <small class="text-muted">just now</small>
       <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
     </div>
     <div class="toast-body">
@@ -588,7 +962,32 @@
   </div>
 </div>
 
+<!-- Back to Top Button -->
+<button id="backToTop"
+        class="btn btn-primary back-to-top"
+        title="Back to top"
+        aria-label="Back to top">
+  <i class="fas fa-arrow-up" aria-hidden="true"></i>
+</button>
+
+<!-- Enhanced JavaScript -->
 <script src="{% static 'js/main.js' %}"></script>
 <script src="{% static 'js/store-page-manager.js' %}" defer></script>
+<!-- Performance monitoring -->
+<script>
+// Performance monitoring
+window.addEventListener('load', function() {
+  // Log page load time
+  const loadTime = performance.timing.loadEventEnd - performance.timing.navigationStart;
+  console.log('Page load time:', loadTime, 'ms');
+
+  // Monitor Core Web Vitals
+  if ('web-vitals' in window) {
+    getCLS(console.log);
+    getFID(console.log);
+    getLCP(console.log);
+  }
+});
+</script>
 
 {% endblock %}

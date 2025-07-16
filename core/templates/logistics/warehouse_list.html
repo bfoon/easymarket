@@ -1,0 +1,213 @@
+{% extends 'logistics/base.html' %}
+
+{% block title %}Warehouses - Logistics Management{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center">
+    <div>
+        <h1 class="page-title">Warehouses</h1>
+        <p class="page-subtitle">Manage storage facilities and locations</p>
+    </div>
+    <a href="#" class="btn btn-primary">
+        <i class="fas fa-plus me-2"></i>
+        Add Warehouse
+    </a>
+</div>
+
+<!-- Warehouses Grid -->
+<div class="row">
+    {% if warehouses %}
+        {% for warehouse in warehouses %}
+        <div class="col-lg-6 col-xl-4 mb-4">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-warehouse me-2"></i>
+                        {{ warehouse.name }}
+                    </h6>
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" 
+                                data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fas fa-ellipsis-h"></i>
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="#">
+                                <i class="fas fa-eye me-2"></i>View Details
+                            </a></li>
+                            <li><a class="dropdown-item" href="#">
+                                <i class="fas fa-edit me-2"></i>Edit
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item text-danger" href="#">
+                                <i class="fas fa-trash me-2"></i>Delete
+                            </a></li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <i class="fas fa-map-marker-alt text-muted me-2"></i>
+                        <span class="text-muted">{{ warehouse.address }}</span>
+                    </div>
+                    
+                    <!-- Statistics -->
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="text-center">
+                                <h5 class="mb-0 text-primary">
+                                    {{ warehouse.total_shipments_count }}
+                                </h5>
+                                <small class="text-muted">Total Shipments</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="text-center">
+                                <h5 class="mb-0 text-warning">
+                                    {{ warehouse.active_shipments_count }}
+                                </h5>
+                                <small class="text-muted">Active</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Activity -->
+                    <hr>
+                    <div class="mb-2">
+                        <small class="text-muted">Recent Activity:</small>
+                    </div>
+                    {% with recent_shipment=warehouse.shipment_set.first %}
+                        {% if recent_shipment %}
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-shipping-fast text-primary me-2"></i>
+                                <div class="flex-grow-1">
+                                    <small class="fw-bold">Shipment #{{ recent_shipment.id }}</small>
+                                    <br>
+                                    <small class="text-muted">{{ recent_shipment.created_at|date:"M d, Y" }}</small>
+                                </div>
+                                <span class="status-badge status-{{ recent_shipment.status }} small">
+                                    {{ recent_shipment.get_status_display }}
+                                </span>
+                            </div>
+                        {% else %}
+                            <div class="text-center text-muted py-2">
+                                <small>No recent activity</small>
+                            </div>
+                        {% endif %}
+                    {% endwith %}
+                </div>
+                <div class="card-footer bg-transparent">
+                    <div class="d-flex justify-content-between">
+                        <a href="#" class="btn btn-sm btn-outline-primary">
+                            <i class="fas fa-eye me-1"></i>
+                            View Details
+                        </a>
+                        <a href="{% url 'logistics:shipment_list' %}?warehouse={{ warehouse.pk }}"
+                           class="btn btn-sm btn-outline-info">
+                            <i class="fas fa-shipping-fast me-1"></i>
+                            Shipments
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+
+        <!-- Summary Card -->
+        <div class="col-12">
+            <div class="card bg-light">
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-md-3">
+                            <h4 class="text-primary">{{ warehouses|length }}</h4>
+                            <p class="text-muted mb-0">Total Warehouses</p>
+                        </div>
+                        <div class="col-md-3">
+                            <h4 class="text-info">{{ total_shipments_sum }}</h4>
+                            <p class="text-muted mb-0">Total Shipments</p>
+                        </div>
+                        <div class="col-md-3">
+                            <h4 class="text-warning">{{ active_shipments_sum }}</h4>
+                            <p class="text-muted mb-0">Active Shipments</p>
+                        </div>
+                        <div class="col-md-3">
+                            <h4 class="text-success">{{ completed_shipments_sum }}</h4>
+                            <p class="text-muted mb-0">Completed</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pagination -->
+        {% if is_paginated %}
+            <div class="col-12">
+                <nav aria-label="Warehouses pagination" class="mt-4">
+                    <ul class="pagination justify-content-center">
+                        {% if page_obj.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page=1">
+                                    <i class="fas fa-angle-double-left"></i>
+                                </a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.previous_page_number }}">
+                                    <i class="fas fa-angle-left"></i>
+                                </a>
+                            </li>
+                        {% endif %}
+
+                        {% for num in page_obj.paginator.page_range %}
+                            {% if page_obj.number == num %}
+                                <li class="page-item active">
+                                    <span class="page-link">{{ num }}</span>
+                                </li>
+                            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+
+                        {% if page_obj.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.next_page_number }}">
+                                    <i class="fas fa-angle-right"></i>
+                                </a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">
+                                    <i class="fas fa-angle-double-right"></i>
+                                </a>
+                            </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+            </div>
+        {% endif %}
+    {% else %}
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <i class="fas fa-warehouse fa-4x text-muted mb-4"></i>
+                    <h4 class="text-muted">No Warehouses Found</h4>
+                    <p class="text-muted mb-4">Start by adding your first warehouse location.</p>
+                    <a href="#" class="btn btn-primary">
+                        <i class="fas fa-plus me-2"></i>
+                        Add First Warehouse
+                    </a>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div>
+
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .status-badge.small {
+        font-size: 10px;
+        padding: 4px 8px;
+    }
+</style>
+{% endblock %}

@@ -1,72 +1,303 @@
 from django import forms
-from orders.models import Order
-from .models import Shipment
-from decimal import Decimal
+from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
+from django.utils import timezone
+from .models import (
+    Shipment, ShipmentBox, BoxItem, Driver, Vehicle,
+    Warehouse, LogisticOffice
+)
+from orders.models import Order, ShippingAddress, OrderItem
+
+User = get_user_model()
+
+
+class DateTimeLocalWidget(forms.DateTimeInput):
+    input_type = 'datetime-local'
+
 
 class ShipmentForm(forms.ModelForm):
-    # Manually define the shipping cost input (not part of Shipment model)
-    shipping_cost = forms.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        initial=Decimal('0.00'),
-        required=True,
-        label="Shipping Cost",
-        widget=forms.NumberInput(attrs={'class': 'form-control'})
-    )
-
     class Meta:
         model = Shipment
         fields = [
-            'order',
-            'shipping_address',
-            'warehouse',
-            'driver',
-            'vehicle',
-            'logistic_office',
-            'collect_time',
-            'estimated_dropoff_time',
-            'weight_kg',
-            'size_cubic_meters',
-            'material_type',
-            'shipment_type',
-            'packing_type',
-            'container_type',
+            'shipping_address', 'warehouse', 'driver', 'vehicle', 'logistic_office',
+            'collect_time', 'estimated_dropoff_time', 'order', 'weight_kg',
+            'size_cubic_meters', 'material_type', 'shipment_type', 'packing_type',
+            'container_type', 'status'
         ]
         widgets = {
-            'collect_time': forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': 'form-control'}),
-            'estimated_dropoff_time': forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': 'form-control'}),
-            'weight_kg': forms.NumberInput(attrs={'class': 'form-control'}),
-            'size_cubic_meters': forms.NumberInput(attrs={'class': 'form-control'}),
+            'collect_time': DateTimeLocalWidget(attrs={'class': 'form-control'}),
+            'estimated_dropoff_time': DateTimeLocalWidget(attrs={'class': 'form-control'}),
+            'shipping_address': forms.Select(attrs={'class': 'form-select'}),
+            'warehouse': forms.Select(attrs={'class': 'form-select'}),
+            'driver': forms.Select(attrs={'class': 'form-select'}),
+            'vehicle': forms.Select(attrs={'class': 'form-select'}),
+            'logistic_office': forms.Select(attrs={'class': 'form-select'}),
+            'order': forms.Select(attrs={'class': 'form-select'}),
+            'weight_kg': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.1', 'min': '0'}),
+            'size_cubic_meters': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0'}),
+            'material_type': forms.Select(attrs={'class': 'form-select'}),
+            'shipment_type': forms.Select(attrs={'class': 'form-select'}),
+            'packing_type': forms.Select(attrs={'class': 'form-select'}),
+            'container_type': forms.Select(attrs={'class': 'form-select'}),
+            'status': forms.Select(attrs={'class': 'form-select'}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        for field_name, field in self.fields.items():
-            field.widget.attrs.setdefault('class', 'form-control')
+        # Set up querysets with proper ordering
+        self.fields['shipping_address'].queryset = ShippingAddress.objects.select_related('order').order_by('-id')
+        self.fields['warehouse'].queryset = Warehouse.objects.order_by('name')
+        self.fields['driver'].queryset = Driver.objects.select_related('user').filter(user__is_active=True).order_by(
+            'user__first_name')
+        self.fields['vehicle'].queryset = Vehicle.objects.select_related('driver').order_by('plate_number')
+        self.fields['logistic_office'].queryset = LogisticOffice.objects.order_by('name')
 
-        self.fields['shipping_address'].widget = forms.HiddenInput()
+        # Filter orders based on whether this is a new shipment or editing existing
+        is_new_shipment = not (self.instance and self.instance.pk)
+
+        if is_new_shipment:
+            # Creating new shipment - only show processing orders
+            processing_orders = Order.objects.filter(status='processing').order_by('-created_at')
+            self.fields['order'].queryset = processing_orders
+            self.fields['order'].help_text = "Only orders with 'Processing' status are available for new shipments"
+
+            # Also filter shipping addresses to only those from processing orders
+            processing_order_addresses = ShippingAddress.objects.filter(
+                order__status='processing'
+            ).order_by('-id')
+            self.fields['shipping_address'].queryset = processing_order_addresses
+        else:
+            # Editing existing shipment - show all orders but disable the field
+            self.fields['order'].queryset = Order.objects.order_by('-created_at')
+            self.fields['shipping_address'].disabled = True
+            self.fields['order'].disabled = True
+
+        # Customize field labels and help texts
+        self.fields['weight_kg'].help_text = "Weight in kilograms"
+        self.fields['size_cubic_meters'].help_text = "Size in cubic meters"
+        self.fields['collect_time'].help_text = "When the shipment will be collected"
+        self.fields['estimated_dropoff_time'].help_text = "Estimated delivery time"
+
+        # Make certain fields optional in the form display
+        self.fields['warehouse'].required = False
+        self.fields['driver'].required = False
+        self.fields['vehicle'].required = False
+        self.fields['logistic_office'].required = False
+        self.fields['order'].required = False
+
+    def clean(self):
+        cleaned_data = super().clean()
+        collect_time = cleaned_data.get('collect_time')
+        estimated_dropoff_time = cleaned_data.get('estimated_dropoff_time')
+        driver = cleaned_data.get('driver')
+        vehicle = cleaned_data.get('vehicle')
+        weight_kg = cleaned_data.get('weight_kg')
+
+        # Validate time relationship
+        if collect_time and estimated_dropoff_time:
+            if collect_time >= estimated_dropoff_time:
+                raise ValidationError("Estimated dropoff time must be after collection time.")
+
+            # Check if collection time is in the past (only for new shipments)
+            if not self.instance.pk and collect_time < timezone.now():
+                raise ValidationError("Collection time cannot be in the past.")
+
+        # Validate driver and vehicle relationship
+        if driver and vehicle:
+            if vehicle.driver != driver:
+                raise ValidationError(
+                    f"Vehicle {vehicle.plate_number} is not assigned to driver {driver.user.get_full_name()}.")
+
+        # Validate vehicle capacity
+        if vehicle and weight_kg:
+            if weight_kg > vehicle.capacity_kg:
+                raise ValidationError(f"Weight ({weight_kg} kg) exceeds vehicle capacity ({vehicle.capacity_kg} kg).")
+
+        return cleaned_data
+
+
+class DriverForm(forms.ModelForm):
+    first_name = forms.CharField(max_length=30, widget=forms.TextInput(attrs={'class': 'form-control'}))
+    last_name = forms.CharField(max_length=30, widget=forms.TextInput(attrs={'class': 'form-control'}))
+    email = forms.EmailField(widget=forms.EmailInput(attrs={'class': 'form-control'}))
+
+    class Meta:
+        model = Driver
+        fields = ['phone', 'license_number']
+        widgets = {
+            'phone': forms.TextInput(attrs={'class': 'form-control'}),
+            'license_number': forms.TextInput(attrs={'class': 'form-control'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.pk:
+            self.fields['first_name'].initial = self.instance.user.first_name
+            self.fields['last_name'].initial = self.instance.user.last_name
+            self.fields['email'].initial = self.instance.user.email
 
     def save(self, commit=True):
-        shipment = super().save(commit=False)
+        driver = super().save(commit=False)
 
-        # Update linked order with values from the shipment
-        shipping_cost = self.cleaned_data.get('shipping_cost')
-        if shipment.order:
-            if shipping_cost is not None:
-                shipment.order.shipping_cost = shipping_cost
-
-            if shipment.collect_time:
-                shipment.order.shipped_date = shipment.collect_time
-
-            if shipment.estimated_dropoff_time:
-                shipment.order.expected_delivery_date = shipment.estimated_dropoff_time.date()
-
-            shipment.order.save(update_fields=['shipping_cost', 'shipped_date', 'expected_delivery_date'])
+        if not driver.user_id:
+            # Create new user
+            user = User.objects.create_user(
+                username=self.cleaned_data['email'],
+                email=self.cleaned_data['email'],
+                first_name=self.cleaned_data['first_name'],
+                last_name=self.cleaned_data['last_name'],
+            )
+            driver.user = user
+        else:
+            # Update existing user
+            user = driver.user
+            user.first_name = self.cleaned_data['first_name']
+            user.last_name = self.cleaned_data['last_name']
+            user.email = self.cleaned_data['email']
+            user.username = self.cleaned_data['email']
+            if commit:
+                user.save()
 
         if commit:
-            shipment.save()
-            self.save_m2m()
+            driver.save()
+        return driver
 
-        return shipment
 
+class VehicleForm(forms.ModelForm):
+    class Meta:
+        model = Vehicle
+        fields = ['driver', 'plate_number', 'model', 'capacity_kg']
+        widgets = {
+            'driver': forms.Select(attrs={'class': 'form-select'}),
+            'plate_number': forms.TextInput(attrs={'class': 'form-control'}),
+            'model': forms.TextInput(attrs={'class': 'form-control'}),
+            'capacity_kg': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.1', 'min': '0'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['driver'].queryset = Driver.objects.select_related('user').filter(user__is_active=True).order_by(
+            'user__first_name')
+
+    def clean_plate_number(self):
+        plate_number = self.cleaned_data['plate_number']
+        # Check for duplicate plate numbers
+        qs = Vehicle.objects.filter(plate_number=plate_number)
+        if self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise ValidationError("A vehicle with this plate number already exists.")
+        return plate_number.upper()
+
+
+class WarehouseForm(forms.ModelForm):
+    class Meta:
+        model = Warehouse
+        fields = ['name', 'address']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'address': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+        }
+
+
+class LogisticOfficeForm(forms.ModelForm):
+    class Meta:
+        model = LogisticOffice
+        fields = ['name', 'location']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'location': forms.TextInput(attrs={'class': 'form-control'}),
+        }
+
+
+class ShipmentBoxForm(forms.ModelForm):
+    class Meta:
+        model = ShipmentBox
+        fields = ['box_number', 'weight_kg']
+        widgets = {
+            'box_number': forms.NumberInput(attrs={'class': 'form-control', 'min': '1'}),
+            'weight_kg': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.1', 'min': '0'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        self.shipment = kwargs.pop('shipment', None)
+        super().__init__(*args, **kwargs)
+
+    def clean_box_number(self):
+        box_number = self.cleaned_data['box_number']
+        if self.shipment:
+            # Check for duplicate box numbers within the same shipment
+            qs = ShipmentBox.objects.filter(shipment=self.shipment, box_number=box_number)
+            if self.instance.pk:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                raise ValidationError(f"Box number {box_number} already exists for this shipment.")
+        return box_number
+
+
+class BoxItemForm(forms.ModelForm):
+    class Meta:
+        model = BoxItem
+        fields = ['order_item', 'quantity']
+        widgets = {
+            'order_item': forms.Select(attrs={'class': 'form-select'}),
+            'quantity': forms.NumberInput(attrs={'class': 'form-control', 'min': '1'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        self.box = kwargs.pop('box', None)
+        super().__init__(*args, **kwargs)
+
+        if self.box and self.box.shipment.order:
+            # Limit order items to those from the shipment's order
+            self.fields['order_item'].queryset = OrderItem.objects.filter(
+                order=self.box.shipment.order
+            ).select_related('product')
+
+    def clean_quantity(self):
+        quantity = self.cleaned_data['quantity']
+        order_item = self.cleaned_data.get('order_item')
+
+        if order_item and quantity:
+            # Check if quantity doesn't exceed the order item quantity
+            if quantity > order_item.quantity:
+                raise ValidationError(
+                    f"Quantity ({quantity}) cannot exceed order item quantity ({order_item.quantity})."
+                )
+
+        return quantity
+
+
+class ShipmentSearchForm(forms.Form):
+    search = forms.CharField(
+        max_length=255,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Search by ID, address, or driver name'
+        })
+    )
+    status = forms.ChoiceField(
+        choices=[('', 'All Statuses')] + Shipment.STATUS_CHOICES,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+    shipment_type = forms.ChoiceField(
+        choices=[('', 'All Types')] + Shipment.SHIPMENT_TYPE_CHOICES,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+    material_type = forms.ChoiceField(
+        choices=[('', 'All Materials')] + Shipment.MATERIAL_TYPE_CHOICES,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+    date_from = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'})
+    )
+    date_to = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'})
+    )

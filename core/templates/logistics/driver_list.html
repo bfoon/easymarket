@@ -1,0 +1,193 @@
+{% extends 'logistics/base.html' %}
+
+{% block title %}Drivers - Logistics Management{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center">
+    <div>
+        <h1 class="page-title">Drivers</h1>
+        <p class="page-subtitle">Manage driver information and assignments</p>
+    </div>
+    <a href="#" class="btn btn-primary">
+        <i class="fas fa-plus me-2"></i>
+        Add Driver
+    </a>
+</div>
+
+<!-- Search Section -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-6">
+                <label for="search" class="form-label">Search Drivers</label>
+                <input type="text" class="form-control" id="search" name="search" 
+                       value="{{ request.GET.search }}" placeholder="Search by name, phone, or license number">
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-outline-primary me-2">
+                    <i class="fas fa-search me-1"></i>
+                    Search
+                </button>
+                <a href="{% url 'logistics:driver_list' %}" class="btn btn-outline-secondary">
+                    <i class="fas fa-times"></i>
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Drivers Table -->
+<div class="card">
+    <div class="card-header">
+        <h6 class="m-0 font-weight-bold text-primary">
+            <i class="fas fa-user-tie me-2"></i>
+            Drivers List
+            {% if drivers %}
+                <span class="badge bg-secondary ms-2">{{ page_obj.paginator.count }} total</span>
+            {% endif %}
+        </h6>
+    </div>
+    <div class="card-body">
+        {% if drivers %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Contact</th>
+                            <th>License</th>
+                            <th>Vehicles</th>
+                            <th>Active Shipments</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for driver in drivers %}
+                        <tr>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <div class="avatar-circle me-3">
+                                        {{ driver.user.first_name.0 }}{{ driver.user.last_name.0 }}
+                                    </div>
+                                    <div>
+                                        <div class="fw-bold">{{ driver.user.get_full_name }}</div>
+                                        <small class="text-muted">{{ driver.user.email }}</small>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <div>
+                                    <i class="fas fa-phone me-1"></i>
+                                    {{ driver.phone }}
+                                </div>
+                            </td>
+                            <td>
+                                <span class="font-monospace">{{ driver.license_number }}</span>
+                            </td>
+                            <td>
+                                <span class="badge bg-info">{{ driver.vehicle_count }} vehicles</span>
+                            </td>
+                            <td>
+                                {% if driver.active_shipments_count %}
+                                    <span class="badge bg-warning">{{ driver.active_shipments_count }} active</span>
+                                {% else %}
+                                    <span class="text-muted">No active shipments</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group" role="group">
+                                    <a href="{% url 'logistics:driver_detail' driver.pk %}" 
+                                       class="btn btn-sm btn-outline-primary" title="View Details">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    <a href="#" class="btn btn-sm btn-outline-warning" title="Edit">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            {% if is_paginated %}
+                <nav aria-label="Drivers pagination" class="mt-4">
+                    <ul class="pagination justify-content-center">
+                        {% if page_obj.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page=1{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}">
+                                    <i class="fas fa-angle-double-left"></i>
+                                </a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}">
+                                    <i class="fas fa-angle-left"></i>
+                                </a>
+                            </li>
+                        {% endif %}
+
+                        {% for num in page_obj.paginator.page_range %}
+                            {% if page_obj.number == num %}
+                                <li class="page-item active">
+                                    <span class="page-link">{{ num }}</span>
+                                </li>
+                            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ num }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}">{{ num }}</a>
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+
+                        {% if page_obj.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}">
+                                    <i class="fas fa-angle-right"></i>
+                                </a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}">
+                                    <i class="fas fa-angle-double-right"></i>
+                                </a>
+                            </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+            {% endif %}
+        {% else %}
+            <div class="text-center text-muted py-5">
+                <i class="fas fa-user-tie fa-3x mb-3"></i>
+                <h5>No drivers found</h5>
+                {% if request.GET.search %}
+                    <p>Try adjusting your search criteria or <a href="{% url 'logistics:driver_list' %}">clear filters</a>.</p>
+                {% else %}
+                    <p>Start by adding your first driver.</p>
+                    <a href="#" class="btn btn-primary">
+                        <i class="fas fa-plus me-1"></i>
+                        Add Driver
+                    </a>
+                {% endif %}
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .avatar-circle {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background-color: var(--primary-color);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 14px;
+    }
+</style>
+{% endblock %}

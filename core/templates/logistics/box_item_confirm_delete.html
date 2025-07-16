@@ -1,0 +1,92 @@
+{% extends 'logistics/base.html' %}
+
+{% block title %}Remove Item - Confirmation{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Remove Item from Box #{{ object.box.box_number }}</h1>
+    <p class="page-subtitle">Shipment #{{ object.box.shipment.id }} - Confirm removal</p>
+</div>
+
+<div class="row">
+    <div class="col-lg-6 mx-auto">
+        <div class="card border-warning">
+            <div class="card-header bg-warning text-dark">
+                <h6 class="m-0">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Confirm Removal
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <h6 class="alert-heading">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Item Removal
+                    </h6>
+                    <p class="mb-0">
+                        Are you sure you want to remove this item from Box #{{ object.box.box_number }}?
+                    </p>
+                </div>
+
+                <!-- Item details -->
+                <div class="card bg-light mb-3">
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <h6 class="card-title">{{ object.order_item.product.name }}</h6>
+                                {% if object.order_item.product.sku %}
+                                    <p class="card-text">
+                                        <small class="text-muted">SKU: {{ object.order_item.product.sku }}</small>
+                                    </p>
+                                {% endif %}
+                                <p class="card-text">
+                                    <strong>Quantity:</strong> {{ object.quantity }}
+                                </p>
+                                <p class="card-text">
+                                    <strong>Unit Price:</strong> ${{ object.order_item.price }}
+                                </p>
+                            </div>
+                            <div class="col-md-4 text-end">
+                                <div class="bg-primary text-white rounded p-2">
+                                    <div class="fw-bold">Total Value</div>
+                                    <div class="h5 mb-0">
+                                        ${{ object.order_item.price|floatformat:2 }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Box info -->
+                <div class="alert alert-secondary">
+                    <p class="mb-0">
+                        <i class="fas fa-box me-1"></i>
+                        <strong>From:</strong> Box #{{ object.box.box_number }}
+                        {% if object.box.weight_kg %} ({{ object.box.weight_kg }} kg){% endif %}
+                    </p>
+                    <p class="mb-0">
+                        <i class="fas fa-shipping-fast me-1"></i>
+                        <strong>Shipment:</strong> #{{ object.box.shipment.id }}
+                    </p>
+                </div>
+
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="d-flex justify-content-end gap-2">
+                        <a href="{% url 'logistics:shipment_detail' object.box.shipment.pk %}" class="btn btn-outline-secondary">
+                            <i class="fas fa-times me-1"></i>
+                            Cancel
+                        </a>
+                        <button type="submit" class="btn btn-warning">
+                            <i class="fas fa-minus me-1"></i>
+                            Yes, Remove Item
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

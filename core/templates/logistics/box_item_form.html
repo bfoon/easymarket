@@ -1,0 +1,189 @@
+{% extends 'logistics/base.html' %}
+
+{% block title %}{{ action }} Item - Box #{{ box.box_number }}{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center">
+    <div>
+        <h1 class="page-title">{{ action }} Item to Box #{{ box.box_number }}</h1>
+        <p class="page-subtitle">
+            Shipment #{{ shipment.id }} - {{ shipment.shipping_address.city }}, {{ shipment.shipping_address.state }}
+        </p>
+    </div>
+    <a href="{% url 'logistics:shipment_detail' shipment.pk %}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left me-1"></i>
+        Back to Shipment
+    </a>
+</div>
+
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    <i class="fas fa-cube me-2"></i>
+                    Item Information
+                </h6>
+            </div>
+            <div class="card-body">
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.order_item.id_for_label }}" class="form-label">
+                            Product <span class="text-danger">*</span>
+                        </label>
+                        {{ form.order_item }}
+                        {% if form.order_item.errors %}
+                            <div class="text-danger small">{{ form.order_item.errors.0 }}</div>
+                        {% endif %}
+                        <div class="form-text">
+                            Select the product from the related order
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.quantity.id_for_label }}" class="form-label">
+                            Quantity <span class="text-danger">*</span>
+                        </label>
+                        {{ form.quantity }}
+                        {% if form.quantity.errors %}
+                            <div class="text-danger small">{{ form.quantity.errors.0 }}</div>
+                        {% endif %}
+                        <div class="form-text">
+                            Number of units to add to this box
+                        </div>
+                    </div>
+
+                    <!-- Show current box contents -->
+                    {% if box.items.exists %}
+                    <div class="alert alert-info">
+                        <h6 class="alert-heading">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Current Box Contents
+                        </h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Product</th>
+                                        <th>Quantity</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for item in box.items.all %}
+                                    <tr>
+                                        <td>{{ item.order_item.product.name }}</td>
+                                        <td>{{ item.quantity }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Show available order items if linked to an order -->
+                    {% if shipment.order %}
+                    <div class="alert alert-secondary">
+                        <h6 class="alert-heading">
+                            <i class="fas fa-shopping-cart me-1"></i>
+                            Available Order Items
+                        </h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Product</th>
+                                        <th>Order Quantity</th>
+                                        <th>Unit Price</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for order_item in shipment.order.items.all %}
+                                    <tr>
+                                        <td>
+                                            {{ order_item.product.name }}
+                                            {% if order_item.product.sku %}
+                                                <br><small class="text-muted">SKU: {{ order_item.product.sku }}</small>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ order_item.quantity }}</td>
+                                        <td>${{ order_item.price }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="d-flex justify-content-end gap-2">
+                        <a href="{% url 'logistics:shipment_detail' shipment.pk %}" class="btn btn-outline-secondary">
+                            <i class="fas fa-times me-1"></i>
+                            Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-1"></i>
+                            {{ action }} Item
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-control, .form-select {
+        border-radius: 8px;
+        border: 1px solid #d1d5db;
+        padding: 12px 16px;
+    }
+    
+    .form-control:focus, .form-select:focus {
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.15);
+    }
+    
+    .form-label {
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 8px;
+    }
+    
+    .text-danger {
+        font-size: 14px;
+        margin-top: 4px;
+    }
+    
+    .form-text {
+        font-size: 12px;
+        color: #6b7280;
+        margin-top: 4px;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add Bootstrap classes to form fields
+    const selects = document.querySelectorAll('select');
+    const inputs = document.querySelectorAll('input');
+    
+    selects.forEach(select => {
+        select.classList.add('form-select');
+    });
+    
+    inputs.forEach(input => {
+        if (input.type === 'number' || input.type === 'text') {
+            input.classList.add('form-control');
+        }
+    });
+});
+</script>
+{% endblock %}
