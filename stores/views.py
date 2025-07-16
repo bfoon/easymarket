@@ -432,6 +432,7 @@ def manage_store_products(request, store_id):
     }
 
     return render(request, 'stores/manage_products.html', context)
+
 @login_required
 def store_orders(request, store_id):
     store = get_object_or_404(Store, id=store_id, owner=request.user)
@@ -585,7 +586,7 @@ def store_products(request, slug):
     store = get_object_or_404(Store, slug=slug, status='active')  # Using status field
 
     # Get all products by this store owner
-    products = Product.objects.filter(seller=store.owner).order_by('-created_at')
+    products = Product.objects.filter(seller=store.owner, is_active=True).order_by('-created_at')
     # Get all categories used by this store's products
     categories = (
         Category.objects
@@ -622,10 +623,10 @@ def store_products(request, slug):
 
 @login_required
 def edit_product(request, store_id, product_id):
-    """Edit a product, images, variants, and stock — even if no images/variants yet."""
+    """Edit a product, including images, variants, stock, and visibility."""
     store = get_object_or_404(Store, id=store_id, owner=request.user)
     product = get_object_or_404(Product, id=product_id, seller=request.user)
-    stock, created = Stock.objects.get_or_create(product=product)
+    stock, _ = Stock.objects.get_or_create(product=product)
 
     ImageFormSet = modelformset_factory(ProductImage, form=ProductImageForm, extra=5, can_delete=False)
     VariantFormSet = modelformset_factory(ProductVariant, form=ProductVariantForm, extra=10, can_delete=False)
@@ -636,25 +637,21 @@ def edit_product(request, store_id, product_id):
         variant_formset = VariantFormSet(request.POST, queryset=ProductVariant.objects.filter(product=product))
         stock_quantity = request.POST.get('stock_quantity')
 
-        # Remove selected promo codes
+        # Handle promo code removals
         for promo in product.promo_codes.all():
             if request.POST.get(f'remove_promo_{promo.id}'):
                 product.promo_codes.remove(promo)
 
-        # Promo code creation
-        promo_code_value = request.POST.get('promo_code')
-        promo_discount = request.POST.get('promo_discount')
-
-        # Handle assigning existing promo
+        # Assign existing promo
         existing_promo_id = request.POST.get('existing_promo')
         if existing_promo_id:
             try:
                 promo = PromoCode.objects.get(id=existing_promo_id)
                 promo.products.add(product)
             except PromoCode.DoesNotExist:
-                pass  # silently ignore
+                pass
 
-        # Handle creating new promo
+        # Create new promo
         new_code = request.POST.get('promo_code')
         new_discount = request.POST.get('promo_discount')
         if new_code and new_discount:
@@ -665,23 +662,21 @@ def edit_product(request, store_id, product_id):
             )
             promo.products.add(product)
 
-        if promo_code_value and promo_discount:
-            PromoCode.objects.create(
-                code=promo_code_value.strip(),
-                discount_percentage=int(promo_discount),
-                is_active=True,
-            ).products.add(product)
-
         if product_form.is_valid() and image_formset.is_valid() and variant_formset.is_valid():
             with transaction.atomic():
-                product = product_form.save()
+                product = product_form.save(commit=False)
 
-                # Update stock quantity
+                # Update active status from checkbox
+                product.is_active = 'is_active' in request.POST
+
+                product.save()
+
+                # Update stock
                 if stock_quantity is not None and stock_quantity.isdigit():
                     stock.quantity = int(stock_quantity)
                     stock.save()
 
-                # Save NEW images
+                # Save new product images
                 for form in image_formset:
                     if form.is_valid() and form.cleaned_data:
                         image_file = form.cleaned_data.get('image')
@@ -690,10 +685,10 @@ def edit_product(request, store_id, product_id):
                             image.product = product
                             image.save()
 
-                # First delete all existing variants for this product
+                # Clear old variants
                 ProductVariant.objects.filter(product=product).delete()
 
-                # Then save only new ones from the formset
+                # Save new variants
                 for form in variant_formset:
                     if form.cleaned_data and form.cleaned_data.get('feature_option'):
                         variant = form.save(commit=False)
@@ -702,6 +697,7 @@ def edit_product(request, store_id, product_id):
 
             messages.success(request, 'Product and stock updated successfully!')
             return redirect('stores:manage_store_products', store_id=store.id)
+
         else:
             if not product_form.is_valid():
                 messages.error(request, f'Product form errors: {product_form.errors}')
@@ -733,7 +729,7 @@ def edit_product(request, store_id, product_id):
         'variant_formset': variant_formset,
         'boolean_fields': boolean_fields,
         'all_promos': all_promos,
-        'stock_quantity': stock.quantity,  # Pass current stock to template
+        'stock_quantity': stock.quantity,
     }
 
     return render(request, 'stores/edit_product.html', context)

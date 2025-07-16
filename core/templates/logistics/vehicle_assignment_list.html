@@ -1,0 +1,362 @@
+{% extends 'logistics/base.html' %}
+
+{% block title %}Vehicle Assignments{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center">
+    <div>
+        <h1 class="page-title">Vehicle Assignments</h1>
+        <p class="page-subtitle">Manage vehicle-driver assignments</p>
+    </div>
+    <div>
+        <a href="{% url 'logistics:assignment_dashboard' %}" class="btn btn-outline-secondary me-2">
+            <i class="fas fa-arrow-left me-1"></i>
+            Back to Dashboard
+        </a>
+        <a href="{% url 'logistics:vehicle_create' %}" class="btn btn-primary">
+            <i class="fas fa-plus me-1"></i>
+            Add Vehicle
+        </a>
+    </div>
+</div>
+
+<!-- Search and Filter -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <form method="get" class="row g-3">
+                    <div class="col-md-4">
+                        <input type="text" name="search" class="form-control" 
+                               placeholder="Search vehicles or drivers..." 
+                               value="{{ search_query }}">
+                    </div>
+                    <div class="col-md-3">
+                        <select name="assignment_status" class="form-select">
+                            <option value="">All Vehicles</option>
+                            <option value="assigned" {% if assignment_status == 'assigned' %}selected{% endif %}>Assigned</option>
+                            <option value="unassigned" {% if assignment_status == 'unassigned' %}selected{% endif %}>Unassigned</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <select name="driver" class="form-select">
+                            <option value="">All Drivers</option>
+                            {% for driver in drivers %}
+                            <option value="{{ driver.id }}" {% if request.GET.driver == driver.id|stringformat:"s" %}selected{% endif %}>
+                                {{ driver.user.get_full_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fas fa-search"></i> Search
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Vehicle List -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    <i class="fas fa-truck me-2"></i>
+                    All Vehicles ({{ vehicles|length }})
+                </h6>
+            </div>
+            <div class="card-body">
+                {% if vehicles %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Vehicle</th>
+                                    <th>Current Driver</th>
+                                    <th>Capacity</th>
+                                    <th>Status</th>
+                                    <th>Active Shipments</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for vehicle in vehicles %}
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="me-3">
+                                                <i class="fas fa-truck fa-2x text-primary"></i>
+                                            </div>
+                                            <div>
+                                                <div class="fw-bold">{{ vehicle.plate_number }}</div>
+                                                <small class="text-muted">{{ vehicle.model }}</small>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        {% if vehicle.driver %}
+                                            <div class="d-flex align-items-center">
+                                                <div class="avatar-sm me-2">
+                                                    {{ vehicle.driver.user.first_name.0 }}{{ vehicle.driver.user.last_name.0 }}
+                                                </div>
+                                                <div>
+                                                    <div class="fw-bold">{{ vehicle.driver.user.get_full_name }}</div>
+                                                    <small class="text-muted">{{ vehicle.driver.license_number }}</small>
+                                                </div>
+                                            </div>
+                                        {% else %}
+                                            <div class="text-muted">
+                                                <i class="fas fa-user-slash me-1"></i>
+                                                Unassigned
+                                            </div>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="fw-bold">{{ vehicle.capacity_kg|floatformat:0 }}</span> kg
+                                    </td>
+                                    <td>
+                                        {% if vehicle.active_shipments_count > 0 %}
+                                            <span class="badge bg-warning">
+                                                <i class="fas fa-route me-1"></i>
+                                                In Use
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-success">
+                                                <i class="fas fa-check-circle me-1"></i>
+                                                Available
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-{{ vehicle.active_shipments_count|yesno:'danger,secondary' }}">
+                                            {{ vehicle.active_shipments_count }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <a href="{% url 'logistics:vehicle_detail' vehicle.pk %}" 
+                                               class="btn btn-sm btn-outline-info">
+                                                <i class="fas fa-eye"></i>
+                                            </a>
+                                            <button class="btn btn-sm btn-outline-primary" 
+                                                    onclick="showAssignModal({{ vehicle.id }}, '{{ vehicle.plate_number }}', {{ vehicle.driver.id|default:'null' }})">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            {% if vehicle.driver and vehicle.active_shipments_count == 0 %}
+                                                <button class="btn btn-sm btn-outline-danger" 
+                                                        onclick="unassignVehicle({{ vehicle.id }}, '{{ vehicle.plate_number }}')">
+                                                    <i class="fas fa-unlink"></i>
+                                                </button>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Pagination -->
+                    {% if is_paginated %}
+                        <nav aria-label="Page navigation">
+                            <ul class="pagination justify-content-center">
+                                {% if page_obj.has_previous %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if assignment_status %}&assignment_status={{ assignment_status }}{% endif %}">
+                                            Previous
+                                        </a>
+                                    </li>
+                                {% endif %}
+                                
+                                <li class="page-item active">
+                                    <span class="page-link">
+                                        Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                                    </span>
+                                </li>
+                                
+                                {% if page_obj.has_next %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if assignment_status %}&assignment_status={{ assignment_status }}{% endif %}">
+                                            Next
+                                        </a>
+                                    </li>
+                                {% endif %}
+                            </ul>
+                        </nav>
+                    {% endif %}
+                {% else %}
+                    <div class="text-center text-muted py-5">
+                        <i class="fas fa-truck fa-3x mb-3"></i>
+                        <h5>No vehicles found</h5>
+                        <p>Try adjusting your search criteria or add a new vehicle.</p>
+                        <a href="{% url 'logistics:vehicle_create' %}" class="btn btn-primary">
+                            <i class="fas fa-plus me-1"></i>
+                            Add Vehicle
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Assignment Modal -->
+<div class="modal fade" id="assignModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Assign Vehicle to Driver</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="assignForm">
+                    {% csrf_token %}
+                    <input type="hidden" id="vehicleId" name="vehicle_id">
+                    <div class="mb-3">
+                        <label class="form-label">Vehicle</label>
+                        <input type="text" id="vehiclePlate" class="form-control" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Driver</label>
+                        <select id="driverId" name="driver_id" class="form-select">
+                            <option value="">Unassigned</option>
+                            {% for driver in drivers %}
+                            <option value="{{ driver.id }}">{{ driver.user.get_full_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Vehicles with active shipments cannot be reassigned to a different driver.
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="assignVehicle()">
+                    <i class="fas fa-save me-1"></i>
+                    Save Assignment
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function showAssignModal(vehicleId, vehiclePlate, currentDriverId) {
+    document.getElementById('vehicleId').value = vehicleId;
+    document.getElementById('vehiclePlate').value = vehiclePlate;
+    document.getElementById('driverId').value = currentDriverId || '';
+    
+    var modal = new bootstrap.Modal(document.getElementById('assignModal'));
+    modal.show();
+}
+
+function assignVehicle() {
+    const form = document.getElementById('assignForm');
+    const formData = new FormData(form);
+    
+    fetch('{% url "logistics:assign_vehicle_to_driver" %}', {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Vehicle assigned successfully!');
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while assigning the vehicle');
+    });
+}
+
+function unassignVehicle(vehicleId, vehiclePlate) {
+    if (confirm(`Are you sure you want to unassign vehicle ${vehiclePlate}?`)) {
+        fetch(`{% url "logistics:unassign_vehicle" 0 %}`.replace('0', vehicleId), {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Vehicle unassigned successfully!');
+                location.reload();
+            } else {
+                alert('Error: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while unassigning the vehicle');
+        });
+    }
+}
+</script>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .avatar-sm {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background-color: var(--bs-primary);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 12px;
+    }
+    
+    .page-title {
+        font-size: 1.75rem;
+        font-weight: 600;
+        color: #2e3138;
+        margin-bottom: 0.25rem;
+    }
+    
+    .page-subtitle {
+        color: #6c757d;
+        font-size: 0.95rem;
+        margin-bottom: 0;
+    }
+    
+    .card {
+        box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+        border: 1px solid #e3e6f0;
+        border-radius: 0.35rem;
+    }
+    
+    .card-header {
+        background-color: #f8f9fc;
+        border-bottom: 1px solid #e3e6f0;
+    }
+    
+    .table th {
+        font-weight: 600;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #5a5c69;
+    }
+</style>
+{% endblock %}

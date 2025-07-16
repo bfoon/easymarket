@@ -1,0 +1,307 @@
+{% extends 'logistics/base.html' %}
+
+{% block title %}Assignment Analytics{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">Assignment Analytics</h1>
+            <p class="text-muted">Performance metrics and insights</p>
+        </div>
+        <div>
+            <a href="{% url 'logistics:assignment_report' %}" class="btn btn-primary me-2">
+                <i class="fas fa-file-alt me-1"></i>
+                Full Report
+            </a>
+            <a href="{% url 'logistics:assignment_dashboard' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-1"></i>
+                Back to Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Key Metrics -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Shipments (30 days)
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ shipments_last_30_days }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-shipping-fast fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Shipments (7 days)
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ shipments_last_7_days }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-chart-line fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Daily Average
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {% if shipments_last_7_days > 0 %}
+                                    {{ shipments_last_7_days|floatformat:0 }}
+                                {% else %}
+                                    0
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-tachometer-alt fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Active Drivers
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                {{ driver_performance|length }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-users fa-2x text-gray-300"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Driver Performance -->
+    <div class="row">
+        <div class="col-lg-6 mb-4">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-trophy me-2"></i>
+                        Top Performing Drivers
+                    </h6>
+                </div>
+                <div class="card-body">
+                    {% if driver_performance %}
+                        <div class="table-responsive">
+                            <table class="table table-borderless">
+                                <thead>
+                                    <tr>
+                                        <th>Driver</th>
+                                        <th>Total</th>
+                                        <th>Recent</th>
+                                        <th>Performance</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for driver in driver_performance %}
+                                    <tr>
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <div class="avatar-circle me-2">
+                                                    {{ driver.user.first_name.0 }}{{ driver.user.last_name.0 }}
+                                                </div>
+                                                <div>
+                                                    <strong>{{ driver.user.get_full_name }}</strong>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="badge badge-primary">{{ driver.total_shipments }}</span>
+                                        </td>
+                                        <td>
+                                            <span class="badge badge-success">{{ driver.recent_shipments }}</span>
+                                        </td>
+                                        <td>
+                                            <div class="progress progress-sm">
+                                                <div class="progress-bar" style="width: {% if driver.total_shipments > 0 %}{% widthratio driver.recent_shipments driver.total_shipments 100 %}%{% else %}0%{% endif %}">
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center text-muted py-4">
+                            <i class="fas fa-chart-bar fa-3x mb-3"></i>
+                            <p>No performance data available yet.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Vehicle Utilization -->
+        <div class="col-lg-6 mb-4">
+            <div class="card shadow">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-info">
+                        <i class="fas fa-truck me-2"></i>
+                        Vehicle Utilization
+                    </h6>
+                </div>
+                <div class="card-body">
+                    {% if vehicle_utilization %}
+                        <div class="table-responsive">
+                            <table class="table table-borderless">
+                                <thead>
+                                    <tr>
+                                        <th>Vehicle</th>
+                                        <th>Driver</th>
+                                        <th>Active</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for vehicle in vehicle_utilization %}
+                                    <tr>
+                                        <td>
+                                            <strong>{{ vehicle.plate_number }}</strong>
+                                            <br>
+                                            <small class="text-muted">{{ vehicle.model }}</small>
+                                        </td>
+                                        <td>
+                                            {% if vehicle.driver and vehicle.driver.user.username != 'unassigned_driver' %}
+                                                {{ vehicle.driver.user.get_full_name }}
+                                            {% else %}
+                                                <span class="text-muted">Unassigned</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <span class="badge {% if vehicle.active_shipments > 0 %}badge-warning{% else %}badge-secondary{% endif %}">
+                                                {{ vehicle.active_shipments }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            {% if vehicle.active_shipments > 0 %}
+                                                <span class="badge badge-success">Active</span>
+                                            {% else %}
+                                                <span class="badge badge-secondary">Idle</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center text-muted py-4">
+                            <i class="fas fa-truck fa-3x mb-3"></i>
+                            <p>No vehicle utilization data available yet.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .avatar-circle {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background-color: #007bff;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 12px;
+    }
+    
+    .border-left-primary {
+        border-left: 0.25rem solid #007bff !important;
+    }
+    
+    .border-left-success {
+        border-left: 0.25rem solid #28a745 !important;
+    }
+    
+    .border-left-info {
+        border-left: 0.25rem solid #17a2b8 !important;
+    }
+    
+    .border-left-warning {
+        border-left: 0.25rem solid #ffc107 !important;
+    }
+    
+    .text-gray-800 {
+        color: #5a5c69 !important;
+    }
+    
+    .text-gray-300 {
+        color: #dddfeb !important;
+    }
+    
+    .progress-sm {
+        height: 0.5rem;
+    }
+    
+    .badge {
+        font-size: 0.75rem;
+        font-weight: 500;
+    }
+    
+    .badge-primary {
+        background-color: #007bff;
+        color: white;
+    }
+    
+    .badge-success {
+        background-color: #28a745;
+        color: white;
+    }
+    
+    .badge-warning {
+        background-color: #ffc107;
+        color: #212529;
+    }
+    
+    .badge-secondary {
+        background-color: #6c757d;
+        color: white;
+    }
+</style>
+{% endblock %}

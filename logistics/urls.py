@@ -57,4 +57,29 @@ urlpatterns = [
     path('offices/', views.LogisticOfficeListView.as_view(), name='logistic_office_list'),
     path('offices/create/', views.LogisticOfficeCreateView.as_view(), name='logistic_office_create'),
     path('offices/<int:pk>/edit/', views.LogisticOfficeUpdateView.as_view(), name='logistic_office_edit'),
+
+    # Assignment Management URLs
+    path('assignments/', views.AssignmentDashboardView.as_view(), name='assignment_dashboard'),
+    path('assignments/vehicles/', views.VehicleAssignmentListView.as_view(), name='vehicle_assignment_list'),
+    path('assignments/drivers/', views.DriverAssignmentListView.as_view(), name='driver_assignment_list'),
+    path('assignments/report/', views.assignment_report, name='assignment_report'),
+    path('assignments/analytics/', views.AssignmentAnalyticsView.as_view(), name='assignment_analytics'),
+
+    # Export URLs
+    path('assignments/report/export/', views.assignment_report_export, name='assignment_report_export'),
+    path('assignments/report/json/', views.assignment_report_json, name='assignment_report_json'),
+
+    # Export Shipping List
+    path('shipments/export/csv/', views.export_shipments_csv, name='shipment_export_csv'),
+    path('shipments/export/excel/', views.export_shipments_excel, name='shipment_export_excel'),
+
+    # Assignment Actions
+    path('assignments/assign/', views.assign_vehicle_to_driver, name='assign_vehicle_to_driver'),
+    path('assignments/quick-assign/', views.quick_assign_vehicle, name='quick_assign_vehicle'),
+    path('assignments/bulk-assign/', views.bulk_assign_vehicles, name='bulk_assign_vehicles'),
+    path('assignments/unassign/<int:vehicle_id>/', views.unassign_vehicle, name='unassign_vehicle'),
+
+    # AJAX endpoints
+    path('api/driver/<int:driver_id>/vehicles/', views.get_driver_vehicles_ajax, name='api_driver_vehicles'),
+    path('api/unassigned-vehicles/', views.get_unassigned_vehicles_ajax, name='api_unassigned_vehicles'),
 ]

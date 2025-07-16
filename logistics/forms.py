@@ -2,6 +2,7 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.utils import timezone
+from django.db.models import Q
 from .models import (
     Shipment, ShipmentBox, BoxItem, Driver, Vehicle,
     Warehouse, LogisticOffice
@@ -288,3 +289,266 @@ class ShipmentSearchForm(forms.Form):
         required=False,
         widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'})
     )
+
+
+class VehicleAssignmentForm(forms.Form):
+    """Form for assigning a vehicle to a driver"""
+    vehicle = forms.ModelChoiceField(
+        queryset=Vehicle.objects.all(),
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+    driver = forms.ModelChoiceField(
+        queryset=Driver.objects.select_related('user').filter(user__is_active=True),
+        required=False,
+        empty_label="Unassigned",
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['vehicle'].queryset = Vehicle.objects.select_related('driver__user').order_by('plate_number')
+        self.fields['driver'].queryset = Driver.objects.select_related('user').filter(
+            user__is_active=True
+        ).order_by('user__first_name')
+
+    def clean(self):
+        cleaned_data = super().clean()
+        vehicle = cleaned_data.get('vehicle')
+        driver = cleaned_data.get('driver')
+
+        if vehicle:
+            # Check if vehicle has active shipments and is being reassigned
+            active_shipments = vehicle.shipment_set.filter(status__in=['pending', 'in_transit']).count()
+            if active_shipments > 0 and vehicle.driver != driver:
+                raise ValidationError(
+                    f'Vehicle {vehicle.plate_number} has {active_shipments} active shipments '
+                    f'and cannot be reassigned to a different driver.'
+                )
+
+        return cleaned_data
+
+
+class QuickAssignmentForm(forms.Form):
+    """Quick form for immediate vehicle assignment"""
+    driver = forms.ModelChoiceField(
+        queryset=Driver.objects.select_related('user').filter(user__is_active=True),
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+    vehicle = forms.ModelChoiceField(
+        queryset=Vehicle.objects.filter(driver__isnull=True),
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['driver'].queryset = Driver.objects.select_related('user').filter(
+            user__is_active=True
+        ).order_by('user__first_name')
+
+        # Show only unassigned vehicles or vehicles without active shipments
+        available_vehicles = Vehicle.objects.filter(
+            Q(driver__isnull=True) |
+            ~Q(shipment__status__in=['pending', 'in_transit'])
+        ).distinct().order_by('plate_number')
+
+        self.fields['vehicle'].queryset = available_vehicles
+
+        if not available_vehicles.exists():
+            self.fields['vehicle'].empty_label = "No vehicles available"
+            self.fields['vehicle'].help_text = "All vehicles are currently assigned or in use"
+
+
+class BulkAssignmentForm(forms.Form):
+    """Form for bulk assignment of vehicles to drivers"""
+    assignments = forms.CharField(
+        widget=forms.HiddenInput(),
+        help_text="JSON data containing vehicle-driver assignments"
+    )
+
+    def clean_assignments(self):
+        import json
+        assignments_data = self.cleaned_data.get('assignments')
+
+        try:
+            assignments = json.loads(assignments_data)
+
+            # Validate that assignments is a list of dictionaries
+            if not isinstance(assignments, list):
+                raise ValidationError("Invalid assignment data format")
+
+            validated_assignments = []
+            for assignment in assignments:
+                if not isinstance(assignment, dict) or 'vehicle_id' not in assignment:
+                    raise ValidationError("Invalid assignment format")
+
+                vehicle_id = assignment.get('vehicle_id')
+                driver_id = assignment.get('driver_id')
+
+                # Validate vehicle exists
+                try:
+                    vehicle = Vehicle.objects.get(id=vehicle_id)
+                except Vehicle.DoesNotExist:
+                    raise ValidationError(f"Vehicle with ID {vehicle_id} does not exist")
+
+                # Validate driver exists (if provided)
+                driver = None
+                if driver_id:
+                    try:
+                        driver = Driver.objects.get(id=driver_id)
+                    except Driver.DoesNotExist:
+                        raise ValidationError(f"Driver with ID {driver_id} does not exist")
+
+                # Check for active shipments
+                active_shipments = vehicle.shipment_set.filter(status__in=['pending', 'in_transit']).count()
+                if active_shipments > 0 and vehicle.driver != driver:
+                    raise ValidationError(
+                        f'Vehicle {vehicle.plate_number} has active shipments and cannot be reassigned'
+                    )
+
+                validated_assignments.append({
+                    'vehicle': vehicle,
+                    'driver': driver,
+                    'vehicle_id': vehicle_id,
+                    'driver_id': driver_id
+                })
+
+            return validated_assignments
+
+        except json.JSONDecodeError:
+            raise ValidationError("Invalid JSON format in assignments data")
+
+
+class AssignmentSearchForm(forms.Form):
+    """Search form for filtering assignments"""
+    search = forms.CharField(
+        max_length=255,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Search by vehicle plate, model, or driver name'
+        })
+    )
+    assignment_status = forms.ChoiceField(
+        choices=[
+            ('', 'All Vehicles'),
+            ('assigned', 'Assigned'),
+            ('unassigned', 'Unassigned'),
+        ],
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+    driver = forms.ModelChoiceField(
+        queryset=Driver.objects.select_related('user').filter(user__is_active=True),
+        required=False,
+        empty_label="All Drivers",
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+    vehicle_status = forms.ChoiceField(
+        choices=[
+            ('', 'All Vehicles'),
+            ('available', 'Available'),
+            ('in_use', 'In Use'),
+        ],
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+
+
+class DriverVehicleSearchForm(forms.Form):
+    """Search form for driver assignments"""
+    search = forms.CharField(
+        max_length=255,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Search by driver name, license, or phone'
+        })
+    )
+    vehicle_status = forms.ChoiceField(
+        choices=[
+            ('', 'All Drivers'),
+            ('with_vehicles', 'With Vehicles'),
+            ('without_vehicles', 'Without Vehicles'),
+        ],
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+
+
+class VehicleReassignmentForm(forms.Form):
+    """Form for reassigning a specific vehicle to a different driver"""
+    new_driver = forms.ModelChoiceField(
+        queryset=Driver.objects.select_related('user').filter(user__is_active=True),
+        required=False,
+        empty_label="Unassign Vehicle",
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+
+    def __init__(self, vehicle, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.vehicle = vehicle
+        self.fields['new_driver'].queryset = Driver.objects.select_related('user').filter(
+            user__is_active=True
+        ).order_by('user__first_name')
+
+        # Set initial value to current driver
+        if vehicle.driver:
+            self.fields['new_driver'].initial = vehicle.driver
+
+    def clean_new_driver(self):
+        new_driver = self.cleaned_data.get('new_driver')
+
+        # Check if vehicle has active shipments and is being reassigned
+        if self.vehicle.driver != new_driver:
+            active_shipments = self.vehicle.shipment_set.filter(status__in=['pending', 'in_transit']).count()
+            if active_shipments > 0:
+                raise ValidationError(
+                    f'Vehicle {self.vehicle.plate_number} has {active_shipments} active shipments '
+                    f'and cannot be reassigned to a different driver.'
+                )
+
+        return new_driver
+
+
+# Update your existing VehicleForm to include assignment validation
+class VehicleForm(forms.ModelForm):
+    class Meta:
+        model = Vehicle
+        fields = ['driver', 'plate_number', 'model', 'capacity_kg']
+        widgets = {
+            'driver': forms.Select(attrs={'class': 'form-select'}),
+            'plate_number': forms.TextInput(attrs={'class': 'form-control'}),
+            'model': forms.TextInput(attrs={'class': 'form-control'}),
+            'capacity_kg': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.1', 'min': '0'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['driver'].queryset = Driver.objects.select_related('user').filter(
+            user__is_active=True
+        ).order_by('user__first_name')
+        self.fields['driver'].required = False
+        self.fields['driver'].empty_label = "Unassigned"
+
+    def clean_plate_number(self):
+        plate_number = self.cleaned_data['plate_number']
+        # Check for duplicate plate numbers
+        qs = Vehicle.objects.filter(plate_number=plate_number)
+        if self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise ValidationError("A vehicle with this plate number already exists.")
+        return plate_number.upper()
+
+    def clean_driver(self):
+        driver = self.cleaned_data.get('driver')
+
+        # If changing driver and vehicle has active shipments, prevent change
+        if self.instance.pk and self.instance.driver != driver:
+            active_shipments = self.instance.shipment_set.filter(status__in=['pending', 'in_transit']).count()
+            if active_shipments > 0:
+                raise ValidationError(
+                    f'This vehicle has {active_shipments} active shipments and cannot be reassigned.'
+                )
+
+        return driver

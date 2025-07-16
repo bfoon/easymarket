@@ -3,15 +3,22 @@ from django.views.generic import ListView, DetailView, CreateView, UpdateView, D
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib import messages
 from django.urls import reverse_lazy, reverse
-from django.db.models import Q
-from django.http import JsonResponse
+from django.db.models import Q, Count, Avg
 from django.core.paginator import Paginator
 from django.forms import modelformset_factory
-from django.utils import timezone
 from logistics.models import Shipment
 from logistics.forms import ShipmentForm
-from django.http import JsonResponse
 from orders.models import Order, ShippingAddress
+from django.utils import timezone
+from datetime import timedelta
+from django.db import transaction
+from django.contrib.auth import get_user_model
+import csv
+import json
+from django.http import HttpResponse, JsonResponse
+from django.contrib.auth.decorators import login_required
+import openpyxl
+from openpyxl.utils import get_column_letter
 
 from .models import (
     Shipment, ShipmentBox, BoxItem, Driver, Vehicle,
@@ -20,6 +27,7 @@ from .models import (
 from orders.models import Order, OrderItem
 from .forms import ShipmentBoxForm, BoxItemForm
 
+User = get_user_model()
 
 class ShipmentListView(LoginRequiredMixin, ListView):
     model = Shipment
@@ -850,3 +858,744 @@ def manage_shipment_boxes(request, shipment_pk):
         'formset': formset,
     }
     return render(request, 'logistics/manage_boxes.html', context)
+
+
+def get_or_create_unassigned_driver():
+    """Get or create a special 'Unassigned' driver for vehicles without active drivers"""
+    try:
+        # Try to find existing unassigned driver
+        unassigned_user = User.objects.filter(
+            username='unassigned_driver',
+            is_active=False
+        ).first()
+
+        if not unassigned_user:
+            # Create unassigned user
+            unassigned_user = User.objects.create_user(
+                username='unassigned_driver',
+                email='unassigned@system.local',
+                first_name='Unassigned',
+                last_name='Driver',
+                is_active=False  # Mark as inactive so it doesn't appear in normal listings
+            )
+
+        # Get or create the driver
+        unassigned_driver, created = Driver.objects.get_or_create(
+            user=unassigned_user,
+            defaults={
+                'phone': 'N/A',
+                'license_number': 'UNASSIGNED'
+            }
+        )
+
+        return unassigned_driver
+    except Exception as e:
+        print(f"Error creating unassigned driver: {e}")
+        return None
+
+
+class AssignmentDashboardView(LoginRequiredMixin, ListView):
+    """Dashboard for managing driver-vehicle assignments"""
+    template_name = 'logistics/assignment_dashboard.html'
+
+    def get(self, request, *args, **kwargs):
+        # Get the unassigned driver
+        unassigned_driver = get_or_create_unassigned_driver()
+
+        # Get vehicles with their assignment status (excluding unassigned driver)
+        vehicles = Vehicle.objects.select_related('driver__user').annotate(
+            active_shipments_count=Count('shipment', filter=Q(shipment__status__in=['pending', 'in_transit']))
+        ).order_by('plate_number')
+
+        # Get drivers with their vehicle counts (excluding unassigned driver)
+        drivers = Driver.objects.select_related('user').filter(
+            user__is_active=True
+        ).annotate(
+            vehicle_count=Count('vehicle', filter=~Q(vehicle__driver=unassigned_driver)),
+            active_shipments_count=Count('vehicle__shipment',
+                                         filter=Q(vehicle__shipment__status__in=['pending', 'in_transit']))
+        ).order_by('user__first_name')
+
+        # Get unassigned vehicles (assigned to unassigned driver)
+        unassigned_vehicles = vehicles.filter(driver=unassigned_driver) if unassigned_driver else []
+
+        # Get drivers without vehicles (excluding unassigned driver)
+        drivers_without_vehicles = drivers.filter(vehicle_count=0)
+
+        # Get real assigned vehicles (not assigned to unassigned driver)
+        assigned_vehicles_count = vehicles.exclude(
+            driver=unassigned_driver).count() if unassigned_driver else vehicles.count()
+
+        context = {
+            'vehicles': vehicles.exclude(driver=unassigned_driver) if unassigned_driver else vehicles,
+            'drivers': drivers,
+            'unassigned_vehicles': unassigned_vehicles,
+            'drivers_without_vehicles': drivers_without_vehicles,
+            'total_vehicles': vehicles.count(),
+            'assigned_vehicles': assigned_vehicles_count,
+            'active_drivers': drivers.filter(vehicle_count__gt=0).count(),
+            'total_drivers': drivers.count(),
+        }
+        return render(request, self.template_name, context)
+
+
+class VehicleAssignmentListView(LoginRequiredMixin, ListView):
+    """List all vehicles and their current driver assignments"""
+    model = Vehicle
+    template_name = 'logistics/vehicle_assignment_list.html'
+    context_object_name = 'vehicles'
+    paginate_by = 20
+
+    def get_queryset(self):
+        unassigned_driver = get_or_create_unassigned_driver()
+
+        queryset = Vehicle.objects.select_related('driver__user').annotate(
+            active_shipments_count=Count('shipment', filter=Q(shipment__status__in=['pending', 'in_transit']))
+        ).order_by('plate_number')
+
+        # Apply filters
+        search_query = self.request.GET.get('search')
+        if search_query:
+            queryset = queryset.filter(
+                Q(plate_number__icontains=search_query) |
+                Q(model__icontains=search_query) |
+                Q(driver__user__first_name__icontains=search_query) |
+                Q(driver__user__last_name__icontains=search_query)
+            )
+
+        assignment_status = self.request.GET.get('assignment_status')
+        if assignment_status == 'assigned':
+            queryset = queryset.exclude(driver=unassigned_driver) if unassigned_driver else queryset.filter(
+                driver__isnull=False)
+        elif assignment_status == 'unassigned':
+            queryset = queryset.filter(driver=unassigned_driver) if unassigned_driver else queryset.filter(
+                driver__isnull=True)
+
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['search_query'] = self.request.GET.get('search', '')
+        context['assignment_status'] = self.request.GET.get('assignment_status', '')
+        context['drivers'] = Driver.objects.select_related('user').filter(user__is_active=True)
+        context['unassigned_driver'] = get_or_create_unassigned_driver()
+        return context
+
+
+def assign_vehicle_to_driver(request):
+    """AJAX view to assign a vehicle to a driver"""
+    if request.method == 'POST':
+        vehicle_id = request.POST.get('vehicle_id')
+        driver_id = request.POST.get('driver_id')
+
+        try:
+            vehicle = Vehicle.objects.get(id=vehicle_id)
+
+            # Handle unassignment (when driver_id is empty)
+            if not driver_id:
+                unassigned_driver = get_or_create_unassigned_driver()
+                if not unassigned_driver:
+                    return JsonResponse({
+                        'success': False,
+                        'message': 'Unable to create unassigned driver placeholder'
+                    })
+                driver = unassigned_driver
+            else:
+                driver = Driver.objects.get(id=driver_id)
+
+            # Check if vehicle is currently in use for active shipments
+            active_shipments = vehicle.shipment_set.filter(status__in=['pending', 'in_transit']).count()
+            if active_shipments > 0 and vehicle.driver != driver:
+                return JsonResponse({
+                    'success': False,
+                    'message': f'Vehicle {vehicle.plate_number} has {active_shipments} active shipments and cannot be reassigned.'
+                })
+
+            old_driver = vehicle.driver
+            vehicle.driver = driver
+            vehicle.save()
+
+            # Create appropriate message
+            if driver.user.username == 'unassigned_driver':
+                message = f'Vehicle {vehicle.plate_number} unassigned from driver'
+                driver_name = 'Unassigned'
+            else:
+                message = f'Vehicle {vehicle.plate_number} assigned to {driver.user.get_full_name()}'
+                driver_name = driver.user.get_full_name()
+
+            if old_driver and old_driver != driver and old_driver.user.username != 'unassigned_driver':
+                message += f' (previously assigned to {old_driver.user.get_full_name()})'
+
+            return JsonResponse({
+                'success': True,
+                'message': message,
+                'vehicle_id': vehicle.id,
+                'driver_name': driver_name
+            })
+
+        except (Vehicle.DoesNotExist, Driver.DoesNotExist) as e:
+            return JsonResponse({
+                'success': False,
+                'message': 'Vehicle or driver not found'
+            })
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'message': f'Error assigning vehicle: {str(e)}'
+            })
+
+    return JsonResponse({'success': False, 'message': 'Invalid request method'})
+
+
+def unassign_vehicle(request, vehicle_id):
+    """Unassign a vehicle from its current driver"""
+    if request.method == 'POST':
+        try:
+            vehicle = get_object_or_404(Vehicle, id=vehicle_id)
+
+            # Check for active shipments
+            active_shipments = vehicle.shipment_set.filter(status__in=['pending', 'in_transit']).count()
+            if active_shipments > 0:
+                return JsonResponse({
+                    'success': False,
+                    'message': f'Vehicle {vehicle.plate_number} has {active_shipments} active shipments and cannot be unassigned.'
+                })
+
+            # Get unassigned driver
+            unassigned_driver = get_or_create_unassigned_driver()
+            if not unassigned_driver:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Unable to create unassigned driver placeholder'
+                })
+
+            old_driver = vehicle.driver
+            vehicle.driver = unassigned_driver
+            vehicle.save()
+
+            message = f'Vehicle {vehicle.plate_number} unassigned'
+            if old_driver and old_driver.user.username != 'unassigned_driver':
+                message += f' from {old_driver.user.get_full_name()}'
+
+            return JsonResponse({
+                'success': True,
+                'message': message
+            })
+
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'message': f'Error unassigning vehicle: {str(e)}'
+            })
+
+    return JsonResponse({'success': False, 'message': 'Invalid request method'})
+
+
+def quick_assign_vehicle(request):
+    """Quick assignment form for immediate vehicle assignment"""
+    if request.method == 'POST':
+        vehicle_id = request.POST.get('vehicle_id')
+        driver_id = request.POST.get('driver_id')
+
+        try:
+            vehicle = get_object_or_404(Vehicle, id=vehicle_id)
+            driver = get_object_or_404(Driver, id=driver_id)
+
+            # Check for active shipments
+            active_shipments = vehicle.shipment_set.filter(status__in=['pending', 'in_transit']).count()
+            if active_shipments > 0 and vehicle.driver != driver:
+                messages.error(request,
+                               f'Vehicle {vehicle.plate_number} has {active_shipments} active shipments and cannot be reassigned.')
+                return redirect('logistics:assignment_dashboard')
+
+            vehicle.driver = driver
+            vehicle.save()
+
+            messages.success(request,
+                             f'Vehicle {vehicle.plate_number} successfully assigned to {driver.user.get_full_name()}')
+
+        except Exception as e:
+            messages.error(request, f'Error assigning vehicle: {str(e)}')
+
+    return redirect('logistics:assignment_dashboard')
+
+
+def get_unassigned_vehicles_ajax(request):
+    """Get all unassigned vehicles via AJAX"""
+    try:
+        unassigned_driver = get_or_create_unassigned_driver()
+
+        if unassigned_driver:
+            vehicles = Vehicle.objects.filter(driver=unassigned_driver)
+        else:
+            vehicles = Vehicle.objects.none()
+
+        vehicles_data = []
+        for vehicle in vehicles:
+            vehicles_data.append({
+                'id': vehicle.id,
+                'plate_number': vehicle.plate_number,
+                'model': vehicle.model,
+                'capacity_kg': vehicle.capacity_kg
+            })
+
+        return JsonResponse({
+            'success': True,
+            'vehicles': vehicles_data
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'Error retrieving unassigned vehicles: {str(e)}'
+        })
+
+
+def bulk_assign_vehicles(request):
+    """Bulk assignment of multiple vehicles"""
+    if request.method == 'POST':
+        vehicle_ids = request.POST.getlist('vehicle_ids')
+        driver_ids = request.POST.getlist('driver_ids')
+
+        if len(vehicle_ids) != len(driver_ids):
+            messages.error(request, 'Number of vehicles must match number of drivers')
+            return redirect('logistics:assignment_dashboard')
+
+        try:
+            unassigned_driver = get_or_create_unassigned_driver()
+
+            with transaction.atomic():
+                assignments_made = 0
+                for vehicle_id, driver_id in zip(vehicle_ids, driver_ids):
+                    vehicle = Vehicle.objects.get(id=vehicle_id)
+
+                    # Handle unassignment
+                    if not driver_id:
+                        if not unassigned_driver:
+                            continue
+                        driver = unassigned_driver
+                    else:
+                        driver = Driver.objects.get(id=driver_id)
+
+                    # Check for active shipments
+                    active_shipments = vehicle.shipment_set.filter(status__in=['pending', 'in_transit']).count()
+                    if active_shipments > 0 and vehicle.driver != driver:
+                        messages.warning(request,
+                                         f'Skipped vehicle {vehicle.plate_number} - has active shipments')
+                        continue
+
+                    vehicle.driver = driver
+                    vehicle.save()
+                    assignments_made += 1
+
+                if assignments_made > 0:
+                    messages.success(request, f'Successfully assigned {assignments_made} vehicles')
+                else:
+                    messages.warning(request, 'No vehicles were assigned')
+
+        except Exception as e:
+            messages.error(request, f'Error in bulk assignment: {str(e)}')
+
+    return redirect('logistics:assignment_dashboard')
+
+
+# Update the existing DriverDetailView in your views.py
+class DriverDetailView(LoginRequiredMixin, DetailView):
+    model = Driver
+    template_name = 'logistics/driver_detail.html'
+    context_object_name = 'driver'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        driver = self.get_object()
+        unassigned_driver = get_or_create_unassigned_driver()
+
+        # Get vehicles with computed status, excluding unassigned driver
+        vehicles = driver.vehicle_set.all()
+        assigned_vehicles = vehicles.exclude(driver=unassigned_driver) if unassigned_driver else vehicles
+
+        for vehicle in assigned_vehicles:
+            vehicle.active_shipments_count = vehicle.shipment_set.exclude(status='shipped').count()
+
+        context['vehicles'] = assigned_vehicles
+        context['assigned_vehicles_count'] = assigned_vehicles.count()
+        context['recent_shipments'] = Shipment.objects.filter(
+            driver=driver
+        ).select_related('shipping_address', 'vehicle').order_by('-created_at')[:10]
+
+        # Add computed statistics
+        context['total_shipments'] = driver.shipment_set.count()
+        context['active_shipments'] = driver.shipment_set.exclude(status='shipped').count()
+        context['completed_shipments'] = driver.shipment_set.filter(status='shipped').count()
+        context['vehicle_count'] = assigned_vehicles.count()
+
+        return context
+
+
+class DriverAssignmentListView(LoginRequiredMixin, ListView):
+    """List all drivers and their assigned vehicles"""
+    model = Driver
+    template_name = 'logistics/driver_assignment_list.html'
+    context_object_name = 'drivers'
+    paginate_by = 20
+
+    def get_queryset(self):
+        unassigned_driver = get_or_create_unassigned_driver()
+
+        queryset = Driver.objects.select_related('user').filter(
+            user__is_active=True
+        ).annotate(
+            vehicle_count=Count('vehicle', filter=~Q(vehicle__driver=unassigned_driver) if unassigned_driver else Q()),
+            active_shipments_count=Count('vehicle__shipment',
+                                         filter=Q(vehicle__shipment__status__in=['pending', 'in_transit']))
+        ).order_by('user__first_name')
+
+        # Apply filters
+        search_query = self.request.GET.get('search')
+        if search_query:
+            queryset = queryset.filter(
+                Q(user__first_name__icontains=search_query) |
+                Q(user__last_name__icontains=search_query) |
+                Q(license_number__icontains=search_query) |
+                Q(phone__icontains=search_query)
+            )
+
+        vehicle_status = self.request.GET.get('vehicle_status')
+        if vehicle_status == 'with_vehicles':
+            queryset = queryset.filter(vehicle_count__gt=0)
+        elif vehicle_status == 'without_vehicles':
+            queryset = queryset.filter(vehicle_count=0)
+
+        return queryset
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['search_query'] = self.request.GET.get('search', '')
+        context['vehicle_status'] = self.request.GET.get('vehicle_status', '')
+
+        unassigned_driver = get_or_create_unassigned_driver()
+        context['unassigned_vehicles'] = Vehicle.objects.filter(driver=unassigned_driver) if unassigned_driver else []
+        return context
+
+
+def get_driver_vehicles_ajax(request, driver_id):
+    """Get vehicles assigned to a specific driver via AJAX"""
+    try:
+        driver = get_object_or_404(Driver, id=driver_id)
+        unassigned_driver = get_or_create_unassigned_driver()
+
+        # Get vehicles assigned to this driver (excluding unassigned driver)
+        vehicles = driver.vehicle_set.all()
+        if unassigned_driver:
+            vehicles = vehicles.exclude(driver=unassigned_driver)
+
+        vehicles_data = []
+        for vehicle in vehicles:
+            active_shipments = vehicle.shipment_set.filter(status__in=['pending', 'in_transit']).count()
+            vehicles_data.append({
+                'id': vehicle.id,
+                'plate_number': vehicle.plate_number,
+                'model': vehicle.model,
+                'capacity_kg': vehicle.capacity_kg,
+                'active_shipments': active_shipments,
+                'status': 'In Use' if active_shipments > 0 else 'Available'
+            })
+
+        return JsonResponse({
+            'success': True,
+            'driver_name': driver.user.get_full_name(),
+            'vehicles': vehicles_data
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'Error retrieving vehicles: {str(e)}'
+        })
+
+
+def assignment_report(request):
+    """Generate assignment report"""
+    unassigned_driver = get_or_create_unassigned_driver()
+
+    vehicles = Vehicle.objects.select_related('driver__user').annotate(
+        active_shipments_count=Count('shipment', filter=Q(shipment__status__in=['pending', 'in_transit']))
+    ).order_by('plate_number')
+
+    drivers = Driver.objects.select_related('user').filter(
+        user__is_active=True
+    ).annotate(
+        vehicle_count=Count('vehicle', filter=~Q(vehicle__driver=unassigned_driver) if unassigned_driver else Q()),
+        active_shipments_count=Count('vehicle__shipment',
+                                     filter=Q(vehicle__shipment__status__in=['pending', 'in_transit']))
+    ).order_by('user__first_name')
+
+    context = {
+        'vehicles': vehicles.exclude(driver=unassigned_driver) if unassigned_driver else vehicles,
+        'drivers': drivers,
+        'unassigned_vehicles': vehicles.filter(driver=unassigned_driver) if unassigned_driver else [],
+        'report_date': timezone.now(),
+        'total_vehicles': vehicles.count(),
+        'assigned_vehicles': vehicles.exclude(
+            driver=unassigned_driver).count() if unassigned_driver else vehicles.count(),
+        'unassigned_vehicles_count': vehicles.filter(driver=unassigned_driver).count() if unassigned_driver else 0,
+        'active_drivers': drivers.filter(vehicle_count__gt=0).count(),
+        'drivers_without_vehicles': drivers.filter(vehicle_count=0).count(),
+    }
+
+    return render(request, 'logistics/assignment_report.html', context)
+
+
+class AssignmentAnalyticsView(LoginRequiredMixin, ListView):
+    """Advanced analytics view for assignment performance"""
+    template_name = 'logistics/assignment_analytics.html'
+
+    def get(self, request, *args, **kwargs):
+        # Time-based analysis
+        now = timezone.now()
+        last_30_days = now - timedelta(days=30)
+        last_7_days = now - timedelta(days=7)
+
+        # Get unassigned driver to exclude from calculations
+        unassigned_driver = get_or_create_unassigned_driver()
+
+        # Assignment trends
+        shipments_last_30_days = Shipment.objects.filter(
+            created_at__gte=last_30_days
+        ).count()
+
+        shipments_last_7_days = Shipment.objects.filter(
+            created_at__gte=last_7_days
+        ).count()
+
+        # Driver performance metrics
+        driver_performance = Driver.objects.select_related('user').filter(
+            user__is_active=True
+        ).annotate(
+            total_shipments=Count('shipment'),
+            recent_shipments=Count('shipment', filter=Q(shipment__created_at__gte=last_30_days))
+        ).order_by('-total_shipments')
+
+        # Vehicle utilization over time
+        vehicle_utilization = Vehicle.objects.select_related('driver__user').annotate(
+            total_shipments=Count('shipment'),
+            active_shipments=Count('shipment', filter=Q(shipment__status__in=['pending', 'in_transit'])),
+            utilization_score=Count('shipment', filter=Q(shipment__status__in=['pending', 'in_transit']))
+        ).order_by('-utilization_score')
+
+        # Filter out unassigned driver vehicles
+        if unassigned_driver:
+            vehicle_utilization = vehicle_utilization.exclude(driver=unassigned_driver)
+
+        context = {
+            'shipments_last_30_days': shipments_last_30_days,
+            'shipments_last_7_days': shipments_last_7_days,
+            'driver_performance': driver_performance[:10],  # Top 10
+            'vehicle_utilization': vehicle_utilization[:10],  # Top 10
+            'report_date': now,
+        }
+
+        return render(request, self.template_name, context)
+
+
+@login_required
+def assignment_report_export(request):
+    """Export assignment report as CSV"""
+    response = HttpResponse(content_type='text/csv')
+    response[
+        'Content-Disposition'] = f'attachment; filename="assignment_report_{timezone.now().strftime("%Y%m%d_%H%M%S")}.csv"'
+
+    writer = csv.writer(response)
+    unassigned_driver = get_or_create_unassigned_driver()
+
+    # Write header
+    writer.writerow(['Driver-Vehicle Assignment Report'])
+    writer.writerow([f'Generated: {timezone.now().strftime("%Y-%m-%d %H:%M:%S")}'])
+    writer.writerow([])
+
+    # Vehicle assignments
+    writer.writerow(['Vehicle Assignments'])
+    writer.writerow(
+        ['Plate Number', 'Model', 'Capacity (kg)', 'Assigned Driver', 'Driver License', 'Status', 'Active Shipments'])
+
+    vehicles = Vehicle.objects.select_related('driver__user').annotate(
+        active_shipments_count=Count('shipment', filter=Q(shipment__status__in=['pending', 'in_transit']))
+    ).order_by('plate_number')
+
+    for vehicle in vehicles:
+        if vehicle.driver and vehicle.driver != unassigned_driver:
+            driver_name = vehicle.driver.user.get_full_name()
+            driver_license = vehicle.driver.license_number
+        else:
+            driver_name = 'Unassigned'
+            driver_license = 'N/A'
+
+        status = 'In Use' if vehicle.active_shipments_count > 0 else 'Available'
+
+        writer.writerow([
+            vehicle.plate_number,
+            vehicle.model,
+            vehicle.capacity_kg,
+            driver_name,
+            driver_license,
+            status,
+            vehicle.active_shipments_count
+        ])
+
+    writer.writerow([])
+
+    # Driver assignments
+    writer.writerow(['Driver Assignments'])
+    writer.writerow(['Driver Name', 'Email', 'Phone', 'License', 'Assigned Vehicles', 'Active Shipments', 'Join Date'])
+
+    drivers = Driver.objects.select_related('user').filter(
+        user__is_active=True
+    ).annotate(
+        vehicle_count=Count('vehicle', filter=~Q(vehicle__driver=unassigned_driver) if unassigned_driver else Q()),
+        active_shipments_count=Count('vehicle__shipment',
+                                     filter=Q(vehicle__shipment__status__in=['pending', 'in_transit']))
+    ).order_by('user__first_name')
+
+    for driver in drivers:
+        writer.writerow([
+            driver.user.get_full_name(),
+            driver.user.email,
+            driver.phone,
+            driver.license_number,
+            driver.vehicle_count,
+            driver.active_shipments_count,
+            driver.user.date_joined.strftime('%Y-%m-%d')
+        ])
+
+    return response
+
+
+@login_required
+def assignment_report_json(request):
+    """Return assignment report data as JSON for API consumption"""
+    unassigned_driver = get_or_create_unassigned_driver()
+
+    # Get vehicle data
+    vehicles = Vehicle.objects.select_related('driver__user').annotate(
+        active_shipments_count=Count('shipment', filter=Q(shipment__status__in=['pending', 'in_transit']))
+    ).order_by('plate_number')
+
+    # Get driver data
+    drivers = Driver.objects.select_related('user').filter(
+        user__is_active=True
+    ).annotate(
+        vehicle_count=Count('vehicle', filter=~Q(vehicle__driver=unassigned_driver) if unassigned_driver else Q()),
+        active_shipments_count=Count('vehicle__shipment',
+                                     filter=Q(vehicle__shipment__status__in=['pending', 'in_transit']))
+    ).order_by('user__first_name')
+
+    # Prepare vehicle data
+    vehicles_data = []
+    for vehicle in vehicles:
+        if vehicle.driver and vehicle.driver != unassigned_driver:
+            driver_info = {
+                'id': vehicle.driver.id,
+                'name': vehicle.driver.user.get_full_name(),
+                'license': vehicle.driver.license_number,
+                'phone': vehicle.driver.phone,
+                'email': vehicle.driver.user.email
+            }
+        else:
+            driver_info = None
+
+        vehicles_data.append({
+            'id': vehicle.id,
+            'plate_number': vehicle.plate_number,
+            'model': vehicle.model,
+            'capacity_kg': vehicle.capacity_kg,
+            'driver': driver_info,
+            'status': 'in_use' if vehicle.active_shipments_count > 0 else 'available',
+            'active_shipments': vehicle.active_shipments_count
+        })
+
+    # Prepare driver data
+    drivers_data = []
+    for driver in drivers:
+        drivers_data.append({
+            'id': driver.id,
+            'name': driver.user.get_full_name(),
+            'email': driver.user.email,
+            'phone': driver.phone,
+            'license': driver.license_number,
+            'vehicle_count': driver.vehicle_count,
+            'active_shipments': driver.active_shipments_count,
+            'join_date': driver.user.date_joined.isoformat()
+        })
+
+    # Calculate metrics
+    total_vehicles = len(vehicles_data)
+    assigned_vehicles = len([v for v in vehicles_data if v['driver'] is not None])
+    unassigned_vehicles = total_vehicles - assigned_vehicles
+
+    data = {
+        'report_date': timezone.now().isoformat(),
+        'summary': {
+            'total_vehicles': total_vehicles,
+            'assigned_vehicles': assigned_vehicles,
+            'unassigned_vehicles': unassigned_vehicles,
+            'total_drivers': len(drivers_data),
+            'active_drivers': len([d for d in drivers_data if d['vehicle_count'] > 0]),
+            'assignment_efficiency': (assigned_vehicles / total_vehicles * 100) if total_vehicles > 0 else 0
+        },
+        'vehicles': vehicles_data,
+        'drivers': drivers_data
+    }
+
+    return JsonResponse(data, indent=2)
+
+
+def export_shipments_csv(request):
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="shipments.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow(['ID', 'Destination', 'Driver', 'Vehicle', 'Weight (kg)', 'Type', 'Status', 'Created'])
+
+    for shipment in Shipment.objects.all():
+        writer.writerow([
+            shipment.id,
+            f"{shipment.shipping_address.city}, {shipment.shipping_address.region}",
+            shipment.driver.user.get_full_name() if shipment.driver else '',
+            shipment.vehicle.plate_number if shipment.vehicle else '',
+            shipment.weight_kg,
+            shipment.get_shipment_type_display(),
+            shipment.get_status_display(),
+            shipment.created_at.strftime('%Y-%m-%d %H:%M'),
+        ])
+
+    return response
+
+def export_shipments_excel(request):
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Shipments"
+
+    columns = ['ID', 'Destination', 'Driver', 'Vehicle', 'Weight (kg)', 'Type', 'Status', 'Created']
+    ws.append(columns)
+
+    for shipment in Shipment.objects.all():
+        ws.append([
+            shipment.id,
+            f"{shipment.shipping_address.city}, {shipment.shipping_address.region}",
+            shipment.driver.user.get_full_name() if shipment.driver else '',
+            shipment.vehicle.plate_number if shipment.vehicle else '',
+            shipment.weight_kg,
+            shipment.get_shipment_type_display(),
+            shipment.get_status_display(),
+            shipment.created_at.strftime('%Y-%m-%d %H:%M'),
+        ])
+
+    for col in range(1, len(columns) + 1):
+        ws.column_dimensions[get_column_letter(col)].width = 20
+
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = 'attachment; filename="shipments.xlsx"'
+    wb.save(response)
+    return response

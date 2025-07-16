@@ -7,7 +7,7 @@ class ProductForm(forms.ModelForm):
         fields = [
             'name', 'category', 'price', 'original_price', 'description',
             'specifications', 'image', 'video', 'is_featured', 'is_trending',
-            'has_30_day_return', 'free_shipping'
+            'has_30_day_return', 'free_shipping', 'is_active'
         ]
         widgets = {
             'name': forms.TextInput(attrs={
@@ -111,7 +111,7 @@ class ProductWithStockForm(forms.ModelForm):
         fields = [
             'name', 'category', 'price', 'original_price', 'description',
             'specifications', 'image', 'video', 'is_featured', 'is_trending',
-            'has_30_day_return', 'free_shipping'
+            'has_30_day_return', 'free_shipping', 'is_active'
         ]
         widgets = {
             # keep your existing widgets here...

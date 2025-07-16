@@ -9,10 +9,14 @@
         <p class="page-subtitle">Driver profile and activity overview</p>
     </div>
     <div>
-        <a href="#" class="btn btn-warning me-2">
+        <a href="{% url 'logistics:driver_edit' driver.pk %}" class="btn btn-warning me-2">
             <i class="fas fa-edit me-1"></i>
             Edit Driver
         </a>
+        <button class="btn btn-success me-2" onclick="showAssignVehicleModal()">
+            <i class="fas fa-plus me-1"></i>
+            Assign Vehicle
+        </button>
         <a href="{% url 'logistics:driver_list' %}" class="btn btn-outline-secondary">
             <i class="fas fa-arrow-left me-1"></i>
             Back to List
@@ -36,7 +40,7 @@
                 </div>
                 <h5 class="mb-1">{{ driver.user.get_full_name }}</h5>
                 <p class="text-muted mb-3">{{ driver.user.email }}</p>
-                
+
                 <div class="row text-start">
                     <div class="col-12 mb-2">
                         <strong>Phone:</strong>
@@ -152,55 +156,104 @@
 </div>
 
 <!-- Assigned Vehicles -->
-{% if vehicles %}
 <div class="row mb-4">
     <div class="col-12">
         <div class="card">
-            <div class="card-header">
+            <div class="card-header d-flex justify-content-between align-items-center">
                 <h6 class="m-0 font-weight-bold text-primary">
                     <i class="fas fa-truck me-2"></i>
-                    Assigned Vehicles
+                    Assigned Vehicles ({{ vehicles|length }})
                 </h6>
+                <div>
+                    <button class="btn btn-sm btn-success" onclick="showAssignVehicleModal()">
+                        <i class="fas fa-plus me-1"></i>
+                        Assign Vehicle
+                    </button>
+                    <a href="{% url 'logistics:vehicle_assignment_list' %}?driver={{ driver.pk }}"
+                       class="btn btn-sm btn-outline-primary">
+                        <i class="fas fa-eye me-1"></i>
+                        View All
+                    </a>
+                </div>
             </div>
             <div class="card-body">
-                <div class="row">
-                    {% for vehicle in vehicles %}
-                    <div class="col-md-6 col-lg-4 mb-3">
-                        <div class="card border">
-                            <div class="card-body">
-                                <div class="d-flex align-items-center mb-2">
-                                    <i class="fas fa-truck fa-2x text-primary me-3"></i>
-                                    <div>
-                                        <h6 class="mb-0">{{ vehicle.plate_number }}</h6>
-                                        <small class="text-muted">{{ vehicle.model }}</small>
+                {% if vehicles %}
+                    <div class="row">
+                        {% for vehicle in vehicles %}
+                        <div class="col-md-6 col-lg-4 mb-3">
+                            <div class="card border">
+                                <div class="card-body">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <i class="fas fa-truck fa-2x text-primary me-3"></i>
+                                        <div class="flex-grow-1">
+                                            <h6 class="mb-0">{{ vehicle.plate_number }}</h6>
+                                            <small class="text-muted">{{ vehicle.model }}</small>
+                                        </div>
+                                        <div class="dropdown">
+                                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle"
+                                                    type="button" data-bs-toggle="dropdown">
+                                                <i class="fas fa-ellipsis-v"></i>
+                                            </button>
+                                            <ul class="dropdown-menu">
+                                                <li>
+                                                    <a class="dropdown-item" href="{% url 'logistics:vehicle_detail' vehicle.pk %}">
+                                                        <i class="fas fa-eye me-2"></i>View Details
+                                                    </a>
+                                                </li>
+                                                <li>
+                                                    <a class="dropdown-item" href="{% url 'logistics:vehicle_edit' vehicle.pk %}">
+                                                        <i class="fas fa-edit me-2"></i>Edit Vehicle
+                                                    </a>
+                                                </li>
+                                                {% if vehicle.active_shipments_count == 0 %}
+                                                <li><hr class="dropdown-divider"></li>
+                                                <li>
+                                                    <a class="dropdown-item text-danger" href="#"
+                                                       onclick="unassignVehicle({{ vehicle.id }}, '{{ vehicle.plate_number }}')">
+                                                        <i class="fas fa-unlink me-2"></i>Unassign
+                                                    </a>
+                                                </li>
+                                                {% endif %}
+                                            </ul>
+                                        </div>
                                     </div>
-                                </div>
-                                <div class="row">
-                                    <div class="col-6">
-                                        <small class="text-muted">Capacity</small>
-                                        <div class="fw-bold">{{ vehicle.capacity_kg|floatformat:0 }} kg</div>
-                                    </div>
-                                    <div class="col-6">
-                                        <small class="text-muted">Status</small>
-                                        <div>
-                                            {% if vehicle.active_shipments_count %}
-                                                <span class="badge bg-warning">In Use</span>
-                                            {% else %}
-                                                <span class="badge bg-success">Available</span>
-                                            {% endif %}
+                                    <div class="row">
+                                        <div class="col-6">
+                                            <small class="text-muted">Capacity</small>
+                                            <div class="fw-bold">{{ vehicle.capacity_kg|floatformat:0 }} kg</div>
+                                        </div>
+                                        <div class="col-6">
+                                            <small class="text-muted">Status</small>
+                                            <div>
+                                                {% if vehicle.active_shipments_count %}
+                                                    <span class="badge bg-warning">
+                                                        In Use ({{ vehicle.active_shipments_count }})
+                                                    </span>
+                                                {% else %}
+                                                    <span class="badge bg-success">Available</span>
+                                                {% endif %}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
+                        {% endfor %}
                     </div>
-                    {% endfor %}
-                </div>
+                {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="fas fa-truck fa-3x mb-3"></i>
+                        <p>No vehicles assigned to this driver yet.</p>
+                        <button class="btn btn-primary" onclick="showAssignVehicleModal()">
+                            <i class="fas fa-plus me-1"></i>
+                            Assign Vehicle
+                        </button>
+                    </div>
+                {% endif %}
             </div>
         </div>
     </div>
 </div>
-{% endif %}
 
 <!-- Recent Shipments -->
 <div class="row">
@@ -259,7 +312,7 @@
                                         <small class="text-muted">{{ shipment.collect_time|time:"H:i" }}</small>
                                     </td>
                                     <td>
-                                        <a href="{% url 'logistics:shipment_detail' shipment.pk %}" 
+                                        <a href="{% url 'logistics:shipment_detail' shipment.pk %}"
                                            class="btn btn-sm btn-outline-primary">
                                             <i class="fas fa-eye"></i>
                                         </a>
@@ -284,6 +337,156 @@
     </div>
 </div>
 
+<!-- Assign Vehicle Modal -->
+<div class="modal fade" id="assignVehicleModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Assign Vehicle to {{ driver.user.get_full_name }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="assignVehicleForm">
+                    {% csrf_token %}
+                    <input type="hidden" name="driver_id" value="{{ driver.id }}">
+                    <div class="mb-3">
+                        <label class="form-label">Select Vehicle</label>
+                        <select name="vehicle_id" class="form-select" required>
+                            <option value="">Choose a vehicle...</option>
+                        </select>
+                        <div class="form-text">Only unassigned vehicles and vehicles without active shipments are shown.</div>
+                    </div>
+                    <div id="vehicleInfo" class="alert alert-info d-none">
+                        <strong>Vehicle Details:</strong>
+                        <div id="vehicleDetails"></div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" onclick="assignVehicleToDriver()">
+                    <i class="fas fa-save me-1"></i>
+                    Assign Vehicle
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let availableVehicles = [];
+
+function showAssignVehicleModal() {
+    // Load available vehicles
+    fetch('{% url "logistics:api_unassigned_vehicles" %}')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                availableVehicles = data.vehicles;
+                const select = document.querySelector('#assignVehicleModal select[name="vehicle_id"]');
+                select.innerHTML = '<option value="">Choose a vehicle...</option>';
+
+                if (availableVehicles.length === 0) {
+                    select.innerHTML = '<option value="">No vehicles available</option>';
+                    select.disabled = true;
+                } else {
+                    availableVehicles.forEach(vehicle => {
+                        const option = document.createElement('option');
+                        option.value = vehicle.id;
+                        option.textContent = `${vehicle.plate_number} - ${vehicle.model}`;
+                        select.appendChild(option);
+                    });
+                    select.disabled = false;
+                }
+
+                const modal = new bootstrap.Modal(document.getElementById('assignVehicleModal'));
+                modal.show();
+            }
+        })
+        .catch(error => {
+            console.error('Error loading vehicles:', error);
+            alert('Error loading available vehicles');
+        });
+}
+
+function assignVehicleToDriver() {
+    const form = document.getElementById('assignVehicleForm');
+    const formData = new FormData(form);
+
+    fetch('{% url "logistics:assign_vehicle_to_driver" %}', {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Vehicle assigned successfully!');
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while assigning the vehicle');
+    });
+}
+
+function unassignVehicle(vehicleId, vehiclePlate) {
+    if (confirm(`Are you sure you want to unassign vehicle ${vehiclePlate} from this driver?`)) {
+        fetch(`{% url "logistics:unassign_vehicle" 0 %}`.replace('0', vehicleId), {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Vehicle unassigned successfully!');
+                location.reload();
+            } else {
+                alert('Error: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while unassigning the vehicle');
+        });
+    }
+}
+
+// Show vehicle details when selected
+document.addEventListener('DOMContentLoaded', function() {
+    const vehicleSelect = document.querySelector('#assignVehicleModal select[name="vehicle_id"]');
+    const vehicleInfo = document.getElementById('vehicleInfo');
+    const vehicleDetails = document.getElementById('vehicleDetails');
+
+    vehicleSelect.addEventListener('change', function() {
+        const selectedVehicleId = this.value;
+        if (selectedVehicleId) {
+            const vehicle = availableVehicles.find(v => v.id == selectedVehicleId);
+            if (vehicle) {
+                vehicleDetails.innerHTML = `
+                    <strong>Plate:</strong> ${vehicle.plate_number}<br>
+                    <strong>Model:</strong> ${vehicle.model}<br>
+                    <strong>Capacity:</strong> ${vehicle.capacity_kg} kg
+                `;
+                vehicleInfo.classList.remove('d-none');
+            }
+        } else {
+            vehicleInfo.classList.add('d-none');
+        }
+    });
+});
+</script>
 {% endblock %}
 
 {% block extra_css %}
@@ -292,7 +495,7 @@
         width: 80px;
         height: 80px;
         border-radius: 50%;
-        background-color: var(--primary-color);
+        background-color: var(--bs-primary);
         color: white;
         display: flex;
         align-items: center;
@@ -301,13 +504,61 @@
         font-size: 24px;
         margin: 0 auto;
     }
-    
+
     .text-gray-800 {
         color: #5a5c69 !important;
     }
-    
+
     .text-gray-300 {
         color: #dddfeb !important;
+    }
+
+    .status-badge {
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.375rem;
+        font-size: 0.75rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.025em;
+    }
+
+    .status-pending {
+        background-color: #ffeaa7;
+        color: #2d3436;
+    }
+
+    .status-in_transit {
+        background-color: #74b9ff;
+        color: white;
+    }
+
+    .status-shipped {
+        background-color: #00b894;
+        color: white;
+    }
+
+    .page-title {
+        font-size: 1.75rem;
+        font-weight: 600;
+        color: #2e3138;
+        margin-bottom: 0.25rem;
+    }
+
+    .page-subtitle {
+        color: #6c757d;
+        font-size: 0.95rem;
+        margin-bottom: 0;
+    }
+
+    .card {
+        box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+        border: 1px solid #e3e6f0;
+        border-radius: 0.35rem;
+    }
+
+    .card-header {
+        background-color: #f8f9fc;
+        border-bottom: 1px solid #e3e6f0;
     }
 </style>
 {% endblock %}

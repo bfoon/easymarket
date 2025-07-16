@@ -159,7 +159,9 @@ class Category(models.Model):
         #     count += subcategory.get_product_count()
         # return count
         pass
-
+class ActiveProductManager(models.Manager):
+    def get_queryset(self):
+        return super().get_queryset().filter(is_active=True)
 
 class Product(models.Model):
     seller = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)

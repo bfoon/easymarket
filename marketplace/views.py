@@ -47,7 +47,7 @@ def all_products(request):
         # Fetch products from parent and subcategories
         products = Product.objects.filter(
             category_id__in=related_category_ids,
-            category__is_active=True
+            is_active=True
         ).order_by('?')[:8]
 
         if products.exists():
@@ -65,8 +65,8 @@ def all_products(request):
 def product_list(request):
     categories = Category.objects.filter(parent__isnull=True)[:6]  # Only parent categories
     products = Product.objects.all()
-    featured_products = Product.objects.filter(is_featured=True)[:6]
-    trending_products = Product.objects.filter(is_trending=True)
+    featured_products = Product.objects.filter(is_active=True, is_featured=True)[:6]
+    trending_products = Product.objects.filter(is_active=True, is_trending=True)
 
     recently_viewed = []
     similar_items = []
@@ -74,11 +74,11 @@ def product_list(request):
 
     # Handle logged-in user
     if request.user.is_authenticated:
-        recently_viewed = Product.objects.filter(productview__user=request.user).distinct().order_by(
+        recently_viewed = Product.objects.filter(is_active=True, productview__user=request.user).distinct().order_by(
             '-productview__viewed_at')[:8]
     else:
         session_recently_viewed = request.session.get('recently_viewed', [])
-        recently_viewed = Product.objects.filter(id__in=session_recently_viewed)
+        recently_viewed = Product.objects.filter(is_active=True, id__in=session_recently_viewed)
 
     # Similar items logic - consider main category and its subcategories
     if recently_viewed:
@@ -92,7 +92,7 @@ def product_list(request):
             related_category_ids = [main_category.id] + list(main_category.children.values_list('id', flat=True))
 
             similar_items = Product.objects.filter(
-                category_id__in=related_category_ids
+                is_active=True, category_id__in=related_category_ids
             ).exclude(id=last_viewed_product.id)[:8]
 
     # Generate personalized recommendations
@@ -193,7 +193,7 @@ def get_anonymous_user_recommendations(request, recently_viewed):
 
     # 3. Fallback to popular products
     if len(recommendations) < 8:
-        popular_products = Product.objects.annotate(
+        popular_products = Product.objects.filter(is_active=True).annotate(
             view_count=Count('productview'),
             avg_rating=Avg('reviews__rating')
         ).order_by('-view_count', '-avg_rating')[:12]
@@ -228,7 +228,7 @@ def get_category_based_recommendations(user, recently_viewed):
 
     # Get highly rated products from preferred categories
     recommendations = Product.objects.filter(
-        category_id__in=category_ids
+        category_id__in=category_ids, is_active=True
     ).exclude(
         id__in=[p.id for p in recently_viewed] if recently_viewed else []
     ).annotate(
@@ -392,7 +392,7 @@ def get_more_recommendations(request):
         recently_viewed = []
         if request.user.is_authenticated:
             recently_viewed = Product.objects.filter(
-                productview__user=request.user
+                productview__user=request.user, is_active=True
             ).distinct().order_by('-productview__viewed_at')[:5]
 
         # Generate recommendations
@@ -433,7 +433,7 @@ def recommended_products_view(request):
     recently_viewed = []
     if request.user.is_authenticated:
         recently_viewed = Product.objects.filter(
-            productview__user=request.user
+            productview__user=request.user, is_active=True
         ).distinct().order_by('-productview__viewed_at')[:10]
     else:
         session_recently_viewed = request.session.get('recently_viewed', [])
@@ -614,7 +614,7 @@ def get_enhanced_collaborative_recommendations(user, recently_viewed):
     ).filter(common_products__gte=2).order_by('-common_products')[:20]
 
     # Get their recently viewed products
-    collaborative_products = Product.objects.filter(
+    collaborative_products = Product.objects.filter(is_active=True,
         productview__user__in=similar_users,
         productview__viewed_at__gte=timezone.now() - timedelta(days=60)
     ).exclude(
@@ -670,7 +670,7 @@ def get_quality_recommendations(user, recently_viewed):
 
     try:
         quality_products = Product.objects.filter(
-            category_id__in=category_ids
+            category_id__in=category_ids, is_active=True
         ).annotate(
             avg_rating=Avg('reviews__rating'),
             review_count=Count('reviews')
@@ -695,7 +695,7 @@ def get_similar_products_anonymous(recently_viewed, viewed_ids):
     category_ids = [p.category.id for p in recently_viewed if p.category]
 
     similar_products = Product.objects.filter(
-        category_id__in=category_ids
+        category_id__in=category_ids, is_active=True
     ).exclude(id__in=viewed_ids).order_by('?')  # Random order for variety
 
     return list(similar_products)
@@ -705,7 +705,7 @@ def get_fallback_recommendations(user, excluded_ids, count):
     """
     Fallback recommendations when we don't have enough personalized ones
     """
-    return list(Product.objects.exclude(
+    return list(Product.objects.filter(is_active=True).exclude(
         id__in=excluded_ids
     ).annotate(
         popularity_score=Count('productview') + Count('reviews') * 2
@@ -780,7 +780,7 @@ def serialize_products(products):
 
 
 def product_detail(request, product_id):
-    product = get_object_or_404(Product, id=product_id)
+    product = get_object_or_404(Product, id=product_id, is_active=True)
     product_images = product.images.all()
     variants = product.variants.select_related('feature_option__feature')
     store = Store.objects.filter(owner=product.seller, status='active').first()
@@ -823,7 +823,7 @@ def product_detail(request, product_id):
         }    # Recommended items with annotated review stats
     recommended_items = (
         Product.objects
-        .filter(category=product.category)
+        .filter(category=product.category, is_active=True)
         .exclude(id=product.id)
         [:4]
     )
@@ -902,7 +902,7 @@ def product_detail(request, product_id):
 
 
 def product_quick_view(request, product_id):
-    product = get_object_or_404(Product, id=product_id)
+    product = get_object_or_404(Product, id=product_id, is_active=True)
     return render(request, 'marketplace/partials/product_quick_view.html', {'product': product})
 
 def hot_picks(request):
@@ -923,7 +923,7 @@ def hot_picks(request):
         products = Product.objects.filter(
             category_id__in=related_category_ids,
             is_featured=True,
-            category__is_active=True  # Assuming you have an is_active field on Product
+            is_active=True  # Assuming you have an is_active field on Product
         ).select_related('category').order_by('-created_at')[:8]
 
         if products.exists():
@@ -946,7 +946,7 @@ def category_products(request, slug):
     related_category_ids = [category.id] + list(subcategories.values_list('id', flat=True))
 
     # Fetch products belonging to the category and its subcategories
-    products = Product.objects.filter(category_id__in=related_category_ids)
+    products = Product.objects.filter(category_id__in=related_category_ids, is_active=True)
 
     return render(request, 'marketplace/category_products.html', {
         'category': category,
@@ -1199,7 +1199,7 @@ def category_products_ajax(request, pk):
 @csrf_exempt
 def add_to_cart(request, product_id):
     try:
-        product = get_object_or_404(Product, id=product_id)
+        product = get_object_or_404(Product, id=product_id, is_active=True)
         quantity = int(request.POST.get('quantity', 1))
 
         # Get feature selections
@@ -1355,7 +1355,7 @@ def cart_view(request):
 
         # Step 2: Load Products
         product_ids = list(product_key_map.keys())
-        products = Product.objects.filter(id__in=product_ids)
+        products = Product.objects.filter(id__in=product_ids, is_active=True)
 
         # Step 3: Build cart item entries
         for product in products:
@@ -1414,7 +1414,7 @@ def get_cart_count(request):
 
             for pid, item in cart.items():
                 try:
-                    prod = Product.objects.get(id=pid)
+                    prod = Product.objects.get(id=pid, is_active=True)
                     cart_total += prod.price * item['quantity']
                 except Product.DoesNotExist:
                     continue
@@ -1461,7 +1461,7 @@ def get_cart_context(request):
 
         for pid, item in cart.items():
             try:
-                prod = Product.objects.get(id=pid)
+                prod = Product.objects.get(id=pid, is_active=True)
                 cart_total += prod.price * item['quantity']
             except Product.DoesNotExist:
                 continue
@@ -1489,7 +1489,7 @@ def update_cart_quantity(request):
                 'message': 'Product ID is required'
             })
 
-        product = get_object_or_404(Product, id=product_id)
+        product = get_object_or_404(Product, id=product_id, is_active=True)
 
         # Handle authenticated users
         if request.user.is_authenticated:
@@ -1606,7 +1606,7 @@ def update_cart_quantity(request):
             item_count = 0
             for pid, item in cart.items():
                 try:
-                    prod = Product.objects.get(id=pid)
+                    prod = Product.objects.get(id=pid, is_active=True)
                     item_total = prod.price * item['quantity']
                     total_price += item_total
                     item_count += item['quantity']
@@ -1802,7 +1802,7 @@ def apply_promo_code(request):
             cart_items = []
             for pid, item in cart_data.items():
                 try:
-                    product = Product.objects.get(id=pid)
+                    product = Product.objects.get(id=pid, is_active=True)
                     quantity = item.get('quantity', 1)
                     cart_items.append({
                         'product': product,
@@ -1861,7 +1861,7 @@ def trending_products_view(request):
     sort_by = request.GET.get('sort', 'trending')
 
     # Annotate products with total stock
-    trending_products = Product.objects.filter(is_trending=True).annotate(
+    trending_products = Product.objects.filter(is_trending=True, is_active=True).annotate(
         total_stock=Sum('stock_records__quantity')
     ).filter(total_stock__gt=0)  # Only show products with stock
 
@@ -1947,7 +1947,7 @@ def search_products(request):
         products = cached_results
     else:
         # Build query
-        products = Product.objects.filter(category__is_active=True)
+        products = Product.objects.filter(is_active=True)
 
         if query:
             products = products.filter(
@@ -1957,17 +1957,17 @@ def search_products(request):
             )
 
         if category_id:
-            products = products.filter(category_id=category_id)
+            products = products.filter(category_id=category_id, is_active=True)
 
         if min_price:
             try:
-                products = products.filter(price__gte=float(min_price))
+                products = products.filter(price__gte=float(min_price), is_active=True)
             except ValueError:
                 pass
 
         if max_price:
             try:
-                products = products.filter(price__lte=float(max_price))
+                products = products.filter(price__lte=float(max_price), is_active=True)
             except ValueError:
                 pass
 
@@ -2023,7 +2023,7 @@ def search_suggestions(request):
             # Basic search in product name and description
             products = Product.objects.filter(
                 Q(name__icontains=query) |
-                Q(description__icontains=query)
+                Q(description__icontains=query), is_active=True
             )
 
             # If you have categories, also search there
@@ -2031,7 +2031,7 @@ def search_suggestions(request):
                 products = products.filter(
                     Q(name__icontains=query) |
                     Q(description__icontains=query) |
-                    Q(category__name__icontains=query)
+                    Q(category__name__icontains=query), is_active=True
                 )
 
             # Select related category if it exists
