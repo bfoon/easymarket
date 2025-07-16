@@ -254,7 +254,7 @@ class DriverCreateView(LoginRequiredMixin, CreateView):
         return reverse_lazy('logistics:driver_detail', kwargs={'pk': self.object.pk})
 
     def form_valid(self, form):
-        messages.success(self.request, f'Driver {form.instance.user.get_full_name()} created successfully!')
+        messages.success(self.request, f'Driver created successfully!')
         return super().form_valid(form)
 
 

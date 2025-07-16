@@ -1,4 +1,4 @@
-from django.shortcuts import render, redirect
+from django.shortcuts import get_object_or_404, render, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import login, get_user_model
 from django.contrib.auth import authenticate, login, logout
@@ -6,9 +6,14 @@ from .models import User
 from .models import Address
 from marketplace.utils import migrate_session_cart_to_user
 from django.contrib import messages
-from .forms import UserRegisterForm
 from django.contrib.auth.hashers import make_password
 from django.utils.text import slugify
+from django.contrib.auth.forms import PasswordChangeForm
+from django.contrib.auth import update_session_auth_hash
+from .forms import ProfileUpdateForm
+from orders.models import Order
+from django.core.paginator import Paginator
+
 
 
 def login_view(request):
@@ -98,3 +103,49 @@ def edit_address_modal(request):
         return redirect(request.META.get('HTTP_REFERER', 'marketplace:product_list'))
 
     return redirect('marketplace:product_list')
+
+
+@login_required
+def user_profile(request):
+    user = request.user
+    addresses = Address.objects.filter(user=user)
+
+    # Get orders with pagination
+    order_list = Order.objects.filter(buyer=user).order_by('-created_at')
+    paginator = Paginator(order_list, 5)  # Show 5 orders per page
+    page_number = request.GET.get('page')
+    orders = paginator.get_page(page_number)
+
+    # Handle forms
+    if request.method == 'POST':
+        profile_form = ProfileUpdateForm(request.POST, request.FILES, instance=user)
+        password_form = PasswordChangeForm(user, request.POST)
+
+        if 'update_profile' in request.POST and profile_form.is_valid():
+            profile_form.save()
+            messages.success(request, "Profile updated successfully.")
+            return redirect('accounts:user_profile')
+
+        if 'change_password' in request.POST and password_form.is_valid():
+            user = password_form.save()
+            update_session_auth_hash(request, user)
+            messages.success(request, "Password changed successfully.")
+            return redirect('accounts:user_profile')
+    else:
+        profile_form = ProfileUpdateForm(instance=user)
+        password_form = PasswordChangeForm(user)
+
+    return render(request, 'accounts/user_profile.html', {
+        'user': user,
+        'addresses': addresses,
+        'profile_form': profile_form,
+        'orders': orders,  # This is the paginated object
+        'password_form': password_form
+    })
+
+@login_required
+def delete_address(request, address_id):
+    address = get_object_or_404(Address, id=address_id, user=request.user)
+    address.delete()
+    messages.success(request, 'Address removed successfully.')
+    return redirect('accounts:user_profile')

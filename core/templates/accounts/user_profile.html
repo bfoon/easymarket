@@ -1,0 +1,196 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}My Profile{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{% static 'css/main.css' %}">
+
+<div class="container py-5">
+  <div class="row justify-content-center">
+    <div class="col-lg-9">
+      <div class="card shadow-lg border-0 rounded-4 overflow-hidden">
+        <!-- Header Section -->
+        <div class="bg-gradient-primary text-white px-4 py-4 d-flex align-items-center">
+          {% if user.profile_pic %}
+            <img src="{{ user.profile_pic.url }}" alt="Profile Picture" class="rounded-circle border border-white border-3 me-3" width="80" height="80" style="object-fit: cover;">
+          {% else %}
+            <div class="bg-white rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 80px; height: 80px;">
+              <i class="fas fa-user fa-2x text-muted"></i>
+            </div>
+          {% endif %}
+          <div>
+            <h4 class="mb-0 fw-bold">{{ user.get_full_name }}</h4>
+            <div class="small text-white-50">{{ user.email }}</div>
+            {% if user.telephone %}
+              <div class="small text-white-50">{{ user.telephone }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Body Section with Tabs -->
+        <div class="card-body p-4">
+          {% if messages %}
+            {% for message in messages %}
+              <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+              </div>
+            {% endfor %}
+          {% endif %}
+
+          <ul class="nav nav-tabs nav-justified mb-4" id="profileTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+              <button class="nav-link active" id="info-tab" data-bs-toggle="tab" data-bs-target="#info" type="button" role="tab">Profile Info</button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="password-tab" data-bs-toggle="tab" data-bs-target="#password" type="button" role="tab">Password</button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" id="address-tab" data-bs-toggle="tab" data-bs-target="#address" type="button" role="tab">Addresses</button>
+            </li>
+          </ul>
+
+          <div class="tab-content" id="profileTabsContent">
+            <!-- Profile Info Tab -->
+            <div class="tab-pane fade show active" id="info" role="tabpanel">
+              <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                {{ profile_form.as_p }}
+                <button type="submit" name="update_profile" class="btn btn-primary mt-2">
+                  <i class="fas fa-save me-1"></i> Update Profile
+                </button>
+              </form>
+            </div>
+
+            <!-- Password Change Tab -->
+            <div class="tab-pane fade" id="password" role="tabpanel">
+              <form method="post" class="mt-3">
+                {% csrf_token %}
+                {{ password_form.as_p }}
+                <button type="submit" name="change_password" class="btn btn-outline-danger">
+                  <i class="fas fa-key me-1"></i> Change Password
+                </button>
+              </form>
+            </div>
+
+            <!-- Address Info Tab -->
+            <div class="tab-pane fade" id="address" role="tabpanel">
+              {% if addresses %}
+                {% for address in addresses %}
+                  <div class="bg-light-subtle p-3 rounded-3 mb-3 d-flex justify-content-between align-items-start">
+                    <div>
+                      <p class="mb-1">
+                        <i class="fas fa-home me-2 text-secondary"></i>{{ address.full_address }}
+                      </p>
+                      {% if address.geo_code %}
+                        <small class="text-muted"><i class="fas fa-map-pin me-1"></i>Geo Code: {{ address.geo_code }}</small>
+                      {% endif %}
+                    </div>
+                    <div>
+                      <a href="#" class="btn btn-sm btn-outline-secondary me-1">
+                        <i class="fas fa-edit"></i>
+                      </a>
+                      <a href="#" class="btn btn-sm btn-outline-danger">
+                        <i class="fas fa-trash-alt"></i>
+                      </a>
+                    </div>
+                  </div>
+                {% endfor %}
+              {% else %}
+                <p class="text-muted mt-2">No addresses found. You can add one during checkout.</p>
+              {% endif %}
+            </div>
+          </div>
+
+          {% if user.verify_doc %}
+            <hr class="my-4">
+            <h5 class="mb-3 text-primary"><i class="fas fa-id-card me-2 text-success"></i>Verification Document</h5>
+            <a href="{{ user.verify_doc.url }}" target="_blank" class="btn btn-outline-success">
+              <i class="fas fa-file-alt me-1"></i> View Document
+            </a>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Order History with Pagination -->
+      <hr class="my-5" id="orders">
+      <h5 class="text-primary"><i class="fas fa-box me-2 text-warning"></i>Order History</h5>
+      {% if orders %}
+        <ul class="list-group mb-3">
+          {% for order in orders %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              <div>
+                <strong>#{{ order.id|slice:":8" }}</strong> - {{ order.created_at|date:"M d, Y" }}<br>
+                <small class="text-muted">{{ order.status }}</small>
+              </div>
+              <a href="{% url 'orders:order_detail' order.id %}" class="btn btn-sm btn-outline-primary">View</a>
+            </li>
+          {% endfor %}
+        </ul>
+
+        <!-- Pagination Controls -->
+        <nav aria-label="Order pagination">
+          <ul class="pagination justify-content-center">
+            {% if orders.has_previous %}
+              <li class="page-item">
+                <a class="page-link" href="?page={{ orders.previous_page_number }}#orders">&laquo;</a>
+              </li>
+            {% else %}
+              <li class="page-item disabled"><span class="page-link">&laquo;</span></li>
+            {% endif %}
+
+            {% for num in orders.paginator.page_range %}
+              {% if orders.number == num %}
+                <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+              {% elif num > orders.number|add:'-3' and num < orders.number|add:'3' %}
+                <li class="page-item"><a class="page-link" href="?page={{ num }}#orders">{{ num }}</a></li>
+              {% endif %}
+            {% endfor %}
+
+            {% if orders.has_next %}
+              <li class="page-item">
+                <a class="page-link" href="?page={{ orders.next_page_number }}#orders">&raquo;</a>
+              </li>
+            {% else %}
+              <li class="page-item disabled"><span class="page-link">&raquo;</span></li>
+            {% endif %}
+          </ul>
+        </nav>
+      {% else %}
+        <p class="text-muted">No orders yet.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<style>
+  .bg-gradient-primary {
+    background: linear-gradient(135deg, #232f3e, #ff9900);
+  }
+
+  .bg-light-subtle {
+    background-color: #f8f9fa;
+    transition: box-shadow 0.2s ease;
+  }
+
+  .bg-light-subtle:hover {
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+  }
+
+  .nav-tabs .nav-link.active {
+    font-weight: 600;
+    border-color: #ff9900 #ff9900 #fff;
+    color: #232f3e;
+  }
+
+  .nav-tabs .nav-link {
+    color: #6c757d;
+  }
+
+  .btn-outline-danger:hover {
+    background-color: #dc3545;
+    color: #fff;
+  }
+</style>
+{% endblock %}
