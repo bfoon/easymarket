@@ -45,46 +45,39 @@ class ShipmentForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # Set up querysets with proper ordering
-        self.fields['shipping_address'].queryset = ShippingAddress.objects.select_related('order').order_by('-id')
         self.fields['warehouse'].queryset = Warehouse.objects.order_by('name')
-        self.fields['driver'].queryset = Driver.objects.select_related('user').filter(user__is_active=True).order_by(
-            'user__first_name')
+        self.fields['driver'].queryset = Driver.objects.select_related('user').filter(user__is_active=True).order_by('user__first_name')
         self.fields['vehicle'].queryset = Vehicle.objects.select_related('driver').order_by('plate_number')
         self.fields['logistic_office'].queryset = LogisticOffice.objects.order_by('name')
 
-        # Filter orders based on whether this is a new shipment or editing existing
-        is_new_shipment = not (self.instance and self.instance.pk)
+        is_new_shipment = not self.instance or not self.instance.pk
 
         if is_new_shipment:
-            # Creating new shipment - only show processing orders
-            processing_orders = Order.objects.filter(status='processing').order_by('-created_at')
-            self.fields['order'].queryset = processing_orders
+            # Default status on creation
+            self.fields['status'].initial = 'pending'
+            # Limit to processing orders only
+            self.fields['order'].queryset = Order.objects.filter(status='processing').order_by('-created_at')
             self.fields['order'].help_text = "Only orders with 'Processing' status are available for new shipments"
-
-            # Also filter shipping addresses to only those from processing orders
-            processing_order_addresses = ShippingAddress.objects.filter(
+            self.fields['shipping_address'].queryset = ShippingAddress.objects.filter(
                 order__status='processing'
-            ).order_by('-id')
-            self.fields['shipping_address'].queryset = processing_order_addresses
+            ).distinct().order_by('-id')
         else:
-            # Editing existing shipment - show all orders but disable the field
             self.fields['order'].queryset = Order.objects.order_by('-created_at')
-            self.fields['shipping_address'].disabled = True
             self.fields['order'].disabled = True
+            self.fields['shipping_address'].queryset = ShippingAddress.objects.order_by('-id')
+            self.fields['shipping_address'].disabled = True
 
-        # Customize field labels and help texts
-        self.fields['weight_kg'].help_text = "Weight in kilograms"
-        self.fields['size_cubic_meters'].help_text = "Size in cubic meters"
-        self.fields['collect_time'].help_text = "When the shipment will be collected"
-        self.fields['estimated_dropoff_time'].help_text = "Estimated delivery time"
-
-        # Make certain fields optional in the form display
+        # Optional fields
         self.fields['warehouse'].required = False
         self.fields['driver'].required = False
         self.fields['vehicle'].required = False
         self.fields['logistic_office'].required = False
-        self.fields['order'].required = False
+
+        # Help texts
+        self.fields['weight_kg'].help_text = "Weight in kilograms"
+        self.fields['size_cubic_meters'].help_text = "Size in cubic meters"
+        self.fields['collect_time'].help_text = "When the shipment will be collected"
+        self.fields['estimated_dropoff_time'].help_text = "Estimated delivery time"
 
     def clean(self):
         cleaned_data = super().clean()
@@ -94,25 +87,19 @@ class ShipmentForm(forms.ModelForm):
         vehicle = cleaned_data.get('vehicle')
         weight_kg = cleaned_data.get('weight_kg')
 
-        # Validate time relationship
         if collect_time and estimated_dropoff_time:
             if collect_time >= estimated_dropoff_time:
-                raise ValidationError("Estimated dropoff time must be after collection time.")
-
-            # Check if collection time is in the past (only for new shipments)
+                self.add_error('estimated_dropoff_time', "Estimated dropoff time must be after collection time.")
             if not self.instance.pk and collect_time < timezone.now():
-                raise ValidationError("Collection time cannot be in the past.")
+                self.add_error('collect_time', "Collection time cannot be in the past.")
 
-        # Validate driver and vehicle relationship
         if driver and vehicle:
             if vehicle.driver != driver:
-                raise ValidationError(
-                    f"Vehicle {vehicle.plate_number} is not assigned to driver {driver.user.get_full_name()}.")
+                self.add_error('vehicle', f"Vehicle {vehicle.plate_number} is not assigned to driver {driver.user.get_full_name()}.")
 
-        # Validate vehicle capacity
         if vehicle and weight_kg:
             if weight_kg > vehicle.capacity_kg:
-                raise ValidationError(f"Weight ({weight_kg} kg) exceeds vehicle capacity ({vehicle.capacity_kg} kg).")
+                self.add_error('weight_kg', f"Weight ({weight_kg} kg) exceeds vehicle capacity ({vehicle.capacity_kg} kg).")
 
         return cleaned_data
 

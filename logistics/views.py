@@ -8,6 +8,8 @@ from django.http import JsonResponse
 from django.core.paginator import Paginator
 from django.forms import modelformset_factory
 from django.utils import timezone
+from logistics.models import Shipment
+from logistics.forms import ShipmentForm
 
 from .models import (
     Shipment, ShipmentBox, BoxItem, Driver, Vehicle,
@@ -102,26 +104,31 @@ class ShipmentDetailView(LoginRequiredMixin, DetailView):
 class ShipmentCreateView(LoginRequiredMixin, CreateView):
     model = Shipment
     template_name = 'logistics/shipment_form.html'
-    form_class = None  # We'll set this in get_form_class
-
-    def get_form_class(self):
-        """Use our custom form with filtered orders"""
-        from .forms import ShipmentForm
-        return ShipmentForm
+    form_class = ShipmentForm
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # Add available processing orders count for debugging
-        processing_orders_count = Order.objects.filter(status='processing').count()
-        context['processing_orders_count'] = processing_orders_count
+        context['processing_orders_count'] = Order.objects.filter(status='processing').count()
         return context
 
     def get_success_url(self):
         return reverse_lazy('logistics:shipment_detail', kwargs={'pk': self.object.pk})
 
     def form_valid(self, form):
+        # You can also assign request.user or other meta info here
+        response = super().form_valid(form)
         messages.success(self.request, 'Shipment created successfully!')
-        return super().form_valid(form)
+        return response
+
+    def form_invalid(self, form):
+        # Log all field errors in the console for debugging
+        print("\n=== Shipment Form Errors ===")
+        for field, errors in form.errors.items():
+            print(f"{field}: {errors}")
+
+        # Optional: Set a user-facing message
+        messages.error(self.request, "There was an error creating the shipment. Please review the form.")
+        return super().form_invalid(form)
 
 
 class ShipmentUpdateView(LoginRequiredMixin, UpdateView):
