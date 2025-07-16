@@ -13,6 +13,8 @@ urlpatterns = [
     path('shipments/create/', views.ShipmentCreateView.as_view(), name='shipment_create'),
     path('shipments/<int:pk>/edit/', views.ShipmentUpdateView.as_view(), name='shipment_edit'),
     path('shipments/<int:pk>/update-status/', views.update_shipment_status, name='update_shipment_status'),
+    path('ajax/addresses/', views.ajax_addresses_for_order, name='ajax_addresses_for_order'),
+    path('ajax/orders/', views.ajax_orders_for_address, name='ajax_orders_for_address'),
 
     # Order Delivery Management
     path('shipments/<int:shipment_pk>/mark-delivered/', views.mark_order_as_delivered, name='mark_order_delivered'),

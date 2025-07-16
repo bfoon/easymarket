@@ -10,6 +10,8 @@ from django.forms import modelformset_factory
 from django.utils import timezone
 from logistics.models import Shipment
 from logistics.forms import ShipmentForm
+from django.http import JsonResponse
+from orders.models import Order, ShippingAddress
 
 from .models import (
     Shipment, ShipmentBox, BoxItem, Driver, Vehicle,
@@ -130,6 +132,27 @@ class ShipmentCreateView(LoginRequiredMixin, CreateView):
         messages.error(self.request, "There was an error creating the shipment. Please review the form.")
         return super().form_invalid(form)
 
+def ajax_addresses_for_order(request):
+    order_id = request.GET.get('order_id')
+    addresses = ShippingAddress.objects.filter(order_id=order_id)
+    data = {
+        'addresses': [
+            {'id': a.id, 'display': str(a)} for a in addresses
+        ]
+    }
+    return JsonResponse(data)
+
+def ajax_orders_for_address(request):
+    address_id = request.GET.get('address_id')
+    address = ShippingAddress.objects.filter(id=address_id).first()
+    orders = Order.objects.filter(shippingaddress=address) if address else []
+    data = {
+        'orders': [
+            {'id': o.id, 'display': f'#{o.id} - {o.created_at.strftime("%Y-%m-%d")}'}
+            for o in orders
+        ]
+    }
+    return JsonResponse(data)
 
 class ShipmentUpdateView(LoginRequiredMixin, UpdateView):
     model = Shipment

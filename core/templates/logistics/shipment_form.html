@@ -337,4 +337,57 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const orderSelect = document.getElementById('id_order');
+    const addressSelect = document.getElementById('id_shipping_address');
+
+    function updateShippingAddresses(orderId) {
+        fetch(`/logistics/ajax/addresses/?order_id=${orderId}`)
+            .then(response => response.json())
+            .then(data => {
+                addressSelect.innerHTML = '';
+                data.addresses.forEach(addr => {
+                    const option = document.createElement('option');
+                    option.value = addr.id;
+                    option.textContent = addr.display;
+                    addressSelect.appendChild(option);
+                });
+            });
+    }
+
+    function updateOrders(addressId) {
+        fetch(`/logistics/ajax/orders/?address_id=${addressId}`)
+            .then(response => response.json())
+            .then(data => {
+                orderSelect.innerHTML = '';
+                data.orders.forEach(order => {
+                    const option = document.createElement('option');
+                    option.value = order.id;
+                    option.textContent = order.display;
+                    orderSelect.appendChild(option);
+                });
+            });
+    }
+
+    if (orderSelect) {
+        orderSelect.addEventListener('change', function () {
+            const orderId = this.value;
+            if (orderId) {
+                updateShippingAddresses(orderId);
+            }
+        });
+    }
+
+    if (addressSelect) {
+        addressSelect.addEventListener('change', function () {
+            const addressId = this.value;
+            if (addressId) {
+                updateOrders(addressId);
+            }
+        });
+    }
+});
+</script>
+
 {% endblock %}
