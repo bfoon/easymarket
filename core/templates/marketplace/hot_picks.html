@@ -7,6 +7,386 @@
 <link rel="stylesheet" href="{% static 'css/main.css' %}">
 <link rel="stylesheet" href="{% static 'css/hot_pick.css' %}">
 
+<style>
+@keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
+}
+
+@keyframes glow {
+    0%, 100% { box-shadow: 0 0 20px rgba(255, 193, 7, 0.3); }
+    50% { box-shadow: 0 0 30px rgba(255, 193, 7, 0.6); }
+}
+
+@keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
+.creative-product-card {
+    background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%);
+    border-radius: 20px;
+    border: none;
+    transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+    overflow: hidden;
+    position: relative;
+    min-width: 280px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+}
+
+.creative-product-card:hover {
+    transform: translateY(-15px) scale(1.02);
+    box-shadow: 0 25px 50px rgba(0,0,0,0.15);
+}
+
+.creative-product-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255,255,255,0.4),
+        transparent
+    );
+    transition: left 0.5s;
+}
+
+.creative-product-card:hover::before {
+    left: 100%;
+}
+
+.creative-image-container {
+    position: relative;
+    height: 240px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 16px;
+    margin: 15px;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(102,126,234,0.3);
+}
+
+.creative-image-container::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.1) 50%, transparent 70%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.creative-product-card:hover .creative-image-container::after {
+    opacity: 1;
+}
+
+.creative-product-image {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    padding: 20px;
+    transition: transform 0.3s ease;
+    background: rgba(255,255,255,0.95);
+    border-radius: 12px;
+    margin: 8px;
+}
+
+.creative-product-card:hover .creative-product-image {
+    transform: scale(1.05);
+}
+
+.floating-badge {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    z-index: 10;
+    animation: float 3s ease-in-out infinite;
+}
+
+.badge-fire {
+    background: linear-gradient(45deg, #ff6b35, #f7931e);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    box-shadow: 0 4px 15px rgba(255,107,53,0.4);
+}
+
+.badge-new-creative {
+    background: linear-gradient(45deg, #667eea, #764ba2);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    box-shadow: 0 4px 15px rgba(102,126,234,0.4);
+}
+
+.badge-sale-creative {
+    background: linear-gradient(45deg, #e74c3c, #c0392b);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    box-shadow: 0 4px 15px rgba(231,76,60,0.4);
+    animation: glow 2s ease-in-out infinite;
+}
+
+.creative-card-body {
+    padding: 20px;
+    position: relative;
+}
+
+.creative-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #2c3e50;
+    margin-bottom: 15px;
+    line-height: 1.3;
+    min-height: 2.6rem;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.creative-title a {
+    color: inherit;
+    text-decoration: none;
+    transition: color 0.3s ease;
+}
+
+.creative-title a:hover {
+    color: #667eea;
+}
+
+.creative-price-container {
+    margin-bottom: 20px;
+    padding: 15px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 12px;
+    border: 1px solid rgba(102,126,234,0.1);
+}
+
+.creative-original-price {
+    font-size: 0.9rem;
+    color: #6c757d;
+    text-decoration: line-through;
+    display: block;
+    margin-bottom: 5px;
+}
+
+.creative-current-price {
+    font-size: 1.4rem;
+    font-weight: 800;
+    background: linear-gradient(45deg, #667eea, #764ba2);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.creative-add-btn {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.creative-add-btn.btn-primary-creative {
+    background: linear-gradient(45deg, #667eea, #764ba2);
+    color: white;
+    box-shadow: 0 4px 15px rgba(102,126,234,0.4);
+}
+
+.creative-add-btn.btn-primary-creative:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(102,126,234,0.6);
+    background: linear-gradient(45deg, #764ba2, #667eea);
+}
+
+.creative-add-btn.btn-secondary-creative {
+    background: linear-gradient(45deg, #6c757d, #495057);
+    color: white;
+}
+
+.creative-add-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255,255,255,0.2),
+        transparent
+    );
+    transition: left 0.5s;
+}
+
+.creative-add-btn:hover::before {
+    left: 100%;
+}
+
+.category-header-creative {
+    display: flex;
+    align-items: center;
+    margin-bottom: 25px;
+    padding: 20px;
+    background: linear-gradient(135deg, rgba(102,126,234,0.1) 0%, rgba(118,75,162,0.1) 100%);
+    border-radius: 16px;
+    border: 1px solid rgba(102,126,234,0.2);
+    backdrop-filter: blur(10px);
+}
+
+.category-badge-creative {
+    background: linear-gradient(45deg, #667eea, #764ba2);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 25px;
+    font-weight: 700;
+    margin-right: 15px;
+    box-shadow: 0 4px 15px rgba(102,126,234,0.3);
+    position: relative;
+    overflow: hidden;
+}
+
+.category-badge-creative::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255,255,255,0.3),
+        transparent
+    );
+    animation: shimmer 2s infinite;
+}
+
+.scroll-btn-creative {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    border: none;
+    background: linear-gradient(45deg, #667eea, #764ba2);
+    color: white;
+    box-shadow: 0 8px 25px rgba(102,126,234,0.4);
+    transition: all 0.3s ease;
+    z-index: 10;
+}
+
+.scroll-btn-creative:hover {
+    transform: scale(1.1);
+    box-shadow: 0 12px 35px rgba(102,126,234,0.6);
+}
+
+.products-container-creative {
+    scroll-behavior: smooth;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    padding: 10px 0;
+}
+
+.products-container-creative::-webkit-scrollbar {
+    display: none;
+}
+
+.section-title-creative {
+    font-size: 2.5rem;
+    font-weight: 800;
+    background: linear-gradient(45deg, #667eea, #764ba2);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-align: center;
+    margin-bottom: 40px;
+    position: relative;
+}
+
+.section-title-creative::after {
+    content: '';
+    position: absolute;
+    bottom: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100px;
+    height: 4px;
+    background: linear-gradient(45deg, #667eea, #764ba2);
+    border-radius: 2px;
+}
+
+.quick-actions {
+    position: absolute;
+    top: 15px;
+    left: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    opacity: 0;
+    transform: translateX(-20px);
+    transition: all 0.3s ease;
+}
+
+.creative-product-card:hover .quick-actions {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.quick-action-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255,255,255,0.9);
+    color: #667eea;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.quick-action-btn:hover {
+    background: #667eea;
+    color: white;
+    transform: scale(1.1);
+}
+
+@media (max-width: 768px) {
+    .creative-product-card {
+        min-width: 250px;
+    }
+
+    .creative-image-container {
+        height: 200px;
+    }
+
+    .section-title-creative {
+        font-size: 2rem;
+    }
+}
+</style>
+
 <!-- Hero Section -->
 <section class="hero-section text-white py-4" style="border-bottom: 3px solid var(--amazon-orange);">
     <div class="container">
@@ -48,94 +428,101 @@
 </section>
 
 <!-- Hot Picks Section -->
-<section class="hot-picks-section py-5">
+<section class="hot-picks-section py-5" style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 50%, #f8f9fa 100%);">
     <div class="container">
-        <h2 class="section-title mb-4">
-            <i class="fas fa-fire trending-fire me-2"></i> Today's Hot Picks
+        <h2 class="section-title-creative">
+            <i class="fas fa-fire me-3" style="color: #ff6b35;"></i>Today's Hot Picks
         </h2>
 
         {% for block in hot_products_by_category %}
         <div class="mb-5">
 
-            <div class="d-flex align-items-center mb-2">
-                <span class="badge bg-warning text-dark me-2">{{ block.category.name }}</span>
-                <small class="text-muted">Top picks from {{ block.category.name }}</small>
+            <div class="category-header-creative">
+                <span class="category-badge-creative">{{ block.category.name }}</span>
+                <div>
+                    <h4 class="mb-1" style="color: #2c3e50; font-weight: 700;">{{ block.category.name }} Collection</h4>
+                    <small class="text-muted">Discover our most popular {{ block.category.name|lower }} items</small>
+                </div>
             </div>
 
             {% if block.products %}
             <div class="position-relative">
 
-                <button class="btn scroll-btn position-absolute top-50 start-0 translate-middle-y scroll-left-{{ forloop.counter }}">
+                <button class="btn scroll-btn-creative position-absolute top-50 start-0 translate-middle-y scroll-left-{{ forloop.counter }}" style="margin-left: -25px;">
                     <i class="fas fa-chevron-left"></i>
                 </button>
-                <button class="btn scroll-btn position-absolute top-50 end-0 translate-middle-y scroll-right-{{ forloop.counter }}">
+                <button class="btn scroll-btn-creative position-absolute top-50 end-0 translate-middle-y scroll-right-{{ forloop.counter }}" style="margin-right: -25px;">
                     <i class="fas fa-chevron-right"></i>
                 </button>
 
-                <div class="d-flex overflow-auto gap-3 pb-3 px-4 products-container products-container-{{ forloop.counter }}">
+                <div class="d-flex overflow-auto gap-4 pb-4 px-5 products-container-creative products-container-{{ forloop.counter }}">
                     {% for product in block.products %}
-                    <div class="product-card shadow-sm">
-                        <div class="product-image-container position-relative">
+                    <div class="creative-product-card">
+                        <div class="creative-image-container">
+                            <div class="quick-actions">
+                                <button class="quick-action-btn" title="Add to Wishlist">
+                                    <i class="far fa-heart"></i>
+                                </button>
+                                <button class="quick-action-btn" title="Quick View">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="quick-action-btn" title="Compare">
+                                    <i class="fas fa-exchange-alt"></i>
+                                </button>
+                            </div>
+
                             <a href="{% url 'marketplace:product_detail' product.id %}">
-                                <img src="{{ product.image.url }}" class="product-image" alt="{{ product.name }}">
+                                <img src="{{ product.image.url }}"
+                                     class="creative-product-image"
+                                     alt="{{ product.name }}">
                             </a>
 
-                            {% if product.discount_percentage %}
-                                <span class="badge badge-sale position-absolute top-0 end-0 m-2">
-                                    {{ product.discount_percentage }}% OFF
-                                </span>
-                            {% elif product.is_new %}
-                                <span class="badge badge-new">NEW</span>
-                            {% else %}
-                                <span class="badge badge-hot">
-                                    <i class="fas fa-fire me-1"></i>
-                                </span>
-                            {% endif %}
+                            <div class="floating-badge">
+                                {% if product.discount_percentage %}
+                                    <span class="badge-sale-creative">
+                                        {{ product.discount_percentage }}% OFF
+                                    </span>
+                                {% elif product.is_new %}
+                                    <span class="badge-new-creative">NEW</span>
+                                {% else %}
+                                    <span class="badge-fire">
+                                        <i class="fas fa-fire me-1"></i>HOT
+                                    </span>
+                                {% endif %}
+                            </div>
                         </div>
 
-                        <div class="card-body">
-
-
-                            <h6 class="card-title mb-2">
-                                <a href="{% url 'marketplace:product_detail' product.id %}" class="text-decoration-none text-dark">
-                                    {{ product.name|truncatechars:30 }}
+                        <div class="creative-card-body">
+                            <h6 class="creative-title">
+                                <a href="{% url 'marketplace:product_detail' product.id %}">
+                                    {{ product.name|truncatechars:40 }}
                                 </a>
                             </h6>
 
-                            {% if product.average_rating %}
-                            <div class="rating mb-2">
-                                {% for i in "12345" %}
-                                    {% if forloop.counter <= product.average_rating %}
-                                        <i class="fas fa-star text-warning"></i>
-                                    {% else %}
-                                        <i class="far fa-star text-muted"></i>
-                                    {% endif %}
-                                {% endfor %}
-                                {% if product.review_count %}
-                                    <small class="text-muted ms-1">({{ product.review_count|floatformat:0 }})</small>
-                                {% endif %}
-                            </div>
-                            {% endif %}
-
-                            <div class="price-container mb-3">
+                            <div class="creative-price-container">
                                 {% if product.original_price and product.original_price != product.price %}
-                                    <span class="original-price text-muted text-decoration-line-through">D{{ product.original_price }}</span>
+                                    <span class="creative-original-price">D{{ product.original_price }}</span>
                                 {% endif %}
-                                <span class="price-tag fw-bold ms-2">D{{ product.price }}</span>
+                                <div class="creative-current-price">D{{ product.price }}</div>
+                                {% if product.original_price and product.original_price != product.price %}
+                                    <small class="text-success fw-bold">
+                                        <i class="fas fa-tag me-1"></i>
+                                        You Save!
+                                    </small>
+                                {% endif %}
                             </div>
 
-                            <button class="btn {% if product.is_in_stock %}btn-outline-primary{% else %}btn-secondary{% endif %} w-100 btn-sm"
+                            <button class="creative-add-btn {% if product.is_in_stock %}btn-primary-creative{% else %}btn-secondary-creative{% endif %}"
                                     onclick="addToCart({{ product.id }}, this)"
                                     data-stock="{{ product.stock.quantity|default:0 }}"
                                     {% if not product.is_in_stock %} disabled {% endif %}>
-                                <i class="fas {% if product.is_in_stock %}fa-cart-plus{% else %}fa-ban{% endif %} me-1"></i>
+                                <i class="fas {% if product.is_in_stock %}fa-cart-plus{% else %}fa-ban{% endif %} me-2"></i>
                                 {% if product.is_in_stock %}
                                     Add to Cart
                                 {% else %}
                                     Out of Stock
                                 {% endif %}
                             </button>
-
                         </div>
                     </div>
                     {% endfor %}
@@ -143,9 +530,9 @@
 
             </div>
             {% else %}
-            <div class="empty-state text-center w-100 py-4">
-                <i class="fas fa-fire fa-2x text-muted mb-2"></i>
-                <h5 class="text-muted">No hot picks in this category</h5>
+            <div class="empty-state text-center w-100 py-5" style="background: rgba(255,255,255,0.8); border-radius: 20px; backdrop-filter: blur(10px);">
+                <i class="fas fa-fire fa-3x mb-3" style="color: #ff6b35;"></i>
+                <h5 style="color: #2c3e50; font-weight: 700;">No hot picks in this category</h5>
                 <p class="small text-muted">Check back soon for exciting deals!</p>
             </div>
             {% endif %}
@@ -158,5 +545,67 @@
 
 <script src="{% static 'js/main.js' %}"></script>
 <script src="{% static 'js/hot_pick.js' %}"></script>
+
+<script>
+// Enhanced scroll functionality with easing
+document.addEventListener('DOMContentLoaded', function() {
+    // Add smooth scrolling for all category containers
+    {% for block in hot_products_by_category %}
+    const container{{ forloop.counter }} = document.querySelector('.products-container-{{ forloop.counter }}');
+    const leftBtn{{ forloop.counter }} = document.querySelector('.scroll-left-{{ forloop.counter }}');
+    const rightBtn{{ forloop.counter }} = document.querySelector('.scroll-right-{{ forloop.counter }}');
+
+    if (container{{ forloop.counter }} && leftBtn{{ forloop.counter }} && rightBtn{{ forloop.counter }}) {
+        leftBtn{{ forloop.counter }}.addEventListener('click', () => {
+            container{{ forloop.counter }}.scrollBy({ left: -300, behavior: 'smooth' });
+        });
+
+        rightBtn{{ forloop.counter }}.addEventListener('click', () => {
+            container{{ forloop.counter }}.scrollBy({ left: 300, behavior: 'smooth' });
+        });
+    }
+    {% endfor %}
+
+    // Add intersection observer for animations
+    const cards = document.querySelectorAll('.creative-product-card');
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+                entry.target.style.opacity = '1';
+                entry.target.style.transform = 'translateY(0)';
+            }
+        });
+    }, { threshold: 0.1 });
+
+    cards.forEach((card) => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(30px)';
+        card.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+        observer.observe(card);
+    });
+
+    // Add loading states for buttons
+    document.querySelectorAll('.creative-add-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            if (!this.disabled) {
+                this.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Adding...';
+                this.disabled = true;
+
+                // Simulate adding to cart
+                setTimeout(() => {
+                    this.innerHTML = '<i class="fas fa-check me-2"></i>Added!';
+                    this.style.background = 'linear-gradient(45deg, #28a745, #20c997)';
+
+                    setTimeout(() => {
+                        this.innerHTML = '<i class="fas fa-cart-plus me-2"></i>Add to Cart';
+                        this.style.background = '';
+                        this.disabled = false;
+                    }, 2000);
+                }, 1000);
+            }
+        });
+    });
+});
+</script>
 
 {% endblock %}

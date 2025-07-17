@@ -7,6 +7,9 @@ class User(AbstractUser):
     telephone = models.CharField(max_length=200, blank=True, null=True)
     is_buyer = models.BooleanField(default=False)
     is_seller = models.BooleanField(default=False)
+    is_logistic = models.BooleanField(default=False)
+    is_finance = models.BooleanField(default=False)
+    is_verified = models.BooleanField(default=False)
 
     class Meta:
         swappable = 'AUTH_USER_MODEL'

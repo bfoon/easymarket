@@ -7,12 +7,1082 @@
 <link rel="stylesheet" href="{% static 'css/main.css' %}">
 <link rel="stylesheet" href="{% static 'css/product_detail.css' %}">
 <link rel="stylesheet" href="{% static 'css/message.css' %}">
-<!-- Amazon-Style Breadcrumb -->
-<section class="amazon-breadcrumb py-2 bg-light border-bottom">
+
+<style>
+@keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-8px); }
+}
+
+@keyframes glow {
+    0%, 100% { box-shadow: 0 0 20px rgba(102,126,234, 0.3); }
+    50% { box-shadow: 0 0 30px rgba(102,126,234, 0.6); }
+}
+
+@keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
+@keyframes slideInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+@keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+}
+
+.creative-breadcrumb {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-bottom: 1px solid rgba(102,126,234,0.1);
+    position: relative;
+    overflow: hidden;
+}
+
+.creative-breadcrumb::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(102,126,234,0.1),
+        transparent
+    );
+    animation: shimmer 3s infinite;
+}
+
+.creative-breadcrumb .breadcrumb-item a {
+    color: #667eea;
+    text-decoration: none;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.creative-breadcrumb .breadcrumb-item a:hover {
+    color: #764ba2;
+    transform: translateY(-1px);
+}
+
+.creative-product-gallery {
+    background: linear-gradient(145deg, rgba(255,255,255,0.9) 0%, rgba(248,249,250,0.9) 100%);
+    border-radius: 24px;
+    padding: 2rem;
+    backdrop-filter: blur(15px);
+    border: 1px solid rgba(102,126,234,0.1);
+    box-shadow: 0 15px 50px rgba(0,0,0,0.1);
+    position: relative;
+    overflow: hidden;
+}
+
+.creative-product-gallery::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(102,126,234,0.1),
+        transparent
+    );
+    transition: left 0.6s ease;
+}
+
+.creative-product-gallery:hover::before {
+    left: 100%;
+}
+
+.creative-main-image-container {
+    position: relative;
+    border-radius: 20px;
+    overflow: hidden;
+    background: white;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    transition: all 0.4s ease;
+}
+
+.creative-main-image-container:hover {
+    transform: scale(1.02);
+    box-shadow: 0 20px 50px rgba(0,0,0,0.15);
+}
+
+.creative-main-image {
+    width: 100%;
+    height: 400px;
+    object-fit: contain;
+    padding: 20px;
+    transition: transform 0.3s ease;
+}
+
+.creative-zoom-indicator {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    background: rgba(102,126,234,0.9);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 15px rgba(102,126,234,0.3);
+    opacity: 0;
+    transition: all 0.3s ease;
+}
+
+.creative-main-image-container:hover .creative-zoom-indicator {
+    opacity: 1;
+    animation: bounce 2s infinite;
+}
+
+.creative-thumbnail-gallery {
+    margin-top: 1.5rem;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.creative-thumbnail-item {
+    width: 80px;
+    height: 80px;
+    border-radius: 12px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 3px solid transparent;
+    background: white;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.creative-thumbnail-item:hover {
+    transform: scale(1.1);
+    box-shadow: 0 8px 25px rgba(102,126,234,0.3);
+}
+
+.creative-thumbnail-item.active {
+    border-color: #667eea;
+    box-shadow: 0 8px 25px rgba(102,126,234,0.4);
+}
+
+.creative-thumbnail-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    padding: 8px;
+}
+
+.creative-product-info {
+    background: linear-gradient(145deg, rgba(255,255,255,0.9) 0%, rgba(248,249,250,0.9) 100%);
+    border-radius: 24px;
+    padding: 2rem;
+    backdrop-filter: blur(15px);
+    border: 1px solid rgba(102,126,234,0.1);
+    box-shadow: 0 15px 50px rgba(0,0,0,0.1);
+    position: relative;
+    overflow: hidden;
+}
+
+.creative-product-title {
+    font-size: 2.2rem;
+    font-weight: 800;
+    background: linear-gradient(45deg, #2c3e50, #34495e);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 1.5rem;
+    line-height: 1.2;
+}
+
+.creative-price-section {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 16px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    border: 1px solid rgba(102,126,234,0.1);
+    position: relative;
+    overflow: hidden;
+}
+
+.creative-current-price {
+    font-size: 2.5rem;
+    font-weight: 800;
+    background: linear-gradient(45deg, #e74c3c, #c0392b);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    display: block;
+    line-height: 1;
+}
+
+.creative-original-price {
+    font-size: 1.2rem;
+    color: #6c757d;
+    text-decoration: line-through;
+    margin-top: 0.5rem;
+}
+
+.creative-discount-badge {
+    background: linear-gradient(45deg, #28a745, #20c997);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-weight: 700;
+    box-shadow: 0 4px 15px rgba(40,167,69,0.4);
+    animation: pulse 2s infinite;
+    display: inline-block;
+    margin-top: 0.5rem;
+}
+
+.creative-features-list {
+    list-style: none;
+    padding: 0;
+    margin-bottom: 2rem;
+}
+
+.creative-features-list li {
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(102,126,234,0.1);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.creative-features-list li:hover {
+    padding-left: 10px;
+    background: rgba(102,126,234,0.05);
+    border-radius: 8px;
+}
+
+.creative-features-list li i {
+    width: 20px;
+    text-align: center;
+    font-size: 1.1rem;
+}
+
+.creative-feature-group {
+    margin-bottom: 1.5rem;
+}
+
+.creative-feature-group label {
+    font-weight: 700;
+    color: #2c3e50;
+    margin-bottom: 0.75rem;
+    display: block;
+}
+
+.creative-feature-option {
+    display: inline-block;
+    margin: 4px;
+}
+
+.creative-feature-option input[type="radio"] {
+    display: none;
+}
+
+.creative-feature-option label {
+    background: rgba(102,126,234,0.1);
+    border: 2px solid rgba(102,126,234,0.2);
+    border-radius: 12px;
+    padding: 8px 16px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+    margin: 0;
+}
+
+.creative-feature-option input[type="radio"]:checked + label {
+    background: linear-gradient(45deg, #667eea, #764ba2);
+    color: white;
+    border-color: #667eea;
+    transform: scale(1.05);
+    box-shadow: 0 4px 15px rgba(102,126,234,0.4);
+}
+
+.creative-quantity-selector {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.creative-quantity-controls {
+    display: flex;
+    border: 2px solid rgba(102,126,234,0.2);
+    border-radius: 12px;
+    overflow: hidden;
+    background: white;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.creative-quantity-btn {
+    background: rgba(102,126,234,0.1);
+    border: none;
+    padding: 12px 16px;
+    font-weight: 700;
+    color: #667eea;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.creative-quantity-btn:hover {
+    background: #667eea;
+    color: white;
+}
+
+.creative-quantity-input {
+    border: none;
+    padding: 12px 16px;
+    text-align: center;
+    font-weight: 700;
+    width: 80px;
+    background: white;
+    outline: none;
+}
+
+.creative-action-buttons {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+}
+
+.creative-btn {
+    padding: 16px 24px;
+    border: none;
+    border-radius: 16px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.creative-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255,255,255,0.3),
+        transparent
+    );
+    transition: left 0.5s;
+}
+
+.creative-btn:hover::before {
+    left: 100%;
+}
+
+.creative-btn-primary {
+    background: linear-gradient(45deg, #667eea, #764ba2);
+    color: white;
+    box-shadow: 0 6px 20px rgba(102,126,234,0.4);
+    flex: 1;
+}
+
+.creative-btn-primary:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 30px rgba(102,126,234,0.6);
+}
+
+.creative-btn-warning {
+    background: linear-gradient(45deg, #f39c12, #e67e22);
+    color: white;
+    box-shadow: 0 6px 20px rgba(243,156,18,0.4);
+    flex: 1;
+}
+
+.creative-btn-warning:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 30px rgba(243,156,18,0.6);
+}
+
+.creative-btn-wishlist {
+    background: rgba(220,53,69,0.1);
+    color: #dc3545;
+    border: 2px solid rgba(220,53,69,0.2);
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+}
+
+.creative-btn-wishlist:hover {
+    background: #dc3545;
+    color: white;
+    transform: scale(1.1);
+}
+
+.creative-btn-wishlist.active {
+    background: #dc3545;
+    color: white;
+    animation: pulse 2s infinite;
+}
+
+.creative-shipping-info {
+    background: linear-gradient(135deg, rgba(40,167,69,0.1) 0%, rgba(32,201,151,0.1) 100%);
+    border-radius: 16px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    border: 1px solid rgba(40,167,69,0.2);
+}
+
+.creative-shipping-info h6 {
+    color: #28a745;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.creative-shipping-info p {
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+}
+
+.creative-shipping-info i {
+    color: #28a745;
+}
+
+.creative-seller-info {
+    background: linear-gradient(135deg, rgba(13,202,240,0.1) 0%, rgba(102,126,234,0.1) 100%);
+    border-radius: 16px;
+    padding: 1.5rem;
+    border: 1px solid rgba(13,202,240,0.2);
+    position: relative;
+    overflow: hidden;
+}
+
+.creative-seller-info::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 100px;
+    height: 100px;
+    background: radial-gradient(circle, rgba(102,126,234,0.1) 0%, transparent 70%);
+}
+
+.creative-seller-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.creative-seller-avatar {
+    width: 50px;
+    height: 50px;
+    background: linear-gradient(45deg, #667eea, #764ba2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.2rem;
+    box-shadow: 0 4px 15px rgba(102,126,234,0.3);
+}
+
+.creative-seller-buttons {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.creative-btn-sm {
+    padding: 8px 16px;
+    font-size: 0.85rem;
+    border-radius: 12px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.creative-floating-chat {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    width: 350px;
+    max-height: 500px;
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    z-index: 1000;
+    transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+    overflow: hidden;
+    backdrop-filter: blur(15px);
+}
+
+.creative-chat-header {
+    background: linear-gradient(45deg, #28a745, #20c997);
+    color: white;
+    padding: 1rem;
+    display: flex;
+    justify-content: between;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.creative-chat-header::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255,255,255,0.3),
+        transparent
+    );
+    animation: shimmer 3s infinite;
+}
+
+.creative-chat-seller {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.creative-chat-avatar {
+    width: 40px;
+    height: 40px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(10px);
+}
+
+.creative-chat-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+    opacity: 0.9;
+}
+
+.creative-status-dot {
+    width: 8px;
+    height: 8px;
+    background: #90EE90;
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+}
+
+.creative-chat-body {
+    height: 300px;
+    overflow-y: auto;
+    padding: 1rem;
+    background: linear-gradient(to bottom, #f8f9fa, #e9ecef);
+}
+
+.creative-message {
+    margin-bottom: 1rem;
+    animation: slideInUp 0.4s ease;
+}
+
+.creative-message-bubble {
+    padding: 12px 16px;
+    border-radius: 16px;
+    max-width: 80%;
+    word-wrap: break-word;
+    position: relative;
+}
+
+.creative-message.sent {
+    text-align: right;
+}
+
+.creative-message.sent .creative-message-bubble {
+    background: linear-gradient(45deg, #667eea, #764ba2);
+    color: white;
+    margin-left: auto;
+}
+
+.creative-message.received .creative-message-bubble {
+    background: white;
+    color: #2c3e50;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.creative-message-time {
+    font-size: 0.7rem;
+    opacity: 0.7;
+    margin-top: 0.25rem;
+}
+
+.creative-chat-footer {
+    padding: 1rem;
+    background: white;
+    border-top: 1px solid rgba(0,0,0,0.1);
+}
+
+.creative-chat-input {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.creative-chat-input input {
+    flex: 1;
+    padding: 12px 16px;
+    border: 2px solid rgba(102,126,234,0.2);
+    border-radius: 20px;
+    outline: none;
+    transition: all 0.3s ease;
+}
+
+.creative-chat-input input:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 20px rgba(102,126,234,0.3);
+}
+
+.creative-chat-send {
+    width: 45px;
+    height: 45px;
+    background: linear-gradient(45deg, #28a745, #20c997);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.creative-chat-send:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 15px rgba(40,167,69,0.4);
+}
+
+.creative-section-card {
+    background: linear-gradient(145deg, rgba(255,255,255,0.9) 0%, rgba(248,249,250,0.9) 100%);
+    border-radius: 24px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    backdrop-filter: blur(15px);
+    border: 1px solid rgba(102,126,234,0.1);
+    box-shadow: 0 15px 50px rgba(0,0,0,0.1);
+    position: relative;
+    overflow: hidden;
+}
+
+.creative-section-title {
+    font-size: 1.8rem;
+    font-weight: 800;
+    background: linear-gradient(45deg, #667eea, #764ba2);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.creative-description-list {
+    list-style: none;
+    padding: 0;
+}
+
+.creative-description-list li {
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(102,126,234,0.1);
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    transition: all 0.3s ease;
+}
+
+.creative-description-list li:hover {
+    padding-left: 15px;
+    background: rgba(102,126,234,0.05);
+    border-radius: 8px;
+}
+
+.creative-description-list li i {
+    color: #667eea;
+    margin-top: 2px;
+}
+
+.creative-spec-table {
+    background: white;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+}
+
+.creative-spec-table table {
+    margin: 0;
+}
+
+.creative-spec-table th {
+    background: linear-gradient(45deg, #667eea, #764ba2);
+    color: white;
+    font-weight: 700;
+    padding: 1rem;
+    border: none;
+}
+
+.creative-spec-table td {
+    padding: 1rem;
+    border-bottom: 1px solid rgba(102,126,234,0.1);
+    font-weight: 500;
+}
+
+.creative-spec-table tr:hover {
+    background: rgba(102,126,234,0.05);
+}
+
+.creative-recommended-card {
+    background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%);
+    border-radius: 20px;
+    border: none;
+    transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+    overflow: hidden;
+    position: relative;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+    height: 100%;
+}
+
+.creative-recommended-card:hover {
+    transform: translateY(-12px) scale(1.02);
+    box-shadow: 0 25px 50px rgba(0,0,0,0.15);
+}
+
+.creative-recommended-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255,255,255,0.4),
+        transparent
+    );
+    transition: left 0.5s;
+}
+
+.creative-recommended-card:hover::before {
+    left: 100%;
+}
+
+.creative-recommended-image {
+    height: 200px;
+    background: white;
+    border-radius: 16px;
+    margin: 15px;
+    padding: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.creative-recommended-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    transition: transform 0.3s ease;
+}
+
+.creative-recommended-card:hover .creative-recommended-image img {
+    transform: scale(1.05);
+}
+
+.creative-discount-badge-rec {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background: linear-gradient(45deg, #e74c3c, #c0392b);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 15px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    box-shadow: 0 4px 15px rgba(231,76,60,0.4);
+    animation: float 3s ease-in-out infinite;
+}
+
+.creative-recommended-content {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.creative-recommended-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #2c3e50;
+    margin-bottom: 12px;
+    line-height: 1.3;
+    min-height: 2.6rem;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.creative-recommended-price {
+    font-size: 1.3rem;
+    font-weight: 800;
+    background: linear-gradient(45deg, #e74c3c, #c0392b);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 12px;
+}
+
+.creative-recommended-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: auto;
+}
+
+.creative-btn-recommended {
+    flex: 1;
+    padding: 8px 12px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    transition: all 0.3s ease;
+    border: none;
+    cursor: pointer;
+}
+
+.creative-btn-view {
+    background: rgba(102,126,234,0.1);
+    color: #667eea;
+    border: 2px solid rgba(102,126,234,0.2);
+}
+
+.creative-btn-view:hover {
+    background: #667eea;
+    color: white;
+    transform: translateY(-2px);
+}
+
+.creative-btn-cart {
+    background: rgba(40,167,69,0.1);
+    color: #28a745;
+    width: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.creative-btn-cart:hover {
+    background: #28a745;
+    color: white;
+    transform: scale(1.1);
+}
+
+.creative-btn-heart {
+    background: rgba(220,53,69,0.1);
+    color: #dc3545;
+    width: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.creative-btn-heart:hover {
+    background: #dc3545;
+    color: white;
+    transform: scale(1.1);
+}
+
+.creative-celebrity-card {
+    background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%);
+    border-radius: 20px;
+    border: none;
+    transition: all 0.4s ease;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+    height: 100%;
+}
+
+.creative-celebrity-card:hover {
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: 0 20px 50px rgba(0,0,0,0.15);
+}
+
+.creative-celebrity-image {
+    height: 220px;
+    position: relative;
+    overflow: hidden;
+}
+
+.creative-celebrity-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+
+.creative-celebrity-card:hover .creative-celebrity-image img {
+    transform: scale(1.1);
+}
+
+.creative-celebrity-badge {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background: linear-gradient(45deg, #f39c12, #e67e22);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 15px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    box-shadow: 0 4px 15px rgba(243,156,18,0.4);
+    animation: glow 2s ease-in-out infinite;
+}
+
+.creative-celebrity-content {
+    padding: 1.5rem;
+}
+
+.creative-celebrity-name {
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: #2c3e50;
+    margin-bottom: 0.5rem;
+}
+
+.creative-celebrity-social {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.creative-social-link {
+    width: 35px;
+    height: 35px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    transition: all 0.3s ease;
+    text-decoration: none;
+}
+
+.creative-social-link:hover {
+    transform: scale(1.2);
+    color: white;
+}
+
+.creative-social-instagram {
+    background: linear-gradient(45deg, #E4405F, #C13584);
+}
+
+.creative-social-twitter {
+    background: linear-gradient(45deg, #1DA1F2, #0E71C8);
+}
+
+.creative-social-facebook {
+    background: linear-gradient(45deg, #1877F2, #0E4F99);
+}
+
+.creative-social-youtube {
+    background: linear-gradient(45deg, #FF0000, #CC0000);
+}
+
+.creative-social-tiktok {
+    background: linear-gradient(45deg, #000000, #333333);
+}
+
+@media (max-width: 768px) {
+    .creative-floating-chat {
+        width: 300px;
+        bottom: 20px;
+        right: 20px;
+    }
+
+    .creative-product-title {
+        font-size: 1.8rem;
+    }
+
+    .creative-current-price {
+        font-size: 2rem;
+    }
+
+    .creative-action-buttons {
+        flex-direction: column;
+    }
+
+    .creative-btn-wishlist {
+        width: 100%;
+        height: 50px;
+        border-radius: 16px;
+    }
+}
+
+/* Animation classes for JavaScript */
+.fade-in {
+    animation: slideInUp 0.6s ease;
+}
+
+.scale-in {
+    animation: pulse 0.6s ease;
+}
+</style>
+
+<!-- Creative Breadcrumb -->
+<section class="creative-breadcrumb py-3">
     <div class="container">
         <nav aria-label="breadcrumb">
             <ol class="breadcrumb mb-0">
-
                 <!-- Home -->
                 <li class="breadcrumb-item">
                     <a href="{% url 'marketplace:product_list' %}">
@@ -38,176 +1108,173 @@
                 </li>
                 {% endif %}
 
-                <!-- Subcategory (if exists) -->
-                {% if product.subcategory %}
-                <li class="breadcrumb-item">
-                    <a href="{% url 'marketplace:category_detail' product.subcategory.id %}">
-                        {{ product.subcategory.name }}
-                    </a>
-                </li>
-                {% endif %}
-
-                <!-- Brand (if exists) -->
-                {% if product.brand %}
-                <li class="breadcrumb-item">
-                    <a href="{% url 'marketplace:brand_detail' product.brand.id %}">
-                        {{ product.brand.name }}
-                    </a>
-                </li>
-                {% endif %}
-
                 <!-- Current Product Name -->
                 <li class="breadcrumb-item active" aria-current="page">
-                    {{ product.name|truncatechars:40 }}
+                    <strong>{{ product.name|truncatechars:40 }}</strong>
                 </li>
             </ol>
         </nav>
     </div>
 </section>
 
-
 <!-- Product Details Section -->
-<section class="container my-5">
-    <div class="row g-4">
+<section style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 50%, #f8f9fa 100%); min-height: 100vh; padding: 3rem 0;">
+    <div class="container">
+        <div class="row g-4">
 
-        <!-- Product Gallery -->
-        <div class="col-lg-5">
-            <div class="product-gallery shadow-sm p-3 bg-white rounded">
-
-                <div class="main-image-container position-relative mb-3">
-                    <img src="{{ product.image.url }}" alt="{{ product.name }}" class="img-fluid w-100 rounded" id="mainProductImage">
-                    <div class="zoom-indicator">
-                        <i class="fas fa-search-plus"></i> Hover to zoom
+            <!-- Product Gallery -->
+            <div class="col-lg-6">
+                <div class="creative-product-gallery">
+                    <div class="creative-main-image-container">
+                        <img src="{{ product.image.url }}" alt="{{ product.name }}" class="creative-main-image" id="mainProductImage">
+                        <div class="creative-zoom-indicator">
+                            <i class="fas fa-search-plus me-1"></i> Hover to zoom
+                        </div>
                     </div>
-                </div>
 
-                {% if product.images.all %}
-                <div class="d-flex flex-wrap gap-2 thumbnail-gallery">
-                    <div class="thumbnail-item active" onclick="changeMainImage(this, '{{ product.image.url }}')">
-                        <img src="{{ product.image.url }}" alt="Main image" class="img-thumbnail">
-                    </div>
-                    {% for img in product.images.all %}
-                    <div class="thumbnail-item" onclick="changeMainImage(this, '{{ img.image.url }}')">
-                        <img src="{{ img.image.url }}" alt="Product image" class="img-thumbnail">
-                    </div>
-                    {% endfor %}
-                </div>
-                {% endif %}
-
-                {% if product.video %}
-                <div class="video-container mt-3">
-                    <video controls class="w-100 rounded">
-                        <source src="{{ product.video.url }}" type="video/mp4">
-                        Your browser does not support the video tag.
-                    </video>
-                </div>
-                {% endif %}
-            </div>
-        </div>
-
-        <!-- Product Info -->
-        <div class="col-lg-7">
-            <div class="product-info">
-
-                <h1 class="product-title fw-bold mb-3">{{ product.name }}</h1>
-
-         <!-- Rating Display -->
-                <div class="d-flex align-items-center mb-3">
-                    <div class="text-warning me-2">
-                        {% for i in rating_range %}
-                            {% if avg_rating >= i %}
-                                <i class="fas fa-star"></i>  {# Full Star #}
-                            {% elif avg_rating >= i|add:"-0.5" %}
-                                <i class="fas fa-star-half-alt"></i>  {# Half Star #}
-                            {% else %}
-                                <i class="far fa-star"></i>  {# Empty Star #}
-                            {% endif %}
+                    {% if product.images.all %}
+                    <div class="creative-thumbnail-gallery">
+                        <div class="creative-thumbnail-item active" onclick="changeMainImage(this, '{{ product.image.url }}')">
+                            <img src="{{ product.image.url }}" alt="Main image">
+                        </div>
+                        {% for img in product.images.all %}
+                        <div class="creative-thumbnail-item" onclick="changeMainImage(this, '{{ img.image.url }}')">
+                            <img src="{{ img.image.url }}" alt="Product image">
+                        </div>
                         {% endfor %}
                     </div>
-                    <span class="me-2 text-muted">{{ avg_rating|floatformat:1 }} ({{ review_count }} reviews)</span>
-                    <span class="text-muted">|</span>
-                    <span class="ms-2 text-muted">{{ product.sold_count|default:"0" }} sold</span>
-                </div>
-                <!-- Price Section -->
-                <div class="price-section mb-3">
-                    <span class="current-price h4 fw-bold text-danger">D{{ product.price }}</span>
-                    {% if product.original_price %}
-                    <span class="ms-2 text-muted text-decoration-line-through">D{{ product.original_price }}</span>
-                    <span class="badge bg-success ms-2">
-                        {{ product.discount_percentage|floatformat:0 }}% OFF
-                    </span>
+                    {% endif %}
+
+                    {% if product.video %}
+                    <div class="mt-4">
+                        <video controls class="w-100" style="border-radius: 16px; box-shadow: 0 8px 25px rgba(0,0,0,0.1);">
+                            <source src="{{ product.video.url }}" type="video/mp4">
+                            Your browser does not support the video tag.
+                        </video>
+                    </div>
                     {% endif %}
                 </div>
+            </div>
 
-                 <!-- Stock and Features -->
-                <ul class="list-unstyled mb-4">
-                    <li class="mb-2">
-                        {% if product.is_in_stock %}
-                        <i class="fas fa-check-circle text-success"></i> {{ product.get_stock_status }}
-                        {% else %}
-                        <i class="fas fa-times-circle text-danger"></i> Out of Stock
+            <!-- Product Info -->
+            <div class="col-lg-6">
+                <div class="creative-product-info">
+                    <h1 class="creative-product-title">{{ product.name }}</h1>
+
+                    <!-- Creative Rating Display -->
+                    <div class="d-flex align-items-center mb-4" style="background: rgba(102,126,234,0.05); padding: 1rem; border-radius: 12px; border: 1px solid rgba(102,126,234,0.1);">
+                        <div class="text-warning me-3" style="font-size: 1.2rem;">
+                            {% for i in rating_range %}
+                                {% if avg_rating >= i %}
+                                    <i class="fas fa-star" style="text-shadow: 0 2px 4px rgba(255,193,7,0.3);"></i>
+                                {% elif avg_rating >= i|add:"-0.5" %}
+                                    <i class="fas fa-star-half-alt" style="text-shadow: 0 2px 4px rgba(255,193,7,0.3);"></i>
+                                {% else %}
+                                    <i class="far fa-star" style="color: #e9ecef;"></i>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                        <div class="d-flex align-items-center gap-3 flex-wrap">
+                            <span style="font-weight: 700; color: #2c3e50;">{{ avg_rating|floatformat:1 }} out of 5</span>
+                            <span style="color: #6c757d;">|</span>
+                            <span style="color: #6c757d; font-weight: 500;">{{ review_count }} review{{ review_count|pluralize }}</span>
+                            <span style="color: #6c757d;">|</span>
+                            <span style="color: #28a745; font-weight: 600;">
+                                <i class="fas fa-shopping-bag me-1"></i>{{ product.sold_count|default:"0" }} sold
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Price Section -->
+                    <div class="creative-price-section">
+                        <span class="creative-current-price">D{{ product.price }}</span>
+                        {% if product.original_price %}
+                        <div class="creative-original-price">D{{ product.original_price }}</div>
+                        <span class="creative-discount-badge">
+                            <i class="fas fa-tag me-1"></i>{{ product.discount_percentage|floatformat:0 }}% OFF
+                        </span>
                         {% endif %}
-                    </li>
-                    <li class="mb-2"><i class="fas fa-shield-alt text-success"></i> Secure Payment</li>
-                    <li class="mb-2"><i class="fas fa-truck text-success"></i> Fast Delivery (2-3 Days)</li>
-                    <li class="mb-2">
-                        {% if product.has_30_day_return %}
-                                <i class="fas fa-undo text-success"></i> 30-Day Return Policy
-                        {% else %}
-                                <i class="fas fa-times-circle text-danger"></i> No returns accepted
-                        {% endif %}
-                    </li>
-                </ul>
-                <!-- Enhanced Feature Selection -->
-               {% for feature, options in feature_data.items %}
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">{{ feature }}</label>
-                        <div class="d-flex flex-wrap gap-2 feature-group" data-feature="{{ feature }}">
+                    </div>
+
+                    <!-- Stock and Features -->
+                    <ul class="creative-features-list">
+                        <li>
+                            {% if product.is_in_stock %}
+                            <i class="fas fa-check-circle text-success"></i> {{ product.get_stock_status }}
+                            {% else %}
+                            <i class="fas fa-times-circle text-danger"></i> Out of Stock
+                            {% endif %}
+                        </li>
+                        <li><i class="fas fa-shield-alt text-success"></i> Secure Payment</li>
+                        <li><i class="fas fa-truck text-success"></i> Fast Delivery (2-3 Days)</li>
+                        <li>
+                            {% if product.has_30_day_return %}
+                            <i class="fas fa-undo text-success"></i> 30-Day Return Policy
+                            {% else %}
+                            <i class="fas fa-times-circle text-danger"></i> No returns accepted
+                            {% endif %}
+                        </li>
+                    </ul>
+
+                    <!-- Enhanced Feature Selection -->
+                    {% for feature, options in feature_data.items %}
+                    <div class="creative-feature-group">
+                        <label>{{ feature }}</label>
+                        <div class="d-flex flex-wrap gap-2" data-feature="{{ feature }}">
                             {% for option in options %}
+                            <div class="creative-feature-option">
                                 <input type="radio"
-                                       class="btn-check"
                                        name="feature_{{ feature|slugify }}"
                                        id="feature_{{ option.id }}"
                                        value="{{ option.value }}"
                                        autocomplete="off">
-                                <label class="btn btn-outline-dark btn-sm px-3" for="feature_{{ option.id }}">
+                                <label for="feature_{{ option.id }}">
                                     {% if feature|lower == "color" %}
                                         <span class="d-inline-block rounded-circle"
-                                              style="width: 16px; height: 16px; background-color: {{ option.value|default:'#ccc' }}; border: 1px solid #ccc;"></span>
-                                        <span class="ms-2">{{ option.value }}</span>
+                                              style="width: 16px; height: 16px; background-color: {{ option.value|default:'#ccc' }}; border: 2px solid white; box-shadow: 0 0 0 1px #ccc;"></span>
+                                        <span>{{ option.value }}</span>
                                     {% else %}
                                         {{ option.value }}
                                     {% endif %}
                                 </label>
+                            </div>
                             {% endfor %}
                         </div>
                     </div>
-                {% endfor %}
-              <!-- Quantity Selector -->
-                {% if product.stock.quantity > 0 %}
-                <div class="d-flex align-items-center mb-3">
-                    <label class="me-2">Quantity:</label>
-                    <div class="input-group" style="width: 120px;">
-                        <button class="btn btn-outline-secondary" type="button" onclick="changeQuantity(-1)">-</button>
-                        <input type="number" class="form-control text-center" id="quantity" value="1" min="1" max="{{ product.stock.quantity }}">
-                        <button class="btn btn-outline-secondary" type="button" onclick="changeQuantity(1)">+</button>
+                    {% endfor %}
+
+                    <!-- Quantity Selector -->
+                    {% if product.stock.quantity > 0 %}
+                    <div class="creative-quantity-selector">
+                        <label style="font-weight: 700; color: #2c3e50;">Quantity:</label>
+                        <div class="creative-quantity-controls">
+                            <button class="creative-quantity-btn" type="button" onclick="changeQuantity(-1)">-</button>
+                            <input type="number" class="creative-quantity-input" id="quantity" value="1" min="1" max="{{ product.stock.quantity }}">
+                            <button class="creative-quantity-btn" type="button" onclick="changeQuantity(1)">+</button>
+                        </div>
                     </div>
-                </div>
-                {% endif %}
+                    {% endif %}
 
-                <!-- Action Buttons -->
-                <div class="d-flex flex-wrap gap-2 mb-4">
-                    <!-- Add to Cart -->
-                    <button class="btn btn-primary" onclick="addToCart({{ product.id }}, this)"
-                        {% if not product.stock or product.stock.quantity == 0 %}disabled{% endif %}>
-                        <i class="fas fa-cart-plus me-1"></i> Add to Cart
-                    </button>
+                    <!-- Action Buttons -->
+                    <div class="creative-action-buttons">
+                        <!-- Add to Cart -->
+                        <button class="creative-btn creative-btn-primary" onclick="addToCart({{ product.id }}, this)"
+                            {% if not product.stock or product.stock.quantity == 0 %}disabled{% endif %}>
+                            <i class="fas fa-cart-plus"></i> Add to Cart
+                        </button>
 
-                    <!-- Buy Now Button -->
-                    <button class="btn btn-warning" onclick="buyNow({{ product.id }})"
-                        {% if not product.stock or product.stock.quantity == 0 %}disabled{% endif %}>
-                        <i class="fas fa-bolt me-1"></i> Buy Now
-                    </button>
+                        <!-- Buy Now Button -->
+                        <button class="creative-btn creative-btn-warning" onclick="buyNow({{ product.id }})"
+                            {% if not product.stock or product.stock.quantity == 0 %}disabled{% endif %}>
+                            <i class="fas fa-bolt"></i> Buy Now
+                        </button>
+
+                        <!-- Wishlist Toggle Button -->
+                        <button class="creative-btn-wishlist {% if product.id in user_wishlist_product_ids %}active{% endif %}"
+                                onclick="toggleWishlist({{ product.id }})" id="wishlistBtn-{{ product.id }}">
+                            <i id="wishlistIcon-{{ product.id }}" class="{% if product.id in user_wishlist_product_ids %}fas fa-heart{% else %}far fa-heart{% endif %}"></i>
+                        </button>
+                    </div>
 
                     <!-- Hidden Buy Now Form -->
                     <form id="buyNowForm" action="{% url 'orders:quick_checkout' %}" method="post" style="display: none;">
@@ -216,542 +1283,738 @@
                         <input type="hidden" name="quantity" id="buyNowQuantity">
                     </form>
 
-                    <!-- Wishlist Toggle Button -->
-                    <button class="btn btn-outline-secondary" onclick="toggleWishlist({{ product.id }})" id="wishlistBtn-{{ product.id }}">
-                        <i id="wishlistIcon-{{ product.id }}" class="{% if product.id in user_wishlist_product_ids %}fas fa-heart text-danger{% else %}far fa-heart{% endif %}"></i>
-                    </button>
-
-                </div>
-
-                <!-- Shipping Info -->
-                {% if user.is_authenticated %}
-                <div class="shipping-info mb-4">
-                    <!-- Change Address Button -->
-                <p>
-                    <i class="fas fa-map-marker-alt text-primary me-1"></i> Deliver to:
-                    {{ address_display|default:"Please add your delivery address" }}
-
-                    {% if address.geo_code %}
-                        <br>
-                        <a href="https://www.google.com/maps?q={{ address.geo_code }}" target="_blank"
-                           class="text-decoration-underline text-info small">
-                            View on Google Maps ({{ address.geo_code }})
-                        </a>
-                    {% endif %}
-
-                    <button class="btn btn-link btn-sm ms-2 p-0" data-bs-toggle="modal" data-bs-target="#editAddressModal">
-                        <i class="fas fa-edit"></i> Change
-                    </button>
-                </p>
-
-                <!-- Edit Address Modal -->
-                <div class="modal fade" id="editAddressModal" tabindex="-1" aria-labelledby="editAddressModalLabel" aria-hidden="true">
-                  <div class="modal-dialog modal-dialog-centered">
-                    <div class="modal-content shadow rounded-4">
-                      <div class="modal-header bg-primary text-white">
-                        <h5 class="modal-title" id="editAddressModalLabel"><i class="fas fa-map-marker-alt me-2"></i>Edit Delivery Address</h5>
-                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-                      </div>
-
-                      <form method="POST" action="{% url 'accounts:edit_address_modal' %}">
-                        {% csrf_token %}
-                        <div class="modal-body">
-                          <div class="mb-3">
-                            <label for="address1" class="form-label">Address Line 1</label>
-                            <textarea class="form-control" id="address1" name="address1" rows="2" required>{{ address.address1 }}</textarea>
-                          </div>
-                          <div class="mb-3">
-                            <label for="address2" class="form-label">Address Line 2</label>
-                            <textarea class="form-control" id="address2" name="address2" rows="2">{{ address.address2 }}</textarea>
-                          </div>
-                          <div class="mb-3">
-                            <label for="country" class="form-label">Country</label>
-                            <input type="text" class="form-control" id="country" name="country" value="{{ address.country }}" required>
-                          </div>
-                            <div class="mb-3">
-                                <label for="geo_code" class="form-label">Geo Code (on the fence)</label>
-                                <input type="text" name="geo_code" id="geo_code" class="form-control" placeholder="e.g., GC-9A23-KL4" value="{{ address.geo_code }}">
-                            </div>
-
-                        </div>
-
-                        <div class="modal-footer justify-content-between">
-                          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                          <button type="submit" class="btn btn-success">
-                            <i class="fas fa-save me-1"></i> Save Address
-                          </button>
-                        </div>
-                      </form>
+                    <!-- Shipping Info -->
+                    {% if user.is_authenticated %}
+                    <div class="creative-shipping-info">
+                        <h6><i class="fas fa-truck"></i> Shipping Information</h6>
+                        <p>
+                            <i class="fas fa-map-marker-alt"></i> Deliver to:
+                            {{ address_display|default:"Please add your delivery address" }}
+                            <button class="btn btn-link btn-sm p-0 ms-2" data-bs-toggle="modal" data-bs-target="#editAddressModal">
+                                <i class="fas fa-edit"></i> Change
+                            </button>
+                        </p>
+                        <p><i class="fas fa-clock"></i> Estimated Delivery: Tomorrow</p>
+                        <p><i class="fas fa-dollar-sign"></i> Free Shipping on orders over D2,000</p>
                     </div>
-                  </div>
-                </div>
-
-
-                    <p><i class="fas fa-clock text-primary me-1"></i> Estimated Delivery: Tomorrow</p>
-                    <p><i class="fas fa-dollar-sign text-primary me-1"></i> Free Shipping on orders over D2,000</p>
-                </div>
-                {% else %}
-                <div class="alert alert-light text-center">
-                    <i class="fas fa-user-lock fa-2x mb-2"></i>
-                    <p class="mb-2">Please <a href="{% url 'accounts:sign_in' %}">Login</a> to see shipping options</p>
-                </div>
-                {% endif %}
-
-                <!-- Seller Info -->
-                <div class="seller-info border-top pt-3 mt-3">
-                    {% if seller_store %}
-                        <h6><i class="fas fa-store me-2"></i>
-                          Seller:
-                          {% if store %}
-                            <a href="{% url 'stores:store_detail' store.slug %}">
-                              {{ store.name }}
-                            </a>
-                          {% else %}
-                            {{ product.seller.get_full_name|default:product.seller.username }}
-                          {% endif %}
-                        </h6>
-
-                        <p class="text-muted small">
-                          Seller Rating:
-                          {% if store %}
-                            {{ store.get_average_rating|floatformat:1 }}/5.0
-                          {% else %}
-                            0.0/5.0
-                          {% endif %}
-                        </p
-
-                    <!-- Visit Store -->
-                    <a href="{% url 'stores:store_detail' seller_store.slug %}" class="btn btn-outline-primary btn-sm me-2">Visit Store</a>
-
-                    <!-- Chat Toggle Button -->
-                    {% if request.user.is_authenticated and request.user != product.seller %}
-                    <button type="button" class="btn btn-outline-success btn-sm" onclick="toggleChatBox()">
-                        <i class="fas fa-comments me-1"></i> Chat with Seller
-                    </button>
-                    {% endif %}
                     {% else %}
-                    <span class="text-muted">Unknown Seller</span>
-                  {% endif %}
+                    <div class="creative-shipping-info text-center">
+                        <i class="fas fa-user-lock fa-2x mb-2" style="color: #667eea;"></i>
+                        <p class="mb-0">Please <a href="{% url 'accounts:sign_in' %}" style="color: #667eea; font-weight: 700;">Login</a> to see shipping options</p>
+                    </div>
+                    {% endif %}
 
-                     <!-- Enhanced Floating Chat Box -->
-                    <div id="chatBox" class="floating-chat-box d-none">
-                        <div class="chat-header d-flex justify-content-between align-items-center p-3 bg-gradient-success text-white rounded-top position-relative overflow-hidden">
-                            <div class="header-shimmer position-absolute top-0 start-0 w-100 h-100"></div>
-                            <div class="seller-info d-flex align-items-center gap-2 position-relative">
-                                <div class="seller-avatar d-flex align-items-center justify-content-center rounded-circle bg-white text-success fw-bold position-relative overflow-hidden">
-                                    <i class="fas fa-user"></i>
-                                    <div class="avatar-glow position-absolute top-0 start-0 w-100 h-100"></div>
-                                </div>
-                                <div class="seller-details">
-                                    <strong class="d-block mb-0">{{ product.seller.get_full_name|default:product.seller.username }}</strong>
-                                    <small class="d-flex align-items-center gap-1 opacity-75">
-                                        <span class="status-dot rounded-circle bg-light"></span>
-                                        <span>Online now</span>
-                                    </small>
-                                </div>
+                    <!-- Seller Info -->
+                    <div class="creative-seller-info">
+                        <div class="creative-seller-header">
+                            <div class="creative-seller-avatar">
+                                <i class="fas fa-store"></i>
                             </div>
-                            <button type="button" class="btn-close btn-close-white close-btn" onclick="toggleChatBox()"></button>
-                        </div>
-
-                        <div class="chat-body p-3 position-relative" style="height: 280px; overflow-y: auto; background: linear-gradient(to bottom, #f8f9fa, #e9ecef);" id="chatMessages">
-                            {% if product %}
-                                <div class="product-preview mb-3 p-2 bg-white rounded shadow-sm border-start border-success border-3">
-                                    <div class="d-flex align-items-center gap-2">
-                                        <i class="fas fa-box text-success"></i>
-                                        <small><strong>{{ product.name }}</strong> - D{{ product.price }}</small>
-                                    </div>
-                                </div>
-                            {% endif %}
-
-                            {% if messages %}
-                                {% for msg in messages %}
-                                    <div class="message-container mb-3 {% if msg.sender == request.user %}text-end{% endif %}" data-aos="fade-up" data-aos-duration="400">
-                                        <div class="message p-2 rounded-4 d-inline-block position-relative {% if msg.sender == request.user %}bg-gradient-success text-white message-sent{% else %}bg-white message-received{% endif %}">
-                                            <small class="message-text">{{ msg.message }}</small><br>
-                                            <small class="message-time opacity-75">{{ msg.timestamp|timesince }} ago</small>
-                                        </div>
-                                    </div>
-                                {% endfor %}
-                            {% else %}
-                                <div class="empty-state text-center py-5 text-muted">
-                                    <i class="fas fa-comments fa-3x mb-3 opacity-25 floating-icon"></i>
-                                    <p class="small">No messages yet. Start the conversation!</p>
-                                </div>
-                            {% endif %}
-
-                            <div class="typing-indicator d-none py-2 text-muted">
-                                <small><i class="fas fa-circle typing-dot"></i> <span class="typing-text">Typing...</span></small>
+                            <div>
+                                <h6 style="margin: 0; font-weight: 700; color: #2c3e50;">
+                                    {% if seller_store %}
+                                        <a href="{% url 'stores:store_detail' seller_store.slug %}" style="color: #667eea; text-decoration: none;">
+                                            {{ seller_store.name }}
+                                        </a>
+                                    {% else %}
+                                        {{ product.seller.get_full_name|default:product.seller.username }}
+                                    {% endif %}
+                                </h6>
+                                <small class="text-muted">
+                                    Seller Rating:
+                                    {% if seller_store %}
+                                        {{ seller_store.get_average_rating|floatformat:1 }}/5.0
+                                    {% else %}
+                                        0.0/5.0
+                                    {% endif %}
+                                </small>
                             </div>
                         </div>
 
-                        <div class="chat-footer p-3 border-top bg-white">
-                            <form method="post" action="{% url 'chat:start_chat' %}" id="chatForm">
-                                {% csrf_token %}
-                                <input type="hidden" name="recipient_id" value="{{ product.seller.id }}">
-                                <input type="hidden" name="product_id" value="{{ product.id }}">
-                                <div class="input-group">
-                                    <input type="text" name="message" class="form-control enhanced-input rounded-pill border-2 px-3" placeholder="Type your message..." required>
-                                    <button class="btn btn-success enhanced-send-btn rounded-circle ms-2 d-flex align-items-center justify-content-center" type="submit">
-                                        <i class="fas fa-paper-plane"></i>
-                                    </button>
-                                </div>
-                            </form>
+                        <div class="creative-seller-buttons">
+                            {% if seller_store %}
+                            <a href="{% url 'stores:store_detail' seller_store.slug %}" class="creative-btn creative-btn-sm" style="background: rgba(102,126,234,0.1); color: #667eea; border: 2px solid rgba(102,126,234,0.2); text-decoration: none;">
+                                <i class="fas fa-store me-1"></i> Visit Store
+                            </a>
+                            {% endif %}
+
+                            {% if request.user.is_authenticated and request.user != product.seller %}
+                            <button type="button" class="creative-btn creative-btn-sm" onclick="toggleChatBox()" style="background: rgba(40,167,69,0.1); color: #28a745; border: 2px solid rgba(40,167,69,0.2);">
+                                <i class="fas fa-comments me-1"></i> Chat with Seller
+                            </button>
+                            {% endif %}
                         </div>
                     </div>
-
                 </div>
-
             </div>
         </div>
-    </div>
 
         <!-- Enhanced Product Description -->
-    <div class="row mt-5">
-        <div class="col-12">
-            <div class="bg-white shadow-sm p-4 rounded">
-                <h3 class="section-title">About this item</h3>
+        <div class="creative-section-card mt-5">
+            <h3 class="creative-section-title">
+                <i class="fas fa-info-circle" style="color: #667eea;"></i> About this item
+            </h3>
 
-                <div id="descShort" class="fade-in">
-                    <ul class="list-unstyled">
-                        {% for bullet in short_description.splitlines %}
-                        {% if bullet.strip %}
-                        {% with bullet.split as words %}
-                        <li class="feature-item">
-                            <i class="fas fa-check-circle text-primary me-2"></i>
+            <div id="descShort" class="fade-in">
+                <ul class="creative-description-list">
+                    {% for bullet in short_description.splitlines %}
+                    {% if bullet.strip %}
+                    {% with bullet.split as words %}
+                    <li>
+                        <i class="fas fa-check-circle"></i>
+                        <div>
                             <strong>{{ words.0 }}</strong>
                             {% for word in words|slice:"1:" %} {{ word }}{% endfor %}
-                        </li>
-                        {% endwith %}
-                        {% endif %}
-                        {% endfor %}
-                    </ul>
-                </div>
+                        </div>
+                    </li>
+                    {% endwith %}
+                    {% endif %}
+                    {% endfor %}
+                </ul>
+            </div>
 
-                {% if description_truncated %}
-                <div class="collapse" id="fullDescription">
-                    <ul class="list-unstyled">
-                        {% for bullet in product.description.splitlines %}
-                        {% if bullet.strip %}
-                        {% with bullet.split as words %}
-                        <li class="feature-item">
-                            <i class="fas fa-check-circle text-primary me-2"></i>
+            {% if description_truncated %}
+            <div class="collapse" id="fullDescription">
+                <ul class="creative-description-list">
+                    {% for bullet in product.description.splitlines %}
+                    {% if bullet.strip %}
+                    {% with bullet.split as words %}
+                    <li>
+                        <i class="fas fa-check-circle"></i>
+                        <div>
                             <strong>{{ words.0 }}</strong>
                             {% for word in words|slice:"1:" %} {{ word }}{% endfor %}
-                        </li>
-                        {% endwith %}
-                        {% endif %}
-                        {% endfor %}
-                    </ul>
-                </div>
-
-                <button class="btn btn-link p-0 mt-3" type="button" data-bs-toggle="collapse"
-                        data-bs-target="#fullDescription" id="toggleDescBtn">
-                    <i class="fas fa-chevron-down me-2"></i>Show More
-                </button>
-                {% endif %}
+                        </div>
+                    </li>
+                    {% endwith %}
+                    {% endif %}
+                    {% endfor %}
+                </ul>
             </div>
-        </div>
-    </div>
 
-    <!-- Enhanced Specifications -->
-    {% if specifications %}
-    <div class="row mt-4">
-        <div class="col-12">
-            <div class="bg-white shadow-sm p-4 rounded">
-                <h3 class="section-title">Technical Specifications</h3>
-
-                <div class="spec-table">
-                    <table class="table table-striped mb-0">
-                        <tbody>
-                            {% for key, value in specifications %}
-                            {% if forloop.counter <= 3 %}
-                            <tr>
-                                <th style="width: 30%;">{{ key }}</th>
-                                <td>{{ value }}</td>
-                            </tr>
-                            {% endif %}
-                            {% endfor %}
-
-                            {% if specifications|length > 3 %}
-                            {% for key, value in specifications %}
-                            {% if forloop.counter > 3 %}
-                            <tr class="collapse" id="specCollapse">
-                                <th style="width: 30%;">{{ key }}</th>
-                                <td>{{ value }}</td>
-                            </tr>
-                            {% endif %}
-                            {% endfor %}
-                            {% endif %}
-                        </tbody>
-                    </table>
-                </div>
-
-                {% if specifications|length > 3 %}
-                <div class="text-center mt-3">
-                    <button class="btn btn-outline-primary" type="button" data-bs-toggle="collapse"
-                            data-bs-target="#specCollapse" id="toggleSpecBtn">
-                        <i class="fas fa-chevron-down me-2"></i>Show More Specs
-                    </button>
-                </div>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-    {% endif %}
-</section>
-<section class="container my-5">
-        <!-- Section Header -->
-        <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-            <h3 class="fw-bold mb-0">Recommended for You</h3>
-            <a href="{% url 'marketplace:all_products' %}" class="btn btn-outline-primary btn-sm">
-                View All Products
-            </a>
-        </div>
-
-<!-- Recommended Products Grid with Dynamic Reviews -->
-<div class="row g-4">
-    {% for item in recommended_items %}
-    <div class="col-xl-3 col-lg-4 col-md-6 col-sm-6">
-        <div class="card h-100 shadow-sm border-0 position-relative product-card">
-
-            <!-- Percentage Tag -->
-            {% if item.discount_percentage %}
-            <span class="badge bg-danger text-white position-absolute" style="top: 10px; right: 10px; z-index: 2;">
-                {{ item.discount_percentage|floatformat:0 }}% OFF
-            </span>
+            <button class="creative-btn creative-btn-sm mt-3" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#fullDescription" id="toggleDescBtn" style="background: rgba(102,126,234,0.1); color: #667eea; border: 2px solid rgba(102,126,234,0.2);">
+                <i class="fas fa-chevron-down me-2"></i>Show More
+            </button>
             {% endif %}
-
-            <!-- Product Image -->
-            <a href="{% url 'marketplace:product_detail' item.id %}" class="d-block">
-                <img src="{{ item.image.url }}" class="card-img-top product-image" alt="{{ item.name }}"
-                     style="height: 200px; object-fit: cover;">
-            </a>
-
-            <div class="card-body d-flex flex-column justify-content-between">
-
-                <!-- Product Title -->
-                <h6 class="card-title mb-2" style="min-height: 2.5rem;">
-                    <a href="{% url 'marketplace:product_detail' item.id %}" class="text-decoration-none text-dark">
-                        {{ item.name|truncatechars:40 }}
-                    </a>
-                </h6>
-
-                <!-- Price -->
-                <div class="mb-2">
-                    <span class="fw-bold text-danger fs-5">D{{ item.price }}</span>
-                    {% if item.original_price %}
-                    <small class="text-muted text-decoration-line-through ms-1">D{{ item.original_price }}</small>
-                    {% endif %}
-                </div>
-
-                <!-- Dynamic Rating Display -->
-                <div class="mb-2 d-flex align-items-center">
-                    <div class="text-warning me-2">
-                        {% with avg=item.average_rating|default:0 %}
-                            {% for i in rating_range %}
-                                {% if avg >= i %}
-                                    <i class="fas fa-star"></i>
-                                {% elif avg >= i|add:"-0.5" %}
-                                    <i class="fas fa-star-half-alt"></i>
-                                {% else %}
-                                    <i class="far fa-star"></i>
-                                {% endif %}
-                            {% endfor %}
-                        {% endwith %}
-                    </div>
-                    <small class="text-muted">
-                        {{ item.average_rating|default:0|floatformat:1 }}
-                        ({{ item.review_count|default:0 }} review{{ item.review_count|default:0|pluralize }})
-                    </small>
-                </div>
-
-                <!-- Category and Sold Count -->
-                <div class="d-flex justify-content-between align-items-center">
-                    <small class="text-primary">
-                        <i class="fas fa-tag me-1"></i> {{ item.category.name }}
-                    </small>
-                    <small class="text-muted">
-                        {{ item.sold_count|default:"0" }} sold
-                    </small>
-                </div>
-
-                <!-- Quick Action Buttons -->
-                <div class="mt-3 d-flex gap-2">
-                    <a href="{% url 'marketplace:product_detail' item.id %}"
-                       class="btn btn-outline-primary btn-sm flex-fill">
-                        <i class="fas fa-eye me-1"></i> View
-                    </a>
-                    {% if user.is_authenticated %}
-                        <button class="btn btn-outline-success btn-sm" onclick="addToCart({{ item.id }}, this)"
-                        {% if not item.stock or item.stock.quantity == 0 %}disabled{% endif %}>
-                            <i class="fas fa-cart-plus"></i>
-                        </button>
-
-                             <button class="btn btn-outline-danger btn-sm" onclick="toggleWishlist({{ item.id }})" id="wishlistBtn-{{ item.id }}">
-                        <i id="wishlistIcon-{{ item.id }}" class="{% if item.id in user_wishlist_product_ids %}fas fa-heart {% else %}far fa-heart{% endif %}"></i>
-                    </button>
-                    {% endif %}
-                </div>
-            </div>
         </div>
-    </div>
-    {% empty %}
-    <div class="col-12 text-center py-5">
-        <i class="fas fa-box-open fa-3x text-muted mb-3"></i>
-        <h5 class="text-muted">No recommended items available</h5>
-        <p class="text-muted">Check back later for personalized recommendations!</p>
-    </div>
-    {% endfor %}
-</div>
 
-</section>
+        <!-- Enhanced Specifications -->
+        {% if specifications %}
+        <div class="creative-section-card">
+            <h3 class="creative-section-title">
+                <i class="fas fa-cog" style="color: #667eea;"></i> Technical Specifications
+            </h3>
 
-<section class="container my-5">
-    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-        <h3 class="fw-bold mb-0">
-            <i class="fas fa-star text-warning me-2"></i> Featured Celebrities
-        </h3>
-    </div>
+            <div class="creative-spec-table">
+                <table class="table table-striped mb-0">
+                    <tbody>
+                        {% for key, value in specifications %}
+                        {% if forloop.counter <= 3 %}
+                        <tr>
+                            <th style="width: 30%;">{{ key }}</th>
+                            <td>{{ value }}</td>
+                        </tr>
+                        {% endif %}
+                        {% endfor %}
 
-    <div class="row g-4">
-        {% for celeb in featured_celebrities %}
-        <div class="col-md-4 col-lg-3">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="position-relative">
-                    {% if celeb.celebrity_image %}
-                    <img src="{{ celeb.celebrity_image.url }}" class="card-img-top" alt="{{ celeb.celebrity_name }}" style="height: 220px; object-fit: cover;">
-                    {% else %}
-                    <div class="bg-light d-flex align-items-center justify-content-center" style="height: 220px;">
-                        <i class="fas fa-user fa-4x text-muted"></i>
-                    </div>
-                    {% endif %}
-                    <div class="position-absolute top-0 end-0 m-2">
-                        <span class="badge bg-warning text-dark">
-                            <i class="fas fa-crown me-1"></i> Celebrity Pick
-                        </span>
-                    </div>
-                </div>
-
-                <div class="card-body">
-                    <h5 class="card-title mb-1">{{ celeb.celebrity_name }}</h5>
-                    <p class="text-muted small mb-2">{{ celeb.celebrity_title|default:"Celebrity" }}</p>
-                    <blockquote class="blockquote-footer mb-3">
-                        <small>"{{ celeb.testimonial|default:"Loving this product!" }}"</small>
-                    </blockquote>
-
-                    <div class="d-flex gap-2">
-                        {% if celeb.instagram_link %}
-                        <a href="{{ celeb.instagram_link }}" target="_blank" class="text-danger">
-                            <i class="fab fa-instagram fa-lg"></i>
-                        </a>
+                        {% if specifications|length > 3 %}
+                        {% for key, value in specifications %}
+                        {% if forloop.counter > 3 %}
+                        <tr class="collapse" id="specCollapse">
+                            <th style="width: 30%;">{{ key }}</th>
+                            <td>{{ value }}</td>
+                        </tr>
                         {% endif %}
-                        {% if celeb.twitter_link %}
-                        <a href="{{ celeb.twitter_link }}" target="_blank" class="text-info">
-                            <i class="fab fa-twitter fa-lg"></i>
-                        </a>
+                        {% endfor %}
                         {% endif %}
-                        {% if celeb.facebook_link %}
-                        <a href="{{ celeb.facebook_link }}" target="_blank" class="text-primary">
-                            <i class="fab fa-facebook fa-lg"></i>
-                        </a>
-                        {% endif %}
-                        {% if celeb.youtube_link %}
-                        <a href="{{ celeb.youtube_link }}" target="_blank" class="text-danger">
-                            <i class="fab fa-youtube fa-lg"></i>
-                        </a>
-                        {% endif %}
-                        {% if celeb.tiktok_link %}
-                        <a href="{{ celeb.tiktok_link }}" target="_blank" class="text-dark">
-                            <i class="fab fa-tiktok fa-lg"></i>
-                        </a>
-                        {% endif %}
-                    </div>
-                </div>
+                    </tbody>
+                </table>
             </div>
+
+            {% if specifications|length > 3 %}
+            <div class="text-center mt-3">
+                <button class="creative-btn creative-btn-sm" type="button" data-bs-toggle="collapse"
+                        data-bs-target="#specCollapse" id="toggleSpecBtn" style="background: rgba(102,126,234,0.1); color: #667eea; border: 2px solid rgba(102,126,234,0.2);">
+                    <i class="fas fa-chevron-down me-2"></i>Show More Specs
+                </button>
+            </div>
+            {% endif %}
         </div>
-        {% empty %}
-        <div class="col-12 text-center py-5">
-            <i class="fas fa-user fa-3x text-muted mb-3"></i>
-            <h5 class="text-muted">No featured celebrities at the moment</h5>
-        </div>
-        {% endfor %}
-    </div>
-
-    <!-- Reviews Section -->
-    <div class="mt-5">
-        <h4>Customer Reviews</h4>
-
-        <!-- Review Form -->
-        {% if user.is_authenticated %}
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h6>Write a Review</h6>
-                </div>
-                <div class="card-body">
-                    <form id="review-form">
-                        {% csrf_token %}
-                        <input type="hidden" name="product_id" value="{{ product.id }}">
-
-                        <div class="mb-3">
-                            <label class="form-label">Rating</label>
-                            <div class="star-rating">
-                                {% for i in rating_range %}
-                                    <i class="far fa-star star-input" data-rating="{{ i }}"></i>
-                                {% endfor %}
-                            </div>
-                            <input type="hidden" name="rating" id="rating-input" required>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">Comment</label>
-                            <textarea name="comment" class="form-control" rows="4" placeholder="Share your experience with this product..."></textarea>
-                        </div>
-
-                        <button type="submit" class="btn btn-primary">
-                            <span class="spinner-border spinner-border-sm d-none" id="submit-spinner"></span>
-                            Submit Review
-                        </button>
-                    </form>
-                </div>
-            </div>
-        {% else %}
-            <div class="alert alert-secondary">
-                <a href="{% url 'accounts:sign_in' %}">Login</a> to leave a review.
-            </div>
         {% endif %}
 
-        <!-- Reviews List -->
-        <div id="reviews-container">
+        <!-- Recommended Products -->
+        <div class="creative-section-card">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h3 class="creative-section-title mb-0">
+                    <i class="fas fa-heart" style="color: #e74c3c;"></i> Recommended for You
+                </h3>
+                <a href="{% url 'marketplace:all_products' %}" class="creative-btn creative-btn-sm" style="background: rgba(102,126,234,0.1); color: #667eea; border: 2px solid rgba(102,126,234,0.2); text-decoration: none;">
+                    View All Products
+                </a>
+            </div>
+
+            <div class="row g-4">
+                {% for item in recommended_items %}
+                <div class="col-xl-3 col-lg-4 col-md-6">
+                    <div class="creative-recommended-card">
+                        {% if item.discount_percentage %}
+                        <div class="creative-discount-badge-rec">
+                            {{ item.discount_percentage|floatformat:0 }}% OFF
+                        </div>
+                        {% endif %}
+
+                        <div class="creative-recommended-image">
+                            <a href="{% url 'marketplace:product_detail' item.id %}">
+                                <img src="{{ item.image.url }}" alt="{{ item.name }}">
+                            </a>
+                        </div>
+
+                        <div class="creative-recommended-content">
+                            <h6 class="creative-recommended-title">
+                                <a href="{% url 'marketplace:product_detail' item.id %}" style="color: inherit; text-decoration: none;">
+                                    {{ item.name|truncatechars:40 }}
+                                </a>
+                            </h6>
+
+                            <div class="creative-recommended-price">
+                                D{{ item.price }}
+                                {% if item.original_price %}
+                                <small class="text-muted text-decoration-line-through ms-1" style="font-size: 0.8rem;">D{{ item.original_price }}</small>
+                                {% endif %}
+                            </div>
+
+                            <div class="mb-3">
+                                <small class="text-muted">
+                                    <i class="fas fa-tag me-1" style="color: #667eea;"></i> {{ item.category.name }}
+                                </small>
+                                <small class="text-muted float-end">{{ item.sold_count|default:"0" }} sold</small>
+                            </div>
+
+                            <div class="creative-recommended-actions">
+                                <a href="{% url 'marketplace:product_detail' item.id %}" class="creative-btn-recommended creative-btn-view">
+                                    <i class="fas fa-eye me-1"></i> View
+                                </a>
+                                {% if user.is_authenticated %}
+                                <button class="creative-btn-recommended creative-btn-cart" onclick="addToCart({{ item.id }}, this)"
+                                    {% if not item.stock or item.stock.quantity == 0 %}disabled{% endif %}>
+                                    <i class="fas fa-cart-plus"></i>
+                                </button>
+                                <button class="creative-btn-recommended creative-btn-heart" onclick="toggleWishlist({{ item.id }})" id="wishlistBtn-{{ item.id }}">
+                                    <i id="wishlistIcon-{{ item.id }}" class="{% if item.id in user_wishlist_product_ids %}fas fa-heart{% else %}far fa-heart{% endif %}"></i>
+                                </button>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="col-12 text-center py-5">
+                    <i class="fas fa-box-open fa-3x mb-3" style="color: #667eea;"></i>
+                    <h5 style="color: #2c3e50; font-weight: 700;">No recommended items available</h5>
+                    <p class="text-muted">Check back later for personalized recommendations!</p>
+                </div>
+                {% endfor %}
+            </div>
         </div>
 
-        <!-- Load More Button -->
-        <div class="text-center mt-4">
-            <button class="btn btn-outline-primary" id="load-more-reviews" data-page="2">
-                Load More Reviews
-            </button>
+        <!-- Featured Celebrities -->
+        <div class="creative-section-card">
+            <h3 class="creative-section-title">
+                <i class="fas fa-star" style="color: #f39c12;"></i> Featured Celebrities
+            </h3>
+
+            <div class="row g-4">
+                {% for celeb in featured_celebrities %}
+                <div class="col-md-4 col-lg-3">
+                    <div class="creative-celebrity-card">
+                        <div class="creative-celebrity-image">
+                            {% if celeb.celebrity_image %}
+                            <img src="{{ celeb.celebrity_image.url }}" alt="{{ celeb.celebrity_name }}">
+                            {% else %}
+                            <div class="bg-light d-flex align-items-center justify-content-center h-100">
+                                <i class="fas fa-user fa-4x text-muted"></i>
+                            </div>
+                            {% endif %}
+                            <div class="creative-celebrity-badge">
+                                <i class="fas fa-crown me-1"></i> Celebrity Pick
+                            </div>
+                        </div>
+
+                        <div class="creative-celebrity-content">
+                            <h5 class="creative-celebrity-name">{{ celeb.celebrity_name }}</h5>
+                            <p class="text-muted small mb-2">{{ celeb.celebrity_title|default:"Celebrity" }}</p>
+                            <blockquote class="mb-3" style="font-style: italic; color: #6c757d;">
+                                "{{ celeb.testimonial|default:"Loving this product!" }}"
+                            </blockquote>
+
+                            <div class="creative-celebrity-social">
+                                {% if celeb.instagram_link %}
+                                <a href="{{ celeb.instagram_link }}" target="_blank" class="creative-social-link creative-social-instagram">
+                                    <i class="fab fa-instagram"></i>
+                                </a>
+                                {% endif %}
+                                {% if celeb.twitter_link %}
+                                <a href="{{ celeb.twitter_link }}" target="_blank" class="creative-social-link creative-social-twitter">
+                                    <i class="fab fa-twitter"></i>
+                                </a>
+                                {% endif %}
+                                {% if celeb.facebook_link %}
+                                <a href="{{ celeb.facebook_link }}" target="_blank" class="creative-social-link creative-social-facebook">
+                                    <i class="fab fa-facebook"></i>
+                                </a>
+                                {% endif %}
+                                {% if celeb.youtube_link %}
+                                <a href="{{ celeb.youtube_link }}" target="_blank" class="creative-social-link creative-social-youtube">
+                                    <i class="fab fa-youtube"></i>
+                                </a>
+                                {% endif %}
+                                {% if celeb.tiktok_link %}
+                                <a href="{{ celeb.tiktok_link }}" target="_blank" class="creative-social-link creative-social-tiktok">
+                                    <i class="fab fa-tiktok"></i>
+                                </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="col-12 text-center py-5">
+                    <i class="fas fa-user fa-3x mb-3" style="color: #667eea;"></i>
+                    <h5 style="color: #2c3e50; font-weight: 700;">No featured celebrities at the moment</h5>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Enhanced Reviews Section -->
+        <div class="creative-section-card">
+            <h3 class="creative-section-title">
+                <i class="fas fa-comments" style="color: #667eea;"></i> Customer Reviews
+            </h3>
+
+            <!-- Creative Review Form -->
+            {% if user.is_authenticated %}
+            <div class="mb-4" style="background: linear-gradient(135deg, rgba(102,126,234,0.05) 0%, rgba(118,75,162,0.05) 100%); border-radius: 16px; padding: 2rem; border: 1px solid rgba(102,126,234,0.1);">
+                <h6 style="color: #2c3e50; font-weight: 700; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-pen" style="color: #667eea;"></i> Write a Review
+                </h6>
+                <form id="review-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="product_id" value="{{ product.id }}">
+
+                    <div class="mb-3">
+                        <label class="form-label" style="font-weight: 700; color: #2c3e50;">Rating</label>
+                        <div class="star-rating d-flex align-items-center gap-2">
+                            {% for i in rating_range %}
+                                <i class="far fa-star star-input" data-rating="{{ i }}" style="font-size: 1.5rem; cursor: pointer; color: #e9ecef; transition: all 0.3s ease;"></i>
+                            {% endfor %}
+                            <span class="ms-3 rating-text" style="font-weight: 600; color: #6c757d;">Select a rating</span>
+                        </div>
+                        <input type="hidden" name="rating" id="rating-input" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label" style="font-weight: 700; color: #2c3e50;">Comment</label>
+                        <textarea name="comment" class="form-control" rows="4" placeholder="Share your experience with this product..." style="border: 2px solid rgba(102,126,234,0.2); border-radius: 12px; padding: 12px 16px; transition: all 0.3s ease;"></textarea>
+                    </div>
+
+                    <button type="submit" class="creative-btn creative-btn-primary">
+                        <span class="spinner-border spinner-border-sm d-none" id="submit-spinner"></span>
+                        <i class="fas fa-paper-plane me-2"></i>Submit Review
+                    </button>
+                </form>
+            </div>
+            {% else %}
+            <div class="mb-4 text-center" style="background: rgba(102,126,234,0.05); border-radius: 16px; padding: 2rem; border: 1px solid rgba(102,126,234,0.1);">
+                <i class="fas fa-user-lock fa-3x mb-3" style="color: #667eea;"></i>
+                <h6 style="color: #2c3e50; font-weight: 700; margin-bottom: 1rem;">Join the Conversation</h6>
+                <p style="color: #6c757d; margin-bottom: 1.5rem;">Share your thoughts and help other customers make informed decisions.</p>
+                <a href="{% url 'accounts:sign_in' %}" class="creative-btn creative-btn-primary" style="text-decoration: none;">
+                    <i class="fas fa-sign-in-alt me-2"></i>Login to Leave a Review
+                </a>
+            </div>
+            {% endif %}
+
+            <!-- Reviews List Container -->
+            <div id="reviews-container" style="background: white; border-radius: 16px; padding: 1.5rem; box-shadow: 0 4px 15px rgba(0,0,0,0.05);">
+                <!-- Reviews will be loaded here via AJAX -->
+            </div>
+
+            <!-- Load More Reviews Button -->
+            <div class="text-center mt-4">
+                <button class="creative-btn creative-btn-sm" id="load-more-reviews" data-page="2" style="background: rgba(102,126,234,0.1); color: #667eea; border: 2px solid rgba(102,126,234,0.2);">
+                    <i class="fas fa-chevron-down me-2"></i>Load More Reviews
+                </button>
+            </div>
         </div>
     </div>
-
 </section>
-<style>
 
-</style>
+<!-- Enhanced Floating Chat Box -->
+<div id="chatBox" class="creative-floating-chat d-none">
+    <div class="creative-chat-header">
+        <div class="creative-chat-seller">
+            <div class="creative-chat-avatar">
+                <i class="fas fa-user"></i>
+            </div>
+            <div>
+                <strong>{{ product.seller.get_full_name|default:product.seller.username }}</strong>
+                <div class="creative-chat-status">
+                    <div class="creative-status-dot"></div>
+                    <span>Online now</span>
+                </div>
+            </div>
+        </div>
+        <button type="button" class="btn-close btn-close-white" onclick="toggleChatBox()"></button>
+    </div>
+
+    <div class="creative-chat-body" id="chatMessages">
+        {% if product %}
+        <div class="mb-3 p-2 bg-white rounded shadow-sm border-start border-success border-3">
+            <div class="d-flex align-items-center gap-2">
+                <i class="fas fa-box text-success"></i>
+                <small><strong>{{ product.name }}</strong> - D{{ product.price }}</small>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if messages %}
+        {% for msg in messages %}
+        <div class="creative-message {% if msg.sender == request.user %}sent{% else %}received{% endif %}">
+            <div class="creative-message-bubble">
+                <div>{{ msg.message }}</div>
+                <div class="creative-message-time">{{ msg.timestamp|timesince }} ago</div>
+            </div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="text-center py-5 text-muted">
+            <i class="fas fa-comments fa-3x mb-3 opacity-25"></i>
+            <p class="small">No messages yet. Start the conversation!</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="creative-chat-footer">
+        <form method="post" action="{% url 'chat:start_chat' %}" id="chatForm">
+            {% csrf_token %}
+            <input type="hidden" name="recipient_id" value="{{ product.seller.id }}">
+            <input type="hidden" name="product_id" value="{{ product.id }}">
+            <div class="creative-chat-input">
+                <input type="text" name="message" placeholder="Type your message..." required>
+                <button class="creative-chat-send" type="submit">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Address Edit Modal (keeping original functionality) -->
+{% if user.is_authenticated %}
+<div class="modal fade" id="editAddressModal" tabindex="-1" aria-labelledby="editAddressModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content shadow rounded-4">
+            <div class="modal-header" style="background: linear-gradient(45deg, #667eea, #764ba2); color: white;">
+                <h5 class="modal-title" id="editAddressModalLabel"><i class="fas fa-map-marker-alt me-2"></i>Edit Delivery Address</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <form method="POST" action="{% url 'accounts:edit_address_modal' %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="address1" class="form-label">Address Line 1</label>
+                        <textarea class="form-control" id="address1" name="address1" rows="2" required>{{ address.address1 }}</textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="address2" class="form-label">Address Line 2</label>
+                        <textarea class="form-control" id="address2" name="address2" rows="2">{{ address.address2 }}</textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="country" class="form-label">Country</label>
+                        <input type="text" class="form-control" id="country" name="country" value="{{ address.country }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="geo_code" class="form-label">Geo Code (on the fence)</label>
+                        <input type="text" name="geo_code" id="geo_code" class="form-control" placeholder="e.g., GC-9A23-KL4" value="{{ address.geo_code }}">
+                    </div>
+                </div>
+
+                <div class="modal-footer justify-content-between">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn" style="background: linear-gradient(45deg, #28a745, #20c997); color: white;">
+                        <i class="fas fa-save me-1"></i> Save Address
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <!-- Reviews List Template -->
 <script id="reviews-template" type="text/template">
 <!-- This will be loaded via AJAX -->
 </script>
-<!-- Set global variables for JavaScript -->
-<script>
-    // Make product ID available to JavaScript
-    window.PRODUCT_ID = {{ product.id }};
 
-    // You can add other global variables here if needed
-    window.CSRF_TOKEN = '{{ csrf_token }}';
+<!-- JavaScript -->
+<script>
+// Make product ID available to JavaScript
+window.PRODUCT_ID = {{ product.id }};
+window.CSRF_TOKEN = '{{ csrf_token }}';
+
+// Enhanced thumbnail gallery functionality
+function changeMainImage(thumbnail, imageUrl) {
+    const mainImage = document.getElementById('mainProductImage');
+    const thumbnails = document.querySelectorAll('.creative-thumbnail-item');
+
+    // Update main image with animation
+    mainImage.style.opacity = '0';
+    setTimeout(() => {
+        mainImage.src = imageUrl;
+        mainImage.style.opacity = '1';
+    }, 200);
+
+    // Update active thumbnail
+    thumbnails.forEach(thumb => thumb.classList.remove('active'));
+    thumbnail.classList.add('active');
+}
+
+// Enhanced quantity control
+function changeQuantity(delta) {
+    const quantityInput = document.getElementById('quantity');
+    if (quantityInput) {
+        const currentValue = parseInt(quantityInput.value);
+        const newValue = currentValue + delta;
+        const max = parseInt(quantityInput.getAttribute('max'));
+
+        if (newValue >= 1 && newValue <= max) {
+            quantityInput.value = newValue;
+            // Add animation feedback
+            quantityInput.style.transform = 'scale(1.1)';
+            setTimeout(() => {
+                quantityInput.style.transform = 'scale(1)';
+            }, 200);
+        }
+    }
+}
+
+// Enhanced chat functionality
+function toggleChatBox() {
+    const chatBox = document.getElementById('chatBox');
+    chatBox.classList.toggle('d-none');
+
+    if (!chatBox.classList.contains('d-none')) {
+        // Scroll to bottom of chat
+        const chatBody = document.querySelector('.creative-chat-body');
+        chatBody.scrollTop = chatBody.scrollHeight;
+
+        // Focus on input
+        const chatInput = chatBox.querySelector('input[name="message"]');
+        setTimeout(() => chatInput.focus(), 300);
+    }
+}
+
+// Enhanced toggle buttons
+function toggleCollapse(buttonId, targetId, showText, hideText) {
+    const button = document.getElementById(buttonId);
+    const target = document.getElementById(targetId);
+    const icon = button.querySelector('i');
+
+    if (target.classList.contains('show')) {
+        button.innerHTML = `<i class="fas fa-chevron-down me-2"></i>${showText}`;
+    } else {
+        button.innerHTML = `<i class="fas fa-chevron-up me-2"></i>${hideText}`;
+    }
+}
+
+// Initialize enhancements
+document.addEventListener('DOMContentLoaded', function() {
+    // Add intersection observer for animations
+    const cards = document.querySelectorAll('.creative-section-card, .creative-recommended-card, .creative-celebrity-card');
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach((entry, index) => {
+            if (entry.isIntersecting) {
+                setTimeout(() => {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }, index * 100);
+            }
+        });
+    }, { threshold: 0.1 });
+
+    cards.forEach((card) => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(30px)';
+        card.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+        observer.observe(card);
+    });
+
+    // Enhanced button interactions
+    document.querySelectorAll('.creative-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            if (!this.disabled) {
+                this.style.transform = 'scale(0.95)';
+                setTimeout(() => {
+                    this.style.transform = '';
+                }, 150);
+            }
+        });
+    });
+
+    // Toggle description button
+    const toggleDescBtn = document.getElementById('toggleDescBtn');
+    if (toggleDescBtn) {
+        toggleDescBtn.addEventListener('click', () => {
+            toggleCollapse('toggleDescBtn', 'fullDescription', 'Show More', 'Show Less');
+        });
+    }
+
+    // Toggle specs button
+    const toggleSpecBtn = document.getElementById('toggleSpecBtn');
+    if (toggleSpecBtn) {
+        toggleSpecBtn.addEventListener('click', () => {
+            toggleCollapse('toggleSpecBtn', 'specCollapse', 'Show More Specs', 'Show Less Specs');
+        });
+    }
+
+    // Enhanced Star Rating System
+    const starInputs = document.querySelectorAll('.star-input');
+    const ratingInput = document.getElementById('rating-input');
+    const ratingText = document.querySelector('.rating-text');
+
+    if (starInputs.length > 0) {
+        starInputs.forEach((star, index) => {
+            star.addEventListener('mouseenter', function() {
+                const rating = parseInt(this.getAttribute('data-rating'));
+                highlightStars(rating);
+                updateRatingText(rating);
+            });
+
+            star.addEventListener('mouseleave', function() {
+                const currentRating = ratingInput ? parseInt(ratingInput.value) : 0;
+                highlightStars(currentRating);
+                updateRatingText(currentRating);
+            });
+
+            star.addEventListener('click', function() {
+                const rating = parseInt(this.getAttribute('data-rating'));
+                if (ratingInput) {
+                    ratingInput.value = rating;
+                }
+                highlightStars(rating);
+                updateRatingText(rating);
+
+                // Add animation feedback
+                this.style.transform = 'scale(1.3)';
+                setTimeout(() => {
+                    this.style.transform = 'scale(1)';
+                }, 200);
+            });
+        });
+    }
+
+    function highlightStars(rating) {
+        starInputs.forEach((star, index) => {
+            const starRating = parseInt(star.getAttribute('data-rating'));
+            if (starRating <= rating) {
+                star.classList.remove('far');
+                star.classList.add('fas');
+                star.style.color = '#ffc107';
+                star.style.textShadow = '0 2px 4px rgba(255,193,7,0.3)';
+            } else {
+                star.classList.remove('fas');
+                star.classList.add('far');
+                star.style.color = '#e9ecef';
+                star.style.textShadow = 'none';
+            }
+        });
+    }
+
+    function updateRatingText(rating) {
+        if (ratingText) {
+            const ratingTexts = {
+                0: 'Select a rating',
+                1: 'Poor - 1 star',
+                2: 'Fair - 2 stars',
+                3: 'Good - 3 stars',
+                4: 'Very Good - 4 stars',
+                5: 'Excellent - 5 stars'
+            };
+            ratingText.textContent = ratingTexts[rating] || 'Select a rating';
+
+            if (rating > 0) {
+                ratingText.style.color = '#28a745';
+                ratingText.style.fontWeight = '700';
+            } else {
+                ratingText.style.color = '#6c757d';
+                ratingText.style.fontWeight = '600';
+            }
+        }
+    }
+
+    // Enhanced Review Form Submission
+    const reviewForm = document.getElementById('review-form');
+    if (reviewForm) {
+        reviewForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const submitBtn = this.querySelector('button[type="submit"]');
+            const spinner = document.getElementById('submit-spinner');
+            const rating = ratingInput ? ratingInput.value : '';
+
+            if (!rating) {
+                alert('Please select a rating before submitting your review.');
+                return;
+            }
+
+            // Show loading state
+            if (submitBtn && spinner) {
+                submitBtn.disabled = true;
+                spinner.classList.remove('d-none');
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Submitting...';
+            }
+
+            // Simulate form submission (replace with actual AJAX call)
+            setTimeout(() => {
+                if (submitBtn && spinner) {
+                    submitBtn.innerHTML = '<i class="fas fa-check me-2"></i>Review Submitted!';
+                    submitBtn.style.background = 'linear-gradient(45deg, #28a745, #20c997)';
+
+                    // Reset form after 2 seconds
+                    setTimeout(() => {
+                        reviewForm.reset();
+                        ratingInput.value = '';
+                        highlightStars(0);
+                        updateRatingText(0);
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = '<i class="fas fa-paper-plane me-2"></i>Submit Review';
+                        submitBtn.style.background = '';
+                    }, 2000);
+                }
+            }, 1500);
+        });
+    }
+
+    // Enhanced textarea focus effects
+    const textarea = document.querySelector('textarea[name="comment"]');
+    if (textarea) {
+        textarea.addEventListener('focus', function() {
+            this.style.borderColor = '#667eea';
+            this.style.boxShadow = '0 0 20px rgba(102,126,234,0.3)';
+        });
+
+        textarea.addEventListener('blur', function() {
+            this.style.borderColor = 'rgba(102,126,234,0.2)';
+            this.style.boxShadow = 'none';
+        });
+    }
+});
 </script>
 
-<!-- Include the external JavaScript file -->
 <script src="{% static 'js/message-review.js' %}"></script>
-
 <script src="{% static 'js/main.js' %}"></script>
 <script src="{% static 'js/product_detail.js' %}"></script>
 {% endblock %}
