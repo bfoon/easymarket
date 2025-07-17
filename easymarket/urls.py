@@ -30,6 +30,7 @@ urlpatterns = [
     path('chat/', include('chat.urls')),
     path('stores/', include('stores.urls')),
     path('logistics/', include('logistics.urls')),
+    path('finance/', include('finance.urls')),
 
 ]
 if settings.DEBUG:

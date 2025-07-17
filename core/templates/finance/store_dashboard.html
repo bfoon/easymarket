@@ -1,0 +1,181 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}Store Dashboard{% endblock %}
+
+{% block page_title %}
+    Store Financial Dashboard
+    <small class="text-muted">{{ current_month|date:"F Y" }}</small>
+{% endblock %}
+
+{% block page_actions %}
+    <button type="button" class="btn btn-primary">
+        <i class="fas fa-download"></i> Export Data
+    </button>
+{% endblock %}
+
+{% block content %}
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card-metric card-revenue">
+                <div class="metric-value">{{ store_data|length }}</div>
+                <div class="metric-label">Active Stores</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card-metric card-profit">
+                <div class="metric-value">
+                    D{% for store in store_data %}{{ store.financial_summary.total_revenue|default:0|floatformat:0 }}{% if not forloop.last %}+{% endif %}{% endfor %}
+                </div>
+                <div class="metric-label">Total Revenue</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card-metric card-expense">
+                <div class="metric-value">
+                    D{% for store in store_data %}{{ store.financial_summary.total_expenses|default:0|floatformat:0 }}{% if not forloop.last %}+{% endif %}{% endfor %}
+                </div>
+                <div class="metric-label">Total Expenses</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card-metric card-logistics">
+                <div class="metric-value">
+                    {% for store in store_data %}{{ store.logistics_data.total_shipments|default:0 }}{% if not forloop.last %}+{% endif %}{% endfor %}
+                </div>
+                <div class="metric-label">Total Shipments</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Store Cards -->
+    <div class="row">
+        {% for data in store_data %}
+        <div class="col-lg-6 col-xl-4 mb-4">
+            <div class="card store-card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div>
+                            <h5 class="card-title">{{ data.store.name }}</h5>
+                            <small class="text-muted">
+                                {{ data.store.get_store_type_display }} • {{ data.store.city }}, {{ data.store.region }}
+                            </small>
+                        </div>
+                        <div class="text-end">
+                            <span class="badge {% if data.store.status == 'active' %}bg-success{% else %}bg-warning{% endif %}">
+                                {{ data.store.get_status_display }}
+                            </span>
+                            {% if data.store.is_featured %}
+                                <span class="badge bg-primary">Featured</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <small class="text-muted">Revenue</small>
+                            <div class="h6 text-success">
+                                D{{ data.financial_summary.total_revenue|default:0|floatformat:2 }}
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Expenses</small>
+                            <div class="h6 text-danger">
+                                D{{ data.financial_summary.total_expenses|default:0|floatformat:2 }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <small class="text-muted">Net Profit</small>
+                            <div class="h6 {% if data.net_profit >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                D{{ data.net_profit|floatformat:2 }}
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Commission Rate</small>
+                            <div class="h6 text-info">
+                                {{ data.commission_rate }}%
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Store Performance Metrics -->
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <small class="text-muted">Total Products</small>
+                            <div class="h6">{{ data.total_products }}</div>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Avg Rating</small>
+                            <div class="h6">
+                                {{ data.average_rating|floatformat:1 }}
+                                {% if data.average_rating > 0 %}⭐{% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Logistics Summary -->
+                    <hr>
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <small class="text-muted">Lifetime Orders</small>
+                            <div class="h6">{{ data.total_orders|default:0 }}</div>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Recent Shipments</small>
+                            <div class="h6">{{ data.logistics_data.total_shipments|default:0 }}</div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-4">
+                            <small class="text-muted">Pending</small>
+                            <div class="h6 text-warning">{{ data.logistics_data.pending_shipments|default:0 }}</div>
+                        </div>
+                        <div class="col-4">
+                            <small class="text-muted">Completed</small>
+                            <div class="h6 text-success">{{ data.logistics_data.completed_shipments|default:0 }}</div>
+                        </div>
+                        <div class="col-4">
+                            <small class="text-muted">Failed</small>
+                            <div class="h6 text-danger">{{ data.logistics_data.failed_shipments|default:0 }}</div>
+                        </div>
+                    </div>
+
+                    {% if data.logistics_data.failed_shipments %}
+                    <div class="alert alert-danger py-2 mb-3">
+                        <small><i class="fas fa-exclamation-triangle"></i> {{ data.logistics_data.failed_shipments }} failed shipments</small>
+                    </div>
+                    {% endif %}
+
+                    <!-- Store Info -->
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <small class="text-muted">Processing Time</small>
+                            <div class="h6">{{ data.processing_time }} days</div>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Lifetime Sales</small>
+                            <div class="h6 text-success">D{{ data.total_sales|floatformat:0 }}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <a href="{% url 'finance:store_detail' data.store.id %}" class="btn btn-outline-primary">
+                            <i class="fas fa-eye"></i> View Details
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="col-12">
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i> No stores found. <a href="/admin/">Add stores</a> to get started.
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+{% endblock %}

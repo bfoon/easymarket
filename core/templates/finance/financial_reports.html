@@ -1,0 +1,432 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}Financial Reports{% endblock %}
+
+{% block page_title %}Financial Reports{% endblock %}
+{% load finance_extras %}
+
+{% block page_actions %}
+    <div class="btn-group">
+        <button type="button" class="btn btn-outline-primary">
+            <i class="fas fa-filter"></i> Filter
+        </button>
+        <button type="button" class="btn btn-primary">
+            <i class="fas fa-download"></i> Export All
+        </button>
+    </div>
+{% endblock %}
+
+{% block content %}
+    <!-- Overall Summary -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card-metric card-revenue">
+                <div class="metric-value">D{{ overall_summary.get_total_sales|default:0|floatformat:0 }}</div>
+                <div class="metric-label">Total Revenue</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card-metric card-expense">
+                <div class="metric-value">D{{ overall_summary.total_expenses|default:0|floatformat:0 }}</div>
+                <div class="metric-label">Total Expenses</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card-metric card-profit">
+                <div class="metric-value">D{{ overall_summary.total_refunds|default:0|floatformat:0 }}</div>
+                <div class="metric-label">Total Refunds</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card-metric card-logistics">
+                <div class="metric-value">D{{ overall_summary.total_commissions|default:0|floatformat:0 }}</div>
+                <div class="metric-label">Total Commissions</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Store Performance Table -->
+    <div class="card">
+        <div class="card-header">
+            <h5><i class="fas fa-chart-bar"></i> Store Performance Comparison</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Store</th>
+                            <th>Revenue</th>
+                            <th>Expenses</th>
+                            <th>Net Profit</th>
+                            <th>Orders</th>
+                            <th>Shipments</th>
+                            <th>Performance</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for store in store_performance %}
+                        <tr>
+                            <td>
+                                <strong>{{ store.name }}</strong><br>
+                                <small class="text-muted">{{ store.business_registration_number }}</small>
+                            </td>
+                            <td class="text-success">D{{ store.get_total_sales|default:0|floatformat:2 }}</td>
+                            <td class="text-danger">D{{ store.total_expenses|default:0|floatformat:2 }}</td>
+                            <td class="{% if store.total_revenue > store.total_expenses %}text-success{% else %}text-danger{% endif %}">
+                                D{{ store.total_revenue|default:0|sub:store.total_expenses|default:0|floatformat:2 }}
+                            </td>
+                            <td>{{ store.get_total_orders|default:0 }}</td>
+                            <td>{{ store.shipment_count|default:0 }}</td>
+                            <td>
+                                {% if store.total_revenue %}
+                                    {% if store.total_revenue > 10000 %}
+                                        <span class="badge bg-success">Excellent</span>
+                                    {% elif store.total_revenue > 5000 %}
+                                        <span class="badge bg-primary">Good</span>
+                                    {% elif store.total_revenue > 1000 %}
+                                        <span class="badge bg-warning">Average</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">Needs Improvement</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="badge bg-secondary">No Data</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted">No store data available</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Global variables for charts
+let financialChart, categoryChart;
+
+// Document ready
+document.addEventListener('DOMContentLoaded', function() {
+    initializeCharts();
+    setupEventListeners();
+});
+
+// Initialize all charts
+function initializeCharts() {
+    initializeFinancialChart();
+    initializeCategoryChart();
+}
+
+// Financial performance line chart
+function initializeFinancialChart() {
+    const ctx = document.getElementById('financialChart');
+    if (!ctx) return;
+
+    // Sample data - in production, this would come from your API
+    const chartData = {
+        labels: {% if comprehensive_data.period %}[
+            {% for i in "1234567"|make_list %}
+            '{{ comprehensive_data.period.start_date|add_days:i|date:"M d" }}',
+            {% endfor %}
+        ]{% else %}['Day 1', 'Day 2', 'Day 3', 'Day 4', 'Day 5', 'Day 6', 'Day 7']{% endif %},
+        datasets: [{
+            label: 'Revenue',
+            data: [
+                {{ financial_summary.total_revenue|default:0 }}/7,
+                {{ financial_summary.total_revenue|default:0 }}/6,
+                {{ financial_summary.total_revenue|default:0 }}/5,
+                {{ financial_summary.total_revenue|default:0 }}/4,
+                {{ financial_summary.total_revenue|default:0 }}/3,
+                {{ financial_summary.total_revenue|default:0 }}/2,
+                {{ financial_summary.total_revenue|default:0 }}
+            ],
+            borderColor: 'rgb(34, 197, 94)',
+            backgroundColor: 'rgba(34, 197, 94, 0.1)',
+            tension: 0.4
+        }, {
+            label: 'Expenses',
+            data: [
+                {{ financial_summary.total_expenses|default:0 }}/7,
+                {{ financial_summary.total_expenses|default:0 }}/6,
+                {{ financial_summary.total_expenses|default:0 }}/5,
+                {{ financial_summary.total_expenses|default:0 }}/4,
+                {{ financial_summary.total_expenses|default:0 }}/3,
+                {{ financial_summary.total_expenses|default:0 }}/2,
+                {{ financial_summary.total_expenses|default:0 }}
+            ],
+            borderColor: 'rgb(239, 68, 68)',
+            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+            tension: 0.4
+        }]
+    };
+
+    financialChart = new Chart(ctx, {
+        type: 'line',
+        data: chartData,
+        options: {
+            responsive: true,
+            interaction: {
+                intersect: false,
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return ' + value.toLocaleString();
+                        }
+                    }
+                }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ':  + context.parsed.y.toLocaleString();
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Category performance pie chart
+function initializeCategoryChart() {
+    const ctx = document.getElementById('categoryChart');
+    if (!ctx) return;
+
+    const categoryData = {
+        labels: [
+            {% for item in category_breakdown %}
+            {% if item.record_type == 'revenue' %}
+            '{{ item.category|title }}',
+            {% endif %}
+            {% endfor %}
+        ],
+        datasets: [{
+            data: [
+                {% for item in category_breakdown %}
+                {% if item.record_type == 'revenue' %}
+                {{ item.total|default:0 }},
+                {% endif %}
+                {% endfor %}
+            ],
+            backgroundColor: [
+                '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'
+            ]
+        }]
+    };
+
+    categoryChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: categoryData,
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = ((context.parsed / total) * 100).toFixed(1);
+                            return context.label + ':  + context.parsed.toLocaleString() + ' (' + percentage + '%)';
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Setup event listeners
+function setupEventListeners() {
+    // Transaction filter buttons
+    document.addEventListener('click', function(e) {
+        if (e.target.matches('[onclick*="filterTransactions"]')) {
+            e.preventDefault();
+        }
+    });
+}
+
+// Filter transactions by type
+function filterTransactions(type) {
+    const table = document.getElementById('transactionsTable');
+    const rows = table.querySelectorAll('tbody tr[data-type]');
+
+    // Update button states
+    document.querySelectorAll('[onclick*="filterTransactions"]').forEach(btn => {
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-outline-primary');
+    });
+
+    event.target.classList.remove('btn-outline-primary');
+    event.target.classList.add('btn-primary');
+
+    // Filter rows
+    rows.forEach(row => {
+        if (type === 'all' || row.dataset.type === type) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+}
+
+// Export financial data
+function exportFinancialData() {
+    const storeId = '{{ store.id }}';
+    const dateFrom = '{{ date_from|date:"Y-m-d" }}';
+    const dateTo = '{{ date_to|date:"Y-m-d" }}';
+
+    const url = `/api/finance/financial-records/?store_id=${storeId}&date_from=${dateFrom}&date_to=${dateTo}&format=csv`;
+
+    // Create download link
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `{{ store.name|slugify }}_financial_data_${dateFrom}_to_${dateTo}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    // Show success message
+    showNotification('Financial data export started', 'success');
+}
+
+// Refresh logistics data
+function refreshLogistics() {
+    showNotification('Refreshing logistics data...', 'info');
+
+    fetch(`/api/finance/stores/{{ store.id }}/financial_summary/`, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        showNotification('Logistics data refreshed successfully', 'success');
+        // You could update the UI with new data here
+        setTimeout(() => {
+            window.location.reload();
+        }, 1000);
+    })
+    .catch(error => {
+        showNotification('Error refreshing logistics data', 'error');
+        console.error('Error:', error);
+    });
+}
+
+// Generate report
+function generateReport() {
+    showNotification('Generating comprehensive report...', 'info');
+
+    const reportData = {
+        store_id: '{{ store.id }}',
+        store_name: '{{ store.name }}',
+        date_from: '{{ date_from|date:"Y-m-d" }}',
+        date_to: '{{ date_to|date:"Y-m-d" }}',
+        financial_summary: {
+            revenue: {{ financial_summary.total_revenue|default:0 }},
+            expenses: {{ financial_summary.total_expenses|default:0 }},
+            profit: {{ net_profit|default:0 }}
+        }
+    };
+
+    // In a real implementation, you'd send this to a report generation service
+    console.log('Report data:', reportData);
+
+    // Simulate report generation
+    setTimeout(() => {
+        showNotification('Report generated successfully', 'success');
+    }, 2000);
+}
+
+// Show notification
+function showNotification(message, type = 'info') {
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show position-fixed`;
+    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    notification.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+
+    document.body.appendChild(notification);
+
+    // Auto remove after 5 seconds
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 5000);
+}
+
+// Real-time updates (if WebSocket is available)
+function setupRealTimeUpdates() {
+    // Example WebSocket implementation
+    if (typeof WebSocket !== 'undefined') {
+        const ws = new WebSocket(`ws://${window.location.host}/ws/finance/{{ store.id }}/`);
+
+        ws.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+
+            if (data.type === 'financial_update') {
+                showNotification('New financial transaction recorded', 'success');
+                // Update UI with new data
+            }
+        };
+
+        ws.onclose = function(event) {
+            console.log('WebSocket connection closed');
+        };
+    }
+}
+
+// Initialize real-time updates if available
+// setupRealTimeUpdates();
+
+// Utility function for date formatting
+function formatDate(date) {
+    return new Date(date).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+    });
+}
+
+// Utility function for currency formatting
+function formatCurrency(amount) {
+    return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD'
+    }).format(amount);
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', function(e) {
+    // Ctrl/Cmd + E for export
+    if ((e.ctrlKey || e.metaKey) && e.key === 'e') {
+        e.preventDefault();
+        exportFinancialData();
+    }
+
+    // Ctrl/Cmd + R for refresh (prevent default and use our refresh)
+    if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
+        e.preventDefault();
+        refreshLogistics();
+    }
+});
+
+console.log('Finance dashboard initialized for {{ store.name }}');
+</script>
+{% endblock %}

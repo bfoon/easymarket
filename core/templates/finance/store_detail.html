@@ -1,0 +1,728 @@
+{% extends 'finance/base.html' %}
+
+{% block title %}{{ store.name }} - Store Details{% endblock %}
+{% load finance_extras %}
+
+{% block page_title %}
+    {{ store.name }}
+    <small class="text-muted">{{ store.get_store_type_display }} • {{ store.city }}, {{ store.region }}</small>
+{% endblock %}
+
+{% block page_actions %}
+    <div class="btn-group">
+        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#dateRangeModal">
+            <i class="fas fa-calendar"></i> Date Range
+        </button>
+        <button type="button" class="btn btn-primary">
+            <i class="fas fa-download"></i> Export
+        </button>
+    </div>
+{% endblock %}
+
+{% block content %}
+    <!-- Date Range Info -->
+    <div class="alert alert-info">
+        <i class="fas fa-calendar"></i> Showing data from {{ date_from }} to {{ date_to }}
+    </div>
+
+    <!-- Financial Overview -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card-metric card-revenue">
+                <div class="metric-value">D{{ financial_summary.total_revenue|default:0|floatformat:2 }}</div>
+                <div class="metric-label">Total Revenue</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card-metric card-expense">
+                <div class="metric-value">D{{ financial_summary.total_expenses|default:0|floatformat:2 }}</div>
+                <div class="metric-label">Total Expenses</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card-metric card-profit">
+                <div class="metric-value">D{{ net_profit|floatformat:2 }}</div>
+                <div class="metric-label">Net Profit</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card-metric card-logistics">
+                <div class="metric-value">D{{ financial_summary.return_costs|default:0|floatformat:2 }}</div>
+                <div class="metric-label">Return Costs</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Additional Metrics Row -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h4 class="text-primary">{{ store_metrics.total_products }}</h4>
+                    <small class="text-muted">Total Products</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h4 class="text-success">{{ store_metrics.total_orders }}</h4>
+                    <small class="text-muted">Lifetime Orders</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h4 class="text-info">D{{ store_metrics.lifetime_sales|floatformat:0 }}</h4>
+                    <small class="text-muted">Lifetime Sales</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h4 class="text-warning">{{ store_metrics.average_rating|floatformat:1 }}⭐</h4>
+                    <small class="text-muted">Average Rating</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Store Information and Logistics -->
+        <div class="col-lg-4">
+            <!-- Store Settings -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5><i class="fas fa-store"></i> Store Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <small class="text-muted">Store Type</small>
+                            <div class="h6">{{ store_metrics.store_type }}</div>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Status</small>
+                            <span class="badge {% if store.status == 'active' %}bg-success{% else %}bg-warning{% endif %}">
+                                {{ store_metrics.status }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <small class="text-muted">Commission Rate</small>
+                            <div class="h6">{{ store_metrics.commission_rate }}%</div>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Processing Time</small>
+                            <div class="h6">{{ store_metrics.processing_time }} days</div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <small class="text-muted">Return Policy</small>
+                            <div class="h6">{{ store_metrics.return_policy_days }} days</div>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Health Score</small>
+                            <div class="h6">
+                                <span class="badge {% if store_metrics.health_score >= 80 %}bg-success{% elif store_metrics.health_score >= 60 %}bg-warning{% else %}bg-danger{% endif %}">
+                                    {{ store_metrics.health_score }}/100
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {% if return_settings %}
+                    <hr>
+                    <h6>Return Settings</h6>
+                    <div class="row mb-2">
+                        <div class="col-12">
+                            <small class="text-muted">Auto Approve Returns</small>
+                            <span class="badge {% if return_settings.auto_approve_returns %}bg-success{% else %}bg-secondary{% endif %}">
+                                {% if return_settings.auto_approve_returns %}Yes{% else %}No{% endif %}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="row mb-2">
+                        <div class="col-12">
+                            <small class="text-muted">Restocking Fee</small>
+                            <div class="h6">{{ return_settings.restocking_fee_percentage }}%</div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Order Analytics -->
+            {% if order_metrics %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5><i class="fas fa-shopping-cart"></i> Order Analytics</h5>
+                    <small class="text-muted">{{ date_from }} to {{ date_to }}</small>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <div class="text-center">
+                                <div class="h4 text-primary">{{ order_metrics.total_orders }}</div>
+                                <small class="text-muted">Total Orders</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="text-center">
+                                <div class="h4 text-success">{{ order_metrics.delivered_orders }}</div>
+                                <small class="text-muted">Delivered</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-4">
+                            <div class="text-center">
+                                <div class="h6 text-info">{{ order_metrics.processing_orders }}</div>
+                                <small class="text-muted">Processing</small>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="text-center">
+                                <div class="h6 text-warning">{{ order_metrics.shipped_orders }}</div>
+                                <small class="text-muted">Shipped</small>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="text-center">
+                                <div class="h6 text-danger">{{ order_metrics.cancelled_orders }}</div>
+                                <small class="text-muted">Cancelled</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    {% if order_metrics.total_orders > 0 %}
+                    <div class="progress mb-2" style="height: 10px;">
+                        <div class="progress-bar bg-success" style="width: {{ order_metrics.delivered_orders|mul:100|div:order_metrics.total_orders }}%"></div>
+                        <div class="progress-bar bg-info" style="width: {{ order_metrics.processing_orders|mul:100|div:order_metrics.total_orders }}%"></div>
+                        <div class="progress-bar bg-warning" style="width: {{ order_metrics.shipped_orders|mul:100|div:order_metrics.total_orders }}%"></div>
+                        <div class="progress-bar bg-danger" style="width: {{ order_metrics.cancelled_orders|mul:100|div:order_metrics.total_orders }}%"></div>
+                    </div>
+                    <small class="text-muted">Order Status Distribution</small>
+                    {% endif %}
+
+                    <hr>
+                    <div class="row">
+                        <div class="col-12">
+                            <small class="text-muted">Average Order Value</small>
+                            <div class="h6">D{{ order_metrics.average_order_value|floatformat:2 }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Payment Methods -->
+            {% if payment_methods %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5><i class="fas fa-credit-card"></i> Payment Methods</h5>
+                    <small class="text-muted">{{ date_from }} to {{ date_to }}</small>
+                </div>
+                <div class="card-body">
+                    {% for method in payment_methods %}
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span>
+                            {% if method.method == 'wave' %}
+                                <i class="fas fa-mobile-alt text-primary"></i> Wave
+                            {% elif method.method == 'qmoney' %}
+                                <i class="fas fa-mobile-alt text-success"></i> QMoney
+                            {% elif method.method == 'afrimoney' %}
+                                <i class="fas fa-mobile-alt text-warning"></i> AfriMoney
+                            {% elif method.method == 'verve_card' %}
+                                <i class="fas fa-credit-card text-info"></i> Verve Card
+                            {% elif method.method == 'cash' %}
+                                <i class="fas fa-money-bill text-secondary"></i> Cash
+                            {% else %}
+                                <i class="fas fa-question-circle"></i> {{ method.method|title }}
+                            {% endif %}
+                        </span>
+                        <div class="text-end">
+                            <div class="h6 mb-0">D{{ method.total_amount|floatformat:2 }}</div>
+                            <small class="text-muted">{{ method.count }} transactions</small>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <p class="text-muted">No payment data available</p>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Return Analytics -->
+            {% if return_metrics %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5><i class="fas fa-undo"></i> Return Analytics</h5>
+                    <small class="text-muted">{{ date_from }} to {{ date_to }}</small>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <div class="text-center">
+                                <div class="h4 text-warning">{{ return_metrics.total_returns }}</div>
+                                <small class="text-muted">Total Returns</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="text-center">
+                                <div class="h4 text-success">D{{ return_metrics.total_refund_amount|floatformat:2 }}</div>
+                                <small class="text-muted">Refunded</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-4">
+                            <div class="text-center">
+                                <div class="h6 text-info">{{ return_metrics.pending_returns }}</div>
+                                <small class="text-muted">Pending</small>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="text-center">
+                                <div class="h6 text-success">{{ return_metrics.completed_returns }}</div>
+                                <small class="text-muted">Completed</small>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="text-center">
+                                <div class="h6 text-danger">{{ return_metrics.rejected_returns }}</div>
+                                <small class="text-muted">Rejected</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr>
+                    <h6>Top Return Reasons</h6>
+                    {% for reason in return_metrics.return_reasons|slice:":3" %}
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>{{ reason.reason|title }}</span>
+                        <span class="badge bg-secondary">{{ reason.count }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Logistics Information -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5><i class="fas fa-shipping-fast"></i> Logistics Performance</h5>
+                </div>
+                <div class="card-body">
+                    {% if logistics_data %}
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <div class="text-center">
+                                <div class="h4 text-primary">{{ logistics_data.total_orders }}</div>
+                                <small class="text-muted">Lifetime Orders</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="text-center">
+                                <div class="h4 text-info">{{ logistics_data.total_shipments }}</div>
+                                <small class="text-muted">Recent Shipments</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-4">
+                            <div class="text-center">
+                                <div class="h6 text-warning">{{ logistics_data.pending_shipments }}</div>
+                                <small class="text-muted">Pending</small>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="text-center">
+                                <div class="h6 text-success">{{ logistics_data.completed_shipments }}</div>
+                                <small class="text-muted">Completed</small>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="text-center">
+                                <div class="h6 text-danger">{{ logistics_data.failed_shipments }}</div>
+                                <small class="text-muted">Failed</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr>
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <small class="text-muted">Avg Processing</small>
+                            <div class="h6">{{ logistics_data.average_processing_time|floatformat:1 }} days</div>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Avg Delivery</small>
+                            <div class="h6">{{ logistics_data.average_delivery_time|floatformat:1 }} days</div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <small class="text-muted">Shipping Costs</small>
+                            <div class="h6">${{ logistics_data.total_shipping_cost|floatformat:2 }}</div>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Success Rate</small>
+                            <div class="h6">{{ logistics_data.delivery_success_rate|floatformat:1 }}%</div>
+                        </div>
+                    </div>
+
+                    {% if logistics_metrics %}
+                    <hr>
+                    <h6>Recent Logistics Performance</h6>
+                    <div class="row mb-2">
+                        <div class="col-6">
+                            <small class="text-muted">Avg Weight/Shipment</small>
+                            <div class="h6">{{ logistics_metrics.average_weight|floatformat:1 }} kg</div>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Period Shipping Cost</small>
+                            <div class="h6">D{{ logistics_metrics.total_shipping_cost|floatformat:2 }}</div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if logistics_data.total_return_shipments %}
+                    <hr>
+                    <h6>Returns Logistics</h6>
+                    <div class="row mb-2">
+                        <div class="col-6">
+                            <small class="text-muted">Return Shipments</small>
+                            <div class="h6">{{ logistics_data.total_return_shipments }}</div>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">Return Rate</small>
+                            <div class="h6">{{ logistics_data.return_rate_percentage|floatformat:1 }}%</div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% else %}
+                    <p class="text-muted">No logistics data available</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-tools"></i> Quick Actions</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-outline-primary btn-sm" onclick="exportFinancialData()">
+                            <i class="fas fa-download"></i> Export Financial Data
+                        </button>
+                        <button class="btn btn-outline-info btn-sm" onclick="refreshLogistics()">
+                            <i class="fas fa-sync"></i> Refresh Logistics Data
+                        </button>
+                        <button class="btn btn-outline-success btn-sm" onclick="generateReport()">
+                            <i class="fas fa-file-pdf"></i> Generate Report
+                        </button>
+                        <a href="/admin/stores/store/{{ store.id }}/change/" class="btn btn-outline-secondary btn-sm">
+                            <i class="fas fa-edit"></i> Edit Store Settings
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Category Breakdown -->
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-chart-pie"></i> Category Breakdown</h5>
+                </div>
+                <div class="card-body">
+                    {% for item in category_breakdown %}
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span>{{ item.category|title }}</span>
+                        <span class="badge {% if item.record_type == 'revenue' %}bg-success{% elif item.record_type == 'expense' %}bg-danger{% else %}bg-warning{% endif %}">
+                            D{{ item.total|floatformat:2 }}
+                        </span>
+                    </div>
+                    {% empty %}
+                    <p class="text-muted">No transactions in this period</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Transactions -->
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5><i class="fas fa-list"></i> Recent Transactions</h5>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-primary" onclick="filterTransactions('all')">All</button>
+                        <button class="btn btn-outline-success" onclick="filterTransactions('revenue')">Revenue</button>
+                        <button class="btn btn-outline-danger" onclick="filterTransactions('expense')">Expenses</button>
+                        <button class="btn btn-outline-warning" onclick="filterTransactions('refund')">Refunds</button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="transactionsTable">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Type</th>
+                                    <th>Category</th>
+                                    <th>Amount</th>
+                                    <th>Description</th>
+                                    <th>Reference</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for transaction in recent_transactions %}
+                                <tr data-type="{{ transaction.record_type }}">
+                                    <td>
+                                        <span class="text-nowrap">{{ transaction.transaction_date }}</span>
+                                        <br><small class="text-muted">{{ transaction.created_at|time }}</small>
+                                    </td>
+                                    <td>
+                                        <span class="badge
+                                            {% if transaction.record_type == 'revenue' %}bg-success
+                                            {% elif transaction.record_type == 'expense' %}bg-danger
+                                            {% elif transaction.record_type == 'refund' %}bg-warning
+                                            {% elif transaction.record_type == 'commission' %}bg-info
+                                            {% elif transaction.record_type == 'return_cost' %}bg-secondary
+                                            {% elif transaction.record_type == 'shipping_cost' %}bg-primary
+                                            {% else %}bg-dark{% endif %}">
+                                            {{ transaction.get_record_type_display }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-light text-dark">{{ transaction.get_category_display }}</span>
+                                    </td>
+                                    <td class="text-nowrap {% if transaction.record_type == 'revenue' %}text-success{% elif transaction.record_type == 'expense' %}text-danger{% endif %}">
+                                        <strong>D{{ transaction.amount|floatformat:2 }}</strong>
+                                    </td>
+                                    <td>
+                                        <div style="max-width: 200px;">
+                                            {{ transaction.description|truncatechars:50 }}
+                                            {% if transaction.notes %}
+                                                <br><small class="text-muted">{{ transaction.notes|truncatechars:30 }}</small>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        {% if transaction.reference_number %}
+                                            <code class="small">{{ transaction.reference_number }}</code>
+                                        {% endif %}
+                                        {% if transaction.order_reference %}
+                                            <br><small class="text-muted">Order: {{ transaction.order_reference }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if transaction.is_confirmed %}
+                                            <span class="badge bg-success">Confirmed</span>
+                                        {% else %}
+                                            <span class="badge bg-warning">Pending</span>
+                                        {% endif %}
+                                        {% if transaction.processed_by %}
+                                            <br><small class="text-muted">by {{ transaction.processed_by.username }}</small>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="7" class="text-center text-muted py-4">
+                                        <i class="fas fa-receipt fa-2x mb-2"></i><br>
+                                        No transactions found for this period
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {% if recent_transactions %}
+                    <div class="d-flex justify-content-between align-items-center mt-3">
+                        <small class="text-muted">Showing {{ recent_transactions|length }} most recent transactions</small>
+                        <a href="/api/finance/financial-records/?store_id={{ store.id }}&format=csv" class="btn btn-sm btn-outline-primary">
+                            <i class="fas fa-download"></i> Export All
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Financial Performance Chart -->
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5><i class="fas fa-chart-line"></i> Financial Performance Trend</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="financialChart" height="100"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Additional Analytics Row -->
+    <div class="row mt-4">
+        <!-- Category Performance -->
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-chart-pie"></i> Revenue by Category</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="categoryChart" height="200"></canvas>
+
+                    <div class="mt-3">
+                        <h6>Category Breakdown</h6>
+                        {% for item in category_breakdown %}
+                        {% if item.record_type == 'revenue' %}
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span>
+                                <i class="fas fa-circle" style="color:
+                                    {% cycle '#FF6384' '#36A2EB' '#FFCE56' '#4BC0C0' '#9966FF' '#FF9F40' as colors %}"></i>
+                                {{ item.category|title }}
+                            </span>
+                            <span class="badge bg-success">D{{ item.total|floatformat:2 }}</span>
+                        </div>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Performance Metrics -->
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-tachometer-alt"></i> Performance Metrics</h5>
+                </div>
+                <div class="card-body">
+                    <!-- KPI Cards -->
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="card bg-light">
+                                <div class="card-body text-center p-3">
+                                    <div class="h4 text-primary">
+                                        {% if order_metrics.total_orders > 0 %}
+                                            {{ order_metrics.delivered_orders|mul:100|div:order_metrics.total_orders|floatformat:1 }}%
+                                        {% else %}
+                                            0%
+                                        {% endif %}
+                                    </div>
+                                    <small class="text-muted">Order Success Rate</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="card bg-light">
+                                <div class="card-body text-center p-3">
+                                    <div class="h4 text-success">
+                                        {% if financial_summary.total_revenue %}
+                                            {{ net_profit|mul:100|div:financial_summary.total_revenue|floatformat:1 }}%
+                                        {% else %}
+                                            0%
+                                        {% endif %}
+                                    </div>
+                                    <small class="text-muted">Profit Margin</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mt-3">
+                        <div class="col-6">
+                            <div class="card bg-light">
+                                <div class="card-body text-center p-3">
+                                    <div class="h4 text-warning">
+                                        {% if return_metrics.total_returns and order_metrics.total_orders %}
+                                            {{ return_metrics.total_returns|mul:100|div:order_metrics.total_orders|floatformat:1 }}%
+                                        {% else %}
+                                            0%
+                                        {% endif %}
+                                    </div>
+                                    <small class="text-muted">Return Rate</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="card bg-light">
+                                <div class="card-body text-center p-3">
+                                    <div class="h4 text-info">{{ store_metrics.average_rating|floatformat:1 }}⭐</div>
+                                    <small class="text-muted">Customer Rating</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Health Score Progress -->
+                    <div class="mt-4">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span>Financial Health Score</span>
+                            <span class="fw-bold">{{ store_metrics.health_score }}/100</span>
+                        </div>
+                        <div class="progress" style="height: 10px;">
+                            <div class="progress-bar
+                                {% if store_metrics.health_score >= 80 %}bg-success
+                                {% elif store_metrics.health_score >= 60 %}bg-warning
+                                {% else %}bg-danger{% endif %}"
+                                style="width: {{ store_metrics.health_score }}%"></div>
+                        </div>
+                        <small class="text-muted">
+                            {% if store_metrics.health_score >= 80 %}
+                                Excellent financial health
+                            {% elif store_metrics.health_score >= 60 %}
+                                Good financial health
+                            {% else %}
+                                Needs attention
+                            {% endif %}
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Date Range Modal -->
+    <div class="modal fade" id="dateRangeModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Select Date Range</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form method="get">
+                    <div class="modal-body">
+                        <div class="row">
+                            <div class="col-6">
+                                <label for="from" class="form-label">From Date</label>
+                                <input type="date" class="form-control" id="from" name="from" value="{{ date_from|date:'Y-m-d' }}">
+                            </div>
+                            <div class="col-6">
+                                <label for="to" class="form-label">To Date</label>
+                                <input type="date" class="form-control" id="to" name="to" value="{{ date_to|date:'Y-m-d' }}">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Apply Filter</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+{% endblock %}

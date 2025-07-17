@@ -64,6 +64,8 @@ INSTALLED_APPS = [
     'stock',
     'chat',
     'stores',
+    'finance',
+
 ]
 
 MIDDLEWARE = [
