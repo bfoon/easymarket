@@ -9,14 +9,46 @@
                 <a class="nav-link active" href="/">Home</a>
                 <a class="nav-link" href="{% url 'marketplace:all_products' %}">Categories</a>
                 <a class="nav-link" href="{% url 'marketplace:hot_picks' %}">Deals</a>
+
+                <!-- Systems Dropdown -->
                 {% if user.is_authenticated %}
-                  {% if user.is_superuser or user.is_seller or user.store_set.exists %}
-                    <a class="nav-link" href="{% url 'stores:manage_stores' %}">Stores</a>
-                  {% endif %}
-                {% endif %}
-                {% if user.is_authenticated %}
-                  {% if user.is_superuser or user.is_staff %}
-                    <a class="nav-link" href="{% url 'logistics:shipment_list' %}">Logistics</a>
+                  {% if user.is_superuser or user.is_seller or user.store_set.exists or user.is_staff %}
+                    <div class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="systemsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="fas fa-cogs me-1"></i>Systems
+                        </a>
+                        <ul class="dropdown-menu shadow-sm" aria-labelledby="systemsDropdown">
+                            {% if user.is_superuser or user.is_seller or user.store_set.exists %}
+                                <li>
+                                    <a class="dropdown-item" href="{% url 'stores:manage_stores' %}">
+                                        <i class="fas fa-store me-2"></i>Stores
+                                    </a>
+                                </li>
+                            {% endif %}
+                            {% if user.is_superuser or user.is_staff %}
+                                <li>
+                                    <a class="dropdown-item" href="{% url 'logistics:shipment_list' %}">
+                                        <i class="fas fa-truck me-2"></i>Logistics
+                                    </a>
+                                </li>
+                            {% endif %}
+                            {% if user.is_superuser or user.is_staff %}
+                                <li>
+                                    <a class="dropdown-item" href="#">
+                                        <i class="fas fa-chart-line me-2"></i>Financial
+                                    </a>
+                                </li>
+                            {% endif %}
+                            {% if user.is_superuser %}
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item" href="{% url 'admin:index' %}">
+                                        <i class="fas fa-user-shield me-2"></i>Admin Panel
+                                    </a>
+                                </li>
+                            {% endif %}
+                        </ul>
+                    </div>
                   {% endif %}
                 {% endif %}
 
@@ -41,6 +73,17 @@
                   </a>
                 </li>
                 <li>
+                  <a class="dropdown-item" href="{% url 'orders:order_history' %}">
+                    <i class="fas fa-shopping-bag me-2"></i>My Orders
+                  </a>
+                </li>
+                <li>
+                  <a class="dropdown-item" href="{% url 'marketplace:my_wishlist' %}">
+                    <i class="fas fa-heart me-2"></i>Wishlist
+                  </a>
+                </li>
+                <li><hr class="dropdown-divider"></li>
+                <li>
                   <a class="dropdown-item" href="{% url 'accounts:signoff' %}">
                     <i class="fas fa-sign-out-alt me-2"></i>Logout
                   </a>
@@ -48,7 +91,6 @@
               </ul>
             </div>
             {% endif %}
-
 
             <!-- Enhanced Search Bar with AJAX -->
             <div class="search-container-header me-3">
@@ -85,49 +127,176 @@
                     </a>
                 {% endif %}
                 <div class="d-flex align-items-center">
-    <a href="{% url 'marketplace:cart' %}" class="btn btn-primary position-relative">
-        <i class="fas fa-shopping-cart"></i>
-        <span id="cartCountBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
-              style="{% if not cart_count or cart_count == 0 %} display: none; {% endif %}">
-            {{ cart_count|default:0 }}
-        </span>
-    </a>
+                    <a href="{% url 'marketplace:cart' %}" class="btn btn-primary position-relative">
+                        <i class="fas fa-shopping-cart"></i>
+                        <span id="cartCountBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                              style="{% if not cart_count or cart_count == 0 %} display: none; {% endif %}">
+                            {{ cart_count|default:0 }}
+                        </span>
+                    </a>
 
-    {% if user.is_authenticated %}
-    <a href="{% url 'accounts:signoff' %}" class="btn btn-outline-danger ms-2 d-lg-none mobile-logout-btn">
-        <i class="fas fa-sign-out-alt me-1"></i> Logout
-    </a>
-    {% endif %}
-</div>
-
+                    {% if user.is_authenticated %}
+                    <a href="{% url 'accounts:signoff' %}" class="btn btn-outline-danger ms-2 d-lg-none mobile-logout-btn">
+                        <i class="fas fa-sign-out-alt me-1"></i> Logout
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
         </div>
     </div>
 </nav>
+
 <style>
     .profile-picture {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    object-fit: cover;
-}
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        object-fit: cover;
+    }
+
+    /* Systems dropdown styling */
+    .navbar-nav .dropdown-menu {
+        border: 1px solid rgba(0,0,0,.125);
+        border-radius: 0.375rem;
+        margin-top: 0.125rem;
+    }
+
+    .navbar-nav .dropdown-item {
+        padding: 0.5rem 1rem;
+        transition: all 0.2s ease-in-out;
+    }
+
+    .navbar-nav .dropdown-item:hover {
+        background-color: #f8f9fa;
+        transform: translateX(2px);
+    }
+
+    .navbar-nav .dropdown-item i {
+        width: 20px;
+        text-align: center;
+        color: #6c757d;
+    }
+
+    .navbar-nav .dropdown-toggle::after {
+        margin-left: 0.5em;
+    }
+
+    /* Search suggestions enhanced styling */
+    .search-suggestions-header {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: white;
+        border: 1px solid #ddd;
+        border-top: none;
+        border-radius: 0 0 4px 4px;
+        max-height: 400px;
+        overflow-y: auto;
+        z-index: 1000;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+
+    .suggestion-item {
+        display: flex;
+        align-items: center;
+        padding: 12px 16px;
+        cursor: pointer;
+        border-bottom: 1px solid #f0f0f0;
+        transition: background-color 0.2s ease;
+    }
+
+    .suggestion-item:hover,
+    .suggestion-item.active {
+        background-color: #f8f9fa;
+    }
+
+    .suggestion-image {
+        width: 40px;
+        height: 40px;
+        object-fit: cover;
+        border-radius: 4px;
+        margin-right: 12px;
+        border: 1px solid #eee;
+    }
+
+    .suggestion-image-placeholder {
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: #f8f9fa;
+        border-radius: 4px;
+        margin-right: 12px;
+        color: #6c757d;
+        border: 1px solid #eee;
+    }
+
+    .suggestion-details {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .suggestion-name {
+        font-weight: 500;
+        color: #333;
+        margin-bottom: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .suggestion-info {
+        font-size: 0.875rem;
+        color: #6c757d;
+    }
+
+    .suggestion-price {
+        font-weight: 600;
+        color: #ff9900;
+        margin-left: 12px;
+    }
+
+    .search-highlight {
+        background-color: #fff3cd;
+        padding: 1px 2px;
+        border-radius: 2px;
+        font-weight: 600;
+    }
+
+    .loading,
+    .no-suggestions {
+        padding: 16px;
+        text-align: center;
+        color: #6c757d;
+        font-style: italic;
+    }
 
     @media (max-aspect-ratio: 3/4), (max-width: 768px) {
-  .hide-on-portrait {
-    display: none !important;
-  }
-}
-/* White hamburger icon on mobile */
-@media (max-width: 991.98px) {
-  .navbar-toggler {
-    border-color: rgba(255, 255, 255, 0.8);
-  }
+        .hide-on-portrait {
+            display: none !important;
+        }
+    }
 
-  .navbar-toggler-icon {
-    background-image: url("data:image/svg+xml;charset=utf8,%3Csvg viewBox='0 0 30 30' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath stroke='rgba%28255, 255, 255, 0.9%29' stroke-width='2' stroke-linecap='round' stroke-miterlimit='10' d='M4 7h22M4 15h22M4 23h22'/%3E%3C/svg%3E");
-  }
-}
+    /* White hamburger icon on mobile */
+    @media (max-width: 991.98px) {
+        .navbar-toggler {
+            border-color: rgba(255, 255, 255, 0.8);
+        }
 
+        .navbar-toggler-icon {
+            background-image: url("data:image/svg+xml;charset=utf8,%3Csvg viewBox='0 0 30 30' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath stroke='rgba%28255, 255, 255, 0.9%29' stroke-width='2' stroke-linecap='round' stroke-miterlimit='10' d='M4 7h22M4 15h22M4 23h22'/%3E%3C/svg%3E");
+        }
 
+        /* Mobile dropdown improvements */
+        .navbar-nav .dropdown-menu {
+            border: none;
+            box-shadow: none;
+            background-color: rgba(255,255,255,0.95);
+            backdrop-filter: blur(10px);
+        }
+    }
 </style>
 
 <script>
@@ -272,5 +441,17 @@ document.addEventListener('DOMContentLoaded', function() {
     function hideSuggestions() {
         suggestionsContainer.style.display = 'none';
     }
+
+    // Enhanced dropdown behavior
+    const dropdowns = document.querySelectorAll('.navbar-nav .dropdown');
+    dropdowns.forEach(dropdown => {
+        const toggle = dropdown.querySelector('.dropdown-toggle');
+        const menu = dropdown.querySelector('.dropdown-menu');
+
+        // Add smooth transitions
+        if (menu) {
+            menu.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+        }
+    });
 });
 </script>
