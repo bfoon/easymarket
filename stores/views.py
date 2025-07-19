@@ -676,8 +676,9 @@ def edit_product(request, store_id, product_id):
             with transaction.atomic():
                 product = product_form.save(commit=False)
 
-                # Update active status from checkbox
+                # Update active or used status from checkbox
                 product.is_active = 'is_active' in request.POST
+                product.used = 'used' in request.POST
 
                 product.save()
 
