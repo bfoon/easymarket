@@ -25,6 +25,7 @@ from marketplace.models import Product, ProductImage, ProductVariant
 from .forms import ProductForm, ProductImageForm, ProductVariantForm
 from django.db import transaction
 import re
+from decimal import Decimal
 from .models import Store
 from reviews.models import Review
 from marketplace.models import Product, Category, ProductImage
@@ -465,6 +466,29 @@ def store_orders(request, store_id):
         'store': store,
         'page_obj': page_obj,
     })
+
+@login_required
+def set_shipping_cost(request, store_id, order_id):
+    if request.method == 'POST':
+        store = get_object_or_404(Store, id=store_id, owner=request.user)
+        order = get_object_or_404(Order, id=order_id)
+
+        try:
+            cost = request.POST.get('shipping_cost', '').strip()
+            if cost == '':
+                order.shipping_cost = Decimal('0.00')
+            else:
+                cost_value = Decimal(cost)
+                if cost_value < 0:
+                    raise ValueError("Shipping cost must be positive")
+                order.shipping_cost = cost_value
+
+            order.save()
+            messages.success(request, "Shipping cost updated successfully.")
+        except Exception as e:
+            messages.error(request, f"Failed to update shipping cost: {e}")
+
+        return redirect('stores:store_order_detail', store_id=store.id, order_id=order.id)
 
 def product_detail(request, product_id):
     """

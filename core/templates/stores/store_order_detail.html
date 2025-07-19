@@ -96,12 +96,28 @@
             <div class="badge bg-success text-white mt-2">Shipped to Warehouse</div>
             {% endif %}
           </div>
+          <form method="post" action="{% url 'stores:set_shipping_cost' store.id order.id %}" class="mb-3">
+            {% csrf_token %}
+            <div class="mb-2">
+              <label for="shipping_cost" class="form-label">Shipping Cost (D)</label>
+              <input type="number" step="0.01" min="0" name="shipping_cost"
+                     id="shipping_cost" class="form-control"
+                     value="{{ order.shipping_cost|default_if_none:'' }}"
+                     {% if order.status == 'shipped' or order.status == 'delivered' %}readonly{% endif %}>
+            </div>
+            {% if order.status != 'shipped' and order.status != 'delivered' %}
+              <button type="submit" class="btn btn-outline-primary btn-sm">
+                <i class="fas fa-save me-1"></i> Save Shipping Cost
+              </button>
+            {% endif %}
+          </form>
+          </div>
 
           <!-- Price -->
           <div class="item-price text-end fw-bold" style="min-width: 80px;">D{{ item.get_total_price|floatformat:2 }}</div>
         </div>
         {% endfor %}
-      </div>
+
     </div>
 
       <!-- Order Total -->

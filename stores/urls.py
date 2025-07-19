@@ -40,6 +40,8 @@ urlpatterns = [
     path('manage/<uuid:store_id>/orders/<int:order_id>/', views.store_order_detail, name='store_order_detail'),
     path('orders/<int:order_id>/update-status/', views.update_order_status, name='update_order_status'),
     path('orders/items/<int:item_id>/update-quantity/', views.update_order_item_quantity, name='update_order_item_quantity'),
+    path('<uuid:store_id>/order/<int:order_id>/set-shipping-cost/', views.set_shipping_cost, name='set_shipping_cost'),
+
 
     # Chat and communication
     path('manage/<uuid:store_id>/chat/', views.store_chat_panel, name='store_chat_panel'),
