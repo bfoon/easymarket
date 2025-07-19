@@ -2,11 +2,12 @@
 {% block content %}
 {% load custom_filters %}
 {% load static %}
-{% load humanize %}
 
 <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
-<link rel="stylesheet" type="text/css" href="{% static 'css/product_list.css' %}">
 
+<style>
+
+</style>
 
 <!-- Hero Section -->
 <section class="hero-section text-white py-4" style="border-bottom: 3px solid var(--amazon-orange);">
@@ -50,59 +51,61 @@
     </div>
 </section>
 
-<!-- Creative Trending Products Carousel -->
-<section class="creative-trending-section py-4">
+<!-- Trending Products Carousel -->
+<section class="py-4" style="background-color: #f8f9fa; border-bottom: 1px solid #eaeded;">
     <div class="container">
-        <div class="creative-trending-header d-flex justify-content-between align-items-center mb-4 flex-wrap">
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
             <div>
-                <h2 class="creative-trending-title">
-                    <i class="fas fa-fire creative-trending-fire" aria-hidden="true"></i> Trending Now
+                <h2 class="h5 fw-bold text-dark mb-1 d-flex align-items-center">
+                    <i class="fas fa-fire me-2 text-warning" aria-hidden="true"></i> Trending Now
                 </h2>
                 <p class="text-muted small mb-0">What's hot and in demand</p>
             </div>
-            <a href="{% url 'marketplace:trending_products' %}" class="creative-trending-btn">
+            <a href="{% url 'marketplace:trending_products' %}" class="btn btn-outline-primary btn-sm">
                 See All
             </a>
         </div>
 
         <div class="position-relative">
             <!-- Scroll Buttons -->
-            <button class="creative-scroll-btn position-absolute top-50 start-0 translate-middle-y"
-                    id="trendingLeft" style="margin-left: -20px; z-index: 10;" aria-label="Scroll left">
+            <button class="btn btn-light btn-sm position-absolute top-50 start-0 translate-middle-y shadow-sm"
+                    id="trendingLeft" style="z-index: 1;" aria-label="Scroll left">
                 <i class="fas fa-chevron-left" aria-hidden="true"></i>
             </button>
-            <button class="creative-scroll-btn position-absolute top-50 end-0 translate-middle-y"
-                    id="trendingRight" style="margin-right: -20px; z-index: 10;" aria-label="Scroll right">
+            <button class="btn btn-light btn-sm position-absolute top-50 end-0 translate-middle-y shadow-sm"
+                    id="trendingRight" style="z-index: 1;" aria-label="Scroll right">
                 <i class="fas fa-chevron-right" aria-hidden="true"></i>
             </button>
 
             <!-- Scrollable Container -->
-            <div class="d-flex overflow-auto gap-3 pb-3 px-4" id="trendingContainer"
+            <div class="d-flex overflow-auto gap-3 pb-2 px-4" id="trendingContainer"
                  style="scroll-behavior: smooth; scrollbar-width: none; -ms-overflow-style: none;">
                 {% for product in trending_products %}
-                <div class="creative-trending-item text-center" style="width: 120px;">
-                    <div class="creative-trending-image" style="height: 80px; width: 80px; margin: 0 auto; cursor: pointer;"
-                         onclick="window.location.href='{% url 'marketplace:product_detail' product.id %}'">
+                <div class="flex-shrink-0 text-center bg-white shadow-sm p-2 rounded" style="width: 110px; border: 1px solid #e3e3e3;">
+                    <div class="product-image-container" style="height: 80px; width: 80px; margin: 0 auto; border-radius: 4px;">
                         {% if product.image %}
                             <img src="{{ product.image.url }}"
-                                 class="img-fluid"
+                                 class="product-image img-fluid"
                                  alt="{{ product.name }}"
-                                 style="height: 100%; width: 100%; object-fit: contain; border-radius: 4px;"
-                                 onerror="this.onerror=null; this.src='{% static 'images/no-image.png' %}'; this.parentElement.innerHTML='<div style=\'height: 80px; width: 80px; display: flex; align-items: center; justify-content: center; background: #f8f9fa; border-radius: 4px; color: #6c757d;\'><i class=\'fas fa-image\'></i></div>';">
+                                 style="height: 80px; width: 80px; object-fit: cover; cursor: pointer;"
+                                 onclick="quickView({{ product.id }})"
+                                 onerror="this.onerror=null; this.src='{% static 'images/no-image.png' %}'; this.parentElement.innerHTML='<div class=\'image-error\' style=\'height: 80px; width: 80px;\'><i class=\'fas fa-image\'></i></div>';">
                         {% else %}
-                            <div style="height: 80px; width: 80px; display: flex; align-items: center; justify-content: center; background: #f8f9fa; border-radius: 4px; color: #6c757d;">
+                            <div class="image-error" style="height: 80px; width: 80px;">
                                 <i class="fas fa-image"></i>
                             </div>
                         {% endif %}
                     </div>
 
-                    <div class="small text-dark fw-semibold mt-2" style="font-size: 0.75rem; min-height: 2rem; line-height: 1.2;">
+                    <div class="small text-dark fw-semibold mt-2" style="font-size: 0.75rem; min-height: 2rem;">
                         {{ product.name|truncatechars:20 }}
+                    </div>
+                    <div class="text-danger fw-bold small mt-1">
+                        {% if product.price %}D{{ product.price }}{% else %}Price N/A{% endif %}
                     </div>
                 </div>
                 {% empty %}
-                <div class="text-center py-4 w-100">
-                    <i class="fas fa-fire fa-2x mb-2" style="color: #ff6b35;"></i>
+                <div class="text-center py-3">
                     <p class="text-muted">No trending products available.</p>
                 </div>
                 {% endfor %}
@@ -111,55 +114,57 @@
     </div>
 </section>
 
-<!-- Creative Categories Section -->
-<section id="categories" class="creative-categories-section py-5">
+<!-- Categories Section -->
+<section id="categories" class="py-4">
     <div class="container">
-        <div class="mb-5 text-center">
-            <h2 class="creative-categories-title mb-2">SHOP BY DEPARTMENT</h2>
-            <p class="text-muted" style="font-size: 1rem;">Browse our top categories and discover amazing deals</p>
+        <div class="mb-4">
+            <h2 class="mb-1" style="font-size: 1.4rem; font-weight: 700; color: #232f3e;">SHOP BY DEPARTMENT</h2>
+            <p class="text-muted mb-0" style="font-size: 0.85rem;">Browse our top categories</p>
         </div>
 
-        <div class="row g-4">
+        <div class="row g-3">
             {% for category in categories %}
             <div class="col-lg-2 col-md-3 col-sm-4 col-6">
-                <div class="creative-category-card">
-                    <div class="creative-category-icon">
+                <div class="category-card text-center">
+                    <div class="category-content">
                         {% if category.icon %}
-                            <i class="{{ category.icon }}" aria-hidden="true"></i>
+                            <i class="{{ category.icon }} category-icon" aria-hidden="true"></i>
                         {% else %}
-                            <i class="fas fa-box" aria-hidden="true"></i>
+                            <i class="fas fa-box category-icon" aria-hidden="true"></i>
                         {% endif %}
+                        <h6 class="category-title">{{ category.name }}</h6>
+                        <div class="category-hover">
+                            <a href="{% url 'marketplace:category_products' category.id %}"
+                               class="btn btn-outline-primary btn-sm"
+                               style="font-size: 0.75rem; padding: 4px 12px;"
+                               aria-label="Shop {{ category.name }} products">
+                                SHOP NOW
+                            </a>
+                        </div>
                     </div>
-                    <h6 class="creative-category-title">{{ category.name }}</h6>
-                    <a href="{% url 'marketplace:category_products' category.id %}"
-                       class="creative-category-btn"
-                       aria-label="Shop {{ category.name }} products">
-                        SHOP NOW
-                    </a>
                 </div>
             </div>
             {% empty %}
-            <div class="col-12 text-center py-5">
-                <i class="fas fa-store fa-3x mb-3" style="color: #667eea;"></i>
-                <p class="text-muted">No categories available.</p>
+            <div class="col-12">
+                <p class="text-center text-muted">No categories available.</p>
             </div>
             {% endfor %}
         </div>
     </div>
 </section>
 
-<!-- Creative Featured Products -->
-<section id="products" class="creative-featured-section py-5">
+<!-- Featured Products -->
+<section id="products" class="py-5 bg-white">
     <div class="container">
         <!-- Section Header -->
-        <div class="creative-featured-header d-flex justify-content-between align-items-center flex-wrap gap-3">
+        <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
             <div>
-                <h2 class="creative-featured-title">
-                    <i class="fas fa-bolt creative-featured-bolt" aria-hidden="true"></i> Exclusive Deals for You
+                <h2 class="h4 fw-bold text-dark mb-1 d-flex align-items-center">
+                    <i class="fas fa-bolt me-2 text-warning" aria-hidden="true"></i> Exclusive Deals for You
                 </h2>
-                <p class="text-muted mb-0">Snag these limited-time offers while they last</p>
+                <p class="text-muted small mb-0">Snag these limited-time offers while they last</p>
             </div>
-            <a href="{% url 'marketplace:hot_picks' %}" class="creative-trending-btn">
+            <a href="{% url 'marketplace:hot_picks' %}" class="btn btn-primary btn-sm px-3">
                 View All Deals <i class="fas fa-arrow-right ms-1" aria-hidden="true"></i>
             </a>
         </div>
@@ -168,46 +173,56 @@
         <div class="row g-4">
             {% for product in featured_products %}
             <div class="col-xl-2 col-lg-3 col-md-4 col-sm-6">
-                <div class="creative-product-card">
+                <div class="card product-card h-100 border-0 shadow-sm hover-lift transition-all" style="border-radius: 12px;">
                     <!-- Product Image -->
-                    <div class="creative-product-image-container">
+                    <div class="position-relative overflow-hidden product-image-container" style="height: 200px;">
                         {% if product.image %}
                             <a href="{% url 'marketplace:product_detail' product.id %}" class="d-block h-100">
                                 <img src="{{ product.image.url }}"
-                                     class="creative-product-image"
+                                     class="product-image img-fluid w-100"
                                      alt="{{ product.name }}"
+                                     style="height: 200px; object-fit: cover;"
                                      loading="lazy"
-                                     onerror="this.onerror=null; this.src='{% static 'images/no-image.png' %}'; if(!this.src.includes('no-image.png')) this.parentElement.innerHTML='<div class=\'h-100 d-flex align-items-center justify-content-center\'><i class=\'fas fa-image fa-3x text-muted\'></i><br><small>Image not available</small></div>';">
+                                     onerror="this.onerror=null; this.src='{% static 'images/no-image.png' %}'; if(!this.src.includes('no-image.png')) this.parentElement.innerHTML='<div class=\'image-error h-100\'><i class=\'fas fa-image fa-3x\'></i><br><small>Image not available</small></div>';">
                             </a>
                         {% else %}
-                            <div class="h-100 d-flex align-items-center justify-content-center">
-                                <i class="fas fa-image fa-3x text-muted"></i>
+                            <div class="image-error h-100">
+                                <i class="fas fa-image fa-3x"></i>
                                 <br><small>No image available</small>
                             </div>
                         {% endif %}
 
                         <!-- Badges -->
-                        <div class="creative-hot-pick-badge">
-                            <i class="fas fa-fire" aria-hidden="true"></i> Hot Pick
-                        </div>
-
                         {% if product.discount %}
-                        <div class="creative-discount-badge">-{{ product.discount }}%</div>
+                        <span class="badge bg-danger position-absolute top-0 end-0 m-2 shadow-sm">-{{ product.discount }}%</span>
                         {% endif %}
+
+                        <span class="position-absolute top-0 start-0 m-2 shadow-sm px-2 py-1" style="
+                            background: rgba(255, 69, 0, 0.85);
+                            color: white;
+                            font-size: 0.75rem;
+                            border-radius: 4px;
+                            backdrop-filter: blur(2px);
+                            display: flex;
+                            align-items: center;
+                            gap: 4px;
+                        ">
+                            <i class="fas fa-fire" aria-hidden="true"></i> Hot Pick
+                        </span>
                     </div>
 
                     <!-- Product Details -->
-                    <div class="creative-product-content">
+                    <div class="card-body d-flex flex-column justify-content-between">
                         <!-- Title -->
-                        <h6 class="creative-product-title">
-                            <a href="{% url 'marketplace:product_detail' product.id %}">
+                        <h6 class="card-title mb-2 lh-sm" style="min-height: 2.5rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
+                            <a href="{% url 'marketplace:product_detail' product.id %}" class="text-decoration-none text-dark">
                                 {{ product.name|truncatechars:35 }}
                             </a>
                         </h6>
 
                         <!-- Rating -->
-                        <div class="creative-rating-container">
-                            <div class="creative-rating-stars">
+                        <div class="d-flex align-items-center mb-2">
+                            <div class="rating-stars text-warning small me-1" aria-label="Rating: {{ product.average_rating|floatformat:1 }} out of 5 stars">
                                 {% for i in "12345" %}
                                     {% if product.average_rating|floatformat:1 >= i %}
                                         <i class="fas fa-star" aria-hidden="true"></i>
@@ -222,29 +237,29 @@
                         </div>
 
                         <!-- Pricing -->
-                        <div class="creative-price-container">
-                            <span class="creative-current-price">
-                                {% if product.price %}D{{ product.price|intcomma }}{% else %}Price N/A{% endif %}
+                        <div class="mb-2">
+                            <span class="fw-bold text-danger">
+                                {% if product.price %}D{{ product.price }}{% else %}Price N/A{% endif %}
                             </span>
-                            {% if product.original_price%}
-                            <span class="creative-original-price">D{{ product.original_price|intcomma }}</span>
+                            {% if product.original_price %}
+                            <small class="text-muted text-decoration-line-through ms-1">D{{ product.original_price }}</small>
                             {% endif %}
                         </div>
 
                         <!-- Shipping Info -->
-                        <div class="creative-shipping-info">
-                            <div class="fast-delivery">
-                                <i class="fas fa-check" aria-hidden="true"></i> Fast Delivery
-                            </div>
+                        <div class="mb-2">
+                            <small class="text-muted">
+                                <i class="fas fa-check text-success me-1" aria-hidden="true"></i> Fast Delivery
+                            </small>
                             {% if product.free_shipping %}
-                            <div class="free-delivery">
-                                <i class="fas fa-shipping-fast" aria-hidden="true"></i> Free delivery
+                            <div class="text-success small">
+                                <i class="fas fa-shipping-fast me-1" aria-hidden="true"></i> Free delivery
                             </div>
                             {% endif %}
                         </div>
 
                         <!-- Action Button -->
-                        <button class="creative-add-btn {% if product.is_in_stock %}btn-primary-creative{% else %}btn-secondary-creative{% endif %}"
+                        <button class="btn {% if product.is_in_stock %}btn-outline-primary{% else %}btn-secondary{% endif %} w-100 btn-sm"
                                 onclick="addToCart({{ product.id }}, this)"
                                 data-stock="{{ product.stock.quantity|default:0 }}"
                                 {% if not product.is_in_stock %}disabled{% endif %}>
@@ -262,39 +277,46 @@
             <div class="col-12 text-center py-5">
                 <i class="fas fa-box-open fa-3x text-muted mb-3" aria-hidden="true"></i>
                 <p class="text-muted">No featured products available at the moment.</p>
-                <a href="{% url 'marketplace:product_list' %}" class="creative-trending-btn">Browse All Products</a>
+                <a href="{% url 'marketplace:product_list' %}" class="btn btn-primary">Browse All Products</a>
             </div>
             {% endfor %}
         </div>
     </div>
 </section>
 
-<!-- Creative Recommended Items Section -->
+<!-- Recommended Items Section -->
 {% if similar_items %}
-<section class="creative-recommended-section py-5">
+<section class="py-5" style="background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);">
     <div class="container">
         <!-- Section Header -->
-        <div class="creative-recommended-header d-flex justify-content-between align-items-center flex-wrap gap-3">
-            <div class="d-flex align-items-center gap-3">
-                <div class="creative-recommendation-icon">
-                    <i class="fas fa-sparkles" aria-hidden="true"></i>
-                </div>
-                <div>
-                    <h2 class="creative-recommended-title">
-                        Inspired by your browsing
-                        <span class="creative-recommended-badge ms-2">New</span>
-                    </h2>
-                    <p class="creative-recommended-subtitle">Curated picks based on your interests</p>
+        <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+            <div class="flex-grow-1">
+                <div class="d-flex align-items-center mb-2">
+                    <div class="recommendation-icon me-3" style="width: 50px; height: 50px; background: linear-gradient(45deg, #667eea, #764ba2); border-radius: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 5px 15px rgba(102,126,234,0.3);">
+                        <i class="fas fa-sparkles" style="color: white; font-size: 1.3rem;" aria-hidden="true"></i>
+                    </div>
+                    <div>
+                        <h2 class="h3 fw-bold text-dark mb-1 d-flex align-items-center">
+                            Inspired by your browsing
+                            <span class="badge bg-primary-subtle text-primary ms-2 fs-6">New</span>
+                        </h2>
+                        <p class="text-muted mb-0">Curated picks based on your interests</p>
+                    </div>
                 </div>
             </div>
-            <div class="creative-recommended-controls">
-                <button class="creative-recommended-scroll-btn" id="scrollLeft" aria-label="Scroll left">
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-secondary btn-sm scroll-btn" id="scrollLeft"
+                        style="width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center;"
+                        aria-label="Scroll left">
                     <i class="fas fa-chevron-left" aria-hidden="true"></i>
                 </button>
-                <button class="creative-recommended-scroll-btn" id="scrollRight" aria-label="Scroll right">
+                <button class="btn btn-outline-secondary btn-sm scroll-btn" id="scrollRight"
+                        style="width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center;"
+                        aria-label="Scroll right">
                     <i class="fas fa-chevron-right" aria-hidden="true"></i>
                 </button>
-                <a href="{% url 'marketplace:recommended_products' %}" class="creative-recommended-view-all ms-2">
+                <a href="{% url 'marketplace:recommended_products' %}" class="btn btn-primary btn-sm px-4"
+                   style="background: linear-gradient(45deg, #667eea, #764ba2); border: none; border-radius: 20px;">
                     View All <i class="fas fa-arrow-right ms-1" aria-hidden="true"></i>
                 </a>
             </div>
@@ -302,105 +324,114 @@
 
         <!-- Horizontal Scroll Product List -->
         <div class="position-relative">
-            <div class="d-flex overflow-auto pb-4 gap-4" id="productsContainer"
+            <div class="products-container d-flex overflow-auto pb-3 gap-4" id="productsContainer"
                  style="scroll-behavior: smooth; scrollbar-width: none; -ms-overflow-style: none;">
 
                 {% for product in similar_items %}
-                <div class="creative-recommended-card">
-                    <!-- Product Image -->
-                    <div class="creative-recommended-image">
-                        {% if product.image %}
-                            <a href="{% url 'marketplace:product_detail' product.id %}" class="d-block h-100">
-                                <img src="{{ product.image.url }}"
-                                     alt="{{ product.name }}"
-                                     loading="lazy"
-                                     onerror="this.onerror=null; this.src='{% static 'images/no-image.png' %}'; if(!this.src.includes('no-image.png')) this.parentElement.innerHTML='<div class=\'h-100 d-flex align-items-center justify-content-center\'><i class=\'fas fa-image fa-2x text-muted\'></i><br><small>Image not available</small></div>';">
-                            </a>
-                        {% else %}
-                            <div class="h-100 d-flex align-items-center justify-content-center">
-                                <i class="fas fa-image fa-2x text-muted"></i>
-                                <br><small>No image available</small>
+                <div class="product-item flex-shrink-0" style="width: 220px;">
+                    <div class="card product-card h-100 border-0 shadow-sm hover-lift transition-all" style="border-radius: 15px; overflow: hidden;">
+                        <!-- Product Image -->
+                        <div class="position-relative overflow-hidden product-image-container" style="height: 180px;">
+                            {% if product.image %}
+                                <a href="{% url 'marketplace:product_detail' product.id %}" class="d-block h-100">
+                                    <img src="{{ product.image.url }}"
+                                         class="product-image img-fluid w-100 hover-zoom transition-transform"
+                                         alt="{{ product.name }}"
+                                         style="height: 180px; object-fit: cover;"
+                                         loading="lazy"
+                                         onerror="this.onerror=null; this.src='{% static 'images/no-image.png' %}'; if(!this.src.includes('no-image.png')) this.parentElement.innerHTML='<div class=\'image-error h-100\'><i class=\'fas fa-image fa-2x\'></i><br><small>Image not available</small></div>';">
+                                </a>
+                            {% else %}
+                                <div class="image-error h-100">
+                                    <i class="fas fa-image fa-2x"></i>
+                                    <br><small>No image available</small>
+                                </div>
+                            {% endif %}
+
+                            <!-- Badges -->
+                            <div class="position-absolute top-0 start-0 p-2">
+                                {% if product.discount_percentage %}
+                                <span class="badge bg-danger shadow-sm">-{{ product.discount_percentage }}%</span>
+                                {% endif %}
+                                {% if product.is_trending %}
+                                <span class="badge bg-warning text-dark shadow-sm mt-1">Best Seller</span>
+                                {% endif %}
                             </div>
-                        {% endif %}
 
-                        <!-- Badges -->
-                        <div class="creative-recommended-badge-container">
-                            {% if product.discount_percentage %}
-                            <span class="creative-recommended-discount">-{{ product.discount_percentage }}%</span>
-                            {% endif %}
-                            {% if product.is_trending %}
-                            <span class="creative-recommended-trending">Best Seller</span>
-                            {% endif %}
+                            <!-- Quick Actions -->
+                            <div class="position-absolute top-0 end-0 p-2">
+                                <button class="btn btn-light btn-sm rounded-circle shadow-sm opacity-75 hover-opacity-100 mb-1"
+                                        onclick="addToWishlist({{ product.id }}, this)"
+                                        title="Add to Wishlist"
+                                        aria-label="Add {{ product.name }} to wishlist">
+                                    <i class="far fa-heart" aria-hidden="true"></i>
+                                </button>
+                                <button class="btn btn-light btn-sm rounded-circle shadow-sm opacity-75 hover-opacity-100"
+                                        title="Quick View"
+                                        onclick="quickView({{ product.id }}, this)"
+                                        aria-label="Quick view {{ product.name }}">
+                                    <i class="fas fa-eye" aria-hidden="true"></i>
+                                </button>
+                            </div>
+
+                            <!-- Quick Add to Cart Overlay -->
+                            <div class="position-absolute bottom-0 start-0 end-0 p-2 bg-gradient-to-t from-dark to-transparent opacity-0 hover-opacity-100 transition-opacity">
+                                <button class="btn btn-light btn-sm w-100"
+                                        onclick="addToCart({{ product.id }}, this)"
+                                        aria-label="Quick add {{ product.name }} to cart">
+                                    <i class="fas fa-shopping-cart me-1" aria-hidden="true"></i> Quick Add
+                                </button>
+                            </div>
                         </div>
 
-                        <!-- Quick Actions -->
-                        <div class="creative-recommended-actions">
-                            <button class="creative-recommended-action-btn"
-                                    onclick="addToWishlist({{ product.id }}, this)"
-                                    title="Add to Wishlist"
-                                    aria-label="Add {{ product.name }} to wishlist">
-                                <i class="far fa-heart" aria-hidden="true"></i>
-                            </button>
-                            <button class="creative-recommended-action-btn"
-                                    title="Quick View"
-                                    onclick="quickView({{ product.id }}, this)"
-                                    aria-label="Quick view {{ product.name }}">
-                                <i class="fas fa-eye" aria-hidden="true"></i>
-                            </button>
-                        </div>
+                        <!-- Product Details -->
+                        <div class="card-body p-3">
+                            <h6 class="card-title mb-2 lh-sm" style="font-size: 0.9rem; min-height: 2.5rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
+                                <a href="{% url 'marketplace:product_detail' product.id %}" class="text-decoration-none text-dark hover-text-primary">
+                                    {{ product.name }}
+                                </a>
+                            </h6>
 
-                        <!-- Quick Add Overlay -->
-                        <div class="creative-recommended-overlay">
-                            <button class="creative-recommended-quick-add"
-                                    onclick="addToCart({{ product.id }}, this)"
-                                    aria-label="Quick add {{ product.name }} to cart">
-                                <i class="fas fa-shopping-cart me-1" aria-hidden="true"></i> Quick Add
-                            </button>
-                        </div>
-                    </div>
+                            <!-- Rating -->
+                            <div class="d-flex align-items-center mb-2">
+                                <div class="rating-stars text-warning small me-1" aria-label="Rating: {{ product.average_rating|floatformat:1 }} out of 5 stars">
+                                    {% for i in "12345" %}
+                                        {% if product.average_rating|floatformat:1 >= i %}
+                                            <i class="fas fa-star" aria-hidden="true"></i>
+                                        {% elif product.average_rating|floatformat:1 >= i|add:"-0.5" %}
+                                            <i class="fas fa-star-half-alt" aria-hidden="true"></i>
+                                        {% else %}
+                                            <i class="far fa-star" aria-hidden="true"></i>
+                                        {% endif %}
+                                    {% endfor %}
+                                </div>
+                                <small class="text-muted">({{ product.reviews.count }})</small>
+                            </div>
 
-                    <!-- Product Details -->
-                    <div class="creative-recommended-content">
-                        <h6 class="creative-recommended-product-title">
-                            <a href="{% url 'marketplace:product_detail' product.id %}">
-                                {{ product.name }}
-                            </a>
-                        </h6>
-
-                        <!-- Rating -->
-                        <div class="creative-recommended-rating">
-                            <div class="text-warning">
-                                {% for i in "12345" %}
-                                    {% if product.average_rating|floatformat:1 >= i %}
-                                        <i class="fas fa-star" aria-hidden="true"></i>
-                                    {% elif product.average_rating|floatformat:1 >= i|add:"-0.5" %}
-                                        <i class="fas fa-star-half-alt" aria-hidden="true"></i>
-                                    {% else %}
-                                        <i class="far fa-star" aria-hidden="true"></i>
+                            <!-- Pricing -->
+                            {% if product.price %}
+                            <div class="pricing mb-2">
+                                <div class="d-flex align-items-baseline gap-2">
+                                    <span class="h6 fw-bold text-danger mb-0">D{{ product.price }}</span>
+                                    {% if product.original_price %}
+                                    <small class="text-muted text-decoration-line-through">D{{ product.original_price }}</small>
                                     {% endif %}
-                                {% endfor %}
-                            </div>
-                            <small class="text-muted">({{ product.reviews.count }})</small>
-                        </div>
-
-                        <!-- Pricing -->
-                        {% if product.price %}
-                        <div class="creative-recommended-price">
-                            D{{ product.price|intcomma  }}
-                            {% if product.original_price %}
-                            <small class="text-muted text-decoration-line-through ms-1" style="font-size: 0.8rem;">D{{ product.original_price }}</small>
-                            {% endif %}
-                        </div>
-                        {% endif %}
-
-                        <!-- Features -->
-                        <div class="creative-recommended-features">
-                            {% if product.free_shipping %}
-                            <div class="text-success small">
-                                <i class="fas fa-shipping-fast me-1" aria-hidden="true"></i>
-                                <span>Free delivery</span>
+                                </div>
+                                {% if product.discount %}
+                                <small class="text-success fw-medium">Save D{{ product.discount }}</small>
+                                {% endif %}
                             </div>
                             {% endif %}
+
+                            <!-- Features -->
+                            <div class="product-features">
+                                {% if product.free_shipping %}
+                                <div class="d-flex align-items-center text-success small mb-1">
+                                    <i class="fas fa-shipping-fast me-2" aria-hidden="true"></i>
+                                    <span>Free delivery</span>
+                                </div>
+                                {% endif %}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -414,7 +445,7 @@
 <script src="{% static 'js/main.js' %}"></script>
 
 <script>
-// Enhanced carousel functionality with creative effects
+// Carousel functionality only - main.js handles everything else
 document.addEventListener('DOMContentLoaded', function () {
     // Initialize trending products carousel
     const trendingContainer = document.getElementById('trendingContainer');
@@ -423,11 +454,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (trendingContainer && trendingBtnLeft && trendingBtnRight) {
         trendingBtnLeft.addEventListener('click', () => {
-            trendingContainer.scrollBy({ left: -250, behavior: 'smooth' });
+            trendingContainer.scrollBy({ left: -200, behavior: 'smooth' });
         });
 
         trendingBtnRight.addEventListener('click', () => {
-            trendingContainer.scrollBy({ left: 250, behavior: 'smooth' });
+            trendingContainer.scrollBy({ left: 200, behavior: 'smooth' });
         });
     }
 
@@ -438,80 +469,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (productsContainer && scrollLeft && scrollRight) {
         scrollLeft.addEventListener('click', () => {
-            productsContainer.scrollBy({ left: -280, behavior: 'smooth' });
+            productsContainer.scrollBy({ left: -240, behavior: 'smooth' });
         });
 
         scrollRight.addEventListener('click', () => {
-            productsContainer.scrollBy({ left: 280, behavior: 'smooth' });
+            productsContainer.scrollBy({ left: 240, behavior: 'smooth' });
         });
     }
-
-    // Add intersection observer for animations
-    const cards = document.querySelectorAll('.creative-product-card, .creative-category-card, .creative-recommended-card');
-    const observer = new IntersectionObserver((entries) => {
-        entries.forEach((entry, index) => {
-            if (entry.isIntersecting) {
-                setTimeout(() => {
-                    entry.target.style.opacity = '1';
-                    entry.target.style.transform = 'translateY(0)';
-                }, index * 100);
-            }
-        });
-    }, { threshold: 0.1 });
-
-    cards.forEach((card) => {
-        card.style.opacity = '0';
-        card.style.transform = 'translateY(30px)';
-        card.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
-        observer.observe(card);
-    });
-
-    // Enhanced add to cart functionality
-    document.querySelectorAll('.creative-add-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            if (!this.disabled && this.classList.contains('btn-primary-creative')) {
-                const originalContent = this.innerHTML;
-
-                // Loading state
-                this.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Adding...';
-                this.disabled = true;
-
-                // Simulate adding to cart
-                setTimeout(() => {
-                    this.innerHTML = '<i class="fas fa-check me-1"></i>Added!';
-                    this.style.background = 'linear-gradient(45deg, #28a745, #20c997)';
-
-                    // Reset after 2 seconds
-                    setTimeout(() => {
-                        this.innerHTML = originalContent;
-                        this.style.background = '';
-                        this.disabled = false;
-                    }, 2000);
-                }, 1000);
-            }
-        });
-    });
-
-    // Enhanced trending item clicks
-    document.querySelectorAll('.creative-trending-item').forEach(item => {
-        item.addEventListener('click', function() {
-            this.style.transform = 'scale(0.95)';
-            setTimeout(() => {
-                this.style.transform = '';
-            }, 150);
-        });
-    });
-
-    // Category card hover sound effects (optional)
-    document.querySelectorAll('.creative-category-card').forEach(card => {
-        card.addEventListener('mouseenter', function() {
-            this.style.willChange = 'transform';
-        });
-
-        card.addEventListener('mouseleave', function() {
-            this.style.willChange = 'auto';
-        });
-    });
 });
 </script>
 

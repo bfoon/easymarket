@@ -48,7 +48,7 @@ def all_products(request):
         products = Product.objects.filter(
             category_id__in=related_category_ids,
             is_active=True
-        ).order_by('?')[:8]
+        ).order_by('?')[:4]
 
         if products.exists():
             category_products.append({

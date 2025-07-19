@@ -4,209 +4,268 @@
 {% block title %}Shop Smart - Premium Products at Everyday Prices{% endblock %}
 
 {% block meta_description %}Discover premium products at unbeatable prices. Free shipping, 30-day returns, and 24/7 support. Shop smart and pay less for quality items.{% endblock %}
-{% load humanize %}
+
 {% block content %}
 <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
 <link rel="stylesheet" type="text/css" href="{% static 'css/all_products.css' %}">
 
-
 <!-- Hero Section -->
-<section class="hero-section text-white py-4" style="border-bottom: 3px solid var(--amazon-orange);" role="banner">
+<section class="hero-section text-white py-4" style="border-bottom: 3px solid var(--amazon-orange);">
     <div class="container">
         <div class="row align-items-center hero-content">
+
+            <!-- Left Content -->
             <div class="col-lg-9 mb-4 mb-lg-0">
                 <h1 class="fw-bold mb-2">SHOP SMART. PAY LESS. GET MORE.</h1>
                 <p class="mb-3 opacity-90">Billionaire Taste. Everyday Price. Because Blending In Was Never the Plan.</p>
 
-                <div class="d-flex flex-wrap gap-3 hero-features" role="list">
-                    <div class="hero-feature d-flex align-items-center text-white-50" role="listitem">
+                <!-- Hero Features -->
+                <div class="d-flex flex-wrap gap-3 hero-features">
+                    <div class="hero-feature d-flex align-items-center text-white-50">
                         <i class="fas fa-shipping-fast me-2 text-warning small" aria-hidden="true"></i>
                         <span class="small">FREE Shipping</span>
                     </div>
-                    <div class="hero-feature d-flex align-items-center text-white-50" role="listitem">
+                    <div class="hero-feature d-flex align-items-center text-white-50">
                         <i class="fas fa-shield-alt me-2 text-warning small" aria-hidden="true"></i>
                         <span class="small">100% Secure</span>
                     </div>
-                    <div class="hero-feature d-flex align-items-center text-white-50" role="listitem">
+                    <div class="hero-feature d-flex align-items-center text-white-50">
                         <i class="fas fa-undo me-2 text-warning small" aria-hidden="true"></i>
                         <span class="small">30-Day Returns</span>
                     </div>
-                    <div class="hero-feature d-flex align-items-center text-white-50" role="listitem">
+                    <div class="hero-feature d-flex align-items-center text-white-50">
                         <i class="fas fa-clock me-2 text-warning small" aria-hidden="true"></i>
                         <span class="small">24/7 Support</span>
                     </div>
                 </div>
             </div>
 
+            <!-- Right Badge -->
             <div class="col-lg-3 text-center">
-                <div class="hero-badge p-3 rounded-3 bg-dark bg-opacity-25" role="img" aria-label="Premium shopping experience">
+                <div class="hero-badge p-3 rounded-3 bg-dark bg-opacity-25">
                     <i class="fas fa-bolt fa-3x text-warning" aria-hidden="true"></i>
                     <div class="mt-2 fw-bold text-warning">SHOP LIKE A BOSS</div>
                 </div>
+            </div>
+
+        </div>
+    </div>
+</section>
+
+<!-- Breadcrumb Section -->
+<section class="amazon-breadcrumb-section py-2">
+    <div class="container">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-0 amazon-breadcrumb-list">
+                <li class="breadcrumb-item">
+                    <a href="{% url 'marketplace:product_list' %}" class="amazon-breadcrumb-link">
+                        <i class="fas fa-home me-1"></i> Home
+                    </a>
+                </li>
+                <li class="breadcrumb-item active amazon-breadcrumb-active" aria-current="page">
+                    All Categories
+                </li>
+            </ol>
+        </nav>
+        <p class="amazon-product-count">
+            {% if category_products %}
+                Showing all {{ category_products|length }} categories with products
+            {% else %}
+                No categories available
+            {% endif %}
+        </p>
+    </div>
+</section>
+
+<!-- Main Content -->
+<section class="py-4">
+    <div class="container">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-lg-3 d-none d-lg-block">
+                <div class="amazon-sidebar-filters  pt-3">
+                    <div class="mb-4">
+                        <h5 class="amazon-sidebar-heading">Browse Categories</h5>
+                        <ul class="list-unstyled amazon-subcategory-list">
+                            {% for block in category_products %}
+                            <li>
+                                <a href="{% url 'marketplace:category_products' block.category.id %}" class="amazon-subcategory-link">
+                                    {{ block.category.name }}
+                                    <span class="amazon-subcategory-count float-end">({{ block.products|length }})</span>
+                                </a>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+
+                    <div class="mb-4">
+                        <h5 class="amazon-sidebar-heading">Quick Filters</h5>
+                        <ul class="list-unstyled">
+                            <li><a href="#" class="amazon-subcategory-link">New Arrivals</a></li>
+                            <li><a href="#" class="amazon-subcategory-link">Best Sellers</a></li>
+                            <li><a href="#" class="amazon-subcategory-link">On Sale</a></li>
+                            <li><a href="#" class="amazon-subcategory-link">Free Shipping</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Categories Grid -->
+            <div class="col-lg-9">
+                {% for block in category_products %}
+                <article class="creative-category-block" data-category-id="{{ block.category.id }}">
+                    <header class="creative-category-header">
+                        <div class="category-info-creative">
+                            <div class="category-icon-creative">
+                                <i class="fas fa-{{ block.category.icon|default:'tags' }}"></i>
+                            </div>
+                            <div>
+                                <h3 class="category-title-creative">{{ block.category.name }}</h3>
+                                <p class="category-subtitle-creative">Explore top picks in {{ block.category.name }} • {{ block.products|length }} product{{ block.products|length|pluralize }}</p>
+                            </div>
+                        </div>
+                        <a href="{% url 'marketplace:category_products' block.category.id %}" class="view-all-btn-creative">
+                            View All <i class="fas fa-arrow-right ms-1"></i>
+                        </a>
+                    </header>
+
+                    <div class="position-relative">
+                        <button class="btn scroll-btn-creative position-absolute top-50 start-0 translate-middle-y scroll-left"
+                                data-target="category-{{ block.category.id }}"
+                                style="margin-left: -25px;"
+                                type="button">
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <button class="btn scroll-btn-creative position-absolute top-50 end-0 translate-middle-y scroll-right"
+                                data-target="category-{{ block.category.id }}"
+                                style="margin-right: -25px;"
+                                type="button">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+
+                        <div class="d-flex overflow-auto gap-3 products-container-creative"
+                             id="category-{{ block.category.id }}">
+                            {% for product in block.products %}
+                            <div class="amazon-product-card" data-product-id="{{ product.id }}">
+                                <div class="amazon-image-container">
+                                    <a href="{% url 'marketplace:product_detail' product.id %}">
+                                        <img src="{{ product.image.url }}"
+                                             class="amazon-product-image"
+                                             alt="{{ product.name }}"
+                                             loading="lazy">
+                                    </a>
+
+                                    <div class="amazon-product-badges">
+                                        {% if product.is_new %}
+                                        <span class="amazon-badge-new">NEW</span>
+                                        {% elif product.discount_percentage %}
+                                        <span class="amazon-badge-deal">{{ product.discount_percentage }}% OFF</span>
+                                        {% else %}
+                                        <span class="amazon-badge-bestseller bg-warning">
+                                            <i class="fas fa-fire me-1"></i> HOT
+                                        </span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+
+                                <div class="amazon-product-content">
+                                    <h3 class="amazon-product-title">
+                                        <a href="{% url 'marketplace:product_detail' product.id %}">
+                                            {{ product.name|truncatechars:40 }}
+                                        </a>
+                                    </h3>
+
+                                    {% if product.average_rating %}
+                                    <div class="mb-2">
+                                        <span class="text-warning">
+                                            {% for i in "12345"|make_list %}
+                                                {% if forloop.counter <= product.average_rating %}
+                                                    <i class="fas fa-star"></i>
+                                                {% else %}
+                                                    <i class="far fa-star"></i>
+                                                {% endif %}
+                                            {% endfor %}
+                                        </span>
+                                        <span class="text-muted small ms-1">({{ product.review_count|default:0 }})</span>
+                                    </div>
+                                    {% endif %}
+
+                                    <div class="amazon-price-container">
+                                        {% if product.original_price and product.original_price != product.price %}
+                                            <span class="amazon-original-price me-1">
+                                                D{{ product.original_price }}
+                                            </span>
+                                            <span class="amazon-price-discount">
+                                                {% if product.discount_percentage %}
+                                                    {{ product.discount_percentage }}% OFF
+                                                {% else %}
+                                                    ON SALE
+                                                {% endif %}
+                                            </span>
+                                        {% endif %}
+                                        <div class="amazon-current-price">D{{ product.price }}</div>
+                                    </div>
+
+                                    <div class="text-success small mb-2">
+                                        <i class="fas fa-shipping-fast me-1"></i> FREE Shipping by ShopSmart
+                                    </div>
+
+                                    <div class="small mb-3">
+                                        {% if product.is_in_stock %}
+                                            <span class="text-success">In stock.</span>
+                                        {% else %}
+                                            <span class="text-danger">Out of stock.</span>
+                                        {% endif %}
+                                    </div>
+
+                                    <button class="amazon-add-to-cart-btn {% if not product.is_in_stock %}amazon-add-to-cart-disabled{% endif %}"
+                                            onclick="{% if product.is_in_stock %}addToCart({{ product.id }}, this){% else %}return false;{% endif %}"
+                                            data-product-id="{{ product.id }}"
+                                            data-stock="{{ product.stock.quantity|default:0 }}"
+                                            {% if not product.is_in_stock %} disabled {% endif %}
+                                            type="button"
+                                            aria-label="{% if product.is_in_stock %}Add {{ product.name }} to cart{% else %}{{ product.name }} is out of stock{% endif %}">
+                                        <i class="fas {% if product.is_in_stock %}fa-cart-plus{% else %}fa-ban{% endif %} me-1"></i>
+                                        <span class="btn-text">
+                                            {% if product.is_in_stock %}
+                                                Add to Cart
+                                            {% else %}
+                                                Out of Stock
+                                            {% endif %}
+                                        </span>
+                                    </button>
+                                </div>
+                            </div>
+                            {% empty %}
+                            <div class="w-100 text-center py-5">
+                                <i class="fas fa-box-open" style="font-size: 3rem; color: #ccc;"></i>
+                                <h5 class="mt-3 text-muted">No products in this category</h5>
+                                <p class="text-muted">Products will appear here once they are added.</p>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </article>
+                {% empty %}
+                <div class="text-center py-5">
+                    <i class="fas fa-store" style="font-size: 5rem; color: #ccc;"></i>
+                    <h3 class="mt-3 text-muted">No Categories Available</h3>
+                    <p class="text-muted">Categories will appear here once they are added to the system.</p>
+                </div>
+                {% endfor %}
             </div>
         </div>
     </div>
 </section>
 
-<!-- Category Section -->
-<main class="category-section-creative" role="main">
-    <div class="container">
-        <header class="category-header-creative">
-            <div class="category-badge-main">
-                <i class="fas fa-th-large" aria-hidden="true"></i> Categories
-            </div>
-            <div>
-                <h2 class="main-category-title">Shop by Category</h2>
-                <p class="main-category-subtitle">Find deals and discover popular picks across all categories</p>
-            </div>
-        </header>
-
-        {% for block in category_products %}
-        <article class="creative-category-block" data-category-id="{{ block.category.id }}">
-            <header class="creative-category-header">
-                <div class="category-info-creative">
-                    <div class="category-icon-creative">
-                        <i class="fas fa-{{ block.category.icon|default:'tags' }}" aria-hidden="true"></i>
-                    </div>
-                    <div>
-                        <h3 class="category-title-creative">{{ block.category.name }}</h3>
-                        <p class="category-subtitle-creative">Explore top picks in <strong>{{ block.category.name }}</strong> • {{ block.products|length }} product{{ block.products|length|pluralize }}</p>
-                    </div>
-                </div>
-                <a href="{% url 'marketplace:category_products' block.category.id %}"
-                   class="view-all-btn-creative"
-                   aria-label="View all products in {{ block.category.name }}">
-                    View All <i class="fas fa-arrow-right" aria-hidden="true"></i>
-                </a>
-            </header>
-
-            <div class="position-relative">
-                <button class="btn scroll-btn-creative position-absolute top-50 start-0 translate-middle-y scroll-left"
-                        data-target="category-{{ block.category.id }}"
-                        style="margin-left: -25px;"
-                        aria-label="Scroll left through {{ block.category.name }} products"
-                        type="button">
-                    <i class="fas fa-chevron-left" aria-hidden="true"></i>
-                </button>
-                <button class="btn scroll-btn-creative position-absolute top-50 end-0 translate-middle-y scroll-right"
-                        data-target="category-{{ block.category.id }}"
-                        style="margin-right: -25px;"
-                        aria-label="Scroll right through {{ block.category.name }} products"
-                        type="button">
-                    <i class="fas fa-chevron-right" aria-hidden="true"></i>
-                </button>
-
-                <div class="d-flex overflow-auto gap-4 pb-4 px-5 products-container-creative"
-                     id="category-{{ block.category.id }}"
-                     role="group"
-                     aria-label="{{ block.category.name }} products">
-                    {% for product in block.products %}
-                    <article class="creative-product-card" data-product-id="{{ product.id }}">
-                        <div class="creative-image-container">
-                            <div class="quick-actions">
-                                <button class="quick-action-btn" title="Add to Wishlist">
-                                    <i class="far fa-heart"></i>
-                                </button>
-                                <button class="quick-action-btn" title="Quick View">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                                <button class="quick-action-btn" title="Compare">
-                                    <i class="fas fa-exchange-alt"></i>
-                                </button>
-                            </div>
-
-                            <a href="{% url 'marketplace:product_detail' product.id %}"
-                               aria-label="View {{ product.name }} details">
-                                <img src="{{ product.image.url }}"
-                                     class="creative-product-image"
-                                     alt="{{ product.name }}"
-                                     loading="lazy"
-                                     decoding="async">
-                            </a>
-
-                            <div class="floating-badge">
-                                {% if product.discount_percentage %}
-                                    <span class="badge-sale-creative" aria-label="{{ product.discount_percentage }}% discount">
-                                        {{ product.discount_percentage }}% OFF
-                                    </span>
-                                {% elif product.is_new %}
-                                    <span class="badge-new-creative" aria-label="New product">NEW</span>
-                                {% else %}
-                                    <span class="badge-fire-creative" aria-label="Popular choice">
-                                        <i class="fas fa-fire me-1" aria-hidden="true"></i>HOT
-                                    </span>
-                                {% endif %}
-                            </div>
-                        </div>
-
-                        <!-- Product Content -->
-                        <div class="creative-product-content">
-                            <h6 class="creative-product-title">
-                                <a href="{% url 'marketplace:product_detail' product.id %}">
-                                    {{ product.name|truncatechars:35 }}
-                                </a>
-                            </h6>
-
-                            <div class="creative-price-container" aria-label="Price information">
-                                {% if product.original_price and product.original_price != product.price %}
-                                    <span class="creative-original-price">
-                                        D{{ product.original_price|intcomma }}
-                                    </span>
-                                {% endif %}
-                                <div class="creative-current-price">
-                                    D{{ product.price|intcomma }}
-                                </div>
-                                {% if product.original_price and product.original_price != product.price %}
-                                    <small class="text-success fw-bold">
-                                        <i class="fas fa-tag me-1"></i>
-                                        You Save!
-                                    </small>
-                                {% endif %}
-                            </div>
-
-                            <button class="creative-add-btn {% if product.is_in_stock %}btn-primary-creative{% else %}btn-secondary-creative{% endif %}"
-                                    onclick="{% if product.is_in_stock %}addToCart({{ product.id }}, this){% else %}return false;{% endif %}"
-                                    data-stock="{{ product.stock.quantity|default:0 }}"
-                                    data-product-id="{{ product.id }}"
-                                    {% if not product.is_in_stock %} disabled {% endif %}
-                                    type="button"
-                                    aria-label="{% if product.is_in_stock %}Add {{ product.name }} to cart{% else %}{{ product.name }} is out of stock{% endif %}">
-                                <i class="fas {% if product.is_in_stock %}fa-cart-plus{% else %}fa-ban{% endif %} me-2" aria-hidden="true"></i>
-                                {% if product.is_in_stock %}
-                                    Add to Cart
-                                {% else %}
-                                    Out of Stock
-                                {% endif %}
-                            </button>
-                        </div>
-                    </article>
-                    {% empty %}
-                    <div class="w-100 empty-state text-center py-5" style="background: rgba(255,255,255,0.8); border-radius: 20px; backdrop-filter: blur(10px);" role="status" aria-label="No products available">
-                        <i class="fas fa-box-open fa-3x mb-3" style="color: #6c757d;" aria-hidden="true"></i>
-                        <h5 style="color: #2c3e50; font-weight: 700;">No products in this category</h5>
-                        <p class="mb-0 text-muted">Products will appear here once they are added.</p>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-        </article>
-        {% empty %}
-        <div class="empty-state text-center py-5" style="background: rgba(255,255,255,0.9); border-radius: 24px; backdrop-filter: blur(15px);" role="status" aria-label="No categories available">
-            <i class="fas fa-store fa-5x mb-4" style="color: #667eea;" aria-hidden="true"></i>
-            <h3 class="mb-3" style="color: #2c3e50; font-weight: 800;">No Categories Available</h3>
-            <p style="color: #6c757d;">Categories will appear here once they are added to the system.</p>
-        </div>
-        {% endfor %}
-    </div>
-</main>
 
 <!-- Toast notification for cart actions -->
 <div class="toast-container position-fixed bottom-0 end-0 p-3">
     <div id="cart-toast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
         <div class="toast-header">
-            <i class="fas fa-shopping-cart me-2" aria-hidden="true"></i>
+            <i class="fas fa-shopping-cart me-2"></i>
             <strong class="me-auto">Cart Update</strong>
-            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+            <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
         </div>
         <div class="toast-body">
             <!-- Dynamic content will be inserted here -->
@@ -218,15 +277,13 @@
 <script src="{% static 'js/all_products.js' %}" defer></script>
 
 <script>
-// Enhanced scroll functionality with smooth scrolling and creative effects
 document.addEventListener('DOMContentLoaded', function() {
-    const scrollButtons = document.querySelectorAll('.scroll-btn-creative');
-
-    scrollButtons.forEach(button => {
-        button.addEventListener('click', function() {
+    // Horizontal scroll functionality for product containers
+    document.querySelectorAll('.scroll-btn-creative').forEach(button => {
+        button.addEventListener('click', function () {
             const targetId = this.getAttribute('data-target');
             const container = document.getElementById(targetId);
-            const scrollAmount = 320; // Fixed scroll amount for better UX
+            const scrollAmount = container.offsetWidth * 0.8;
 
             if (this.classList.contains('scroll-left')) {
                 container.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
@@ -238,90 +295,130 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Update scroll button visibility based on scroll position
     document.querySelectorAll('.products-container-creative').forEach(container => {
-        container.addEventListener('scroll', function() {
-            const leftBtn = document.querySelector(`.scroll-left[data-target="${container.id}"]`);
-            const rightBtn = document.querySelector(`.scroll-right[data-target="${container.id}"]`);
+        container.addEventListener('scroll', function () {
+            const categoryId = this.id;
+            const leftBtn = document.querySelector(`[data-target="${categoryId}"].scroll-left`);
+            const rightBtn = document.querySelector(`[data-target="${categoryId}"].scroll-right`);
 
-            if (leftBtn && rightBtn) {
-                // Show/hide left button
-                leftBtn.style.opacity = container.scrollLeft > 0 ? '1' : '0.5';
+            if (leftBtn) leftBtn.style.opacity = this.scrollLeft > 0 ? '1' : '0.5';
 
-                // Show/hide right button
-                const isAtEnd = container.scrollLeft >= (container.scrollWidth - container.clientWidth - 10);
+            if (rightBtn) {
+                const isAtEnd = this.scrollLeft >= (this.scrollWidth - this.clientWidth - 10);
                 rightBtn.style.opacity = isAtEnd ? '0.5' : '1';
+            }
+        });
+
+        // Initial button state
+        const categoryId = container.id;
+        const leftBtn = document.querySelector(`[data-target="${categoryId}"].scroll-left`);
+        if (leftBtn) leftBtn.style.opacity = '0.5';
+    });
+
+    // Sticky sidebar scroll highlighting
+    function highlightActiveCategory() {
+        const categoryBlocks = document.querySelectorAll('.creative-category-block');
+        const sidebarLinks = document.querySelectorAll('.amazon-subcategory-link');
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const categoryId = entry.target.getAttribute('data-category-id');
+
+                    // Remove active class from all links
+                    sidebarLinks.forEach(link => link.classList.remove('active'));
+
+                    // Add active class to current category link
+                    sidebarLinks.forEach(link => {
+                        const href = link.getAttribute('href');
+                        if (href && href.includes(categoryId)) {
+                            link.classList.add('active');
+                        }
+                    });
+                }
+            });
+        }, {
+            threshold: 0.3,
+            rootMargin: '-100px 0px -50% 0px'
+        });
+
+        categoryBlocks.forEach(block => observer.observe(block));
+    }
+
+    // Smooth scroll to category when sidebar link is clicked
+    function setupSmoothScrolling() {
+        const sidebarLinks = document.querySelectorAll('.amazon-subcategory-link');
+
+        sidebarLinks.forEach(link => {
+            link.addEventListener('click', function(e) {
+                const href = this.getAttribute('href');
+
+                // Check if it's a category link (contains category_products in URL)
+                if (href && href.includes('category_products')) {
+                    // Let the default behavior happen (navigate to category page)
+                    return;
+                }
+
+                // If it's an anchor link or internal scroll target
+                if (href && href.startsWith('#')) {
+                    e.preventDefault();
+                    const targetId = href.substring(1);
+                    const targetElement = document.getElementById(targetId);
+
+                    if (targetElement) {
+                        const headerHeight = 100; // Adjust based on your header height
+                        const targetPosition = targetElement.offsetTop - headerHeight;
+
+                        window.scrollTo({
+                            top: targetPosition,
+                            behavior: 'smooth'
+                        });
+                    }
+                }
+            });
+        });
+    }
+
+    // Initialize functions
+    highlightActiveCategory();
+    setupSmoothScrolling();
+
+    // Add loading state to sidebar when navigating
+    const sidebarLinks = document.querySelectorAll('.amazon-subcategory-link');
+    sidebarLinks.forEach(link => {
+        link.addEventListener('click', function() {
+            if (this.getAttribute('href') && this.getAttribute('href').includes('category_products')) {
+                this.style.opacity = '0.6';
+                this.innerHTML += ' <i class="fas fa-spinner fa-spin ms-1"></i>';
             }
         });
     });
 
-    // Add intersection observer for staggered animations
-    const categoryBlocks = document.querySelectorAll('.creative-category-block');
-    const observer = new IntersectionObserver((entries) => {
-        entries.forEach((entry, index) => {
+    // Enhanced product card interactions
+    document.querySelectorAll('.amazon-product-card').forEach(card => {
+        card.addEventListener('mouseenter', () => {
+            card.style.willChange = 'transform, box-shadow';
+        });
+
+        card.addEventListener('mouseleave', () => {
+            card.style.willChange = 'auto';
+        });
+    });
+
+    // Lazy loading animation for cards
+    const observer = new IntersectionObserver(entries => {
+        entries.forEach(entry => {
             if (entry.isIntersecting) {
-                setTimeout(() => {
-                    entry.target.style.opacity = '1';
-                    entry.target.style.transform = 'translateY(0)';
-                }, index * 200); // Stagger the animations
+                entry.target.style.opacity = '1';
+                entry.target.style.transform = 'translateY(0)';
             }
         });
     }, { threshold: 0.1 });
 
-    categoryBlocks.forEach((block) => {
-        block.style.opacity = '0';
-        block.style.transform = 'translateY(30px)';
-        block.style.transition = 'opacity 0.8s ease, transform 0.8s ease';
-        observer.observe(block);
-    });
-
-    // Add loading states for add to cart buttons
-    document.querySelectorAll('.creative-add-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            if (!this.disabled && this.classList.contains('btn-primary-creative')) {
-                // Store original content
-                const originalContent = this.innerHTML;
-
-                // Show loading state
-                this.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Adding...';
-                this.disabled = true;
-
-                // Simulate adding to cart
-                setTimeout(() => {
-                    this.innerHTML = '<i class="fas fa-check me-2"></i>Added!';
-                    this.style.background = 'linear-gradient(45deg, #28a745, #20c997)';
-
-                    // Reset after 2 seconds
-                    setTimeout(() => {
-                        this.innerHTML = originalContent;
-                        this.style.background = '';
-                        this.disabled = false;
-                    }, 2000);
-                }, 1000);
-            }
-        });
-    });
-
-    // Add parallax effect to category headers
-    window.addEventListener('scroll', () => {
-        const scrolled = window.pageYOffset;
-        const parallax = document.querySelectorAll('.category-icon-creative');
-
-        parallax.forEach((icon, index) => {
-            const speed = 0.5;
-            const yOffset = -(scrolled * speed);
-            icon.style.transform = `translateY(${yOffset}px) scale(1)`;
-        });
-    });
-
-    // Add hover sound effect (optional)
-    document.querySelectorAll('.creative-product-card').forEach(card => {
-        card.addEventListener('mouseenter', function() {
-            // You can add a subtle hover sound here
-            this.style.willChange = 'transform';
-        });
-
-        card.addEventListener('mouseleave', function() {
-            this.style.willChange = 'auto';
-        });
+    document.querySelectorAll('.amazon-product-card').forEach(card => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(20px)';
+        card.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+        observer.observe(card);
     });
 });
 </script>

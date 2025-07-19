@@ -1,0 +1,781 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Stock Management - {{ store.name }}{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+<style>
+.stock-summary-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.stock-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 0.5rem;
+    padding: 1.5rem;
+    text-align: center;
+}
+
+.stock-card.warning {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.stock-card.danger {
+    background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+    color: #333;
+}
+
+.stock-card.success {
+    background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+    color: #333;
+}
+
+.stock-number {
+    font-size: 2rem;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+}
+
+.stock-filters {
+    background: #f8f9fa;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin-bottom: 2rem;
+}
+
+.stock-table {
+    background: white;
+    border-radius: 0.5rem;
+    box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+    overflow: hidden;
+}
+
+.stock-level {
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.stock-level.high {
+    background: #d4edda;
+    color: #155724;
+}
+
+.stock-level.medium {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.stock-level.low {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.stock-level.out {
+    background: #e2e3e5;
+    color: #383d41;
+}
+
+.product-image {
+    width: 50px;
+    height: 50px;
+    object-fit: cover;
+    border-radius: 0.25rem;
+}
+
+.stock-adjustment-form {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.stock-adjustment-form input {
+    width: 80px;
+}
+
+.quick-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.modal-stock-form {
+    max-width: 400px;
+}
+
+.bulk-actions {
+    background: #e9ecef;
+    padding: 1rem;
+    border-radius: 0.375rem;
+    margin-bottom: 1rem;
+    display: none;
+}
+
+.bulk-actions.show {
+    display: block;
+}
+</style>
+
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0">Stock Management</h1>
+            <p class="text-muted">Monitor and manage inventory for {{ store.name }}</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'stores:inventory_history' store.id %}" class="btn btn-outline-primary">
+                <i class="fas fa-history me-2"></i>View History
+            </a>
+            <a href="{% url 'stores:store_dashboard' store.id %}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Stock Summary Cards -->
+    <div class="stock-summary-cards">
+        <div class="stock-card">
+            <div class="stock-number">{{ total_products|intcomma }}</div>
+            <div>Total Products</div>
+        </div>
+        <div class="stock-card success">
+            <div class="stock-number">{{ in_stock_count|default:0|intcomma }}</div>
+            <div>In Stock</div>
+        </div>
+        <div class="stock-card warning">
+            <div class="stock-number">{{ low_stock_count|intcomma }}</div>
+            <div>Low Stock</div>
+        </div>
+        <div class="stock-card danger">
+            <div class="stock-number">{{ out_of_stock_count|intcomma }}</div>
+            <div>Out of Stock</div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="stock-filters">
+        <form method="GET" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label for="search" class="form-label">Search Products</label>
+                <input type="text" class="form-control" id="search" name="search"
+                       value="{{ search_query }}" placeholder="Product name...">
+            </div>
+            <div class="col-md-2">
+                <label for="stock_filter" class="form-label">Stock Level</label>
+                <select class="form-select" id="stock_filter" name="stock_filter">
+                    <option value="all" {% if stock_filter == 'all' %}selected{% endif %}>All</option>
+                    <option value="available" {% if stock_filter == 'available' %}selected{% endif %}>Available</option>
+                    <option value="low" {% if stock_filter == 'low' %}selected{% endif %}>Low Stock</option>
+                    <option value="out" {% if stock_filter == 'out' %}selected{% endif %}>Out of Stock</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label for="category" class="form-label">Category</label>
+                <select class="form-select" id="category" name="category">
+                    <option value="">All Categories</option>
+                    {% for cat in categories %}
+                        <option value="{{ cat.category_id }}"
+                                {% if category_filter == cat.category_id|stringformat:"s" %}selected{% endif %}>
+                            {{ cat.category__name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-search me-2"></i>Filter
+                </button>
+            </div>
+            <div class="col-md-3">
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#bulkUpdateModal">
+                        <i class="fas fa-edit me-2"></i>Bulk Update
+                    </button>
+                    <button type="button" class="btn btn-outline-success" onclick="exportStock()">
+                        <i class="fas fa-download me-2"></i>Export
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Bulk Actions (hidden by default) -->
+    <div class="bulk-actions" id="bulkActions">
+        <div class="d-flex justify-content-between align-items-center">
+            <span><strong id="selectedCount">0</strong> products selected</span>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-primary" onclick="bulkUpdateStock()">
+                    <i class="fas fa-edit me-1"></i>Update Stock
+                </button>
+                <button class="btn btn-sm btn-secondary" onclick="clearSelection()">
+                    <i class="fas fa-times me-1"></i>Clear Selection
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Products Table -->
+    <div class="stock-table">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th width="40">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="selectAll">
+                            </div>
+                        </th>
+                        <th width="80">Image</th>
+                        <th>Product</th>
+                        <th width="120">Category</th>
+                        <th width="100">Price</th>
+                        <th width="120">Current Stock</th>
+                        <th width="120">Stock Level</th>
+                        <th width="200">Quick Update</th>
+                        <th width="120">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for product in page_obj %}
+                    <tr data-product-id="{{ product.id }}">
+                        <td>
+                            <div class="form-check">
+                                <input class="form-check-input product-checkbox" type="checkbox"
+                                       value="{{ product.id }}">
+                            </div>
+                        </td>
+                        <td>
+                            {% if product.image %}
+                                <img src="{{ product.image.url }}" alt="{{ product.name }}" class="product-image">
+                            {% else %}
+                                <div class="product-image bg-light d-flex align-items-center justify-content-center">
+                                    <i class="fas fa-image text-muted"></i>
+                                </div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <strong>{{ product.name|truncatechars:40 }}</strong>
+                            <br>
+                            <small class="text-muted">ID: {{ product.id }}</small>
+                        </td>
+                        <td>
+                            {% if product.category %}
+                                <span class="badge bg-secondary">{{ product.category.name }}</span>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <strong>D{{ product.price|floatformat:2 }}</strong>
+                        </td>
+                        <td>
+                            <span class="stock-quantity" data-product="{{ product.id }}">
+                                {{ product.stock_quantity|default:0 }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if product.stock_quantity == 0 %}
+                                <span class="stock-level out">Out of Stock</span>
+                            {% elif product.stock_quantity <= 5 %}
+                                <span class="stock-level low">Low Stock</span>
+                            {% elif product.stock_quantity <= 20 %}
+                                <span class="stock-level medium">Medium</span>
+                            {% else %}
+                                <span class="stock-level high">Good</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="stock-adjustment-form">
+                                <select class="form-select form-select-sm" id="adjustType{{ product.id }}">
+                                    <option value="set">Set</option>
+                                    <option value="add">Add</option>
+                                    <option value="subtract">Remove</option>
+                                </select>
+                                <input type="number" class="form-control form-control-sm"
+                                       id="adjustAmount{{ product.id }}" placeholder="0" min="0">
+                                <button class="btn btn-sm btn-primary"
+                                        onclick="quickUpdateStock({{ product.id }})">
+                                    <i class="fas fa-check"></i>
+                                </button>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="quick-actions">
+                                <button class="btn btn-sm btn-outline-primary"
+                                        onclick="openStockModal({{ product.id }}, '{{ product.name|escapejs }}')">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <a href="{% url 'stores:edit_product' store.id product.id %}" 
+                                   class="btn btn-sm btn-outline-secondary">
+                                    <i class="fas fa-cog"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="9" class="text-center py-4">
+                            <i class="fas fa-box fa-2x text-muted mb-2"></i>
+                            <br>
+                            <span class="text-muted">No products found matching your criteria.</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if page_obj.has_other_pages %}
+        <div class="p-3 border-top">
+            <nav aria-label="Stock pagination">
+                <ul class="pagination justify-content-center mb-0">
+                    {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if stock_filter != 'all' %}&stock_filter={{ stock_filter }}{% endif %}{% if category_filter %}&category={{ category_filter }}{% endif %}">
+                                <i class="fas fa-chevron-left"></i>
+                            </a>
+                        </li>
+                    {% endif %}
+
+                    {% for num in page_obj.paginator.page_range %}
+                        {% if page_obj.number == num %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ num }}</span>
+                            </li>
+                        {% else %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ num }}{% if search_query %}&search={{ search_query }}{% endif %}{% if stock_filter != 'all' %}&stock_filter={{ stock_filter }}{% endif %}{% if category_filter %}&category={{ category_filter }}{% endif %}">{{ num }}</a>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if stock_filter != 'all' %}&stock_filter={{ stock_filter }}{% endif %}{% if category_filter %}&category={{ category_filter }}{% endif %}">
+                                <i class="fas fa-chevron-right"></i>
+                            </a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Stock Update Modal -->
+<div class="modal fade" id="stockUpdateModal" tabindex="-1" aria-labelledby="stockUpdateModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h1 class="modal-title fs-5" id="stockUpdateModalLabel">Update Stock</h1>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="stockUpdateForm" class="modal-stock-form">
+                    {% csrf_token %}
+                    <input type="hidden" id="modalProductId">
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Product</label>
+                        <div class="fw-bold" id="modalProductName"></div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Current Stock</label>
+                        <div class="fw-bold text-primary" id="modalCurrentStock"></div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="modalAdjustmentType" class="form-label">Adjustment Type</label>
+                        <select class="form-select" id="modalAdjustmentType" name="type">
+                            <option value="set">Set to specific amount</option>
+                            <option value="add">Add to current stock</option>
+                            <option value="subtract">Remove from current stock</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="modalQuantity" class="form-label">Quantity</label>
+                        <input type="number" class="form-control" id="modalQuantity" name="quantity" 
+                               min="0" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="modalNotes" class="form-label">Notes (Optional)</label>
+                        <textarea class="form-control" id="modalNotes" name="notes" rows="3" 
+                                  placeholder="Reason for stock adjustment..."></textarea>
+                    </div>
+
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <span id="modalPreview">New stock will be: -</span>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="submitStockUpdate()">
+                    <i class="fas fa-save me-2"></i>Update Stock
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bulk Update Modal -->
+<div class="modal fade" id="bulkUpdateModal" tabindex="-1" aria-labelledby="bulkUpdateModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h1 class="modal-title fs-5" id="bulkUpdateModalLabel">Bulk Stock Update</h1>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="bulkUpdateForm">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Selected Products</label>
+                        <div id="bulkProductList" class="border rounded p-2 mb-2" style="max-height: 150px; overflow-y: auto;">
+                            <!-- Will be populated by JavaScript -->
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="bulkAdjustmentType" class="form-label">Adjustment Type</label>
+                        <select class="form-select" id="bulkAdjustmentType">
+                            <option value="set">Set all to specific amount</option>
+                            <option value="add">Add to all current stock</option>
+                            <option value="subtract">Remove from all current stock</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="bulkQuantity" class="form-label">Quantity</label>
+                        <input type="number" class="form-control" id="bulkQuantity" min="0" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="bulkNotes" class="form-label">Notes</label>
+                        <textarea class="form-control" id="bulkNotes" rows="2" 
+                                  placeholder="Reason for bulk stock adjustment..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="submitBulkUpdate()">
+                    <i class="fas fa-save me-2"></i>Update All Selected
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let selectedProducts = new Set();
+let currentModalProductId = null;
+let currentModalStock = 0;
+
+// Selection management
+document.addEventListener('DOMContentLoaded', function() {
+    const selectAllCheckbox = document.getElementById('selectAll');
+    const productCheckboxes = document.querySelectorAll('.product-checkbox');
+    
+    selectAllCheckbox.addEventListener('change', function() {
+        productCheckboxes.forEach(checkbox => {
+            checkbox.checked = this.checked;
+            if (this.checked) {
+                selectedProducts.add(checkbox.value);
+            } else {
+                selectedProducts.delete(checkbox.value);
+            }
+        });
+        updateBulkActions();
+    });
+    
+    productCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            if (this.checked) {
+               selectedProducts.add(String(checkbox.value));
+            } else {
+                selectedProducts.delete(this.value);
+            }
+            updateBulkActions();
+            
+            // Update select all checkbox
+            const allChecked = Array.from(productCheckboxes).every(cb => cb.checked);
+            const noneChecked = Array.from(productCheckboxes).every(cb => !cb.checked);
+            selectAllCheckbox.indeterminate = !allChecked && !noneChecked;
+            selectAllCheckbox.checked = allChecked;
+        });
+    });
+    
+    // Modal preview updates
+    const modalTypeSelect = document.getElementById('modalAdjustmentType');
+    const modalQuantityInput = document.getElementById('modalQuantity');
+    
+    [modalTypeSelect, modalQuantityInput].forEach(element => {
+        element.addEventListener('change', updateModalPreview);
+        element.addEventListener('input', updateModalPreview);
+    });
+});
+
+function updateBulkActions() {
+    const bulkActions = document.getElementById('bulkActions');
+    const selectedCount = document.getElementById('selectedCount');
+    
+    if (selectedProducts.size > 0) {
+        bulkActions.classList.add('show');
+        selectedCount.textContent = selectedProducts.size;
+    } else {
+        bulkActions.classList.remove('show');
+    }
+}
+
+function clearSelection() {
+    selectedProducts.clear();
+    document.querySelectorAll('.product-checkbox').forEach(cb => cb.checked = false);
+    document.getElementById('selectAll').checked = false;
+    document.getElementById('selectAll').indeterminate = false;
+    updateBulkActions();
+}
+
+// Stock update functions
+function quickUpdateStock(productId) {
+    const type = document.getElementById(`adjustType${productId}`).value;
+    const amount = document.getElementById(`adjustAmount${productId}`).value;
+    
+    if (!amount || amount < 0) {
+        alert('Please enter a valid amount');
+        return;
+    }
+    
+    updateStock(productId, type, amount);
+}
+
+function openStockModal(productId, productName) {
+    currentModalProductId = productId;
+
+    // Grab the stock value from the DOM
+    const stockElement = document.querySelector(`tr[data-product-id="${productId}"] .stock-quantity`);
+    currentModalStock = stockElement ? parseInt(stockElement.textContent) || 0 : 0;
+
+    document.getElementById('modalProductId').value = productId;
+    document.getElementById('modalProductName').textContent = productName;
+    document.getElementById('modalCurrentStock').textContent = currentModalStock;
+    document.getElementById('modalQuantity').value = '';
+    document.getElementById('modalNotes').value = '';
+    document.getElementById('modalAdjustmentType').value = 'set';
+
+    updateModalPreview();
+
+    const modal = new bootstrap.Modal(document.getElementById('stockUpdateModal'));
+    modal.show();
+}
+
+
+function updateModalPreview() {
+    const type = document.getElementById('modalAdjustmentType').value;
+    const quantity = parseInt(document.getElementById('modalQuantity').value) || 0;
+    const preview = document.getElementById('modalPreview');
+    
+    let newStock;
+    switch(type) {
+        case 'set':
+            newStock = quantity;
+            break;
+        case 'add':
+            newStock = currentModalStock + quantity;
+            break;
+        case 'subtract':
+            newStock = Math.max(0, currentModalStock - quantity);
+            break;
+    }
+    
+    preview.textContent = `New stock will be: ${newStock}`;
+}
+
+function submitStockUpdate() {
+    const form = document.getElementById('stockUpdateForm');
+    const formData = new FormData(form);
+    formData.append('quantity', document.getElementById('modalQuantity').value);
+    formData.append('type', document.getElementById('modalAdjustmentType').value);
+    formData.append('notes', document.getElementById('modalNotes').value);
+    
+    fetch(`/stores/manage/{{ store.id }}/stock/${currentModalProductId}/update/`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const stockElement = document.querySelector(`[data-product="${currentModalProductId}"] .stock-quantity`);
+            if (stockElement) {
+                stockElement.textContent = data.new_quantity;
+            }
+
+            bootstrap.Modal.getInstance(document.getElementById('stockUpdateModal')).hide();
+            showToast('success', data.message);
+
+            setTimeout(() => window.location.reload(), 1000);
+        } else {
+            showToast('error', data.message);
+        }
+    })
+    .catch(error => {
+        showToast('error', 'An error occurred while updating stock');
+        console.error('Error:', error);
+    });
+}
+
+
+function updateStock(productId, type, amount, notes = '') {
+    const formData = new FormData();
+    formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+    formData.append('quantity', amount);
+    formData.append('type', type);
+    formData.append('notes', notes);
+    
+    fetch(`/stores/manage/{{ store.id }}/stock/${productId}/update/`, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Update the stock display
+            const stockElement = document.querySelector(`[data-product="${productId}"] .stock-quantity`);
+            if (stockElement) {
+                stockElement.textContent = data.new_quantity;
+            }
+            
+            // Clear the input
+            document.getElementById(`adjustAmount${productId}`).value = '';
+            
+            showToast('success', data.message);
+            
+            // Refresh page to update stock levels
+            setTimeout(() => window.location.reload(), 1000);
+        } else {
+            showToast('error', data.message);
+        }
+    })
+    .catch(error => {
+        showToast('error', 'An error occurred while updating stock');
+        console.error('Error:', error);
+    });
+}
+
+function bulkUpdateStock() {
+    if (selectedProducts.size === 0) {
+        alert('Please select products to update');
+        return;
+    }
+    
+    // Populate bulk modal with selected products
+    const productList = document.getElementById('bulkProductList');
+    productList.innerHTML = '';
+    
+    selectedProducts.forEach(productId => {
+        const row = document.querySelector(`tr[data-product-id="${productId}"]`);
+        const productName = row.querySelector('strong').textContent;
+        const div = document.createElement('div');
+        div.className = 'small mb-1';
+        div.textContent = productName;
+        productList.appendChild(div);
+    });
+    
+    const modal = new bootstrap.Modal(document.getElementById('bulkUpdateModal'));
+    modal.show();
+}
+
+function submitBulkUpdate() {
+    const type = document.getElementById('bulkAdjustmentType').value;
+    const quantity = document.getElementById('bulkQuantity').value;
+    const notes = document.getElementById('bulkNotes').value;
+    
+    if (!quantity || quantity < 0) {
+        alert('Please enter a valid quantity');
+        return;
+    }
+    
+    // Update each selected product
+    let updatePromises = [];
+    selectedProducts.forEach(productId => {
+        const formData = new FormData();
+        formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+        formData.append('quantity', quantity);
+        formData.append('type', type);
+        formData.append('notes', notes || 'Bulk stock update');
+        
+        updatePromises.push(
+            fetch(`{% url 'stores:update_stock' store.id 0 %}`.replace('0', productId), {
+                method: 'POST',
+                body: formData
+            })
+        );
+    });
+    
+    Promise.all(updatePromises)
+        .then(responses => Promise.all(responses.map(r => r.json())))
+        .then(results => {
+            const successCount = results.filter(r => r.success).length;
+            const failCount = results.length - successCount;
+            
+            bootstrap.Modal.getInstance(document.getElementById('bulkUpdateModal')).hide();
+            
+            if (failCount === 0) {
+                showToast('success', `Successfully updated ${successCount} products`);
+            } else {
+                showToast('warning', `Updated ${successCount} products, ${failCount} failed`);
+            }
+            
+            // Clear selection and refresh
+            clearSelection();
+            setTimeout(() => window.location.reload(), 1000);
+        })
+        .catch(error => {
+            showToast('error', 'An error occurred during bulk update');
+            console.error('Error:', error);
+        });
+}
+
+function exportStock() {
+    // Implement stock export functionality
+    showToast('info', 'Stock export feature coming soon');
+}
+
+function showToast(type, message) {
+    // Simple toast notification
+    const toast = document.createElement('div');
+    toast.className = `alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show position-fixed`;
+    toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    toast.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        if (toast.parentNode) {
+            toast.parentNode.removeChild(toast);
+        }
+    }, 5000);
+}
+</script>
+{% endblock %}

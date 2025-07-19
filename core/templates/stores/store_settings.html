@@ -1,0 +1,850 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load widget_tweaks %}
+
+{% block title %}Store Settings - {{ store.name }}{% endblock %}
+
+{% block content %}
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+
+<style>
+.settings-nav {
+    background: #f8f9fa;
+    border-radius: 0.5rem;
+    padding: 0.5rem;
+    margin-bottom: 2rem;
+}
+
+.settings-nav .nav-link {
+    color: #6c757d;
+    border-radius: 0.375rem;
+    padding: 0.75rem 1rem;
+    margin: 0 0.25rem;
+    transition: all 0.2s;
+}
+
+.settings-nav .nav-link:hover {
+    background: #e9ecef;
+    color: #495057;
+}
+
+.settings-nav .nav-link.active {
+    background: #007bff;
+    color: white;
+}
+
+.settings-card {
+    border: none;
+    box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+    border-radius: 0.5rem;
+}
+
+.form-section {
+    margin-bottom: 2rem;
+}
+
+.form-section h4 {
+    color: #495057;
+    margin-bottom: 1rem;
+    font-weight: 600;
+}
+
+.file-upload-preview {
+    max-width: 200px;
+    max-height: 150px;
+    border-radius: 0.375rem;
+    margin-top: 0.5rem;
+}
+
+.hours-grid {
+    display: grid;
+    grid-template-columns: 1fr 2fr 2fr 1fr;
+    gap: 1rem;
+    align-items: center;
+    padding: 0.75rem;
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    margin-bottom: 0.5rem;
+}
+
+.shipping-zone {
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    position: relative;
+}
+
+.shipping-zone.marked-for-deletion {
+    opacity: 0.5;
+    background-color: #f8d7da;
+}
+
+.return-policy-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1rem;
+}
+
+.policy-section {
+    background: #f8f9fa;
+    padding: 1rem;
+    border-radius: 0.375rem;
+}
+</style>
+
+
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <!-- Header -->
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1 class="h3 mb-0">Store Settings</h1>
+                    <p class="text-muted">Manage your store configuration and preferences</p>
+                </div>
+                <a href="{% url 'stores:store_dashboard' store.id %}" class="btn btn-outline-primary">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+                </a>
+            </div>
+
+            <!-- Settings Navigation -->
+            <nav class="settings-nav">
+                <ul class="nav nav-pills" id="settingsTabs" role="tablist">
+                    <li class="nav-item">
+                        <button class="nav-link {% if active_tab == 'basic' %}active{% endif %}" 
+                                type="button" data-bs-toggle="pill" data-bs-target="#basic-tab">
+                            <i class="fas fa-store me-2"></i>Basic Info
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link {% if active_tab == 'hours' %}active{% endif %}" 
+                                type="button" data-bs-toggle="pill" data-bs-target="#hours-tab">
+                            <i class="fas fa-clock me-2"></i>Store Hours
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link {% if active_tab == 'shipping' %}active{% endif %}" 
+                                type="button" data-bs-toggle="pill" data-bs-target="#shipping-tab">
+                            <i class="fas fa-truck me-2"></i>Shipping
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link {% if active_tab == 'returns' %}active{% endif %}" 
+                                type="button" data-bs-toggle="pill" data-bs-target="#returns-tab">
+                            <i class="fas fa-undo me-2"></i>Returns
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link {% if active_tab == 'financial' %}active{% endif %}" 
+                                type="button" data-bs-toggle="pill" data-bs-target="#financial-tab">
+                            <i class="fas fa-money-bill me-2"></i>Financial
+                        </button>
+                    </li>
+                </ul>
+            </nav>
+
+            <!-- Tab Content -->
+            <div class="tab-content" id="settingsTabContent">
+                
+                <!-- Basic Info Tab -->
+                <div class="tab-pane fade {% if active_tab == 'basic' %}show active{% endif %}" id="basic-tab">
+                    <div class="card settings-card">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="fas fa-store me-2"></i>Basic Store Information</h5>
+                        </div>
+                        <div class="card-body">
+                            <form method="post" enctype="multipart/form-data">
+                                {% csrf_token %}
+                                <input type="hidden" name="tab" value="basic">
+                                
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="form-section">
+                                            <h4>Store Identity</h4>
+                                            
+                                            <div class="mb-3">
+                                                <label for="{{ basic_form.name.id_for_label }}" class="form-label">
+                                                    Store Name <span class="text-danger">*</span>
+                                                </label>
+                                                {{ basic_form.name }}
+                                                {% if basic_form.name.errors %}
+                                                    <div class="text-danger small">{{ basic_form.name.errors.0 }}</div>
+                                                {% endif %}
+                                            </div>
+
+                                            <div class="mb-3">
+                                                <label for="{{ basic_form.slug.id_for_label }}" class="form-label">
+                                                    Store URL Slug <span class="text-danger">*</span>
+                                                </label>
+                                                {{ basic_form.slug }}
+                                                <div class="form-text">
+                                                    Your store will be accessible at: yoursite.com/stores/{{ basic_form.slug.value|default:"your-slug" }}
+                                                </div>
+                                                {% if basic_form.slug.errors %}
+                                                    <div class="text-danger small">{{ basic_form.slug.errors.0 }}</div>
+                                                {% endif %}
+                                            </div>
+
+                                            <div class="mb-3">
+                                                <label for="{{ basic_form.short_description.id_for_label }}" class="form-label">
+                                                    Short Description
+                                                </label>
+                                                {{ basic_form.short_description }}
+                                                <div class="form-text">Brief tagline for your store (max 500 characters)</div>
+                                            </div>
+
+                                            <div class="mb-3">
+                                                <label for="{{ basic_form.description.id_for_label }}" class="form-label">
+                                                    Full Description <span class="text-danger">*</span>
+                                                </label>
+                                                {{ basic_form.description }}
+                                                {% if basic_form.description.errors %}
+                                                    <div class="text-danger small">{{ basic_form.description.errors.0 }}</div>
+                                                {% endif %}
+                                            </div>
+
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label for="{{ basic_form.store_type.id_for_label }}" class="form-label">
+                                                            Store Type
+                                                        </label>
+                                                        {{ basic_form.store_type }}
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label for="{{ basic_form.category.id_for_label }}" class="form-label">
+                                                            Primary Category
+                                                        </label>
+                                                        {{ basic_form.category }}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="form-section">
+                                            <h4>Contact Information</h4>
+                                            
+                                            <div class="mb-3">
+                                                <label for="{{ basic_form.email.id_for_label }}" class="form-label">
+                                                    Email <span class="text-danger">*</span>
+                                                </label>
+                                                {{ basic_form.email }}
+                                                {% if basic_form.email.errors %}
+                                                    <div class="text-danger small">{{ basic_form.email.errors.0 }}</div>
+                                                {% endif %}
+                                            </div>
+
+                                            <div class="mb-3">
+                                                <label for="{{ basic_form.phone.id_for_label }}" class="form-label">
+                                                    Phone Number
+                                                </label>
+                                                {{ basic_form.phone }}
+                                            </div>
+
+                                            <div class="mb-3">
+                                                <label for="{{ basic_form.website.id_for_label }}" class="form-label">
+                                                    Website
+                                                </label>
+                                                {{ basic_form.website }}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <div class="form-section">
+                                            <h4>Address</h4>
+                                            
+                                            <div class="mb-3">
+                                                <label for="{{ basic_form.address_line_1.id_for_label }}" class="form-label">
+                                                    Address Line 1
+                                                </label>
+                                                {{ basic_form.address_line_1 }}
+                                            </div>
+
+                                            <div class="mb-3">
+                                                <label for="{{ basic_form.address_line_2.id_for_label }}" class="form-label">
+                                                    Address Line 2
+                                                </label>
+                                                {{ basic_form.address_line_2 }}
+                                            </div>
+
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label for="{{ basic_form.city.id_for_label }}" class="form-label">
+                                                            City
+                                                        </label>
+                                                        {{ basic_form.city }}
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label for="{{ basic_form.region.id_for_label }}" class="form-label">
+                                                            Region
+                                                        </label>
+                                                        {{ basic_form.region }}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label for="{{ basic_form.postal_code.id_for_label }}" class="form-label">
+                                                            Postal Code
+                                                        </label>
+                                                        {{ basic_form.postal_code }}
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label for="{{ basic_form.country.id_for_label }}" class="form-label">
+                                                            Country
+                                                        </label>
+                                                        {{ basic_form.country }}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="form-section">
+                                            <h4>Branding</h4>
+                                            
+                                            <div class="mb-3">
+                                                <label for="{{ basic_form.logo.id_for_label }}" class="form-label">
+                                                    Store Logo
+                                                </label>
+                                                {{ basic_form.logo }}
+                                                <div class="form-text">Upload a square logo (recommended: 300x300px)</div>
+                                                {% if store.logo %}
+                                                    <img src="{{ store.logo.url }}" alt="Current logo" class="file-upload-preview mt-2">
+                                                {% endif %}
+                                            </div>
+
+                                            <div class="mb-3">
+                                                <label for="{{ basic_form.banner.id_for_label }}" class="form-label">
+                                                    Store Banner
+                                                </label>
+                                                {{ basic_form.banner }}
+                                                <div class="form-text">Upload a banner image (recommended: 1200x400px)</div>
+                                                {% if store.banner %}
+                                                    <img src="{{ store.banner.url }}" alt="Current banner" class="file-upload-preview mt-2">
+                                                {% endif %}
+                                            </div>
+                                        </div>
+
+                                        <div class="form-section">
+                                            <h4>Social Media</h4>
+                                            
+                                            <div class="mb-3">
+                                                <label for="{{ basic_form.facebook_url.id_for_label }}" class="form-label">
+                                                    Facebook URL
+                                                </label>
+                                                {{ basic_form.facebook_url }}
+                                            </div>
+
+                                            <div class="mb-3">
+                                                <label for="{{ basic_form.twitter_url.id_for_label }}" class="form-label">
+                                                    Twitter URL
+                                                </label>
+                                                {{ basic_form.twitter_url }}
+                                            </div>
+
+                                            <div class="mb-3">
+                                                <label for="{{ basic_form.instagram_url.id_for_label }}" class="form-label">
+                                                    Instagram URL
+                                                </label>
+                                                {{ basic_form.instagram_url }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="text-end">
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-save me-2"></i>Save Basic Information
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Store Hours Tab -->
+                <div class="tab-pane fade {% if active_tab == 'hours' %}show active{% endif %}" id="hours-tab">
+                    <div class="card settings-card">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="fas fa-clock me-2"></i>Store Operating Hours</h5>
+                        </div>
+                        <div class="card-body">
+                            <form method="post">
+                                {% csrf_token %}
+                                <input type="hidden" name="tab" value="hours">
+                                {{ hours_formset.management_form }}
+                                
+                                <div class="mb-3">
+                                    <p class="text-muted">Set your store's operating hours for each day of the week.</p>
+                                </div>
+
+                                {% for form in hours_formset %}
+                                    <div class="hours-grid">
+                                        <div>
+                                            <strong>{{ form.instance.get_day_of_week_display }}</strong>
+                                            {{ form.day_of_week.as_hidden }}
+                                            {% for hidden in form.hidden_fields %}
+                                                {{ hidden }}
+                                            {% endfor %}
+                                        </div>
+                                        <div>
+                                            <label for="{{ form.opening_time.id_for_label }}" class="form-label">Opening Time</label>
+                                            {{ form.opening_time }}
+                                        </div>
+                                        <div>
+                                            <label for="{{ form.closing_time.id_for_label }}" class="form-label">Closing Time</label>
+                                            {{ form.closing_time }}
+                                        </div>
+                                        <div>
+                                            <div class="form-check">
+                                                {{ form.is_closed }}
+                                                <label for="{{ form.is_closed.id_for_label }}" class="form-check-label">
+                                                    Closed
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+
+                                <div class="text-end mt-4">
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-save me-2"></i>Save Store Hours
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Shipping Tab -->
+                <div class="tab-pane fade {% if active_tab == 'shipping' %}show active{% endif %}" id="shipping-tab">
+                    <div class="card settings-card">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="fas fa-truck me-2"></i>Shipping Zones</h5>
+                        </div>
+                        <div class="card-body">
+                            <form method="post" id="shipping-form">
+                                {% csrf_token %}
+                                <input type="hidden" name="tab" value="shipping">
+                                {{ shipping_formset.management_form }}
+                                
+                                <div class="mb-3">
+                                    <p class="text-muted">Configure shipping zones and costs for different regions.</p>
+                                </div>
+
+                                <div id="shipping-zones">
+                                    {% for form in shipping_formset %}
+                                        <div class="shipping-zone" data-form-index="{{ forloop.counter0 }}">
+                                            {% if form.instance.pk %}
+                                                <div class="d-flex justify-content-between align-items-start mb-3">
+                                                    <h6>Shipping Zone {{ forloop.counter }}</h6>
+                                                    <button type="button" class="btn btn-sm btn-outline-danger delete-zone">
+                                                        <i class="fas fa-trash me-1"></i>Delete
+                                                    </button>
+                                                </div>
+                                            {% else %}
+                                                <h6>New Shipping Zone</h6>
+                                            {% endif %}
+                                            
+                                            {% for hidden in form.hidden_fields %}
+                                                {{ hidden }}
+                                            {% endfor %}
+                                            
+                                            <div class="row">
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label for="{{ form.name.id_for_label }}" class="form-label">Zone Name</label>
+                                                        {{ form.name }}
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <div class="mb-3">
+                                                        <label for="{{ form.estimated_delivery_days.id_for_label }}" class="form-label">Delivery Days</label>
+                                                        {{ form.estimated_delivery_days }}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div class="mb-3">
+                                                <label for="{{ form.regions.id_for_label }}" class="form-label">Regions Covered</label>
+                                                {{ form.regions }}
+                                                <div class="form-text">Enter regions separated by commas</div>
+                                            </div>
+
+                                            <div class="row">
+                                                <div class="col-md-4">
+                                                    <div class="mb-3">
+                                                        <label for="{{ form.base_cost.id_for_label }}" class="form-label">Base Cost (D)</label>
+                                                        {{ form.base_cost }}
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <div class="mb-3">
+                                                        <label for="{{ form.per_kg_cost.id_for_label }}" class="form-label">Per KG Cost (D)</label>
+                                                        {{ form.per_kg_cost }}
+                                                    </div>
+                                                </div>
+                                                <div class="col-md-4">
+                                                    <div class="mb-3">
+                                                        <label for="{{ form.free_shipping_threshold.id_for_label }}" class="form-label">Free Shipping Threshold (D)</label>
+                                                        {{ form.free_shipping_threshold }}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div class="form-check">
+                                                {{ form.is_active }}
+                                                <label for="{{ form.is_active.id_for_label }}" class="form-check-label">
+                                                    Active Zone
+                                                </label>
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+
+                                <div class="text-end mt-4">
+                                    <button type="button" class="btn btn-outline-primary me-2" id="add-shipping-zone">
+                                        <i class="fas fa-plus me-2"></i>Add Zone
+                                    </button>
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-save me-2"></i>Save Shipping Settings
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Returns Tab -->
+                <div class="tab-pane fade {% if active_tab == 'returns' %}show active{% endif %}" id="returns-tab">
+                    <div class="card settings-card">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="fas fa-undo me-2"></i>Return Policy Settings</h5>
+                        </div>
+                        <div class="card-body">
+                            <form method="post">
+                                {% csrf_token %}
+                                <input type="hidden" name="tab" value="returns">
+                                
+                                <div class="return-policy-grid">
+                                    <div class="policy-section">
+                                        <h6>General Settings</h6>
+                                        
+                                        <div class="mb-3">
+                                            <label for="{{ returns_form.return_window_days.id_for_label }}" class="form-label">
+                                                Return Window (Days)
+                                            </label>
+                                            {{ returns_form.return_window_days }}
+                                            <div class="form-text">Number of days customers can return items</div>
+                                        </div>
+
+                                        <div class="mb-3">
+                                            <label for="{{ returns_form.restocking_fee_percentage.id_for_label }}" class="form-label">
+                                                Restocking Fee (%)
+                                            </label>
+                                            {{ returns_form.restocking_fee_percentage }}
+                                        </div>
+
+                                        <div class="form-check">
+                                            {{ returns_form.auto_approve_returns }}
+                                            <label for="{{ returns_form.auto_approve_returns.id_for_label }}" class="form-check-label">
+                                                Auto-approve returns
+                                            </label>
+                                        </div>
+
+                                        <div class="form-check">
+                                            {{ returns_form.refund_shipping_cost }}
+                                            <label for="{{ returns_form.refund_shipping_cost.id_for_label }}" class="form-check-label">
+                                                Refund shipping costs
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div class="policy-section">
+                                        <h6>Accepted Return Reasons</h6>
+                                        
+                                        <div class="form-check">
+                                            {{ returns_form.accept_defective }}
+                                            <label for="{{ returns_form.accept_defective.id_for_label }}" class="form-check-label">
+                                                Defective products
+                                            </label>
+                                        </div>
+
+                                        <div class="form-check">
+                                            {{ returns_form.accept_wrong_item }}
+                                            <label for="{{ returns_form.accept_wrong_item.id_for_label }}" class="form-check-label">
+                                                Wrong item sent
+                                            </label>
+                                        </div>
+
+                                        <div class="form-check">
+                                            {{ returns_form.accept_wrong_size }}
+                                            <label for="{{ returns_form.accept_wrong_size.id_for_label }}" class="form-check-label">
+                                                Wrong size/fit
+                                            </label>
+                                        </div>
+
+                                        <div class="form-check">
+                                            {{ returns_form.accept_damaged_shipping }}
+                                            <label for="{{ returns_form.accept_damaged_shipping.id_for_label }}" class="form-check-label">
+                                                Damaged in shipping
+                                            </label>
+                                        </div>
+
+                                        <div class="form-check">
+                                            {{ returns_form.accept_not_as_described }}
+                                            <label for="{{ returns_form.accept_not_as_described.id_for_label }}" class="form-check-label">
+                                                Not as described
+                                            </label>
+                                        </div>
+
+                                        <div class="form-check">
+                                            {{ returns_form.accept_quality_issues }}
+                                            <label for="{{ returns_form.accept_quality_issues.id_for_label }}" class="form-check-label">
+                                                Quality issues
+                                            </label>
+                                        </div>
+
+                                        <div class="form-check">
+                                            {{ returns_form.accept_changed_mind }}
+                                            <label for="{{ returns_form.accept_changed_mind.id_for_label }}" class="form-check-label">
+                                                Changed mind
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div class="policy-section">
+                                        <h6>Requirements & Services</h6>
+                                        
+                                        <div class="form-check">
+                                            {{ returns_form.require_original_packaging }}
+                                            <label for="{{ returns_form.require_original_packaging.id_for_label }}" class="form-check-label">
+                                                Require original packaging
+                                            </label>
+                                        </div>
+
+                                        <div class="form-check">
+                                            {{ returns_form.require_photos }}
+                                            <label for="{{ returns_form.require_photos.id_for_label }}" class="form-check-label">
+                                                Require photos
+                                            </label>
+                                        </div>
+
+                                        <div class="form-check">
+                                            {{ returns_form.provide_return_label }}
+                                            <label for="{{ returns_form.provide_return_label.id_for_label }}" class="form-check-label">
+                                                Provide return shipping label
+                                            </label>
+                                        </div>
+
+                                        <div class="form-check">
+                                            {{ returns_form.pickup_service_available }}
+                                            <label for="{{ returns_form.pickup_service_available.id_for_label }}" class="form-check-label">
+                                                Pickup service available
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="mt-4">
+                                    <label for="{{ returns_form.custom_return_policy.id_for_label }}" class="form-label">
+                                        Custom Return Policy Text
+                                    </label>
+                                    {{ returns_form.custom_return_policy }}
+                                    <div class="form-text">Additional terms and conditions for returns</div>
+                                </div>
+
+                                <div class="text-end mt-4">
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-save me-2"></i>Save Return Policy
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Financial Tab -->
+                <div class="tab-pane fade {% if active_tab == 'financial' %}show active{% endif %}" id="financial-tab">
+                    <div class="card settings-card">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="fas fa-money-bill me-2"></i>Financial Settings</h5>
+                        </div>
+                        <div class="card-body">
+                            <form method="post">
+                                {% csrf_token %}
+                                <input type="hidden" name="tab" value="financial">
+                                
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="form-section">
+                                            <h4>Banking Information</h4>
+                                            
+                                            <div class="mb-3">
+                                                <label for="{{ financial_form.bank_name.id_for_label }}" class="form-label">
+                                                    Bank Name
+                                                </label>
+                                                {{ financial_form.bank_name }}
+                                            </div>
+
+                                            <div class="mb-3">
+                                                <label for="{{ financial_form.bank_account_number.id_for_label }}" class="form-label">
+                                                    Account Number
+                                                </label>
+                                                {{ financial_form.bank_account_number }}
+                                                <div class="form-text">This information is encrypted and secure</div>
+                                            </div>
+                                        </div>
+
+                                        <div class="form-section">
+                                            <h4>Business Registration</h4>
+                                            
+                                            <div class="mb-3">
+                                                <label for="{{ financial_form.business_registration_number.id_for_label }}" class="form-label">
+                                                    Business Registration Number
+                                                </label>
+                                                {{ financial_form.business_registration_number }}
+                                            </div>
+
+                                            <div class="mb-3">
+                                                <label for="{{ financial_form.tax_identification_number.id_for_label }}" class="form-label">
+                                                    Tax Identification Number
+                                                </label>
+                                                {{ financial_form.tax_identification_number }}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <div class="form-section">
+                                            <h4>Commission & Pricing</h4>
+                                            
+                                            <div class="mb-3">
+                                                <label for="{{ financial_form.commission_rate.id_for_label }}" class="form-label">
+                                                    Commission Rate (%)
+                                                </label>
+                                                {{ financial_form.commission_rate }}
+                                                <div class="form-text">
+                                                    Current rate: {{ store.commission_rate }}%
+                                                    <br>Your commission rate may be subject to platform policies
+                                                </div>
+                                            </div>
+
+                                            <div class="mb-3">
+                                                <label for="{{ financial_form.minimum_order_amount.id_for_label }}" class="form-label">
+                                                    Minimum Order Amount (D)
+                                                </label>
+                                                {{ financial_form.minimum_order_amount }}
+                                                <div class="form-text">Minimum amount required for orders from your store</div>
+                                            </div>
+                                        </div>
+
+                                        <div class="alert alert-info">
+                                            <i class="fas fa-info-circle me-2"></i>
+                                            <strong>Payment Schedule:</strong><br>
+                                            Payments are processed weekly on Fridays for orders delivered in the previous week.
+                                            Commission fees are automatically deducted.
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="text-end mt-4">
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-save me-2"></i>Save Financial Settings
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Handle dynamic shipping zone forms
+document.addEventListener('DOMContentLoaded', function() {
+    let formCount = {{ shipping_formset.total_form_count }};
+    
+    // Add new shipping zone
+    document.getElementById('add-shipping-zone').addEventListener('click', function() {
+        const container = document.getElementById('shipping-zones');
+        const emptyForm = container.querySelector('.shipping-zone:last-child').cloneNode(true);
+        
+        // Update form indices
+        const inputs = emptyForm.querySelectorAll('input, select, textarea');
+        inputs.forEach(input => {
+            const name = input.getAttribute('name');
+            if (name) {
+                input.setAttribute('name', name.replace(/-\d+-/, `-${formCount}-`));
+                input.setAttribute('id', input.getAttribute('id').replace(/-\d+-/, `-${formCount}-`));
+            }
+            if (input.type !== 'hidden') {
+                input.value = '';
+            }
+        });
+        
+        const labels = emptyForm.querySelectorAll('label');
+        labels.forEach(label => {
+            const forAttr = label.getAttribute('for');
+            if (forAttr) {
+                label.setAttribute('for', forAttr.replace(/-\d+-/, `-${formCount}-`));
+            }
+        });
+        
+        emptyForm.querySelector('h6').textContent = 'New Shipping Zone';
+        container.appendChild(emptyForm);
+        
+        formCount++;
+        document.querySelector('#id_form-TOTAL_FORMS').value = formCount;
+    });
+    
+    // Handle deletion
+    document.addEventListener('click', function(e) {
+        if (e.target.closest('.delete-zone')) {
+            const zone = e.target.closest('.shipping-zone');
+            const deleteInput = zone.querySelector('input[name$="-DELETE"]');
+            if (deleteInput) {
+                deleteInput.checked = true;
+                zone.classList.add('marked-for-deletion');
+            } else {
+                zone.remove();
+                formCount--;
+                document.querySelector('#id_form-TOTAL_FORMS').value = formCount;
+            }
+        }
+    });
+    
+    // Handle store hours closed checkbox
+    document.querySelectorAll('input[name$="-is_closed"]').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const row = this.closest('.hours-grid');
+            const timeInputs = row.querySelectorAll('input[type="time"]');
+            timeInputs.forEach(input => {
+                input.disabled = this.checked;
+                if (this.checked) {
+                    input.value = '';
+                }
+            });
+        });
+        
+        // Initialize state
+        checkbox.dispatchEvent(new Event('change'));
+    });
+});
+</script>
+{% endblock %}

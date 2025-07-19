@@ -1,11 +1,12 @@
 {% extends 'base.html' %}
 {% load custom_filters %}
 {% load static %}
-{% load humanize %}
+
 {% block content %}
 
 <link rel="stylesheet" href="{% static 'css/main.css' %}">
 <link rel="stylesheet" href="{% static 'css/hot_pick.css' %}">
+
 
 <!-- Hero Section -->
 <section class="hero-section text-white py-4" style="border-bottom: 3px solid var(--amazon-orange);">
@@ -48,101 +49,142 @@
 </section>
 
 <!-- Hot Picks Section -->
-<section class="hot-picks-section py-5" style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 50%, #f8f9fa 100%);">
+<section class="hot-picks-section py-5">
     <div class="container">
-        <h2 class="section-title-creative">
-            <i class="fas fa-fire me-3" style="color: #ff6b35;"></i>Today's Hot Picks
+        <h2 class="hot-picks-title mb-4">
+            <i class="fas fa-fire hot-picks-fire me-2"></i> Today's Hot Picks
         </h2>
 
         {% for block in hot_products_by_category %}
         <div class="mb-5">
 
-            <div class="category-header-creative">
-                <span class="category-badge-creative">{{ block.category.name }}</span>
+            <div class="hot-picks-category-info">
+                <span class="hot-picks-badge-warning text-dark me-3">{{ block.category.name }}</span>
                 <div>
-                    <h4 class="mb-1" style="color: #2c3e50; font-weight: 700;">{{ block.category.name }} Collection</h4>
-                    <small class="text-muted">Discover our most popular {{ block.category.name|lower }} items</small>
+                    <h5 class="mb-1">{{ block.category.name }} Collection</h5>
+                    <small class="text-muted">Top picks from {{ block.category.name }} • {{ block.products|length }} hot item{{ block.products|length|pluralize }}</small>
                 </div>
             </div>
 
             {% if block.products %}
             <div class="position-relative">
 
-                <button class="btn scroll-btn-creative position-absolute top-50 start-0 translate-middle-y scroll-left-{{ forloop.counter }}" style="margin-left: -25px;">
+                <button class="btn hot-picks-scroll-btn position-absolute top-50 start-0 translate-middle-y scroll-left-{{ forloop.counter }}"
+                        data-target="hot-picks-products-container-{{ forloop.counter }}"
+                        style="margin-left: -25px;">
                     <i class="fas fa-chevron-left"></i>
                 </button>
-                <button class="btn scroll-btn-creative position-absolute top-50 end-0 translate-middle-y scroll-right-{{ forloop.counter }}" style="margin-right: -25px;">
+                <button class="btn hot-picks-scroll-btn position-absolute top-50 end-0 translate-middle-y scroll-right-{{ forloop.counter }}"
+                        data-target="hot-picks-products-container-{{ forloop.counter }}"
+                        style="margin-right: -25px;">
                     <i class="fas fa-chevron-right"></i>
                 </button>
 
-                <div class="d-flex overflow-auto gap-4 pb-4 px-5 products-container-creative products-container-{{ forloop.counter }}">
+                <div class="d-flex overflow-auto gap-4 pb-3 px-4 hot-picks-products-container hot-picks-products-container-{{ forloop.counter }}">
                     {% for product in block.products %}
-                    <div class="creative-product-card">
-                        <div class="creative-image-container">
-                            <div class="quick-actions">
-                                <button class="quick-action-btn" title="Add to Wishlist">
-                                    <i class="far fa-heart"></i>
-                                </button>
-                                <button class="quick-action-btn" title="Quick View">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                                <button class="quick-action-btn" title="Compare">
-                                    <i class="fas fa-exchange-alt"></i>
-                                </button>
-                            </div>
-
-                            <a href="{% url 'marketplace:product_detail' product.id %}">
+                    <div class="hot-picks-card shadow-sm" data-product-id="{{ product.id }}">
+                        <div class="hot-picks-image-container position-relative">
+                            <a href="{% url 'marketplace:product_detail' product.id %}"
+                               title="View {{ product.name }} details">
                                 <img src="{{ product.image.url }}"
-                                     class="creative-product-image"
-                                     alt="{{ product.name }}">
+                                     class="hot-picks-image"
+                                     alt="{{ product.name }}"
+                                     loading="lazy">
                             </a>
 
-                            <div class="floating-badge">
-                                {% if product.discount_percentage %}
-                                    <span class="badge-sale-creative">
-                                        {{ product.discount_percentage }}% OFF
-                                    </span>
-                                {% elif product.is_new %}
-                                    <span class="badge-new-creative">NEW</span>
-                                {% else %}
-                                    <span class="badge-fire">
-                                        <i class="fas fa-fire me-1"></i>HOT
-                                    </span>
-                                {% endif %}
+                            <!-- Product Badges -->
+                            {% if product.discount_percentage %}
+                                <span class="hot-picks-badge hot-picks-badge-sale">
+                                    {{ product.discount_percentage }}% OFF
+                                </span>
+                            {% elif product.is_new %}
+                                <span class="hot-picks-badge hot-picks-badge-new">NEW</span>
+                            {% else %}
+                                <span class="hot-picks-badge hot-picks-badge-hot">
+                                    <i class="fas fa-fire me-1"></i>HOT
+                                </span>
+                            {% endif %}
+
+                            <!-- Quick Actions -->
+                            <div class="hot-picks-quick-actions">
+                                <button class="btn btn-sm"
+                                        onclick="addToWishlist({{ product.id }}, this)"
+                                        title="Add to wishlist"
+                                        aria-label="Add {{ product.name }} to wishlist">
+                                    <i class="far fa-heart"></i>
+                                </button>
+                                <button class="btn btn-sm"
+                                        onclick="quickView({{ product.id }})"
+                                        title="Quick view"
+                                        aria-label="Quick view {{ product.name }}">
+                                    <i class="fas fa-eye"></i>
+                                </button>
                             </div>
                         </div>
 
-                        <div class="creative-card-body">
-                            <h6 class="creative-title">
-                                <a href="{% url 'marketplace:product_detail' product.id %}">
-                                    {{ product.name|truncatechars:40 }}
+                        <div class="hot-picks-card-body">
+                            <h6 class="hot-picks-card-title mb-2">
+                                <a href="{% url 'marketplace:product_detail' product.id %}"
+                                   class="text-decoration-none"
+                                   title="{{ product.name }}">
+                                    {{ product.name|truncatechars:30 }}
                                 </a>
                             </h6>
 
-                            <div class="creative-price-container">
-                                {% if product.original_price and product.original_price != product.price %}
-                                    <span class="creative-original-price">D{{ product.original_price|intcomma  }}</span>
+                            {% if product.average_rating %}
+                            <div class="hot-picks-rating mb-2">
+                                {% for i in "12345" %}
+                                    {% if forloop.counter <= product.average_rating %}
+                                        <i class="fas fa-star text-warning"></i>
+                                    {% else %}
+                                        <i class="far fa-star text-muted"></i>
+                                    {% endif %}
+                                {% endfor %}
+                                {% if product.review_count %}
+                                    <small class="text-muted ms-1">({{ product.review_count|floatformat:0 }})</small>
                                 {% endif %}
-                                <div class="creative-current-price">D{{ product.price|intcomma  }}</div>
+                            </div>
+                            {% endif %}
+
+                            <div class="hot-picks-price-container mb-3">
                                 {% if product.original_price and product.original_price != product.price %}
-                                    <small class="text-success fw-bold">
-                                        <i class="fas fa-tag me-1"></i>
-                                        You Save!
-                                    </small>
+                                    <span class="hot-picks-original-price">D{{ product.original_price }}</span>
+                                    <span class="badge bg-success small">
+                                        Save D{{ product.amount_saved|floatformat:2 }}
+                                    </span>
+                                {% endif %}
+                                <div class="hot-picks-price-tag">D{{ product.price }}</div>
+                            </div>
+
+                            <div class="text-success small mb-2">
+                                <i class="fas fa-shipping-fast me-1"></i> FREE Shipping by ShopSmart
+                            </div>
+
+                            <div class="small mb-3">
+                                {% if product.is_in_stock %}
+                                    <span class="text-success">In stock.</span>
+                                {% else %}
+                                    <span class="text-danger">Out of stock.</span>
                                 {% endif %}
                             </div>
 
-                            <button class="creative-add-btn {% if product.is_in_stock %}btn-primary-creative{% else %}btn-secondary-creative{% endif %}"
-                                    onclick="addToCart({{ product.id }}, this)"
+                            <button class="{% if product.is_in_stock %}hot-picks-btn-outline-primary{% else %}hot-picks-btn-secondary{% endif %} btn-sm"
+                                    onclick="{% if product.is_in_stock %}addToCart({{ product.id }}, this){% else %}return false;{% endif %}"
+                                    data-product-id="{{ product.id }}"
                                     data-stock="{{ product.stock.quantity|default:0 }}"
-                                    {% if not product.is_in_stock %} disabled {% endif %}>
-                                <i class="fas {% if product.is_in_stock %}fa-cart-plus{% else %}fa-ban{% endif %} me-2"></i>
-                                {% if product.is_in_stock %}
-                                    Add to Cart
-                                {% else %}
-                                    Out of Stock
-                                {% endif %}
+                                    {% if not product.is_in_stock %} disabled {% endif %}
+                                    aria-label="{% if product.is_in_stock %}Add {{ product.name }} to cart{% else %}{{ product.name }} is out of stock{% endif %}"
+                                    type="button">
+                                <i class="fas {% if product.is_in_stock %}fa-cart-plus{% else %}fa-ban{% endif %} me-1"></i>
+                                <span class="btn-text">
+                                    {% if product.is_in_stock %}
+                                        Add to Cart
+                                    {% else %}
+                                        Out of Stock
+                                    {% endif %}
+                                </span>
                             </button>
+
                         </div>
                     </div>
                     {% endfor %}
@@ -150,46 +192,90 @@
 
             </div>
             {% else %}
-            <div class="empty-state text-center w-100 py-5" style="background: rgba(255,255,255,0.8); border-radius: 20px; backdrop-filter: blur(10px);">
-                <i class="fas fa-fire fa-3x mb-3" style="color: #ff6b35;"></i>
-                <h5 style="color: #2c3e50; font-weight: 700;">No hot picks in this category</h5>
+            <div class="hot-picks-empty-state text-center w-100 py-4">
+                <i class="fas fa-fire fa-3x text-muted mb-3"></i>
+                <h5 class="text-muted mb-2">No hot picks in this category</h5>
                 <p class="small text-muted">Check back soon for exciting deals!</p>
+                <a href="{% url 'marketplace:category_detail' block.category.id %}" class="btn hot-picks-btn-outline-primary btn-sm">
+                    <i class="fas fa-tags me-1"></i> Browse {{ block.category.name }}
+                </a>
             </div>
             {% endif %}
 
         </div>
         {% endfor %}
-
     </div>
 </section>
+
 
 <script src="{% static 'js/main.js' %}"></script>
 <script src="{% static 'js/hot_pick.js' %}"></script>
 
 <script>
-// Enhanced scroll functionality with easing
-document.addEventListener('DOMContentLoaded', function() {
-    // Add smooth scrolling for all category containers
-    {% for block in hot_products_by_category %}
-    const container{{ forloop.counter }} = document.querySelector('.products-container-{{ forloop.counter }}');
-    const leftBtn{{ forloop.counter }} = document.querySelector('.scroll-left-{{ forloop.counter }}');
-    const rightBtn{{ forloop.counter }} = document.querySelector('.scroll-right-{{ forloop.counter }}');
+// Enhanced Hot Picks JavaScript (Scoped with hot-picks- prefix)
+document.addEventListener('DOMContentLoaded', function () {
+    // Scroll functionality for hot picks
+    document.querySelectorAll('.hot-picks-scroll-btn').forEach(button => {
+        button.addEventListener('click', function () {
+            const targetClass = this.getAttribute('data-target');
+            const container = document.querySelector('.' + targetClass);
+            const scrollAmount = container.offsetWidth * 0.8;
 
-    if (container{{ forloop.counter }} && leftBtn{{ forloop.counter }} && rightBtn{{ forloop.counter }}) {
-        leftBtn{{ forloop.counter }}.addEventListener('click', () => {
-            container{{ forloop.counter }}.scrollBy({ left: -300, behavior: 'smooth' });
+            if (
+                this.classList.contains('scroll-left-1') ||
+                this.classList.contains('scroll-left-2') ||
+                this.classList.contains('scroll-left-3') ||
+                this.classList.contains('scroll-left-4')
+            ) {
+                container.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
+            } else {
+                container.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+            }
+        });
+    });
+
+    // Update scroll button visibility based on scroll position
+    document.querySelectorAll('.hot-picks-products-container').forEach(container => {
+        container.addEventListener('scroll', function () {
+            const containerClass = container.className
+                .split(' ')
+                .find(cls => cls.startsWith('hot-picks-products-container-'));
+            const counter = containerClass?.split('-').pop();
+
+            const leftBtn = document.querySelector(`.scroll-left-${counter}`);
+            const rightBtn = document.querySelector(`.scroll-right-${counter}`);
+
+            if (leftBtn) leftBtn.style.opacity = container.scrollLeft > 0 ? '1' : '0.5';
+
+            if (rightBtn) {
+                const isAtEnd = container.scrollLeft >= (container.scrollWidth - container.clientWidth);
+                rightBtn.style.opacity = isAtEnd ? '0.5' : '1';
+            }
         });
 
-        rightBtn{{ forloop.counter }}.addEventListener('click', () => {
-            container{{ forloop.counter }}.scrollBy({ left: 300, behavior: 'smooth' });
-        });
-    }
-    {% endfor %}
+        // Initial button state
+        const containerClass = container.className
+            .split(' ')
+            .find(cls => cls.startsWith('hot-picks-products-container-'));
+        const counter = containerClass?.split('-').pop();
+        const leftBtn = document.querySelector(`.scroll-left-${counter}`);
+        if (leftBtn) leftBtn.style.opacity = '0.5';
+    });
 
-    // Add intersection observer for animations
-    const cards = document.querySelectorAll('.creative-product-card');
-    const observer = new IntersectionObserver((entries) => {
-        entries.forEach((entry) => {
+    // Enhanced product card interactions
+    document.querySelectorAll('.hot-picks-card').forEach(card => {
+        card.addEventListener('mouseenter', () => {
+            card.style.willChange = 'transform, box-shadow';
+        });
+
+        card.addEventListener('mouseleave', () => {
+            card.style.willChange = 'auto';
+        });
+    });
+
+    // Lazy loading animation for cards
+    const observer = new IntersectionObserver(entries => {
+        entries.forEach(entry => {
             if (entry.isIntersecting) {
                 entry.target.style.opacity = '1';
                 entry.target.style.transform = 'translateY(0)';
@@ -197,35 +283,14 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }, { threshold: 0.1 });
 
-    cards.forEach((card) => {
+    document.querySelectorAll('.hot-picks-card').forEach(card => {
         card.style.opacity = '0';
-        card.style.transform = 'translateY(30px)';
+        card.style.transform = 'translateY(20px)';
         card.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
         observer.observe(card);
     });
-
-    // Add loading states for buttons
-    document.querySelectorAll('.creative-add-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            if (!this.disabled) {
-                this.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Adding...';
-                this.disabled = true;
-
-                // Simulate adding to cart
-                setTimeout(() => {
-                    this.innerHTML = '<i class="fas fa-check me-2"></i>Added!';
-                    this.style.background = 'linear-gradient(45deg, #28a745, #20c997)';
-
-                    setTimeout(() => {
-                        this.innerHTML = '<i class="fas fa-cart-plus me-2"></i>Add to Cart';
-                        this.style.background = '';
-                        this.disabled = false;
-                    }, 2000);
-                }, 1000);
-            }
-        });
-    });
 });
+
 </script>
 
 {% endblock %}

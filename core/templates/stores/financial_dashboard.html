@@ -1,0 +1,748 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Financial Dashboard - {{ store.name }}{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+<style>
+.financial-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.financial-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 1rem;
+    padding: 1.5rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.financial-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 100px;
+    height: 100px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 50%;
+    transform: translate(30px, -30px);
+}
+
+.financial-card.revenue {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+.financial-card.commission {
+    background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+}
+
+.financial-card.net {
+    background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+    color: #333;
+}
+
+.financial-card.orders {
+    background: linear-gradient(135deg, #d299c2 0%, #fef9d7 100%);
+    color: #333;
+}
+
+.financial-number {
+    font-size: 2.5rem;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+}
+
+.financial-label {
+    font-size: 1rem;
+    opacity: 0.9;
+}
+
+.financial-icon {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    font-size: 2rem;
+    opacity: 0.3;
+}
+
+.chart-container {
+    background: white;
+    border-radius: 0.5rem;
+    padding: 1.5rem;
+    box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+    margin-bottom: 2rem;
+}
+
+.date-filters {
+    background: #f8f9fa;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin-bottom: 2rem;
+}
+
+.top-products-table {
+    background: white;
+    border-radius: 0.5rem;
+    box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+    overflow: hidden;
+}
+
+.recent-transactions {
+    background: white;
+    border-radius: 0.5rem;
+    padding: 1.5rem;
+    box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+}
+
+.transaction-item {
+    display: flex;
+    justify-content: between;
+    align-items: center;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.transaction-item:last-child {
+    border-bottom: none;
+}
+
+.transaction-details {
+    flex: 1;
+}
+
+.transaction-amount {
+    font-weight: bold;
+    color: #28a745;
+}
+
+.commission-breakdown {
+    background: #f8f9fa;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin: 1rem 0;
+}
+
+.export-section {
+    background: white;
+    border-radius: 0.5rem;
+    padding: 1.5rem;
+    box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+    margin-top: 2rem;
+}
+
+.metric-trend {
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
+}
+
+.trend-up {
+    color: #28a745;
+}
+
+.trend-down {
+    color: #dc3545;
+}
+
+.trend-neutral {
+    color: #6c757d;
+}
+
+@media (max-width: 768px) {
+    .financial-cards {
+        grid-template-columns: 1fr;
+    }
+
+    .financial-number {
+        font-size: 2rem;
+    }
+}
+</style>
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0">Financial Dashboard</h1>
+            <p class="text-muted">Track your store's financial performance and earnings</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'stores:sales_analytics' store.id %}" class="btn btn-outline-primary">
+                <i class="fas fa-chart-line me-2"></i>Analytics
+            </a>
+            <a href="{% url 'stores:store_dashboard' store.id %}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Date Range Filter -->
+    <div class="date-filters">
+        <form method="GET" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label for="date_from" class="form-label">From Date</label>
+                <input type="date" class="form-control" id="date_from" name="date_from"
+                       value="{{ start_date|date:'Y-m-d' }}">
+            </div>
+            <div class="col-md-3">
+                <label for="date_to" class="form-label">To Date</label>
+                <input type="date" class="form-control" id="date_to" name="date_to"
+                       value="{{ end_date|date:'Y-m-d' }}">
+            </div>
+            <div class="col-md-3">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-filter me-2"></i>Apply Filter
+                </button>
+            </div>
+            <div class="col-md-3">
+                <div class="text-muted small">
+                    Showing data from {{ start_date|date:"M d, Y" }} to {{ end_date|date:"M d, Y" }}
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- Financial Overview Cards -->
+    <div class="financial-cards">
+        <div class="financial-card revenue">
+            <div class="financial-icon">
+                <i class="fas fa-dollar-sign"></i>
+            </div>
+            <div class="financial-number">D{{ total_revenue|floatformat:2|intcomma }}</div>
+            <div class="financial-label">Total Revenue</div>
+            <div class="metric-trend trend-up">
+                <i class="fas fa-arrow-up me-1"></i>12.5% from last period
+            </div>
+        </div>
+
+        <div class="financial-card commission">
+            <div class="financial-icon">
+                <i class="fas fa-percentage"></i>
+            </div>
+            <div class="financial-number">D{{ commission_amount|floatformat:2|intcomma }}</div>
+            <div class="financial-label">Commission ({{ commission_rate }}%)</div>
+            <div class="metric-trend trend-neutral">
+                <i class="fas fa-minus me-1"></i>Same rate
+            </div>
+        </div>
+
+        <div class="financial-card net">
+            <div class="financial-icon">
+                <i class="fas fa-wallet"></i>
+            </div>
+            <div class="financial-number">D{{ net_revenue|floatformat:2|intcomma }}</div>
+            <div class="financial-label">Net Earnings</div>
+            <div class="metric-trend trend-up">
+                <i class="fas fa-arrow-up me-1"></i>8.3% from last period
+            </div>
+        </div>
+
+        <div class="financial-card orders">
+            <div class="financial-icon">
+                <i class="fas fa-shopping-cart"></i>
+            </div>
+            <div class="financial-number">{{ total_orders|intcomma }}</div>
+            <div class="financial-label">Total Orders</div>
+            <div class="metric-trend trend-up">
+                <i class="fas fa-arrow-up me-1"></i>{{ total_items_sold|intcomma }} items sold
+            </div>
+        </div>
+    </div>
+
+    <!-- Commission Breakdown -->
+    <div class="commission-breakdown">
+        <h5 class="mb-3"><i class="fas fa-calculator me-2"></i>Commission Breakdown</h5>
+        <div class="row">
+            <div class="col-md-3">
+                <div class="text-center">
+                    <div class="h4 text-primary">{{ commission_rate }}%</div>
+                    <small class="text-muted">Commission Rate</small>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="text-center">
+                    <div class="h4 text-info">D{{ total_revenue|floatformat:2 }}</div>
+                    <small class="text-muted">Gross Revenue</small>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="text-center">
+                    <div class="h4 text-warning">D{{ commission_amount|floatformat:2 }}</div>
+                    <small class="text-muted">Commission Fee</small>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="text-center">
+                    <div class="h4 text-success">D{{ net_revenue|floatformat:2 }}</div>
+                    <small class="text-muted">Your Earnings</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Revenue Chart -->
+        <div class="col-lg-8">
+            <div class="chart-container">
+                <h5 class="mb-3"><i class="fas fa-chart-line me-2"></i>Revenue Trends</h5>
+                <div style="position: relative; height: 400px; width: 100%;">
+                    <canvas id="revenueChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Transactions -->
+        <div class="col-lg-4">
+            <div class="recent-transactions">
+                <h5 class="mb-3"><i class="fas fa-history me-2"></i>Recent Orders</h5>
+                <div class="transaction-list">
+                    {% for order in recent_orders %}
+                    <div class="transaction-item">
+                        <div class="transaction-details">
+                            <div class="fw-bold">Order #{{ order.order_number }}</div>
+                            <small class="text-muted">{{ order.created_at|date:"M d, Y H:i" }}</small>
+                            <br>
+                            <small class="text-muted">{{ order.buyer.get_full_name|default:order.buyer.username }}</small>
+                        </div>
+                        <div class="transaction-amount">
+                            D{{ order.get_total|floatformat:2 }}
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="text-center text-muted py-3">
+                        <i class="fas fa-receipt fa-2x mb-2"></i>
+                        <br>
+                        No recent transactions
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="text-center mt-3">
+                    <a href="{% url 'stores:store_orders' store.id %}" class="btn btn-outline-primary btn-sm">
+                        View All Orders
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Selling Products -->
+    <div class="top-products-table">
+        <div class="p-3 border-bottom">
+            <h5 class="mb-0"><i class="fas fa-trophy me-2"></i>Top Selling Products</h5>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Product</th>
+                        <th>Category</th>
+                        <th>Units Sold</th>
+                        <th>Revenue</th>
+                        <th>Avg. Price</th>
+                        <th>Performance</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for product in top_products %}
+                    <tr>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                {% if product.image %}
+                                    <img src="{{ product.image.url }}" alt="{{ product.name }}"
+                                         class="rounded me-2" style="width: 40px; height: 40px; object-fit: cover;">
+                                {% else %}
+                                    <div class="bg-light rounded me-2 d-flex align-items-center justify-content-center"
+                                         style="width: 40px; height: 40px;">
+                                        <i class="fas fa-image text-muted"></i>
+                                    </div>
+                                {% endif %}
+                                <div>
+                                    <div class="fw-bold">{{ product.name|truncatechars:30 }}</div>
+                                    <small class="text-muted">ID: {{ product.id }}</small>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            {% if product.category %}
+                                <span class="badge bg-secondary">{{ product.category.name }}</span>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <strong>{{ product.total_sold|default:0|intcomma }}</strong>
+                        </td>
+                        <td>
+                            <strong class="text-success">D{{ product.total_revenue|default:0|floatformat:2|intcomma }}</strong>
+                        </td>
+                        <td>
+                            D{{ product.price|floatformat:2 }}
+                        </td>
+                        <td>
+                            <div class="progress" style="height: 8px;">
+                                {% widthratio product.total_revenue top_products.0.total_revenue 100 as percentage %}
+                                <div class="progress-bar bg-success" style="width: {{ percentage }}%"></div>
+                            </div>
+                            <small class="text-muted">{{ percentage }}%</small>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center py-4">
+                            <i class="fas fa-chart-bar fa-2x text-muted mb-2"></i>
+                            <br>
+                            <span class="text-muted">No sales data available for this period</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Export Section -->
+    <div class="export-section">
+        <h5 class="mb-3"><i class="fas fa-download me-2"></i>Export Financial Reports</h5>
+        <p class="text-muted mb-3">Download detailed financial reports for accounting and tax purposes.</p>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="d-grid gap-2">
+                    <button class="btn btn-outline-primary" onclick="exportReport('revenue')">
+                        <i class="fas fa-file-excel me-2"></i>Export Revenue Report
+                    </button>
+                    <button class="btn btn-outline-secondary" onclick="exportReport('commission')">
+                        <i class="fas fa-file-pdf me-2"></i>Export Commission Report
+                    </button>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="d-grid gap-2">
+                    <button class="btn btn-outline-info" onclick="exportReport('transactions')">
+                        <i class="fas fa-file-csv me-2"></i>Export Transaction History
+                    </button>
+                    <button class="btn btn-outline-success" onclick="exportReport('summary')">
+                        <i class="fas fa-file-alt me-2"></i>Export Summary Report
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="alert alert-info mt-3">
+            <i class="fas fa-info-circle me-2"></i>
+            <strong>Note:</strong> Reports include data for the selected date range.
+            For tax purposes, ensure you download end-of-year reports.
+        </div>
+    </div>
+
+    <!-- Payment Information -->
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="fas fa-credit-card me-2"></i>Payment Settings</h6>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <strong>Bank Account:</strong>
+                        {% if store.bank_account_number %}
+                            <span class="text-muted">****{{ store.bank_account_number|slice:"-4:" }}</span>
+                        {% else %}
+                            <span class="text-danger">Not configured</span>
+                        {% endif %}
+                    </div>
+                    <div class="mb-3">
+                        <strong>Bank Name:</strong>
+                        <span>{{ store.bank_name|default:"Not specified" }}</span>
+                    </div>
+                    <div class="mb-3">
+                        <strong>Next Payment:</strong>
+                        <span class="text-primary">Friday, Next Week</span>
+                    </div>
+                    <a href="{% url 'stores:store_settings' store.id %}?tab=financial" class="btn btn-outline-primary btn-sm">
+                        <i class="fas fa-edit me-1"></i>Update Payment Info
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="fas fa-calendar me-2"></i>Payment Schedule</h6>
+                </div>
+                <div class="card-body">
+                    <div class="timeline">
+                        <div class="timeline-item">
+                            <div class="timeline-marker bg-success"></div>
+                            <div class="timeline-content">
+                                <strong>Last Payment</strong>
+                                <br>
+                                <small class="text-muted">Dec 15, 2023 - D2,450.00</small>
+                            </div>
+                        </div>
+                        <div class="timeline-item">
+                            <div class="timeline-marker bg-primary"></div>
+                            <div class="timeline-content">
+                                <strong>Next Payment</strong>
+                                <br>
+                                <small class="text-muted">Dec 22, 2023 - Estimated D{{ net_revenue|floatformat:2 }}</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Ensure Chart.js is loaded and DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    // Revenue Chart
+    const ctx = document.getElementById('revenueChart');
+    if (!ctx) return;
+
+    // Check if chart already exists and destroy it
+    if (window.revenueChartInstance) {
+        window.revenueChartInstance.destroy();
+    }
+
+    // Sample data - replace with your actual data
+    const monthlyData = {{ monthly_data|default:"[]"|safe }};
+
+    // Fallback data if no monthly_data is provided
+    const defaultData = [
+        {month: 'Jan', revenue: 1000, commission: 50, net: 950},
+        {month: 'Feb', revenue: 1200, commission: 60, net: 1140},
+        {month: 'Mar', revenue: 1500, commission: 75, net: 1425},
+        {month: 'Apr', revenue: 1300, commission: 65, net: 1235},
+        {month: 'May', revenue: 1800, commission: 90, net: 1710},
+        {month: 'Jun', revenue: 2000, commission: 100, net: 1900}
+    ];
+
+    const chartData = monthlyData.length > 0 ? monthlyData : defaultData;
+
+    window.revenueChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: chartData.map(d => d.month),
+            datasets: [
+                {
+                    label: 'Revenue',
+                    data: chartData.map(d => d.revenue),
+                    borderColor: '#4facfe',
+                    backgroundColor: 'rgba(79, 172, 254, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4,
+                    pointBackgroundColor: '#4facfe',
+                    pointBorderColor: '#4facfe',
+                    pointRadius: 4
+                },
+                {
+                    label: 'Commission',
+                    data: chartData.map(d => d.commission),
+                    borderColor: '#fa709a',
+                    backgroundColor: 'rgba(250, 112, 154, 0.1)',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.4,
+                    pointBackgroundColor: '#fa709a',
+                    pointBorderColor: '#fa709a',
+                    pointRadius: 4
+                },
+                {
+                    label: 'Net Earnings',
+                    data: chartData.map(d => d.net),
+                    borderColor: '#28a745',
+                    backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4,
+                    pointBackgroundColor: '#28a745',
+                    pointBorderColor: '#28a745',
+                    pointRadius: 4
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: {
+                duration: 1000,
+                easing: 'easeInOutQuart'
+            },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top',
+                    labels: {
+                        usePointStyle: true,
+                        padding: 20
+                    }
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    backgroundColor: 'rgba(0,0,0,0.8)',
+                    titleColor: 'white',
+                    bodyColor: 'white',
+                    borderColor: 'rgba(255,255,255,0.2)',
+                    borderWidth: 1,
+                    cornerRadius: 8,
+                    callbacks: {
+                        label: function(context) {
+                            return context.dataset.label + ': D' + context.parsed.y.toLocaleString();
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: {
+                        display: false
+                    },
+                    ticks: {
+                        color: '#6c757d'
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: 'rgba(0,0,0,0.1)'
+                    },
+                    ticks: {
+                        color: '#6c757d',
+                        callback: function(value) {
+                            return 'D' + value.toLocaleString();
+                        }
+                    }
+                }
+            },
+            interaction: {
+                intersect: false,
+                mode: 'index'
+            },
+            elements: {
+                point: {
+                    hoverRadius: 6
+                }
+            }
+        }
+    });
+});
+
+// Export functions
+function exportReport(type) {
+    // Show loading message
+    const btn = event.target;
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Generating...';
+    btn.disabled = true;
+
+    // Simulate export process
+    setTimeout(() => {
+        // In production, replace with actual export API call
+        fetch(`{% url 'stores:export_financial_report' store.id %}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value || ''
+            },
+            body: JSON.stringify({
+                type: type,
+                start_date: '{{ start_date|date:"Y-m-d" }}',
+                end_date: '{{ end_date|date:"Y-m-d" }}'
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast('success', data.message);
+            } else {
+                showToast('error', 'Export failed. Please try again.');
+            }
+        })
+        .catch(error => {
+            console.error('Export error:', error);
+            showToast('error', 'An error occurred during export.');
+        })
+        .finally(() => {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        });
+    }, 2000);
+}
+
+function showToast(type, message) {
+    const toast = document.createElement('div');
+    toast.className = `alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show position-fixed`;
+    toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    toast.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+
+    document.body.appendChild(toast);
+
+    setTimeout(() => {
+        if (toast.parentNode) {
+            toast.parentNode.removeChild(toast);
+        }
+    }, 5000);
+}
+
+// Timeline styles - only add once
+if (!document.querySelector('#timeline-styles')) {
+    const timelineStyles = document.createElement('style');
+    timelineStyles.id = 'timeline-styles';
+    timelineStyles.textContent = `
+        .timeline {
+            position: relative;
+            padding-left: 2rem;
+        }
+
+        .timeline-item {
+            position: relative;
+            margin-bottom: 1rem;
+        }
+
+        .timeline-item:before {
+            content: '';
+            position: absolute;
+            left: -1.5rem;
+            top: 0.5rem;
+            bottom: -1rem;
+            width: 2px;
+            background: #e9ecef;
+        }
+
+        .timeline-item:last-child:before {
+            display: none;
+        }
+
+        .timeline-marker {
+            position: absolute;
+            left: -1.75rem;
+            top: 0.25rem;
+            width: 0.5rem;
+            height: 0.5rem;
+            border-radius: 50%;
+        }
+
+        .timeline-content {
+            padding-left: 0.5rem;
+        }
+    `;
+    document.head.appendChild(timelineStyles);
+}
+</script>
+{% endblock %}

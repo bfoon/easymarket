@@ -34,6 +34,16 @@ from django.http import HttpResponseForbidden
 from functools import wraps
 from .forms import ProductForm, ProductImageForm
 from stock.models import Stock
+import csv
+
+from .models import (
+    Store, StoreHours, StoreShippingZone, StoreReturnSettings,
+    StoreInventoryTracking, StoreMetrics
+)
+from .forms import (
+    StoreSettingsForm, StoreHoursFormSet, StoreShippingZoneFormSet,
+    StoreReturnSettingsForm, StoreFinancialForm
+)
 
 def store_owner_required(view_func):
     @wraps(view_func)
@@ -1161,6 +1171,7 @@ def store_dashboard(request, store_id):
 
     now = timezone.now()
     current_month = now.replace(day=1)
+    pending_orders_count = Order.objects.filter(items__product__store=store, status='processing').count()
 
     try:
         user_products = Product.objects.filter(seller=store.owner)
@@ -1273,6 +1284,947 @@ def store_dashboard(request, store_id):
         'review_count': review_count,
         'average_rating': round(average_rating, 1),
         'rating_breakdown': rating_breakdown,
+        'pending_orders_count': pending_orders_count,
+
     }
 
     return render(request, 'stores/store_dashboard.html', context)
+
+
+@login_required
+@store_owner_required
+def store_settings(request, store_id):
+    """Comprehensive store settings management"""
+    store = get_object_or_404(Store, id=store_id, owner=request.user)
+
+    # Get or create related settings
+    return_settings, created = StoreReturnSettings.objects.get_or_create(store=store)
+
+    # Get existing store hours or create default ones
+    store_hours = []
+    for day in range(7):
+        hour, created = StoreHours.objects.get_or_create(
+            store=store,
+            day_of_week=day,
+            defaults={'is_closed': True}
+        )
+        store_hours.append(hour)
+
+    if request.method == 'POST':
+        tab = request.POST.get('tab', 'basic')
+
+        if tab == 'basic':
+            form = StoreSettingsForm(request.POST, request.FILES, instance=store)
+            if form.is_valid():
+                form.save()
+                messages.success(request, 'Store details updated successfully!')
+                return redirect('stores:store_settings', store_id=store.id)
+
+        elif tab == 'hours':
+            hours_formset = StoreHoursFormSet(request.POST, queryset=StoreHours.objects.filter(store=store))
+            if hours_formset.is_valid():
+                for form in hours_formset:
+                    if form.is_valid():
+                        hour = form.save(commit=False)
+                        hour.store = store
+                        hour.save()
+                messages.success(request, 'Store hours updated successfully!')
+                return redirect('stores:store_settings', store_id=store.id)
+
+        elif tab == 'shipping':
+            shipping_formset = StoreShippingZoneFormSet(
+                request.POST,
+                queryset=StoreShippingZone.objects.filter(store=store)
+            )
+            if shipping_formset.is_valid():
+                with transaction.atomic():
+                    for form in shipping_formset:
+                        if form.is_valid() and form.cleaned_data:
+                            if form.cleaned_data.get('DELETE'):
+                                if form.instance.pk:
+                                    form.instance.delete()
+                            else:
+                                zone = form.save(commit=False)
+                                zone.store = store
+                                zone.save()
+                messages.success(request, 'Shipping zones updated successfully!')
+                return redirect('stores:store_settings', store_id=store.id)
+
+        elif tab == 'returns':
+            returns_form = StoreReturnSettingsForm(request.POST, instance=return_settings)
+            if returns_form.is_valid():
+                returns_form.save()
+                messages.success(request, 'Return policy updated successfully!')
+                return redirect('stores:store_settings', store_id=store.id)
+
+        elif tab == 'financial':
+            financial_form = StoreFinancialForm(request.POST, instance=store)
+            if financial_form.is_valid():
+                financial_form.save()
+                messages.success(request, 'Financial settings updated successfully!')
+                return redirect('stores:store_settings', store_id=store.id)
+
+    # Initialize forms
+    basic_form = StoreSettingsForm(instance=store)
+    hours_formset = StoreHoursFormSet(queryset=StoreHours.objects.filter(store=store).order_by('day_of_week'))
+    shipping_formset = StoreShippingZoneFormSet(queryset=StoreShippingZone.objects.filter(store=store))
+    returns_form = StoreReturnSettingsForm(instance=return_settings)
+    financial_form = StoreFinancialForm(instance=store)
+
+    context = {
+        'store': store,
+        'basic_form': basic_form,
+        'hours_formset': hours_formset,
+        'shipping_formset': shipping_formset,
+        'returns_form': returns_form,
+        'financial_form': financial_form,
+        'active_tab': request.GET.get('tab', 'basic'),
+    }
+
+    return render(request, 'stores/store_settings.html', context)
+
+
+@login_required
+@store_owner_required
+def stock_management(request, store_id):
+    """Comprehensive stock management for store products"""
+    store = get_object_or_404(Store, id=store_id, owner=request.user)
+
+    # Use prefetch_related for reverse relation 'stock_records'
+    products = Product.objects.filter(seller=store.owner).select_related('category', 'store').prefetch_related('stock_records')
+
+    # Apply filters
+    search_query = request.GET.get('search', '')
+    stock_filter = request.GET.get('stock_filter', 'all')
+    category_filter = request.GET.get('category', '')
+
+    if search_query:
+        products = products.filter(
+            Q(name__icontains=search_query) |
+            Q(description__icontains=search_query)
+        )
+
+    if stock_filter == 'low':
+        products = products.filter(stock_records__quantity__lte=10, stock_records__quantity__gt=0)
+    elif stock_filter == 'out':
+        products = products.filter(stock_records__quantity=0)
+    elif stock_filter == 'available':
+        products = products.filter(stock_records__quantity__gt=0)
+
+    if category_filter:
+        products = products.filter(category_id=category_filter)
+
+    # Pagination
+    paginator = Paginator(products, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    # Stock summary
+    total_products = products.count()
+    low_stock_count = Product.objects.filter(
+        seller=store.owner,
+        stock_records__quantity__lte=10,
+        stock_records__quantity__gt=0
+    ).count()
+    out_of_stock_count = Product.objects.filter(
+        seller=store.owner,
+        stock_records__quantity=0
+    ).count()
+
+    in_stock_count = Product.objects.filter(
+        seller=store.owner,
+        stock_records__quantity__gte=10,
+        stock_records__quantity__gt=0
+    ).count()
+
+    # Categories for filter
+    categories = products.values('category__name', 'category_id').distinct()
+
+    context = {
+        'store': store,
+        'page_obj': page_obj,
+        'total_products': total_products,
+        'low_stock_count': low_stock_count,
+        'in_stock_count': in_stock_count,
+        'out_of_stock_count': out_of_stock_count,
+        'search_query': search_query,
+        'stock_filter': stock_filter,
+        'category_filter': category_filter,
+        'categories': categories,
+    }
+
+    return render(request, 'stores/stock_management.html', context)
+
+@login_required
+@require_POST
+def update_stock(request, store_id, product_id):
+    """Update stock quantity for a specific product"""
+    store = get_object_or_404(Store, id=store_id, owner=request.user)
+    product = get_object_or_404(Product, id=product_id, seller=store.owner)
+
+    try:
+        new_quantity = int(request.POST.get('quantity', 0))
+        adjustment_type = request.POST.get('type', 'set')  # 'set', 'add', 'subtract'
+        notes = request.POST.get('notes', '')
+
+        stock, created = Stock.objects.get_or_create(product=product)
+        old_quantity = stock.quantity
+
+        if adjustment_type == 'set':
+            stock.quantity = new_quantity
+            quantity_change = new_quantity - old_quantity
+        elif adjustment_type == 'add':
+            stock.quantity += new_quantity
+            quantity_change = new_quantity
+        elif adjustment_type == 'subtract':
+            stock.quantity = max(0, stock.quantity - new_quantity)
+            quantity_change = -(new_quantity)
+
+        stock.save()
+
+        # Create inventory tracking record
+        StoreInventoryTracking.objects.create(
+            store=store,
+            product=product,
+            transaction_type='adjustment',
+            quantity_change=quantity_change,
+            notes=notes or f'Stock {adjustment_type}: {new_quantity}',
+            performed_by=request.user
+        )
+
+        return JsonResponse({
+            'success': True,
+            'new_quantity': stock.quantity,
+            'message': f'Stock updated successfully. New quantity: {stock.quantity}'
+        })
+
+    except (ValueError, TypeError):
+        return JsonResponse({
+            'success': False,
+            'message': 'Invalid quantity provided'
+        })
+
+
+@login_required
+@store_owner_required
+def inventory_history(request, store_id):
+    """View inventory transaction history"""
+    store = get_object_or_404(Store, id=store_id, owner=request.user)
+
+    transactions = StoreInventoryTracking.objects.filter(
+        store=store
+    ).select_related('product', 'performed_by').order_by('-timestamp')
+
+    # Apply filters
+    product_filter = request.GET.get('product')
+    transaction_type = request.GET.get('type')
+    date_from = request.GET.get('date_from')
+    date_to = request.GET.get('date_to')
+
+    # Get filter display names
+    selected_product_name = None
+    selected_type_name = None
+
+    if product_filter:
+        transactions = transactions.filter(product_id=product_filter)
+        try:
+            selected_product = Product.objects.get(id=product_filter, seller=store.owner)
+            selected_product_name = selected_product.name
+        except Product.DoesNotExist:
+            pass
+
+    if transaction_type:
+        transactions = transactions.filter(transaction_type=transaction_type)
+        # Get display name for transaction type
+        type_choices = dict(StoreInventoryTracking.TRANSACTION_TYPES)
+        selected_type_name = type_choices.get(transaction_type, transaction_type)
+
+    if date_from:
+        transactions = transactions.filter(timestamp__date__gte=date_from)
+
+    if date_to:
+        transactions = transactions.filter(timestamp__date__lte=date_to)
+
+    # Pagination
+    paginator = Paginator(transactions, 25)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    # Get products for filter dropdown
+    products = Product.objects.filter(seller=store.owner).values('id', 'name')
+
+    # Calculate summary stats
+    positive_transactions = transactions.filter(quantity_change__gt=0).count()
+    negative_transactions = transactions.filter(quantity_change__lt=0).count()
+
+    context = {
+        'store': store,
+        'page_obj': page_obj,
+        'products': products,
+        'transaction_types': StoreInventoryTracking.TRANSACTION_TYPES,
+        'filters': {
+            'product': product_filter,
+            'product_name': selected_product_name,
+            'type': transaction_type,
+            'type_name': selected_type_name,
+            'date_from': date_from,
+            'date_to': date_to,
+        },
+        'positive_transactions': positive_transactions,
+        'negative_transactions': negative_transactions,
+    }
+
+    return render(request, 'stores/inventory_history.html', context)
+
+@login_required
+@store_owner_required
+def financial_dashboard(request, store_id):
+    """Financial overview and management for the store"""
+    store = get_object_or_404(Store, id=store_id, owner=request.user)
+
+    # Date range for analysis
+    end_date = timezone.now().date()
+    start_date = end_date - timedelta(days=30)
+
+    # Get date range from request if provided
+    if request.GET.get('date_from'):
+        start_date = datetime.strptime(request.GET.get('date_from'), '%Y-%m-%d').date()
+    if request.GET.get('date_to'):
+        end_date = datetime.strptime(request.GET.get('date_to'), '%Y-%m-%d').date()
+
+    # Sales data
+    order_items = OrderItem.objects.filter(
+        product__seller=store.owner,
+        order__created_at__date__gte=start_date,
+        order__created_at__date__lte=end_date,
+        order__status__in=['delivered', 'shipped', 'processing']
+    )
+
+    total_revenue = sum(item.get_total_price() for item in order_items)
+    total_orders = order_items.values('order').distinct().count()
+    total_items_sold = order_items.aggregate(total=Sum('quantity'))['total'] or 0
+
+    # Commission calculations
+    commission_amount = total_revenue * (store.commission_rate / 100)
+    net_revenue = total_revenue - commission_amount
+
+    # Monthly breakdown
+    monthly_data = []
+    current_date = start_date
+    while current_date <= end_date:
+        month_start = current_date.replace(day=1)
+        if current_date.month == 12:
+            month_end = current_date.replace(year=current_date.year + 1, month=1, day=1) - timedelta(days=1)
+        else:
+            month_end = current_date.replace(month=current_date.month + 1, day=1) - timedelta(days=1)
+
+        month_orders = OrderItem.objects.filter(
+            product__seller=store.owner,
+            order__created_at__date__gte=month_start,
+            order__created_at__date__lte=month_end,
+            order__status__in=['delivered', 'shipped', 'processing']
+        )
+
+        month_revenue = sum(item.get_total_price() for item in month_orders)
+        month_commission = month_revenue * (store.commission_rate / 100)
+
+        monthly_data.append({
+            'month': month_start.strftime('%B %Y'),
+            'revenue': float(month_revenue),
+            'commission': float(month_commission),
+            'net': float(month_revenue - month_commission),
+            'orders': month_orders.values('order').distinct().count()
+        })
+
+        if current_date.month == 12:
+            current_date = current_date.replace(year=current_date.year + 1, month=1)
+        else:
+            current_date = current_date.replace(month=current_date.month + 1)
+
+    # Top selling products
+    top_products = Product.objects.filter(
+        seller=store.owner
+    ).annotate(
+        total_sold=Sum('order_items__quantity'),
+        total_revenue=Sum(
+            ExpressionWrapper(
+                F('order_items__quantity') * F('order_items__price_at_time'),
+                output_field=DecimalField()
+            )
+        )
+    ).filter(total_sold__gt=0).order_by('-total_revenue')[:10]
+
+    # Recent transactions
+    recent_orders = Order.objects.filter(
+        items__product__seller=store.owner
+    ).distinct().order_by('-created_at')[:5]
+
+    context = {
+        'store': store,
+        'start_date': start_date,
+        'end_date': end_date,
+        'total_revenue': total_revenue,
+        'commission_amount': commission_amount,
+        'net_revenue': net_revenue,
+        'total_orders': total_orders,
+        'total_items_sold': total_items_sold,
+        'monthly_data': json.dumps(monthly_data),
+        'top_products': top_products,
+        'recent_orders': recent_orders,
+        'commission_rate': store.commission_rate,
+    }
+
+    return render(request, 'stores/financial_dashboard.html', context)
+
+
+@login_required
+@store_owner_required
+def sales_analytics(request, store_id):
+    """Detailed sales analytics and reporting"""
+    store = get_object_or_404(Store, id=store_id, owner=request.user)
+
+    # Date range
+    end_date = timezone.now().date()
+    start_date = end_date - timedelta(days=30)
+
+    if request.GET.get('period') == '7days':
+        start_date = end_date - timedelta(days=7)
+    elif request.GET.get('period') == '90days':
+        start_date = end_date - timedelta(days=90)
+    elif request.GET.get('period') == 'year':
+        start_date = end_date - timedelta(days=365)
+
+    # Daily sales data for charts
+    daily_sales = []
+    current_date = start_date
+    while current_date <= end_date:
+        day_orders = OrderItem.objects.filter(
+            product__seller=store.owner,
+            order__created_at__date=current_date,
+            order__status__in=['delivered', 'shipped', 'processing']
+        )
+
+        day_revenue = sum(item.get_total_price() for item in day_orders)
+        day_orders_count = day_orders.values('order').distinct().count()
+
+        daily_sales.append({
+            'date': current_date.strftime('%Y-%m-%d'),
+            'revenue': float(day_revenue),
+            'orders': day_orders_count,
+            'items': day_orders.aggregate(total=Sum('quantity'))['total'] or 0
+        })
+
+        current_date += timedelta(days=1)
+
+    # Category performance
+    category_performance = Product.objects.filter(
+        seller=store.owner
+    ).values(
+        'category__name'
+    ).annotate(
+        total_sold=Sum('order_items__quantity'),
+        revenue=Sum(
+            ExpressionWrapper(
+                F('order_items__quantity') * F('order_items__price_at_time'),
+                output_field=DecimalField()
+            )
+        ),
+        total_revenue=F('revenue'),
+        avg_price=Avg('price')
+    ).filter(total_sold__gt=0).order_by('-total_revenue')
+    total_revenue = sum(day['revenue'] for day in daily_sales)
+
+    context = {
+         'store': store,
+        'start_date': start_date,
+        'end_date': end_date,
+        'daily_sales': json.dumps(daily_sales),
+        'category_performance': category_performance,
+        'period': request.GET.get('period', '30days'),
+        'total_revenue': total_revenue,  # ✅ now included
+    }
+
+    return render(request, 'stores/sales_analytics.html', context)
+
+
+@login_required
+@require_POST
+def export_financial_report(request, store_id):
+    """Export financial report as CSV"""
+    store = get_object_or_404(Store, id=store_id, owner=request.user)
+
+    # This would implement CSV export functionality
+    # For now, return a JSON response
+    return JsonResponse({
+        'success': True,
+        'message': 'Report export initiated. You will receive an email when ready.'
+    })
+
+# Store API management
+@login_required
+def store_metrics_api(request, store_id):
+    """API endpoint for real-time store metrics"""
+    store = get_object_or_404(Store, id=store_id, owner=request.user)
+
+    # Calculate current metrics
+    today = timezone.now().date()
+    week_ago = today - timedelta(days=7)
+    month_ago = today - timedelta(days=30)
+
+    # Today's metrics
+    today_orders = OrderItem.objects.filter(
+        product__seller=store.owner,
+        order__created_at__date=today,
+        order__status__in=['delivered', 'shipped', 'processing']
+    )
+
+    today_revenue = sum(item.get_total_price() for item in today_orders)
+    today_orders_count = today_orders.values('order').distinct().count()
+
+    # Weekly metrics
+    week_orders = OrderItem.objects.filter(
+        product__seller=store.owner,
+        order__created_at__date__gte=week_ago,
+        order__status__in=['delivered', 'shipped', 'processing']
+    )
+
+    week_revenue = sum(item.get_total_price() for item in week_orders)
+    week_orders_count = week_orders.values('order').distinct().count()
+
+    # Stock alerts
+    low_stock_products = Product.objects.filter(
+        seller=store.owner,
+        stock__quantity__lte=10,
+        stock__quantity__gt=0
+    ).count()
+
+    out_of_stock_products = Product.objects.filter(
+        seller=store.owner,
+        stock__quantity=0
+    ).count()
+
+    # Recent activity
+    recent_inventory_changes = StoreInventoryTracking.objects.filter(
+        store=store
+    ).order_by('-timestamp')[:5]
+
+    recent_changes = []
+    for change in recent_inventory_changes:
+        recent_changes.append({
+            'product_name': change.product.name,
+            'transaction_type': change.get_transaction_type_display(),
+            'quantity_change': change.quantity_change,
+            'timestamp': change.timestamp.strftime('%Y-%m-%d %H:%M'),
+        })
+
+    data = {
+        'store_id': str(store.id),
+        'store_name': store.name,
+        'today': {
+            'revenue': float(today_revenue),
+            'orders': today_orders_count,
+            'date': today.strftime('%Y-%m-%d')
+        },
+        'week': {
+            'revenue': float(week_revenue),
+            'orders': week_orders_count,
+            'period': f"{week_ago.strftime('%Y-%m-%d')} to {today.strftime('%Y-%m-%d')}"
+        },
+        'stock_alerts': {
+            'low_stock': low_stock_products,
+            'out_of_stock': out_of_stock_products
+        },
+        'recent_activity': recent_changes,
+        'last_updated': timezone.now().isoformat()
+    }
+
+    return JsonResponse(data)
+
+
+@login_required
+@require_POST
+def bulk_inventory_update(request, store_id):
+    """API endpoint for bulk inventory updates"""
+    store = get_object_or_404(Store, id=store_id, owner=request.user)
+
+    try:
+        data = json.loads(request.body)
+        product_ids = data.get('product_ids', [])
+        adjustment_type = data.get('type', 'set')  # 'set', 'add', 'subtract'
+        quantity = int(data.get('quantity', 0))
+        notes = data.get('notes', 'Bulk inventory update')
+
+        if not product_ids or quantity < 0:
+            return JsonResponse({'success': False, 'message': 'Invalid data provided'})
+
+        updated_products = []
+        failed_products = []
+
+        with transaction.atomic():
+            for product_id in product_ids:
+                try:
+                    product = Product.objects.get(id=product_id, seller=store.owner)
+                    stock, created = Stock.objects.get_or_create(product=product)
+
+                    old_quantity = stock.quantity
+
+                    if adjustment_type == 'set':
+                        stock.quantity = quantity
+                        quantity_change = quantity - old_quantity
+                    elif adjustment_type == 'add':
+                        stock.quantity += quantity
+                        quantity_change = quantity
+                    elif adjustment_type == 'subtract':
+                        stock.quantity = max(0, stock.quantity - quantity)
+                        quantity_change = -(min(quantity, old_quantity))
+
+                    stock.save()
+
+                    # Create inventory tracking record
+                    StoreInventoryTracking.objects.create(
+                        store=store,
+                        product=product,
+                        transaction_type='adjustment',
+                        quantity_change=quantity_change,
+                        notes=notes,
+                        performed_by=request.user
+                    )
+
+                    updated_products.append({
+                        'id': product.id,
+                        'name': product.name,
+                        'old_quantity': old_quantity,
+                        'new_quantity': stock.quantity
+                    })
+
+                except Product.DoesNotExist:
+                    failed_products.append({'id': product_id, 'error': 'Product not found'})
+                except Exception as e:
+                    failed_products.append({'id': product_id, 'error': str(e)})
+
+        return JsonResponse({
+            'success': True,
+            'updated_count': len(updated_products),
+            'failed_count': len(failed_products),
+            'updated_products': updated_products,
+            'failed_products': failed_products
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'message': 'Invalid JSON data'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)})
+
+
+@login_required
+def export_store_data(request, store_id, data_type):
+    """Export various store data as CSV"""
+    store = get_object_or_404(Store, id=store_id, owner=request.user)
+
+    response = HttpResponse(content_type='text/csv')
+
+    if data_type == 'products':
+        response['Content-Disposition'] = f'attachment; filename="{store.slug}_products.csv"'
+
+        writer = csv.writer(response)
+        writer.writerow([
+            'ID', 'Name', 'Category', 'Price', 'Original Price', 'Stock Quantity',
+            'Is Active', 'Is Featured', 'Created At', 'Updated At'
+        ])
+
+        products = Product.objects.filter(seller=store.owner).select_related('category', 'stock')
+        for product in products:
+            writer.writerow([
+                product.id,
+                product.name,
+                product.category.name if product.category else '',
+                product.price,
+                product.original_price or '',
+                product.stock.quantity if hasattr(product, 'stock') else 0,
+                product.is_active,
+                product.is_featured,
+                product.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                product.updated_at.strftime('%Y-%m-%d %H:%M:%S')
+            ])
+
+    elif data_type == 'inventory':
+        response['Content-Disposition'] = f'attachment; filename="{store.slug}_inventory_history.csv"'
+
+        writer = csv.writer(response)
+        writer.writerow([
+            'Date', 'Product ID', 'Product Name', 'Transaction Type', 'Quantity Change',
+            'Condition', 'Reference ID', 'Notes', 'Performed By'
+        ])
+
+        transactions = StoreInventoryTracking.objects.filter(store=store).select_related(
+            'product', 'performed_by'
+        ).order_by('-timestamp')
+
+        for transaction in transactions:
+            writer.writerow([
+                transaction.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+                transaction.product.id,
+                transaction.product.name,
+                transaction.get_transaction_type_display(),
+                transaction.quantity_change,
+                transaction.get_condition_display() if transaction.condition else '',
+                transaction.reference_id or '',
+                transaction.notes or '',
+                transaction.performed_by.username if transaction.performed_by else 'System'
+            ])
+
+    elif data_type == 'sales':
+        response['Content-Disposition'] = f'attachment; filename="{store.slug}_sales_report.csv"'
+
+        writer = csv.writer(response)
+        writer.writerow([
+            'Order Date', 'Order ID', 'Product ID', 'Product Name', 'Quantity',
+            'Unit Price', 'Total Price', 'Customer', 'Order Status'
+        ])
+
+        order_items = OrderItem.objects.filter(
+            product__seller=store.owner
+        ).select_related('order', 'product', 'order__buyer').order_by('-order__created_at')
+
+        for item in order_items:
+            writer.writerow([
+                item.order.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                item.order.order_number,
+                item.product.id,
+                item.product.name,
+                item.quantity,
+                item.price_at_time,
+                item.get_total_price(),
+                item.order.buyer.username,
+                item.order.get_status_display()
+            ])
+
+    else:
+        return JsonResponse({'error': 'Invalid data type'}, status=400)
+
+    return response
+
+
+@login_required
+def store_analytics_data(request, store_id):
+    """Get detailed analytics data for charts and reports"""
+    store = get_object_or_404(Store, id=store_id, owner=request.user)
+
+    # Date range
+    days = int(request.GET.get('days', 30))
+    end_date = timezone.now().date()
+    start_date = end_date - timedelta(days=days)
+
+    # Daily sales data
+    daily_sales = []
+    current_date = start_date
+    while current_date <= end_date:
+        day_orders = OrderItem.objects.filter(
+            product__seller=store.owner,
+            order__created_at__date=current_date,
+            order__status__in=['delivered', 'shipped', 'processing']
+        )
+
+        day_revenue = sum(item.get_total_price() for item in day_orders)
+        day_orders_count = day_orders.values('order').distinct().count()
+        day_items_sold = day_orders.aggregate(total=Sum('quantity'))['total'] or 0
+
+        daily_sales.append({
+            'date': current_date.strftime('%Y-%m-%d'),
+            'revenue': float(day_revenue),
+            'orders': day_orders_count,
+            'items_sold': day_items_sold
+        })
+
+        current_date += timedelta(days=1)
+
+    # Category performance
+    category_performance = Product.objects.filter(
+        seller=store.owner
+    ).values(
+        'category__name'
+    ).annotate(
+        total_sold=Sum('order_items__quantity'),
+        total_revenue=Sum(F('order_items__quantity') * F('order_items__price_at_time')),
+        product_count=Count('id')
+    ).filter(total_sold__gt=0).order_by('-total_revenue')
+
+    # Convert to list for JSON serialization
+    category_data = []
+    for cat in category_performance:
+        category_data.append({
+            'name': cat['category__name'] or 'Uncategorized',
+            'total_sold': cat['total_sold'],
+            'total_revenue': float(cat['total_revenue'] or 0),
+            'product_count': cat['product_count']
+        })
+
+    # Top customers
+    top_customers = OrderItem.objects.filter(
+        product__seller=store.owner
+    ).values(
+        'order__buyer__username',
+        'order__buyer__first_name',
+        'order__buyer__last_name'
+    ).annotate(
+        total_orders=Count('order', distinct=True),
+        total_spent=Sum(F('quantity') * F('price_at_time')),
+        total_items=Sum('quantity')
+    ).order_by('-total_spent')[:10]
+
+    customer_data = []
+    for customer in top_customers:
+        customer_data.append({
+            'username': customer['order__buyer__username'],
+            'name': f"{customer['order__buyer__first_name'] or ''} {customer['order__buyer__last_name'] or ''}".strip() or
+                    customer['order__buyer__username'],
+            'total_orders': customer['total_orders'],
+            'total_spent': float(customer['total_spent']),
+            'total_items': customer['total_items']
+        })
+
+    return JsonResponse({
+        'daily_sales': daily_sales,
+        'category_performance': category_data,
+        'top_customers': customer_data,
+        'period': {
+            'start_date': start_date.strftime('%Y-%m-%d'),
+            'end_date': end_date.strftime('%Y-%m-%d'),
+            'days': days
+        }
+    })
+
+
+@login_required
+@require_POST
+def calculate_store_metrics(request, store_id):
+    """Manually trigger calculation of store metrics"""
+    store = get_object_or_404(Store, id=store_id, owner=request.user)
+
+    try:
+        date = request.POST.get('date')
+        if date:
+            calc_date = datetime.strptime(date, '%Y-%m-%d').date()
+        else:
+            calc_date = timezone.now().date()
+
+        metrics = StoreMetrics.calculate_daily_metrics(store, calc_date)
+
+        return JsonResponse({
+            'success': True,
+            'message': f'Metrics calculated for {calc_date}',
+            'metrics': {
+                'date': metrics.date.strftime('%Y-%m-%d'),
+                'total_orders': metrics.total_orders,
+                'total_sales': float(metrics.total_sales),
+                'total_returns': metrics.total_returns,
+                'return_rate': float(metrics.return_rate_percentage),
+                'low_stock_items': metrics.low_stock_items,
+                'out_of_stock_items': metrics.out_of_stock_items
+            }
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'Error calculating metrics: {str(e)}'
+        })
+
+
+# Utility functions for store management
+
+def get_store_statistics(store, days=30):
+    """Get comprehensive store statistics"""
+    end_date = timezone.now().date()
+    start_date = end_date - timedelta(days=days)
+
+    # Sales data
+    order_items = OrderItem.objects.filter(
+        product__seller=store.owner,
+        order__created_at__date__gte=start_date,
+        order__status__in=['delivered', 'shipped', 'processing']
+    )
+
+    total_revenue = sum(item.get_total_price() for item in order_items)
+    total_orders = order_items.values('order').distinct().count()
+    total_items_sold = order_items.aggregate(total=Sum('quantity'))['total'] or 0
+
+    # Product statistics
+    total_products = Product.objects.filter(seller=store.owner).count()
+    active_products = Product.objects.filter(seller=store.owner, is_active=True).count()
+
+    # Stock statistics
+    low_stock = Product.objects.filter(
+        seller=store.owner,
+        stock__quantity__lte=10,
+        stock__quantity__gt=0
+    ).count()
+
+    out_of_stock = Product.objects.filter(
+        seller=store.owner,
+        stock__quantity=0
+    ).count()
+
+    return {
+        'period_days': days,
+        'revenue': {
+            'total': float(total_revenue),
+            'average_per_day': float(total_revenue / days),
+            'average_per_order': float(total_revenue / total_orders) if total_orders > 0 else 0
+        },
+        'orders': {
+            'total': total_orders,
+            'average_per_day': total_orders / days,
+            'items_per_order': total_items_sold / total_orders if total_orders > 0 else 0
+        },
+        'products': {
+            'total': total_products,
+            'active': active_products,
+            'inactive': total_products - active_products
+        },
+        'stock': {
+            'low_stock': low_stock,
+            'out_of_stock': out_of_stock,
+            'total_tracked': total_products
+        }
+    }
+
+
+def validate_store_permissions(user, store):
+    """Check if user has permission to manage the store"""
+    if user == store.owner:
+        return True
+
+    if user.is_superuser:
+        return True
+
+    # Check if user is a store manager
+    if hasattr(user, 'managed_stores') and store in user.managed_stores.all():
+        return True
+
+    return False
+
+
+def get_store_dashboard_data(store):
+    """Get all data needed for store dashboard"""
+    stats = get_store_statistics(store)
+
+    # Recent orders
+    recent_orders = Order.objects.filter(
+        items__product__seller=store.owner
+    ).distinct().order_by('-created_at')[:5]
+
+    # Top products
+    top_products = Product.objects.filter(
+        seller=store.owner
+    ).annotate(
+        total_sold=Sum('order_items__quantity'),
+        total_revenue=Sum(F('order_items__quantity') * F('order_items__price_at_time'))
+    ).filter(total_sold__gt=0).order_by('-total_revenue')[:5]
+
+    return {
+        'statistics': stats,
+        'recent_orders': recent_orders,
+        'top_products': top_products,
+        'store': store
+    }
