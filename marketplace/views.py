@@ -938,6 +938,72 @@ def hot_picks(request):
         'hot_products_by_category': hot_products_by_category
     })
 
+def used_products_view(request):
+    """
+    View to display all used products with filtering and pagination.
+    """
+    # Get all used products that are active
+    products = Product.objects.filter(
+        used=True,
+        is_active=True
+    ).select_related('category', 'store', 'seller').order_by('-created_at')
+
+    # Get all categories for filtering
+    categories = Category.objects.all()
+
+    # Apply filters based on GET parameters
+    category_filter = request.GET.get('category')
+    if category_filter:
+        products = products.filter(category__id=category_filter)
+
+    # Price range filtering
+    min_price = request.GET.get('min_price')
+    max_price = request.GET.get('max_price')
+
+    if min_price:
+        try:
+            products = products.filter(price__gte=float(min_price))
+        except ValueError:
+            pass
+
+    if max_price:
+        try:
+            products = products.filter(price__lte=float(max_price))
+        except ValueError:
+            pass
+
+    # Search functionality
+    search_query = request.GET.get('search')
+    if search_query:
+        products = products.filter(
+            Q(name__icontains=search_query) |
+            Q(description__icontains=search_query) |
+            Q(specifications__icontains=search_query)
+        )
+
+    # Sorting options
+    sort_by = request.GET.get('sort', '-created_at')
+    if sort_by in ['price', '-price', 'name', '-name', 'created_at', '-created_at']:
+        products = products.order_by(sort_by)
+
+    # Pagination
+    paginator = Paginator(products, 12)  # Show 12 products per page
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    context = {
+        'products': page_obj,
+        'categories': categories,
+        'current_category': category_filter,
+        'search_query': search_query,
+        'min_price': min_price,
+        'max_price': max_price,
+        'sort_by': sort_by,
+        'total_products': products.count(),
+    }
+
+    return render(request, 'marketplace/used_products.html', context)
+
 def category_products(request, slug):
     category = get_object_or_404(Category, id=slug)
 
