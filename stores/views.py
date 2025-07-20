@@ -1,13 +1,14 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
-from django.db.models import Sum, Count, Q
+from django.db.models import Sum, Count, Q, OuterRef, Subquery, IntegerField, Value
 from django.utils import timezone
 from django.db import models
 from datetime import datetime, timedelta
+from django.urls import reverse
 import calendar
 import json
 from django.views.decorators.http import require_http_methods
-from django.http import Http404
+from django.http import Http404, HttpResponse
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
@@ -963,30 +964,63 @@ def store_chat_panel(request, store_id):
     }
     return render(request, 'stores/chat_panel.html', context)
 
+
 @login_required
 def chat_thread_detail(request, store_id, thread_id):
     store = get_object_or_404(Store, id=store_id, owner=request.user)
     thread = get_object_or_404(ChatThread, id=thread_id, participants=request.user)
 
-    if request.method == 'POST':
-        msg = request.POST.get('message')
+    # ✅ Mark all unread messages as read
+    thread.messages.filter(is_read=False).exclude(sender=request.user).update(
+        is_read=True,
+        read_at=timezone.now()
+    )
+
+    if request.method == 'POST' and request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        msg = request.POST.get('message', '').strip()
         if msg:
-            ChatMessage.objects.create(
+            chat_message = ChatMessage.objects.create(
                 thread=thread,
                 sender=request.user,
                 message=msg
             )
-            thread.save()  # triggers `updated_at`
-        return HttpResponseRedirect(reverse('stores:chat_thread_detail', args=[store.id, thread.id]))
+            thread.save()
+            return JsonResponse({
+                'success': True,
+                'message': chat_message.message,
+                'timestamp': chat_message.timestamp.strftime('%H:%M'),
+                'sender': chat_message.sender.get_full_name() or chat_message.sender.username,
+                'message_id': chat_message.id
+            })
+        return JsonResponse({'success': False, 'error': 'Empty message'}, status=400)
+
+    # Load all threads for sidebar
+    all_threads = ChatThread.objects.filter(participants=request.user).prefetch_related('participants', 'messages')
+    threads_data = []
+    for t in all_threads:
+        other = t.participants.exclude(id=request.user.id).first()
+        last_msg = t.messages.order_by('-timestamp').first()
+        unread_count = t.messages.filter(is_read=False).exclude(sender=request.user).count()
+
+        threads_data.append({
+            'thread': t,
+            'participant': other,
+            'last_message': last_msg.message if last_msg else 'No messages yet',
+            'timestamp': last_msg.timestamp if last_msg else None,
+            'unread_count': unread_count,
+        })
 
     messages = thread.messages.select_related('sender').order_by('timestamp')
-    context = {
+
+    return render(request, 'stores/chat_thread_detail.html', {
         'store': store,
         'thread': thread,
         'messages': messages,
-        'other_user': thread.participants.exclude(id=request.user.id).first()
-    }
-    return render(request, 'stores/chat_thread_detail.html', context)
+        'threads': threads_data,
+        'current_thread': thread,
+        'other_user': thread.participants.exclude(id=request.user.id).first(),
+    })
+
 
 @login_required
 def store_order_detail(request, store_id, order_id):
@@ -1198,6 +1232,33 @@ def store_dashboard(request, store_id):
     current_month = now.replace(day=1)
     pending_orders_count = Order.objects.filter(items__product__store=store, status='processing').count()
 
+    # Get all products for the current store
+    store_products = Product.objects.filter(store=store)
+
+    # Get reviews for all those products
+    product_reviews = Review.objects.filter(product__in=store_products).select_related('user', 'product')
+
+    # Pending orders
+    pending_orders = Order.objects.filter(
+        status='pending',
+        items__product__store=store
+    ).distinct()
+    pending_orders_count = pending_orders.count()
+
+    # Use Subquery to annotate stock level from stock_records
+    low_stock_products = Product.objects.annotate(
+        stock_level=Subquery(
+            Stock.objects.filter(product=OuterRef('pk')).values('quantity')[:1]
+        )
+    ).filter(store=store, stock_level__lt=5)
+
+    # Unread messages
+    unread_messages = ChatMessage.objects.filter(
+        order__items__product__store=store,
+        is_read=False,
+        sender__is_staff=False  # Optional: ignore messages sent by the store owner/admin
+    ).distinct().count()
+
     try:
         user_products = Product.objects.filter(seller=store.owner)
         total_products = user_products.count()
@@ -1299,6 +1360,7 @@ def store_dashboard(request, store_id):
         'total_revenue': total_revenue,
         'monthly_revenue': monthly_revenue,
         'store_views': store_views,
+        "product_reviews": product_reviews,
         'weekly_views': weekly_views,
         'recent_orders': recent_orders,
         'top_products': top_products,
@@ -1310,6 +1372,8 @@ def store_dashboard(request, store_id):
         'average_rating': round(average_rating, 1),
         'rating_breakdown': rating_breakdown,
         'pending_orders_count': pending_orders_count,
+        "low_stock_products": low_stock_products,
+        "unread_messages": unread_messages,
 
     }
 

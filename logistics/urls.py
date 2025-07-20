@@ -82,4 +82,8 @@ urlpatterns = [
     # AJAX endpoints
     path('api/driver/<int:driver_id>/vehicles/', views.get_driver_vehicles_ajax, name='api_driver_vehicles'),
     path('api/unassigned-vehicles/', views.get_unassigned_vehicles_ajax, name='api_unassigned_vehicles'),
+    path('ajax/addresses/', views.ajax_addresses_by_order, name='ajax_addresses_by_order'),
+    path('ajax/vehicles/', views.ajax_vehicles_by_driver, name='ajax_vehicles_by_driver'),
+    path('ajax/drivers/', views.ajax_drivers_by_vehicle, name='ajax_drivers_by_vehicle'),
+
 ]

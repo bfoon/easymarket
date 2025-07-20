@@ -275,6 +275,78 @@
         </div>
     </div>
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const orderSelect = document.getElementById('id_order');
+    const addressSelect = document.getElementById('id_shipping_address');
+    const driverSelect = document.getElementById('id_driver');
+    const vehicleSelect = document.getElementById('id_vehicle');
+
+    function updateShippingAddresses(orderId) {
+        fetch(`/logistics/ajax/addresses/?order_id=${orderId}`)
+            .then(res => res.json())
+            .then(data => {
+                addressSelect.innerHTML = '';
+                data.addresses.forEach(addr => {
+                    const opt = document.createElement('option');
+                    opt.value = addr.id;
+                    opt.textContent = addr.display;
+                    addressSelect.appendChild(opt);
+                });
+            });
+    }
+
+    function updateVehicles(driverId) {
+        fetch(`/logistics/ajax/vehicles/?driver_id=${driverId}`)
+            .then(res => res.json())
+            .then(data => {
+                vehicleSelect.innerHTML = '';
+                data.vehicles.forEach(vehicle => {
+                    const opt = document.createElement('option');
+                    opt.value = vehicle.id;
+                    opt.textContent = vehicle.display;
+                    vehicleSelect.appendChild(opt);
+                });
+            });
+    }
+
+    function updateDrivers(vehicleId) {
+        fetch(`/logistics/ajax/drivers/?vehicle_id=${vehicleId}`)
+            .then(res => res.json())
+            .then(data => {
+                driverSelect.innerHTML = '';
+                data.drivers.forEach(driver => {
+                    const opt = document.createElement('option');
+                    opt.value = driver.id;
+                    opt.textContent = driver.display;
+                    driverSelect.appendChild(opt);
+                });
+            });
+    }
+
+    if (orderSelect) {
+        orderSelect.addEventListener('change', () => {
+            const orderId = orderSelect.value;
+            if (orderId) updateShippingAddresses(orderId);
+        });
+    }
+
+    if (driverSelect) {
+        driverSelect.addEventListener('change', () => {
+            const driverId = driverSelect.value;
+            if (driverId) updateVehicles(driverId);
+        });
+    }
+
+    if (vehicleSelect) {
+        vehicleSelect.addEventListener('change', () => {
+            const vehicleId = vehicleSelect.value;
+            if (vehicleId) updateDrivers(vehicleId);
+        });
+    }
+});
+</script>
+
 
 {% endblock %}
 
@@ -306,6 +378,7 @@
         border-color: #e5e7eb !important;
     }
 </style>
+
 {% endblock %}
 
 {% block extra_js %}

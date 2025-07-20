@@ -142,7 +142,7 @@ class ShipmentCreateView(LoginRequiredMixin, CreateView):
 
 def ajax_addresses_for_order(request):
     order_id = request.GET.get('order_id')
-    addresses = ShippingAddress.objects.filter(order_id=order_id)
+    addresses = ShippingAddress.objects.filter(order__id=order_id)
     data = {
         'addresses': [
             {'id': a.id, 'display': str(a)} for a in addresses
@@ -153,7 +153,7 @@ def ajax_addresses_for_order(request):
 def ajax_orders_for_address(request):
     address_id = request.GET.get('address_id')
     address = ShippingAddress.objects.filter(id=address_id).first()
-    orders = Order.objects.filter(shippingaddress=address) if address else []
+    orders = Order.objects.filter(shipping_address=address, status='processing') if address else []
     data = {
         'orders': [
             {'id': o.id, 'display': f'#{o.id} - {o.created_at.strftime("%Y-%m-%d")}'}
@@ -161,6 +161,46 @@ def ajax_orders_for_address(request):
         ]
     }
     return JsonResponse(data)
+
+def ajax_addresses_by_order(request):
+    order_id = request.GET.get('order_id')
+    if order_id:
+        try:
+            order = Order.objects.get(id=order_id)
+            if order.shipping_address:
+                address = order.shipping_address
+                return JsonResponse({
+                    "addresses": [{
+                        "id": address.id,
+                        "display": f"{address.full_name} - {address.street}, {address.city}"
+                    }]
+                })
+        except Order.DoesNotExist:
+            pass
+    return JsonResponse({"addresses": []})
+
+
+def ajax_vehicles_by_driver(request):
+    driver_id = request.GET.get('driver_id')
+    vehicles = Vehicle.objects.filter(driver_id=driver_id)
+    data = [{"id": v.id, "display": v.plate_number} for v in vehicles]
+    return JsonResponse({"vehicles": data})
+
+
+def ajax_drivers_by_vehicle(request):
+    vehicle_id = request.GET.get('vehicle_id')
+    try:
+        vehicle = Vehicle.objects.get(id=vehicle_id)
+        if vehicle.driver:
+            return JsonResponse({
+                "drivers": [{
+                    "id": vehicle.driver.id,
+                    "display": vehicle.driver.user.get_full_name()
+                }]
+            })
+    except Vehicle.DoesNotExist:
+        pass
+    return JsonResponse({"drivers": []})
 
 class ShipmentUpdateView(LoginRequiredMixin, UpdateView):
     model = Shipment

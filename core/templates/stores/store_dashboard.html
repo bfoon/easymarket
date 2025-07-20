@@ -6,36 +6,6 @@
 <link rel="stylesheet" type="text/css" href="{% static 'css/store_dashboard.css' %}">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-<style>
-/* Chart container fixes */
-.chart-container {
-    position: relative;
-    overflow: hidden;
-    z-index: 1;
-}
-
-.chart-container canvas {
-    position: relative;
-    z-index: 2;
-}
-
-/* Ensure cards don't overlap */
-.card {
-    position: relative;
-    z-index: 10;
-    overflow: hidden;
-}
-
-/* Fix for chart responsiveness */
-.card-body .chart-container {
-    margin-bottom: 10px;
-}
-
-/* Ensure proper spacing */
-.row.mb-4 {
-    margin-bottom: 2rem !important;
-}
-</style>
 
 <div class="container-fluid py-4">
   <!-- Dashboard Header -->
@@ -542,47 +512,48 @@
   </div>
 
   <!-- Notifications and Alerts -->
-  {% if notifications or alerts %}
-  <div class="row mb-4">
-    <div class="col-12">
-      <div class="card border-warning">
-        <div class="card-header bg-warning text-dark">
-          <h6 class="card-title mb-0">
-            <i class="fas fa-bell me-2"></i>Notifications & Alerts
-          </h6>
+{% if low_stock_products or pending_orders_count > 10 or unread_messages %}
+<div class="row mb-4">
+  <div class="col-12">
+    <div class="card border-warning">
+      <div class="card-header bg-warning text-dark">
+        <h6 class="card-title mb-0">
+          <i class="fas fa-bell me-2"></i>Notifications & Alerts
+        </h6>
+      </div>
+      <div class="card-body">
+        {% if low_stock_products %}
+        <div class="alert alert-warning alert-dismissible fade show" role="alert">
+          <i class="fas fa-exclamation-triangle me-2"></i>
+          <strong>Low Stock Alert:</strong> {{ low_stock_products.count }} product{{ low_stock_products.count|pluralize }} running low on stock.
+          <a href="{% url 'stores:manage_store_products' store.id %}?filter=low_stock" class="alert-link">View products</a>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
-        <div class="card-body">
-          {% if low_stock_products %}
-          <div class="alert alert-warning alert-dismissible fade show" role="alert">
-            <i class="fas fa-exclamation-triangle me-2"></i>
-            <strong>Low Stock Alert:</strong> {{ low_stock_products.count }} product{{ low_stock_products.count|pluralize }} running low on stock.
-            <a href="{% url 'stores:manage_store_products' store.id %}?filter=low_stock" class="alert-link">View products</a>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-          </div>
-          {% endif %}
+        {% endif %}
 
-          {% if pending_orders_count > 10 %}
-          <div class="alert alert-info alert-dismissible fade show" role="alert">
-            <i class="fas fa-clock me-2"></i>
-            <strong>Order Backlog:</strong> You have {{ pending_orders_count }} pending orders that need attention.
-            <a href="{% url 'stores:store_orders' store.id %}?status=pending" class="alert-link">Process orders</a>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-          </div>
-          {% endif %}
-
-          {% if unread_messages %}
-          <div class="alert alert-primary alert-dismissible fade show" role="alert">
-            <i class="fas fa-envelope me-2"></i>
-            <strong>New Messages:</strong> You have {{ unread_messages }} unread customer message{{ unread_messages|pluralize }}.
-            <a href="{% url 'stores:store_chat_panel' store.id %}" class="alert-link">View messages</a>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-          </div>
-          {% endif %}
+        {% if pending_orders_count > 10 %}
+        <div class="alert alert-info alert-dismissible fade show" role="alert">
+          <i class="fas fa-clock me-2"></i>
+          <strong>Order Backlog:</strong> You have {{ pending_orders_count }} pending orders that need attention.
+          <a href="{% url 'stores:store_orders' store.id %}?status=pending" class="alert-link">Process orders</a>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
+        {% endif %}
+
+        {% if unread_messages %}
+        <div class="alert alert-primary alert-dismissible fade show" role="alert">
+          <i class="fas fa-envelope me-2"></i>
+          <strong>New Messages:</strong> You have {{ unread_messages }} unread customer message{{ unread_messages|pluralize }}.
+          <a href="{% url 'stores:store_chat_panel' store.id %}" class="alert-link">View messages</a>
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endif %}
       </div>
     </div>
   </div>
-  {% endif %}
+</div>
+{% endif %}
+
 
   <!-- Store Information and Quick Actions -->
   <div class="row">
@@ -722,84 +693,110 @@
 
   <!-- Customer Reviews Section -->
   <div class="row mb-4">
-    <div class="col-12">
-      <div class="card">
-        <div class="card-header bg-light d-flex justify-content-between align-items-center">
-          <h5 class="card-title mb-0">
-            <i class="fas fa-comments text-info me-2"></i>Customer Reviews Overview
-          </h5>
-          <a href="#" class="btn btn-sm btn-outline-info">View All Reviews</a>
-        </div>
-        <div class="card-body">
-          <div class="row">
-            <div class="col-md-4">
-              <div class="text-center">
-                <div class="d-flex align-items-center justify-content-center mb-3">
-                  <h2 class="mb-0 me-2">{{ average_rating|default:"0.0"|floatformat:1 }}</h2>
-                  <div>
-                    {% for i in "12345" %}
-                      {% if forloop.counter <= average_rating %}
-                        <i class="fas fa-star text-warning"></i>
-                      {% else %}
-                        <i class="far fa-star text-warning"></i>
-                      {% endif %}
-                    {% endfor %}
-                  </div>
-                </div>
-                <p class="text-muted mb-0">Based on {{ review_count }} review{{ review_count|pluralize }}</p>
-                {% if review_trend > 0 %}
-                <small class="text-success"><i class="fas fa-arrow-up"></i> Trending up</small>
-                {% elif review_trend < 0 %}
-                <small class="text-danger"><i class="fas fa-arrow-down"></i> Trending down</small>
-                {% endif %}
-              </div>
-            </div>
-            <div class="col-md-4">
-              <div class="rating-breakdown">
-                {% for rating, count in rating_breakdown.items %}
-                <div class="d-flex align-items-center mb-2">
-                  <span class="me-2">{{ rating }} <i class="fas fa-star text-warning"></i></span>
-                  <div class="progress flex-fill me-2" style="height: 8px;">
-                    <div class="progress-bar bg-warning" style="width: {% widthratio count review_count 100 %}%"></div>
-                  </div>
-                  <span class="text-muted">{{ count }}</span>
-                </div>
-                {% endfor %}
-              </div>
-            </div>
-            <div class="col-md-4">
-              <div class="recent-review">
-                {% if latest_review %}
-                <h6 class="mb-2">Latest Review</h6>
-                <blockquote class="blockquote-sm">
-                  <p class="mb-1">{{ latest_review.comment|truncatechars:100 }}</p>
-                  <footer class="blockquote-footer">
-                    {{ latest_review.reviewer_name }} •
-                    <span class="text-warning">
-                      {% for i in "12345" %}
-                        {% if forloop.counter <= latest_review.rating %}
-                          <i class="fas fa-star"></i>
-                        {% else %}
-                          <i class="far fa-star"></i>
-                        {% endif %}
-                      {% endfor %}
-                    </span>
-                  </footer>
-                </blockquote>
-                {% else %}
-                <div class="text-center text-muted">
-                  <i class="fas fa-comments fa-2x mb-2"></i>
-                  <p class="mb-0">No reviews yet</p>
-                </div>
-                {% endif %}
-              </div>
-            </div>
+  <!-- Store Reviews -->
+  <div class="col-lg-6 mb-3">
+    <div class="card h-100">
+      <div class="card-header bg-light d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0">
+          <i class="fas fa-store text-primary me-2"></i>Store Reviews
+        </h5>
+        <a href="#" class="btn btn-sm btn-outline-primary">View All</a>
+      </div>
+      <div class="card-body">
+        <div class="text-center mb-3">
+          <h2 class="mb-0">{{ store_average_rating|default:"0.0"|floatformat:1 }}</h2>
+          <div>
+            {% for i in "12345" %}
+              {% if forloop.counter <= store_average_rating %}
+                <i class="fas fa-star text-warning"></i>
+              {% else %}
+                <i class="far fa-star text-warning"></i>
+              {% endif %}
+            {% endfor %}
           </div>
+          <p class="text-muted mb-0">Based on {{ store_review_count }} store review{{ store_review_count|pluralize }}</p>
         </div>
+
+        {% if latest_store_review %}
+        <blockquote class="blockquote-sm">
+          <p class="mb-1">{{ latest_store_review.comment|truncatechars:100 }}</p>
+          <footer class="blockquote-footer">
+            {{ latest_store_review.reviewer_name }} •
+            <span class="text-warning">
+              {% for i in "12345" %}
+                {% if forloop.counter <= latest_store_review.rating %}
+                  <i class="fas fa-star"></i>
+                {% else %}
+                  <i class="far fa-star"></i>
+                {% endif %}
+              {% endfor %}
+            </span>
+          </footer>
+        </blockquote>
+        {% else %}
+        <div class="text-center text-muted">
+          <i class="fas fa-store-slash fa-2x mb-2"></i>
+          <p class="mb-0">No store reviews yet</p>
+        </div>
+        {% endif %}
       </div>
     </div>
   </div>
-</div>
+
+  <!-- Product Reviews -->
+  <div class="col-lg-6 mb-3">
+    <div class="card h-100">
+      <div class="card-header bg-light d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0">
+          <i class="fas fa-box-open text-warning me-2"></i>Product Reviews
+        </h5>
+        <a href="#" class="btn btn-sm btn-outline-warning">View All</a>
+      </div>
+      <div class="card-body">
+        <div class="text-center mb-3">
+          <h2 class="mb-0">{{ average_rating|default:"0.0"|floatformat:1 }}</h2>
+          <div>
+            {% for i in "12345" %}
+              {% if forloop.counter <= average_rating|floatformat:0 %}
+                <i class="fas fa-star text-warning"></i>
+              {% else %}
+                <i class="far fa-star text-warning"></i>
+              {% endif %}
+            {% endfor %}
+          </div>
+          <p class="text-muted mb-0">
+            Based on {{ review_count|default:"0" }} product review{{ review_count|pluralize }}
+          </p>
+        </div>
+
+        {% if product_reviews %}
+          {% for review in product_reviews|slice:":1" %}
+          <blockquote class="blockquote-sm">
+            <p class="mb-1">{{ review.comment|truncatechars:100 }}</p>
+            <footer class="blockquote-footer">
+              {{ review.user.username }} •
+              <span class="text-warning">
+                {% for i in "12345" %}
+                  {% if forloop.counter <= review.rating %}
+                    <i class="fas fa-star"></i>
+                  {% else %}
+                    <i class="far fa-star"></i>
+                  {% endif %}
+                {% endfor %}
+              </span>
+            </footer>
+          </blockquote>
+          {% endfor %}
+        {% else %}
+        <div class="text-center text-muted">
+          <i class="fas fa-box fa-2x mb-2"></i>
+          <p class="mb-0">No product reviews yet</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
 
 <!-- Loading Modal -->
 <div class="modal fade" id="loadingModal" tabindex="-1" aria-hidden="true">

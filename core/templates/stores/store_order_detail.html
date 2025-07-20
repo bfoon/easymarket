@@ -66,59 +66,62 @@
       </div>
       <div class="card-body-modern">
         {% for item in order_items %}
-        <div class="order-item d-flex align-items-center border-bottom py-3">
+<div class="order-item d-flex align-items-center border-bottom py-3">
 
-          <!-- Product Image -->
-          <div class="me-3" style="flex-shrink: 0;">
-            <img src="{{ item.product.image.url }}" alt="{{ item.product.name }}" class="img-thumbnail" style="width: 60px; height: 60px; object-fit: cover;">
-          </div>
+  <!-- Product Image -->
+  <div class="me-3" style="flex-shrink: 0;">
+    <img src="{{ item.product.image.url }}" alt="{{ item.product.name }}" class="img-thumbnail" style="width: 60px; height: 60px; object-fit: cover;">
+  </div>
 
-          <!-- Details -->
-          <div class="flex-grow-1">
-            <div class="item-name fw-semibold">{{ item.product.name }}</div>
-            <form class="update-quantity-form d-flex align-items-center mt-1" data-item-id="{{ item.id }}">
-                {% csrf_token %}
-                <label class="me-2 mb-0">Qty:</label>
-                <input
-                    type="number"
-                    name="quantity"
-                    min="1"
-                    value="{{ item.quantity }}"
-                    class="form-control form-control-sm me-2"
-                    style="width: 70px;"
-                    {% if order.status == 'shipped' or order.status == 'delivered' %}readonly disabled{% endif %} > <button
-                    type="submit"
-                    class="btn btn-sm btn-outline-primary"
-                    {% if order.status == 'shipped' or order.status == 'delivered' %}disabled{% endif %} >
-                    Update </button>
-            </form>
-            {% if item.shipped_to_warehouse %}
-            <div class="badge bg-success text-white mt-2">Shipped to Warehouse</div>
-            {% endif %}
-          </div>
-          <form method="post" action="{% url 'stores:set_shipping_cost' store.id order.id %}" class="mb-3">
-            {% csrf_token %}
-            <div class="mb-2">
-              <label for="shipping_cost" class="form-label">Shipping Cost (D)</label>
-              <input type="number" step="0.01" min="0" name="shipping_cost"
-                     id="shipping_cost" class="form-control"
-                     value="{{ order.shipping_cost|default_if_none:'' }}"
-                     {% if order.status == 'shipped' or order.status == 'delivered' %}readonly{% endif %}>
-            </div>
-            {% if order.status != 'shipped' and order.status != 'delivered' %}
-              <button type="submit" class="btn btn-outline-primary btn-sm">
-                <i class="fas fa-save me-1"></i> Save Shipping Cost
-              </button>
-            {% endif %}
-          </form>
-          </div>
+  <!-- Details -->
+  <div class="flex-grow-1">
+    <div class="item-name fw-semibold">{{ item.product.name }}</div>
+    <form class="update-quantity-form d-flex align-items-center mt-1" data-item-id="{{ item.id }}">
+      {% csrf_token %}
+      <label class="me-2 mb-0">Qty:</label>
+      <input type="number" name="quantity" min="1" value="{{ item.quantity }}"
+             class="form-control form-control-sm me-2" style="width: 70px;"
+             {% if order.status == 'shipped' or order.status == 'delivered' %}readonly disabled{% endif %}>
+      <button type="submit" class="btn btn-sm btn-outline-primary"
+              {% if order.status == 'shipped' or order.status == 'delivered' %}disabled{% endif %}>
+        Update
+      </button>
+    </form>
+    {% if item.shipped_to_warehouse %}
+    <div class="badge bg-success text-white mt-2">Shipped to Warehouse</div>
+    {% endif %}
+  </div>
 
-          <!-- Price -->
-          <div class="item-price text-end fw-bold" style="min-width: 80px;">D{{ item.get_total_price|floatformat:2 }}</div>
-        </div>
-        {% endfor %}
+  <!-- Price -->
+  <div class="item-price text-end fw-bold" style="min-width: 80px;">
+    D{{ item.get_total_price|floatformat:2 }}
+  </div>
+</div>
+{% endfor %}
 
-    </div>
+<!-- Shipping Cost Input (Shown only once) -->
+<div class="modern-card my-4">
+  <div class="card-header-modern">
+    <i class="fas fa-shipping-fast me-2"></i>Shipping Cost
+  </div>
+  <div class="card-body-modern">
+    <form method="post" action="{% url 'stores:set_shipping_cost' store.id order.id %}">
+      {% csrf_token %}
+      <div class="mb-3" style="max-width: 300px;">
+        <label for="shipping_cost" class="form-label">Enter Shipping Cost (D)</label>
+        <input type="number" step="0.01" min="0" name="shipping_cost" id="shipping_cost"
+               class="form-control"
+               value="{{ order.shipping_cost|default_if_none:'' }}"
+               {% if order.status == 'shipped' or order.status == 'delivered' %}readonly{% endif %}>
+      </div>
+      {% if order.status != 'shipped' and order.status != 'delivered' %}
+      <button type="submit" class="btn btn-outline-primary btn-sm">
+        <i class="fas fa-save me-1"></i> Save Shipping Cost
+      </button>
+      {% endif %}
+    </form>
+  </div>
+  </div>
 
       <!-- Order Total -->
     <div class="order-item" style="border-top: 2px solid #e5e7eb; margin-top: 1rem; padding-top: 1rem;">
