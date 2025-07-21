@@ -15,7 +15,6 @@ from orders.models import Order
 from django.core.paginator import Paginator
 
 
-
 def login_view(request):
     if request.method == 'POST':
         username = request.POST.get('username')

@@ -390,7 +390,6 @@ def track_order(request, order_id):
 
     return render(request, 'orders/track_order.html', context)
 
-
 def track_order_public(request):
     """Public tracking page where anyone can track orders using tracking number"""
     order = None
@@ -402,23 +401,26 @@ def track_order_public(request):
 
         if tracking_number:
             try:
-                # Search for order by tracking number
-                order = Order.objects.get(
-                    tracking_number__iexact=tracking_number,
-                    status__in=['shipped', 'delivered']  # Only allow tracking for shipped/delivered orders
-                )
-            except Order.DoesNotExist:
-                error_message = "No order found with this tracking number. Please check the number and try again."
-            except Order.MultipleObjectsReturned:
-                # In case of duplicates, get the most recent one
+                # Include order if status is shipped/delivered or has in_transit shipment
                 order = Order.objects.filter(
-                    tracking_number__iexact=tracking_number,
-                    status__in=['shipped', 'delivered']
-                ).order_by('-created_at').first()
+                    tracking_number__iexact=tracking_number
+                ).filter(
+                    Q(status__in=['shipped', 'delivered']) |
+                    Q(shipments__status='in_transit')
+                ).distinct().order_by('-created_at').first()
+
+                if not order:
+                    error_message = "No order found with this tracking number. Please check the number and try again."
+            except Order.MultipleObjectsReturned:
+                order = Order.objects.filter(
+                    tracking_number__iexact=tracking_number
+                ).filter(
+                    Q(status__in=['shipped', 'delivered']) |
+                    Q(shipments__status='in_transit')
+                ).distinct().order_by('-created_at').first()
         else:
             error_message = "Please enter a tracking number."
 
-    # Generate tracking timeline if order found
     tracking_updates = []
     if order:
         tracking_updates = generate_tracking_timeline(order)
@@ -432,7 +434,6 @@ def track_order_public(request):
 
     return render(request, 'orders/track_order_public.html', context)
 
-
 def track_order_ajax(request):
     """AJAX endpoint for real-time tracking updates"""
     if request.method == 'GET':
@@ -441,51 +442,64 @@ def track_order_ajax(request):
         if not tracking_number:
             return JsonResponse({
                 'success': False,
-                'error': 'Tracking number is required'
+                'error': 'Tracking number is required.'
             })
 
         try:
-            order = Order.objects.get(
-                tracking_number__iexact=tracking_number,
-                status__in=['shipped', 'delivered']
-            )
+            order = Order.objects.filter(
+                tracking_number__iexact=tracking_number
+            ).filter(
+                Q(status__in=['shipped', 'delivered']) |
+                Q(shipments__status='in_transit')
+            ).distinct().order_by('-created_at').first()
+
+            if not order:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'No order found with this tracking number.'
+                })
 
             tracking_updates = generate_tracking_timeline(order)
+            shipment_in_transit = order.shipments.filter(status='in_transit').exists()
 
             return JsonResponse({
                 'success': True,
                 'order': {
                     'id': order.id,
-                    'status': order.get_status_display(),
-                    'status_code': order.status,
+                    'status': 'In Transit' if shipment_in_transit else order.get_status_display(),
+                    'status_code': 'in_transit' if shipment_in_transit else order.status,
                     'created_at': order.created_at.strftime('%B %d, %Y'),
-                    'expected_delivery': order.expected_delivery_date.strftime(
-                        '%B %d, %Y') if order.expected_delivery_date else None,
+                    'expected_delivery': order.expected_delivery_date.strftime('%B %d, %Y') if order.expected_delivery_date else None,
                     'total': float(order.get_total),
                     'item_count': order.get_item_count(),
                 },
                 'tracking_updates': tracking_updates,
                 'shipping_address': {
-                    'full_name': order.shipping_address.full_name if order.shipping_address else '',
-                    'street': order.shipping_address.street if order.shipping_address else '',
-                    'city': order.shipping_address.city if order.shipping_address else '',
-                    'state': order.shipping_address.region if order.shipping_address else '',
-                    'zip_code': order.shipping_address.geo_code if order.shipping_address else '',
+                    'full_name': getattr(order.shipping_address, 'full_name', ''),
+                    'street': getattr(order.shipping_address, 'street', ''),
+                    'city': getattr(order.shipping_address, 'city', ''),
+                    'region': getattr(order.shipping_address, 'region', ''),
+                    'geo_code': getattr(order.shipping_address, 'geo_code', ''),
                 } if order.shipping_address else None
             })
 
         except Order.DoesNotExist:
             return JsonResponse({
                 'success': False,
-                'error': 'No order found with this tracking number'
+                'error': 'No order found with this tracking number.'
             })
 
-    return JsonResponse({'success': False, 'error': 'Invalid request method'})
+    return JsonResponse({
+        'success': False,
+        'error': 'Invalid request method.'
+    })
 
+
+
+from datetime import timedelta
 
 def generate_tracking_timeline(order):
     """Generate tracking timeline for an order"""
-
     timeline = []
 
     # Order Placed
@@ -517,9 +531,9 @@ def generate_tracking_timeline(order):
         'title': 'Order Processing',
         'description': 'Your order is being prepared for shipment.',
         'date': processing_date,
-        'completed': order.status in ['shipped', 'delivered'],
+        'completed': order.status in ['shipped', 'in_transit', 'delivered'],
         'icon': 'fas fa-cogs',
-        'color': 'success' if order.status in ['shipped', 'delivered'] else 'warning'
+        'color': 'success' if order.status in ['shipped', 'in_transit', 'delivered'] else 'warning'
     })
 
     # Shipped
@@ -528,17 +542,18 @@ def generate_tracking_timeline(order):
             'title': 'Shipped',
             'description': 'Your order has been shipped via our delivery partner.',
             'date': order.shipped_date,
-            'completed': True,
+            'completed': order.status in ['shipped', 'delivered'],
             'icon': 'fas fa-truck',
-            'color': 'success'
+            'color': 'success' if order.status in ['in_transit', 'delivered'] else 'warning'
         })
 
-        # In Transit
-        in_transit_date = order.shipped_date + timedelta(days=1)
+    # In Transit
+    shipment = order.shipments.filter(status='in_transit').order_by('-created_at').first()
+    if shipment:
         timeline.append({
             'title': 'In Transit',
-            'description': 'Your package is on its way to the destination.',
-            'date': in_transit_date,
+            'description': 'Your package is on its way through our logistics network and may arrive today.',
+            'date': shipment.collect_time,
             'completed': order.status == 'delivered',
             'icon': 'fas fa-route',
             'color': 'success' if order.status == 'delivered' else 'primary'
@@ -557,7 +572,7 @@ def generate_tracking_timeline(order):
         })
 
     # Delivered
-    if order.delivered_date:
+    if order.status == 'delivered' and order.delivered_date:
         timeline.append({
             'title': 'Delivered',
             'description': 'Your order has been delivered successfully.',

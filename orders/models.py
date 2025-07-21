@@ -65,7 +65,7 @@ class Order(models.Model):
     payment_date = models.DateTimeField(blank=True, null=True)
 
     # Financial fields
-    tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('8.5'))  # 8.5% default tax
+    tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.0'))  # 8.5% default tax
     shipping_cost = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
     discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
     promo_code = models.ForeignKey(PromoCode, on_delete=models.SET_NULL, null=True, blank=True)
@@ -117,8 +117,11 @@ class Order(models.Model):
         return self.status in ['pending', 'processing']
 
     def can_be_tracked(self):
-        """Check if order can be tracked"""
-        return self.status in ['shipped', 'delivered'] and self.tracking_number
+        """Check if order can be tracked based on status or related shipment"""
+        return (
+                self.status in ['shipped', 'delivered'] or
+                self.shipments.filter(status='in_transit').exists()
+        ) and self.tracking_number
 
     def is_completed(self):
         """Check if order is completed"""
@@ -154,6 +157,9 @@ class Order(models.Model):
             self.collect_time = timezone.now()
         self.save()
 
+    @property
+    def is_in_transit(self):
+        return self.shipments.filter(status='in_transit').exists()
 
     def save(self, *args, **kwargs):
         # Auto-set dates based on status changes
