@@ -79,6 +79,14 @@ urlpatterns = [
     path('assignments/bulk-assign/', views.bulk_assign_vehicles, name='bulk_assign_vehicles'),
     path('assignments/unassign/<int:vehicle_id>/', views.unassign_vehicle, name='unassign_vehicle'),
 
+    # Driver URLs
+    path('driver/dashboard/', views.driver_dashboard, name='driver_dashboard'),
+    path('driver/profile/', views.driver_profile, name='driver_profile'),
+    path('driver/shipment/<int:shipment_id>/', views.shipment_detail_map, name='shipment_detail_map'),
+    path('driver/shipment/<int:shipment_id>/start/', views.start_delivery, name='start_delivery'),
+    path('driver/shipment/<int:shipment_id>/delivered/', views.mark_delivered, name='mark_delivered'),
+    path('driver/shipment/<int:shipment_id>/location/', views.get_shipment_location, name='get_shipment_location'),
+
     # AJAX endpoints
     path('api/driver/<int:driver_id>/vehicles/', views.get_driver_vehicles_ajax, name='api_driver_vehicles'),
     path('api/unassigned-vehicles/', views.get_unassigned_vehicles_ajax, name='api_unassigned_vehicles'),

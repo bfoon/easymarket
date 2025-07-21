@@ -201,3 +201,15 @@ SEARCH_MIN_QUERY_LENGTH = 2
 LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/'  # Where to go after successful login
 LOGOUT_REDIRECT_URL = '/'  # Where to go after logout
+
+# Google Maps API Key (optional but recommended for better geocoding)
+GOOGLE_MAPS_API_KEY = 'your_google_maps_api_key_here'
+
+# Plus Code settings
+PLUS_CODE_SETTINGS = {
+    'DEFAULT_COUNTRY': 'Gambia',
+    'DEFAULT_REGION_CENTER': (13.4432, -15.3101),  # Gambia center
+    'GEOCODING_TIMEOUT': 10,  # seconds
+    'USE_GOOGLE_GEOCODING': True,
+    'FALLBACK_TO_OSM': True,
+}

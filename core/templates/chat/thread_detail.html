@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% load static %}
+
+{% block title %}Chat with {{ other_user.get_full_name }} | {{ store.name }}{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+<link rel="stylesheet" href="{% static 'css/chat.css' %}">
+<div class="container-fluid py-4">
+  <div class="row">
+    <!-- Sidebar Threads List -->
+    <div class="col-md-4 col-lg-3 mb-3">
+      <div class="card shadow-sm">
+        <div class="card-header bg-primary text-white py-2">
+          <strong>Conversations</strong>
+        </div>
+        <div class="list-group list-group-flush">
+          {% for t in threads %}
+            <a href="{% url 'chat:thread_detail' store.id t.thread.id %}"
+               class="list-group-item list-group-item-action {% if t.thread.id == current_thread.id %}active{% endif %}">
+              <div class="d-flex justify-content-between align-items-center">
+                <div>
+                  {{ t.participant.get_full_name }}
+                  <br><small class="text-muted">{{ t.last_message|truncatechars:40 }}</small>
+                </div>
+                {% if t.unread_count > 0 %}
+                  <span class="badge bg-danger rounded-pill">{{ t.unread_count }}</span>
+                {% endif %}
+              </div>
+            </a>
+          {% empty %}
+            <div class="p-3 text-muted">No conversations</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Chat Panel -->
+    <div class="col-md-8 col-lg-9">
+
+      <div class="card shadow-sm">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h5 class="mb-0">
+            <i class="fas fa-comments text-primary me-2"></i>
+            Chat with {{ other_user.get_full_name }}
+          </h5>
+          {% if shipment %}
+            <a href="{% url 'logistics:shipment_detail' shipment.id %}" class="btn btn-sm btn-outline-secondary">
+              <i class="fas fa-shipping-fast me-1"></i> Back to Shipment
+            </a>
+          {% endif %}
+
+        </div>
+        <div class="card-body chat-scroll" style="height: 400px; overflow-y: auto;">
+          {% for message in messages %}
+            <div class="mb-3 {% if message.sender == request.user %}text-end{% endif %}">
+              <div class="{% if message.sender == request.user %}bg-primary text-white{% else %}bg-light{% endif %} rounded p-2 d-inline-block">
+                {{ message.message|linebreaksbr }}
+              </div>
+              <div class="small text-muted mt-1">
+                {{ message.sender.get_full_name }} • {{ message.timestamp|naturaltime }}
+              </div>
+            </div>
+          {% empty %}
+            <div class="text-center text-muted py-5">
+              <i class="fas fa-comment-dots fa-2x mb-3"></i>
+              <p>No messages yet.</p>
+            </div>
+          {% endfor %}
+        </div>
+        <div class="card-footer">
+         <form method="POST" action="{% url 'chat:send_message' thread.id %}?shipment_id={{ shipment.id }}">
+            {% csrf_token %}
+            <div class="input-group">
+              <textarea name="message" class="form-control" rows="1" required placeholder="Type a message..."></textarea>
+              <button class="btn btn-primary" type="submit">
+                <i class="fas fa-paper-plane"></i>
+              </button>
+            </div>
+        </form>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

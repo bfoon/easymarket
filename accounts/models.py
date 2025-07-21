@@ -9,6 +9,7 @@ class User(AbstractUser):
     is_seller = models.BooleanField(default=False)
     is_logistic = models.BooleanField(default=False)
     is_finance = models.BooleanField(default=False)
+    is_driver = models.BooleanField(default=False)
     is_verified = models.BooleanField(default=False)
 
     class Meta:

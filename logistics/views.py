@@ -6,9 +6,9 @@ from django.urls import reverse_lazy, reverse
 from django.db.models import Q, Count, Avg
 from django.core.paginator import Paginator
 from django.forms import modelformset_factory
-from logistics.models import Shipment
+from logistics.models import Shipment, Driver
 from logistics.forms import ShipmentForm
-from orders.models import Order, ShippingAddress
+from orders.models import Order, ShippingAddress, OrderStatusHistory
 from django.utils import timezone
 from datetime import timedelta
 from django.db import transaction
@@ -19,10 +19,18 @@ from django.http import HttpResponse, JsonResponse
 from django.contrib.auth.decorators import login_required
 import openpyxl
 from openpyxl.utils import get_column_letter
-
+from django.views.decorators.http import require_POST
+from django.views.decorators.csrf import csrf_exempt
 from .models import (
     Shipment, ShipmentBox, BoxItem, Driver, Vehicle,
     Warehouse, LogisticOffice
+)
+from .decorators import driver_required
+from .utils import (
+    send_delivery_notification,
+    create_delivery_history,
+    get_driver_statistics,
+    validate_shipment_transition
 )
 from orders.models import Order, OrderItem
 from .forms import ShipmentBoxForm, BoxItemForm
@@ -79,6 +87,8 @@ class ShipmentListView(LoginRequiredMixin, ListView):
         return context
 
 
+from stores.models import Store
+
 class ShipmentDetailView(LoginRequiredMixin, DetailView):
     model = Shipment
     template_name = 'logistics/shipment_detail.html'
@@ -90,7 +100,6 @@ class ShipmentDetailView(LoginRequiredMixin, DetailView):
         context['boxes'] = shipment.boxes.prefetch_related('items__order_item__product')
         context['total_boxes'] = shipment.boxes.count()
 
-        # Add order status information
         if shipment.order:
             order = shipment.order
             context['order'] = order
@@ -98,17 +107,26 @@ class ShipmentDetailView(LoginRequiredMixin, DetailView):
             context['order_status_display'] = order.get_status_display()
             context['is_order_delivered'] = order.status == 'delivered'
             context['can_mark_delivered'] = (
-                    order.status in ['shipped'] and
-                    shipment.status == 'shipped'
+                order.status == 'shipped' and
+                shipment.status == 'shipped'
             )
             context['delivered_date'] = order.delivered_date
-            # Make boxes read-only if order is delivered
             context['boxes_readonly'] = order.status == 'delivered'
+
+            # Collect unique stores from order items
+            store_set = set()
+            for item in order.items.select_related('product__store').all():
+                if item.product and item.product.store:
+                    store_set.add(item.product.store)
+            context['stores'] = store_set
+
         else:
             context['order'] = None
             context['boxes_readonly'] = False
+            context['stores'] = []
 
         return context
+
 
 
 class ShipmentCreateView(LoginRequiredMixin, CreateView):
@@ -1639,3 +1657,205 @@ def export_shipments_excel(request):
     response['Content-Disposition'] = 'attachment; filename="shipments.xlsx"'
     wb.save(response)
     return response
+
+@login_required
+@driver_required
+def driver_dashboard(request):
+    """Main dashboard for drivers showing their assigned shipments"""
+
+    driver = request.driver
+
+    # Get all shipments assigned to this driver
+    shipments = Shipment.objects.filter(
+        driver=driver
+    ).select_related(
+        'shipping_address', 'order', 'warehouse', 'vehicle'
+    ).order_by('-created_at')
+
+    # Group shipments by actual status
+    pending_shipments = shipments.filter(status='pending')
+    in_transit_shipments = shipments.filter(status='in_transit')
+    shipped_shipments = shipments.filter(status='shipped')  # Not delivered yet
+    delivered_shipments = shipments.filter(status='delivered')
+
+    context = {
+        'driver': driver,
+        'pending_shipments': pending_shipments,
+        'in_transit_shipments': in_transit_shipments,
+        'shipped_shipments': shipped_shipments,
+        'delivered_shipments': delivered_shipments,
+        'total_shipments': shipments.count(),
+    }
+
+    return render(request, 'logistics/driver_dashboard.html', context)
+
+
+@login_required
+def shipment_detail_map(request, shipment_id):
+    """Detailed view of a shipment with map and customer info"""
+
+    if not request.user.is_driver:
+        messages.error(request, "You don't have permission to access this page.")
+        return redirect('home')
+
+    try:
+        driver = Driver.objects.get(user=request.user)
+        shipment = get_object_or_404(
+            Shipment.objects.select_related(
+                'shipping_address', 'order', 'warehouse', 'vehicle', 'order__buyer'
+            ),
+            id=shipment_id,
+            driver=driver
+        )
+    except Driver.DoesNotExist:
+        messages.error(request, "Driver profile not found.")
+        return redirect('home')
+
+    # Get order items for this shipment
+    order_items = shipment.order.items.all() if shipment.order else []
+
+    # Get shipment boxes
+    boxes = shipment.boxes.all().prefetch_related('items__order_item__product')
+
+    context = {
+        'shipment': shipment,
+        'driver': driver,
+        'order_items': order_items,
+        'boxes': boxes,
+        'customer': shipment.order.buyer if shipment.order else None,
+        'shipping_address': shipment.shipping_address,
+    }
+
+    return render(request, 'logistics/shipment_detail_map.html', context)
+
+
+@login_required
+@require_POST
+def start_delivery(request, shipment_id):
+    """Mark shipment as in transit"""
+    if not request.user.is_driver:
+        return JsonResponse({'success': False, 'error': 'Permission denied'})
+
+    try:
+        driver = Driver.objects.get(user=request.user)
+        shipment = get_object_or_404(Shipment, id=shipment_id, driver=driver)
+
+        if shipment.status != 'shipped':
+            return JsonResponse({'success': False, 'error': 'Shipment is not marked as ready (shipped)'})
+
+        # Set shipment as in_transit
+        shipment.status = 'in_transit'
+        shipment.save()
+
+        # Update related order
+        if shipment.order and shipment.order.status != 'shipped':
+            shipment.order.status = 'shipped'
+            shipment.order.shipped_date = timezone.now()
+            shipment.order.save()
+
+        return JsonResponse({'success': True, 'message': 'Shipment is now in transit'})
+
+    except Driver.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Driver profile not found'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@login_required
+@require_POST
+def mark_delivered(request, shipment_id):
+    """Mark shipment as delivered"""
+    if not request.user.is_driver:
+        return JsonResponse({'success': False, 'error': 'Permission denied'})
+
+    try:
+        driver = Driver.objects.get(user=request.user)
+        shipment = get_object_or_404(Shipment, id=shipment_id, driver=driver)
+
+        if shipment.status not in ['in_transit']:
+            return JsonResponse({'success': False, 'error': 'Only in-transit shipments can be marked delivered'})
+
+        delivery_notes = request.POST.get('delivery_notes', '')
+
+        # Mark shipment as delivered
+        shipment.status = 'delivered'
+        shipment.save()
+
+        # Optionally mark order as delivered if all related shipments are delivered
+        if shipment.order:
+            all_shipments = shipment.order.shipments.all()
+            if all_shipments.exists() and all(s.status == 'delivered' for s in all_shipments):
+                shipment.order.status = 'delivered'
+                shipment.order.delivered_date = timezone.now()
+                shipment.order.save()
+
+        return JsonResponse({'success': True, 'message': 'Shipment marked as delivered'})
+
+    except Driver.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Driver profile not found'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+
+@login_required
+@driver_required
+def get_shipment_location(request, shipment_id):
+    """Get shipment location data for map with Plus Code support"""
+
+    driver = request.driver
+    shipment = get_object_or_404(
+        Shipment.objects.select_related('shipping_address'),
+        id=shipment_id,
+        driver=driver
+    )
+
+    try:
+        # Use enhanced location data with Plus Code support
+        from .utils import get_shipment_location_data
+        location_data = get_shipment_location_data(shipment)
+        location_data['success'] = True
+
+        return JsonResponse(location_data)
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@login_required
+def driver_profile(request):
+    """Driver profile and statistics"""
+
+    if not request.user.is_driver:
+        messages.error(request, "You don't have permission to access this page.")
+        return redirect('home')
+
+    try:
+        driver = Driver.objects.get(user=request.user)
+    except Driver.DoesNotExist:
+        messages.error(request, "Driver profile not found.")
+        return redirect('home')
+
+    total_shipments = Shipment.objects.filter(driver=driver).count()
+    pending_shipments = Shipment.objects.filter(driver=driver, status='pending').count()
+    in_transit_shipments = Shipment.objects.filter(driver=driver, status='in_transit').count()
+    shipped_shipments = Shipment.objects.filter(driver=driver, status='shipped').count()
+    delivered_shipments = Shipment.objects.filter(driver=driver, status='delivered').count()
+
+    recent_shipments = Shipment.objects.filter(
+        driver=driver
+    ).select_related('shipping_address', 'order').order_by('-created_at')[:5]
+
+    context = {
+        'driver': driver,
+        'stats': {
+            'total_shipments': total_shipments,
+            'pending_shipments': pending_shipments,
+            'in_transit_shipments': in_transit_shipments,
+            'shipped_shipments': shipped_shipments,
+            'delivered_shipments': delivered_shipments,
+        },
+        'recent_shipments': recent_shipments,
+    }
+
+    return render(request, 'logistics/driver_profile.html', context)

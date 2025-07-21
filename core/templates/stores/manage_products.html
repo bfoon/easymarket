@@ -33,12 +33,23 @@
     </div>
   </div>
 
-  <!-- Search -->
-  <div class="row mb-3">
-    <div class="col-md-4">
-      <input type="search" class="form-control form-control-sm shadow-sm" placeholder="Search products..." oninput="filterProducts(this.value)">
-    </div>
+ <!-- Search -->
+<div class="row mb-3">
+  <div class="col-md-4">
+    <input type="search" id="searchInput" class="form-control form-control-sm shadow-sm"
+           placeholder="Search products..." oninput="applyFilters()">
   </div>
+</div>
+
+<!-- Category Dropdown -->
+<div class="col-md-4">
+  <select class="form-select form-select-sm shadow-sm" id="categoryFilter" onchange="applyFilters()">
+    <option value="">All Categories</option>
+    {% for cat in categories %}
+      <option value="{{ cat.name }}">{{ cat.name }}</option>
+    {% endfor %}
+  </select>
+</div>
 
   <!-- Products List -->
   <div class="row">
@@ -62,13 +73,13 @@
              <thead class="bg-light">
               <tr>
                 <th>Image</th>
-                <th>Product</th>
-                <th>Category</th>
-                <th>Price</th>
-                <th>Stock</th>
-                <th>Status</th>
-                <th>Condition</th> <!-- ✅ New -->
-                <th>Created</th>
+                <th onclick="sortTable(1)">Product <i class="fas fa-sort"></i></th>
+                <th onclick="sortTable(2)">Category <i class="fas fa-sort"></i></th>
+                <th onclick="sortTable(3)">Price <i class="fas fa-sort"></i></th>
+                <th onclick="sortTable(4)">Stock <i class="fas fa-sort"></i></th>
+                <th onclick="sortTable(5)">Status <i class="fas fa-sort"></i></th>
+                <th onclick="sortTable(6)">Condition <i class="fas fa-sort"></i></th>
+                <th onclick="sortTable(7)">Created <i class="fas fa-sort"></i></th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -216,7 +227,54 @@
     </div>
   </div>
 </div>
+<script>
+let sortDirection = {};
 
+function sortTable(columnIndex) {
+  const table = document.querySelector("table");
+  const tbody = table.tBodies[0];
+  const rows = Array.from(tbody.querySelectorAll("tr"));
+
+  const isAscending = sortDirection[columnIndex] = !sortDirection[columnIndex];
+
+  rows.sort((a, b) => {
+    const aText = a.children[columnIndex].innerText.trim().toLowerCase();
+    const bText = b.children[columnIndex].innerText.trim().toLowerCase();
+
+    const aNum = parseFloat(aText.replace(/[^0-9.]/g, ''));
+    const bNum = parseFloat(bText.replace(/[^0-9.]/g, ''));
+
+    // If it's a number column (like price or stock)
+    if (!isNaN(aNum) && !isNaN(bNum)) {
+      return isAscending ? aNum - bNum : bNum - aNum;
+    }
+
+    // For text comparison (like product name, category)
+    return isAscending ? aText.localeCompare(bText) : bText.localeCompare(aText);
+  });
+
+  // Re-append rows
+  rows.forEach(row => tbody.appendChild(row));
+}
+</script>
+
+<script>
+function applyFilters() {
+  const query = document.getElementById("searchInput").value.toLowerCase();
+  const category = document.getElementById("categoryFilter").value.toLowerCase();
+  const rows = document.querySelectorAll("tbody tr");
+
+  rows.forEach(row => {
+    const name = row.querySelector("td:nth-child(2)").innerText.toLowerCase();
+    const cat = row.querySelector("td:nth-child(3)").innerText.toLowerCase();
+
+    const matchName = name.includes(query);
+    const matchCategory = !category || cat.includes(category);
+
+    row.style.display = matchName && matchCategory ? '' : 'none';
+  });
+}
+</script>
 <script>
 function filterProducts(query) {
   const rows = document.querySelectorAll("tbody tr");

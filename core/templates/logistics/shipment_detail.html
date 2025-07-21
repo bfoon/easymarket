@@ -3,6 +3,8 @@
 {% block title %}Shipment #{{ shipment.id }} - Logistics Management{% endblock %}
 
 {% block content %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <div class="page-header d-flex justify-content-between align-items-center">
     <div>
         <h1 class="page-title">Shipment #{{ shipment.id }}</h1>
@@ -106,6 +108,31 @@
 
 <!-- Main Information -->
 <div class="row mb-4">
+    {% if stores %}
+<div class="row mb-4">
+  <div class="col-12">
+    <div class="card shadow">
+      <div class="card-header">
+        <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-store me-1"></i>Store{{ stores|length|pluralize }}</h6>
+      </div>
+      <div class="card-body">
+        {% for store in stores %}
+          <div class="mb-3">
+            <strong>{{ store.name }}</strong><br>
+            {% if store.owner %}
+              <small class="text-muted">Managed by {{ store.owner.get_full_name }}</small><br>
+              <a href="{% url 'chat:start_chat_with_store' store.id %}?shipment_id={{ shipment.id }}" class="btn btn-sm btn-outline-primary mt-1">
+              <i class="fas fa-comments me-1"></i> Chat with Store
+            </a>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
     <!-- Shipment Details -->
     <div class="col-lg-6 mb-4">
         <div class="card h-100">
@@ -168,11 +195,18 @@
                     {% if shipment.shipping_address.full_name %}
                         <strong>{{ shipment.shipping_address.full_name }}</strong><br>
                     {% endif %}
-                    {{ shipment.shipping_address.address }}<br>
+                    {{ shipment.shipping_address.address_line_1 }}<br>
                     {% if shipment.shipping_address.address_line_2 %}
                         {{ shipment.shipping_address.address_line_2 }}<br>
                     {% endif %}
-                    {{ shipment.shipping_address.city }}, {{ shipment.shipping_address.region }}, {{ shipment.shipping_address.geo_code }}<br>
+                    {{ shipment.shipping_address.city }}, {{ shipment.shipping_address.region }},
+
+                    <a href="#" class="text-primary text-decoration-underline"
+                       onclick="openGooglePlusCodeMap('{{ shipment.shipping_address.geo_code }}', '{{ shipment.shipping_address.city }}, {{ shipment.shipping_address.country }}')">
+                       {{ shipment.shipping_address.geo_code }}
+                    </a>
+                    <br>
+
                     {% if shipment.shipping_address.country %}
                         {{ shipment.shipping_address.country }}
                     {% endif %}
@@ -476,6 +510,68 @@
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="plusCodeMapModal" tabindex="-1" aria-labelledby="plusCodeMapModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Geo Location: <span id="plusCodeTitle"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0">
+        <iframe id="plusCodeMapFrame"
+                src=""
+                style="width: 100%; height: 500px; border: none;"
+                allowfullscreen
+                loading="lazy"></iframe>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
+<script>
+function openGooglePlusCodeMap(plusCode, locationContext) {
+  const modal = new bootstrap.Modal(document.getElementById('plusCodeMapModal'));
+  const encodedSearch = encodeURIComponent(plusCode + ' ' + locationContext);
+  const embedUrl = `https://www.google.com/maps?q=${encodedSearch}&output=embed`;
+
+  document.getElementById('plusCodeTitle').textContent = plusCode;
+  document.getElementById('plusCodeMapFrame').src = embedUrl;
+
+  modal.show();
+}
+</script>
+
+<script>
+let geoMap;
+
+function openGeoMapModal(geoCode) {
+  const [lat, lng] = geoCode.split(',').map(Number);
+  const modal = new bootstrap.Modal(document.getElementById('geoMapModal'));
+  modal.show();
+
+  setTimeout(() => {
+    if (!geoMap) {
+      geoMap = L.map('geoMapContainer').setView([lat, lng], 13);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(geoMap);
+      L.marker([lat, lng]).addTo(geoMap)
+        .bindPopup("Geo Code: " + geoCode)
+        .openPopup();
+    } else {
+      geoMap.setView([lat, lng], 13);
+      L.marker([lat, lng]).addTo(geoMap)
+        .bindPopup("Geo Code: " + geoCode)
+        .openPopup();
+    }
+  }, 300); // Wait for modal to render
+}
+</script>
+
+
 
 {% endblock %}
 

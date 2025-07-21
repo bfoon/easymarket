@@ -72,22 +72,25 @@ def send_chat_message(request):
 @login_required
 def chat_thread_detail(request, store_id, thread_id):
     thread = get_object_or_404(ChatThread, id=thread_id)
+    store = get_object_or_404(Store, id=store_id)
 
-    # Ensure the user is a participant
     if request.user not in thread.participants.all():
-        return redirect('stores:store_dashboard', store_id=store_id)
+        return redirect('stores:store_dashboard', store_id=store.id)
 
-    # Mark all unread messages from other users as read
-    unread_messages = thread.messages.filter(is_read=False).exclude(sender=request.user)
-    unread_messages.update(is_read=True, read_at=timezone.now())
+    thread.messages.filter(is_read=False).exclude(sender=request.user).update(
+        is_read=True, read_at=timezone.now()
+    )
 
-    # Fetch all messages
     messages = thread.messages.select_related('sender').order_by('timestamp')
-
-    # Get the other user in the thread
     other_user = thread.participants.exclude(id=request.user.id).first()
 
-    # Fetch all threads for the current user (with unread count)
+    # ✅ Get shipment from query param
+    shipment_id = request.GET.get('shipment_id')
+    shipment = None
+    if shipment_id:
+        from logistics.models import Shipment
+        shipment = Shipment.objects.filter(id=shipment_id).first()
+
     all_threads = ChatThread.objects.filter(participants=request.user).prefetch_related('participants', 'messages')
     threads_data = []
     for t in all_threads:
@@ -109,5 +112,45 @@ def chat_thread_detail(request, store_id, thread_id):
         'other_user': other_user,
         'threads': threads_data,
         'current_thread': thread,
-        'store': get_object_or_404(Store, id=store_id)  # Assuming `Store` model exists
+        'store': store,
+        'shipment': shipment,  # ✅ Pass this to template
     })
+
+@login_required
+def start_chat_with_store(request, store_id):
+    store = get_object_or_404(Store, id=store_id)
+    recipient = store.owner
+
+    # Always get or create a new thread between the logistics officer and store owner
+    thread, created = ChatThread.objects.get_or_create_between(request.user, recipient)
+
+    # Optional: get shipment_id from query param to keep context
+    shipment_id = request.GET.get('shipment_id')
+
+    # Redirect with shipment context if available
+    url = reverse('chat:thread_detail', kwargs={'store_id': store.id, 'thread_id': thread.id})
+    if shipment_id:
+        url += f'?shipment_id={shipment_id}'
+
+    return redirect(url)
+
+@login_required
+def send_message(request, thread_id):
+    if request.method == 'POST':
+        thread = get_object_or_404(ChatThread, id=thread_id)
+        message = request.POST.get('message', '').strip()
+
+        if message:
+            ChatMessage.objects.create(thread=thread, sender=request.user, message=message)
+
+        # Get other participant
+        other_user = thread.participants.exclude(id=request.user.id).first()
+        store = other_user.owned_stores.first()  # assuming related_name='stores' on Store model
+
+        # Preserve shipment_id
+        shipment_id = request.GET.get('shipment_id')
+        url = reverse('chat:thread_detail', kwargs={'store_id': store.id, 'thread_id': thread.id})
+        if shipment_id:
+            url += f'?shipment_id={shipment_id}'
+
+        return redirect(url)
