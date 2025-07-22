@@ -83,6 +83,15 @@ class Order(models.Model):
     order_notes = models.TextField(blank=True, null=True)
     admin_notes = models.TextField(blank=True, null=True)
 
+    source_type = models.CharField(
+        max_length=20,
+        choices=[
+            ('marketplace', 'Marketplace'),
+            ('auction', 'Auction'),
+        ],
+        default='marketplace'
+    )
+
     class Meta:
         ordering = ['-created_at']
 
@@ -96,6 +105,10 @@ class Order(models.Model):
     def get_tax_amount(self):
         """Calculate tax amount based on subtotal"""
         return self.get_subtotal() * (self.tax_rate / 100)
+
+    @property
+    def is_auction_order(self):
+        return self.source_type == 'auction'
 
     @property
     def get_total(self):

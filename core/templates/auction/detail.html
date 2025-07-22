@@ -1,0 +1,442 @@
+{% extends 'auction/base.html' %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}{{ auction.title }} - EasyMarket Auctions{% endblock %}
+
+{% block content %}
+<!-- Amazon-Style Breadcrumb -->
+<section class="auction-breadcrumb py-2 bg-light border-bottom">
+    <div class="container">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-0">
+                <li class="breadcrumb-item">
+                    <a href="{% url 'marketplace:product_list' %}">
+                        <i class="fas fa-home me-1"></i> Home
+                    </a>
+                </li>
+                <li class="breadcrumb-item">
+                    <a href="{% url 'auction:index' %}">
+                        <i class="fas fa-gavel me-1"></i> Auctions
+                    </a>
+                </li>
+                <li class="breadcrumb-item">
+                    <a href="{% url 'auction:category' auction.category.id %}">
+                        {{ auction.category.name }}
+                    </a>
+                </li>
+                <li class="breadcrumb-item active" aria-current="page">
+                    {{ auction.title|truncatechars:50 }}
+                </li>
+            </ol>
+        </nav>
+    </div>
+</section>
+
+<section class="container my-5">
+    <div class="row g-4">
+        <!-- Auction Gallery -->
+        <div class="col-lg-5">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-3">
+                    <div class="main-image-container position-relative mb-3">
+                        {% if auction.image %}
+                            <img src="{{ auction.image.url }}" alt="{{ auction.title }}" class="img-fluid w-100 rounded" id="mainAuctionImage">
+                        {% else %}
+                            <div class="bg-light d-flex align-items-center justify-content-center rounded" style="height: 400px;">
+                                <i class="fas fa-image fa-4x text-muted"></i>
+                            </div>
+                        {% endif %}
+
+                        <!-- Status badges -->
+                        {% if auction.featured %}
+                            <span class="badge bg-warning text-dark position-absolute" style="top: 10px; left: 10px;">
+                                <i class="fas fa-star"></i> Featured
+                            </span>
+                        {% endif %}
+                    </div>
+
+                    <!-- Additional images -->
+                    {% if auction.additional_images.all %}
+                    <div class="d-flex flex-wrap gap-2">
+                        {% for img in auction.additional_images.all %}
+                        <div class="thumbnail-item" onclick="changeMainImage(this, '{{ img.image.url }}')">
+                            <img src="{{ img.image.url }}" alt="{{ img.alt_text }}" class="img-thumbnail" style="width: 60px; height: 60px; object-fit: cover; cursor: pointer;">
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Auction Info -->
+        <div class="col-lg-7">
+            <div class="auction-info">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div>
+                        <h1 class="fw-bold mb-2" style="color: #232f3e;">{{ auction.title }}</h1>
+                        <div class="auction-meta mb-2">
+                            <span class="badge bg-info">{{ auction.get_auction_type_display }}</span>
+                            {% if auction.featured %}
+                                <span class="badge bg-warning text-dark"><i class="fas fa-star"></i> Featured</span>
+                            {% endif %}
+                            {% if auction.auto_extend %}
+                                <span class="badge bg-secondary"><i class="fas fa-clock"></i> Auto-Extend</span>
+                            {% endif %}
+                        </div>
+                        <p class="text-muted">
+                            <i class="fas fa-store me-1"></i>
+                            <a href="{% url 'auction:store_auctions' auction.store.slug %}" class="text-decoration-none">
+                                <strong>{{ auction.store.name }}</strong>
+                            </a>
+                            <span class="mx-2">|</span>
+                            <i class="fas fa-user me-1"></i> {{ auction.seller.get_full_name|default:auction.seller.username }}
+                            <span class="mx-2">|</span>
+                            <i class="fas fa-eye me-1"></i> {{ auction.view_count }} views
+                        </p>
+                    </div>
+                    {% if user.is_authenticated and user != auction.seller %}
+                        <button class="btn btn-outline-danger" onclick="toggleWatchlist('{{ auction.pk }}')">
+                            {% if is_watching %}
+                                <i class="fas fa-heart"></i> Remove from Watchlist
+                            {% else %}
+                                <i class="far fa-heart"></i> Add to Watchlist
+                            {% endif %}
+                        </button>
+                    {% endif %}
+                </div>
+
+                <!-- Pricing information -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="card bg-light border-0">
+                            <div class="card-body text-center">
+                                <h3 class="text-success mb-0">D{{ auction.current_price|intcomma }}</h3>
+                                <small class="text-muted">Current Bid</small>
+                                {% if auction.reserve_price %}
+                                    <div class="mt-2">
+                                        <span class="{% if auction.reserve_met %}reserve-met{% else %}reserve-not-met{% endif %}">
+                                            {% if auction.reserve_met %}
+                                                <i class="fas fa-check"></i> Reserve Met
+                                            {% else %}
+                                                <i class="fas fa-times"></i> Reserve Not Met
+                                            {% endif %}
+                                        </span>
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card bg-light border-0">
+                            <div class="card-body text-center">
+                                <h5 class="text-danger mb-0">{{ auction.time_remaining }}</h5>
+                                <small class="text-muted">Time Remaining</small>
+                                {% if can_extend %}
+                                    <div class="mt-2">
+                                        <small class="text-info"><i class="fas fa-info-circle"></i> May extend if bid placed</small>
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Description -->
+                <div class="mb-4">
+                    <h5>About this auction</h5>
+                    <div class="border p-3 rounded bg-light">
+                        {{ auction.description|linebreaks }}
+                    </div>
+                </div>
+
+                <!-- Auction details -->
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Auction Details</h6>
+                        <ul class="list-unstyled">
+                            <li><strong>Starting Bid:</strong> D{{ auction.starting_bid|intcomma }}</li>
+                            <li><strong>Minimum Increment:</strong> D{{ auction.increment_amount|intcomma }}</li>
+                            {% if auction.reserve_price %}
+                                <li><strong>Reserve Price:</strong> D{{ auction.reserve_price|intcomma }}</li>
+                            {% endif %}
+                            {% if auction.buy_now_price %}
+                                <li><strong>Buy Now Price:</strong> D{{ auction.buy_now_price|intcomma }}</li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Shipping & Store Info</h6>
+                        <ul class="list-unstyled">
+                            <li>
+                                <strong>Shipping Required:</strong>
+                                {% if auction.shipping_required %}
+                                    <span class="text-success">Yes - D{{ auction.shipping_cost|intcomma }}</span>
+                                {% else %}
+                                    <span class="text-muted">Pickup Only</span>
+                                {% endif %}
+                            </li>
+                            <li>
+                                <strong>Store Rating:</strong>
+                                <span class="text-warning">
+                                    {{ auction.store.get_average_rating|floatformat:1 }}/5.0
+                                </span>
+                            </li>
+                            <li>
+                                <strong>Processing Time:</strong>
+                                {{ auction.store.processing_time }} days
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-5">
+        <div class="col-md-8">
+            <!-- Questions Section -->
+            {% if user.is_authenticated and user != auction.seller %}
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header" style="background: linear-gradient(135deg, #232f3e 0%, #37475a 100%); color: white;">
+                    <h5 class="mb-0"><i class="fas fa-question-circle me-2"></i> Ask a Question</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" action="{% url 'auction:ask_question' auction.pk %}">
+                        {% csrf_token %}
+                        {{ question_form.question }}
+                        <button type="submit" class="btn mt-2" style="background-color: #ff9900; color: #232f3e; font-weight: bold;">
+                            <i class="fas fa-paper-plane me-1"></i> Submit Question
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Public Questions -->
+            {% if public_questions %}
+            <div class="card border-0 shadow-sm">
+                <div class="card-header" style="background: linear-gradient(135deg, #232f3e 0%, #37475a 100%); color: white;">
+                    <h5 class="mb-0"><i class="fas fa-comments me-2"></i> Questions & Answers</h5>
+                </div>
+                <div class="card-body">
+                    {% for question in public_questions %}
+                    <div class="mb-3 pb-3 {% if not forloop.last %}border-bottom{% endif %}">
+                        <div class="d-flex justify-content-between">
+                            <strong>{{ question.questioner.username }}</strong>
+                            <small class="text-muted">{{ question.created_at|timesince }} ago</small>
+                        </div>
+                        <p class="mt-2">{{ question.question }}</p>
+                        {% if question.answer %}
+                            <div class="mt-2 p-2 bg-light rounded">
+                                <strong>Seller's Answer:</strong>
+                                <p class="mb-0 mt-1">{{ question.answer }}</p>
+                                <small class="text-muted">{{ question.answered_at|timesince }} ago</small>
+                            </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-md-4">
+            <!-- Bidding Section -->
+            {% if auction.is_active %}
+                {% if user.is_authenticated %}
+                    {% if user != auction.seller and can_bid %}
+                        <div class="card border-0 shadow-sm mb-4">
+                            <div class="card-header text-white" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+                                <h5 class="mb-0"><i class="fas fa-gavel me-2"></i> Place Your Bid</h5>
+                            </div>
+                            <div class="card-body bid-form">
+                                <div class="text-center mb-3">
+                                    <div class="h4 text-success">D{{ auction.minimum_bid|intcomma }}</div>
+                                    <small class="text-muted">Minimum Next Bid</small>
+                                </div>
+
+                                <form method="post" action="{% url 'auction:place_bid' auction.pk %}">
+                                    {% csrf_token %}
+                                    <div class="mb-3">
+                                        {{ bid_form.amount.label_tag }}
+                                        {{ bid_form.amount }}
+                                        <div class="form-text">Enter at least D{{ auction.minimum_bid|intcomma }}</div>
+                                    </div>
+                                    <div class="mb-3">
+                                        {{ bid_form.max_auto_bid.label_tag }}
+                                        {{ bid_form.max_auto_bid }}
+                                        <div class="form-text">{{ bid_form.max_auto_bid.help_text }}</div>
+                                    </div>
+                                    <button type="submit" class="btn btn-success w-100">
+                                        <i class="fas fa-gavel me-1"></i> Place Bid
+                                    </button>
+                                </form>
+
+                                {% if auction.buy_now_price %}
+                                    <hr>
+                                    <a href="{% url 'auction:buy_now' auction.pk %}" class="btn buy-now-btn w-100">
+                                        <i class="fas fa-shopping-cart me-1"></i> Buy Now - D{{ auction.buy_now_price|intcomma }}
+                                    </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% elif user == auction.seller %}
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i> This is your auction.
+                            <a href="{% url 'auction:my_auctions' %}" class="alert-link">Manage your auctions</a>
+                        </div>
+                    {% elif not user.is_buyer %}
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle"></i> You need to be registered as a buyer to place bids.
+                        </div>
+                    {% endif %}
+                {% else %}
+                    <div class="card border-0 shadow-sm mb-4">
+                        <div class="card-body text-center">
+                            <h5>Want to bid?</h5>
+                            <p>Please log in to place a bid on this auction.</p>
+                            <div class="d-grid gap-2">
+                                <a href="{% url 'accounts:sign_in' %}" class="btn btn-primary">Login</a>
+                                <a href="{% url 'accounts:sign_in' %}" class="btn btn-outline-primary">Register</a>
+                            </div>
+                        </div>
+                    </div>
+                {% endif %}
+            {% else %}
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i> This auction has ended
+                    {% if auction.winner %}
+                        <br><strong>Winner:</strong> {{ auction.winner.username }}
+                        {% if auction.order %}
+                            <br><a href="{% url 'orders:order_detail' auction.order.pk %}" class="alert-link">View Order</a>
+                        {% endif %}
+                    {% endif %}
+                </div>
+            {% endif %}
+
+            <!-- Bid History -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header" style="background: linear-gradient(135deg, #232f3e 0%, #37475a 100%); color: white;">
+                    <h5 class="mb-0"><i class="fas fa-history me-2"></i> Bid History</h5>
+                </div>
+                <div class="card-body bid-history">
+                    {% if bids %}
+                        {% for bid in bids %}
+                            <div class="d-flex justify-content-between align-items-center py-2 {% if bid.is_winning %}winning-bid{% endif %}">
+                                <div>
+                                    <strong>{{ bid.bidder.username }}</strong>
+                                    {% if bid.is_winning %}
+                                        <i class="fas fa-crown text-warning"></i>
+                                    {% endif %}
+                                    {% if bid.is_auto_bid %}
+                                        <i class="fas fa-robot text-info" title="Auto-bid"></i>
+                                    {% endif %}
+                                    <br>
+                                    <small class="{% if bid.is_winning %}text-light{% else %}text-muted{% endif %}">
+                                        {{ bid.timestamp|timesince }} ago
+                                    </small>
+                                </div>
+                                <div class="text-end">
+                                    <strong>D{{ bid.amount|intcomma }}</strong>
+                                </div>
+                            </div>
+                            {% if not forloop.last %}<hr class="my-2">{% endif %}
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-muted text-center">No bids yet. Be the first to bid!</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Related Auctions -->
+            {% if related_auctions %}
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header" style="background: linear-gradient(135deg, #232f3e 0%, #37475a 100%); color: white;">
+                        <h6 class="mb-0"><i class="fas fa-eye me-2"></i> More from {{ auction.store.name }}</h6>
+                    </div>
+                    <div class="card-body">
+                        {% for related in related_auctions %}
+                            <div class="d-flex mb-3">
+                                {% if related.image %}
+                                    <img src="{{ related.image.url }}" class="me-2 rounded" style="width: 60px; height: 60px; object-fit: cover;" alt="{{ related.title }}">
+                                {% else %}
+                                    <div class="me-2 bg-light d-flex align-items-center justify-content-center rounded" style="width: 60px; height: 60px;">
+                                        <i class="fas fa-image text-muted"></i>
+                                    </div>
+                                {% endif %}
+                                <div class="flex-grow-1">
+                                    <a href="{% url 'auction:detail' related.pk %}" class="text-decoration-none">
+                                        <strong>{{ related.title|truncatechars:25 }}</strong>
+                                    </a>
+                                    <br>
+                                    <small class="text-success">D{{ related.current_price|intcomma }}</small>
+                                    <span class="mx-1">•</span>
+                                    <small class="text-muted">{{ related.time_remaining }}</small>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</section>
+
+<script>
+function toggleWatchlist(auctionId) {
+    fetch(`/auctions/${auctionId}/watchlist/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'Content-Type': 'application/json',
+        },
+    })
+    .then(response => response.json())
+    .then(data => {
+        // Update UI based on response
+        console.log('Watchlist toggled:', data.message);
+    })
+    .catch(error => {
+        console.error('Error:', error);
+    });
+}
+
+function changeMainImage(thumbnail, imageUrl) {
+    document.getElementById('mainAuctionImage').src = imageUrl;
+    // Update active thumbnail
+    document.querySelectorAll('.thumbnail-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    thumbnail.classList.add('active');
+}
+
+// Auto-refresh auction status every 30 seconds
+setInterval(function() {
+    fetch(`/auctions/api/{{ auction.pk }}/status/`)
+        .then(response => response.json())
+        .then(data => {
+            // Update time remaining, current price, etc.
+            const countdownElements = document.querySelectorAll('.countdown');
+            const priceElements = document.querySelectorAll('.current-price');
+
+            countdownElements.forEach(el => {
+                if (el.textContent !== data.time_remaining) {
+                    el.textContent = data.time_remaining;
+                    el.style.animation = 'pulse 1s';
+                }
+            });
+
+            priceElements.forEach(el => {
+                if (!el.textContent.includes(data.current_price)) {
+                    el.textContent = 'D' + data.current_price;
+                    el.style.animation = 'glow 2s';
+                }
+            });
+        })
+        .catch(error => console.error('Error updating auction status:', error));
+}, 30000);
+</script>
+{% endblock %}

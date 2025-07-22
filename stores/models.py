@@ -104,6 +104,17 @@ class Store(models.Model):
     facebook_url = models.URLField(blank=True, null=True)
     twitter_url = models.URLField(blank=True, null=True)
     instagram_url = models.URLField(blank=True, null=True)
+    allow_auctions = models.BooleanField(default=True)
+    auction_commission_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal('5.00'),
+        help_text="Commission rate for auctions (%)"
+    )
+    auto_approve_auctions = models.BooleanField(
+        default=False,
+        help_text="Automatically approve auctions without admin review"
+    )
 
     class Meta:
         ordering = ['-created_at']
@@ -150,6 +161,22 @@ class Store(models.Model):
 
     def can_process_returns(self):
         return self.is_active_store and self.return_policy_days > 0
+
+    def get_active_auctions(self):
+        """Get active auctions for this store"""
+        return self.auctions.filter(status='active')
+
+    def get_auction_sales(self):
+        """Get total auction sales for this store"""
+        from auction.models import Auction
+        from django.db.models import Sum
+
+        return self.auctions.filter(
+            status__in=['sold', 'ended'],
+            winner__isnull=False
+        ).aggregate(
+            total=Sum('current_bid')
+        )['total'] or Decimal('0.00')
 
 
 class StoreManager(models.Model):

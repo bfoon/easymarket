@@ -184,6 +184,22 @@ class Product(models.Model):
     store = models.ForeignKey('stores.Store', on_delete=models.CASCADE, related_name='products' , blank=True, null=True)
     is_active = models.BooleanField(default=True)
 
+    available_for_auction = models.BooleanField(default=True)
+    auction_reserve_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Suggested reserve price for auctions"
+    )
+    auction_starting_bid = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Suggested starting bid for auctions"
+    )
+
     # Remove this line:
     # stock = models.PositiveIntegerField(default=0)
 
@@ -192,6 +208,24 @@ class Product(models.Model):
 
     def __str__(self):
         return self.name
+
+    def create_auction(self, seller, starting_bid, end_date, **kwargs):
+        """Helper method to create an auction from this product"""
+        from auction.models import Auction
+
+        auction_data = {
+            'title': self.name,
+            'description': self.description,
+            'starting_bid': starting_bid,
+            'end_date': end_date,
+            'seller': seller,
+            'marketplace_product': self,
+            'image': self.image,
+            'shipping_cost': 0.00,  # You can calculate this based on your logic
+            **kwargs
+        }
+
+        return Auction.objects.create(**auction_data)
 
     @property
     def stock(self):

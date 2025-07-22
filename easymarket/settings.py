@@ -65,6 +65,7 @@ INSTALLED_APPS = [
     'chat',
     'stores',
     'finance',
+    'auction',
 
 ]
 
@@ -95,6 +96,7 @@ TEMPLATES = [
                 'marketplace.context_processors.search_context',
                 'orders.context_processors.pending_orders_count',
                 'reviews.context_processors.global_review_stats',
+                'auction.context_processors.auction_counts',
             ],
         },
     },
@@ -171,6 +173,12 @@ EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'your-email@gmail.com'  # Your email
 EMAIL_HOST_PASSWORD = 'your-app-password'  # Your email password or app password
 DEFAULT_FROM_EMAIL = 'EasyMarket <noreply@easymarket.com>'
+EMAIL_AUCTION_SETTINGS = {
+    'OUTBID_NOTIFICATION': True,
+    'AUCTION_ENDING_NOTIFICATION': True,
+    'AUCTION_WON_NOTIFICATION': True,
+    'NEW_BID_NOTIFICATION_SELLER': True,
+}
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
@@ -212,4 +220,28 @@ PLUS_CODE_SETTINGS = {
     'GEOCODING_TIMEOUT': 10,  # seconds
     'USE_GOOGLE_GEOCODING': True,
     'FALLBACK_TO_OSM': True,
+}
+
+# Auction-specific settings
+AUCTION_SETTINGS = {
+    'AUTO_END_AUCTIONS': True,
+    'NOTIFICATION_EMAILS': True,
+    'MAX_IMAGES_PER_AUCTION': 5,
+    'DEFAULT_AUCTION_DURATION_DAYS': 7,
+    'MIN_AUCTION_DURATION_HOURS': 1,
+    'MAX_AUCTION_DURATION_DAYS': 30,
+    'FEATURED_AUCTION_COST': 10.00,
+    'AUTO_EXTEND_MINUTES': 5,
+    'DEFAULT_COMMISSION_RATE': 5.0,  # 5% default commission
+    'MINIMUM_BID_INCREMENT': 1.00,
+}
+
+# Integration with existing payment system
+PAYMENT_INTEGRATION = {
+    'AUCTION_PAYMENT_REQUIRED': True,
+    'AUCTION_FEES': {
+        'LISTING_FEE': 0.50,
+        'SUCCESS_FEE_PERCENTAGE': 3.5,
+        'FEATURED_LISTING_FEE': 10.00,
+    }
 }

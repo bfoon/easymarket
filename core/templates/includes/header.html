@@ -43,11 +43,24 @@
                                 <i class="fas fa-box-open me-2 text-secondary"></i>Used Products
                             </a>
                         </li>
+                         <li><hr class="dropdown-divider"></li>
                         <li>
-                            <a class="easymarket-dropdown-item dropdown-item" href="#">
-                                <i class="fas fa-gavel me-2 text-warning"></i>Auction
+                            <a class="easymarket-dropdown-item dropdown-item" href="{% url 'auction:index' %}">
+                                <i class="fas fa-gavel me-2 text-warning"></i>Live Auctions
+                                {% if active_auctions_count %}
+                                    <span class="badge bg-danger ms-2 auction-count-badge" style="font-size: 0.65rem; animation: pulse 2s infinite;">
+                                        {{ active_auctions_count }}
+                                    </span>
+                                {% endif %}
                             </a>
                         </li>
+                        {% if user.is_authenticated and user.is_seller %}
+                        <li>
+                            <a class="easymarket-dropdown-item dropdown-item" href="{% url 'auction:create' %}">
+                                <i class="fas fa-plus me-2 text-success"></i>Create Auction
+                            </a>
+                        </li>
+                        {% endif %}
                         <li>
                             <a class="easymarket-dropdown-item dropdown-item" href="#">
                                 <i class="fas fa-gift me-2 text-success"></i>Giveaways
@@ -75,6 +88,16 @@
                                             <i class="fas fa-store me-2 text-primary"></i>Stores
                                         </a>
                                     </li>
+                                <li>
+                                    <a class="easymarket-dropdown-item dropdown-item" href="{% url 'auction:my_auctions' %}">
+                                        <i class="fas fa-gavel me-2 text-warning"></i>My Auctions
+                                        {% if user_auction_count %}
+                                            <span class="badge bg-primary ms-2" style="font-size: 0.65rem;">
+                                                {{ user_auction_count }}
+                                            </span>
+                                        {% endif %}
+                                    </a>
+                                </li>
                                 {% endif %}
                                 {% if user.is_superuser or user.is_logistic or user.is_finance %}
                                     <li>
@@ -131,6 +154,38 @@
                             <i class="fas fa-shopping-bag me-2 text-success"></i>My Orders
                         </a>
                     </li>
+                    {% if user.is_buyer %}
+            <li>
+                <a class="easymarket-dropdown-item dropdown-item" href="{% url 'auction:my_bids' %}">
+                    <i class="fas fa-gavel me-2 text-warning"></i>My Bids
+                    {% if user_active_bids_count %}
+                        <span class="badge bg-primary ms-2" style="font-size: 0.65rem;">
+                            {{ user_active_bids_count }}
+                        </span>
+                    {% endif %}
+                </a>
+            </li>
+            <li>
+                <a class="easymarket-dropdown-item dropdown-item" href="{% url 'auction:won_auctions' %}">
+                    <i class="fas fa-trophy me-2 text-warning"></i>Won Auctions
+                    {% if user_won_auctions_count %}
+                        <span class="badge bg-success ms-2" style="font-size: 0.65rem;">
+                            {{ user_won_auctions_count }}
+                        </span>
+                    {% endif %}
+                </a>
+            </li>
+        <li>
+            <a class="easymarket-dropdown-item dropdown-item" href="{% url 'auction:watchlist' %}">
+                <i class="fas fa-heart me-2 text-danger"></i>Auction Watchlist
+                {% if user_watchlist_count %}
+                    <span class="badge bg-danger ms-2" style="font-size: 0.65rem;">
+                        {{ user_watchlist_count }}
+                    </span>
+                {% endif %}
+            </a>
+        </li>
+        {% endif %}
                     <li>
                         <a class="easymarket-dropdown-item dropdown-item" href="{% url 'marketplace:my_wishlist' %}">
                             <i class="fas fa-heart me-2 text-danger"></i>Wishlist
@@ -204,6 +259,38 @@
 </nav>
 
 <style>
+/* Force white color for the toggler icon on small screens */
+.navbar-light .navbar-toggler-icon {
+    background-image: url("data:image/svg+xml;charset=utf8,%3Csvg viewBox='0 0 30 30' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath stroke='rgba%28255, 255, 255, 1%29' stroke-width='2' stroke-linecap='round' stroke-miterlimit='10' d='M4 7h22M4 15h22M4 23h22'/%3E%3C/svg%3E");
+}
+
+/* Fix navbar background and text in mobile view */
+@media (max-width: 991.98px) {
+    .navbar-collapse {
+        background-color: #212529 !important; /* dark background */
+    }
+
+    .navbar-nav .nav-link,
+    .navbar-nav .dropdown-item {
+        color: #f8f9fa !important; /* light text */
+    }
+
+    .navbar-nav .dropdown-item:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .navbar-nav .dropdown-menu {
+        background-color: #343a40 !important;
+    }
+
+    .dropdown-menu .dropdown-item {
+        color: #f8f9fa;
+    }
+}
+</style>
+
+
+<style>
     .profile-picture {
         width: 40px;
         height: 40px;
@@ -260,6 +347,45 @@
         border-radius: 2px;
         animation: slideIn 0.3s ease-out;
     }
+    .auction-count-badge {
+    animation: pulse-auction 2s infinite;
+}
+
+@keyframes pulse-auction {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    50% {
+        transform: scale(1.1);
+        opacity: 0.8;
+    }
+}
+
+.easymarket-dropdown-item:hover .auction-count-badge {
+    animation-play-state: paused;
+    transform: scale(1.2);
+}
+
+/* Highlight auction links */
+.easymarket-dropdown-item[href*="auction"] {
+    background: linear-gradient(45deg, transparent 0%, rgba(255, 153, 0, 0.05) 100%);
+    border-left: 3px solid transparent;
+    transition: all 0.3s ease;
+}
+
+.easymarket-dropdown-item[href*="auction"]:hover {
+    background: linear-gradient(45deg, rgba(255, 153, 0, 0.1) 0%, rgba(255, 153, 0, 0.2) 100%);
+    border-left: 3px solid #ff9900;
+    transform: translateX(5px);
+}
+
+/* Active auction page indicator */
+.nav-link.active[href*="auction"] {
+    background: linear-gradient(45deg, rgba(255, 153, 0, 0.1) 0%, rgba(255, 153, 0, 0.2) 100%);
+    color: #ff9900 !important;
+    border-radius: 0.25rem;
+}
 
     @keyframes slideIn {
         from {
@@ -476,7 +602,75 @@
     }
 </style>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('.navbar-collapse .nav-link').forEach(function(link) {
+            link.addEventListener('click', function(e) {
+        // Skip if the link is a dropdown toggle (has data-bs-toggle="dropdown")
+        if (link.getAttribute('data-bs-toggle') === 'dropdown') return;
+
+        const navbarCollapse = document.querySelector('.navbar-collapse');
+        if (window.innerWidth < 992 && navbarCollapse.classList.contains('show')) {
+            const bsCollapse = bootstrap.Collapse.getInstance(navbarCollapse) || new bootstrap.Collapse(navbarCollapse, { toggle: false });
+            bsCollapse.hide();
+        }
+    });
+});
+
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Function to update auction counts in navigation
+    function updateAuctionCounts() {
+        {% if user.is_authenticated %}
+        fetch('/auctions/api/user-counts/', {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            // Update active bids count
+            const activeBidsElement = document.querySelector('[href*="my_bids"] .badge');
+            if (activeBidsElement && data.active_bids_count) {
+                activeBidsElement.textContent = data.active_bids_count;
+                activeBidsElement.style.display = data.active_bids_count > 0 ? 'inline' : 'none';
+            }
+
+            // Update won auctions count
+            const wonAuctionsElement = document.querySelector('[href*="won_auctions"] .badge');
+            if (wonAuctionsElement && data.won_auctions_count) {
+                wonAuctionsElement.textContent = data.won_auctions_count;
+                wonAuctionsElement.style.display = data.won_auctions_count > 0 ? 'inline' : 'none';
+            }
+
+            // Update watchlist count
+            const watchlistElement = document.querySelector('[href*="auction"][href*="watchlist"] .badge');
+            if (watchlistElement && data.watchlist_count) {
+                watchlistElement.textContent = data.watchlist_count;
+                watchlistElement.style.display = data.watchlist_count > 0 ? 'inline' : 'none';
+            }
+
+            // Update seller auction count
+            const sellerAuctionsElement = document.querySelector('[href*="my_auctions"] .badge');
+            if (sellerAuctionsElement && data.seller_auctions_count) {
+                sellerAuctionsElement.textContent = data.seller_auctions_count;
+                sellerAuctionsElement.style.display = data.seller_auctions_count > 0 ? 'inline' : 'none';
+            }
+        })
+        .catch(error => {
+            console.debug('Auction counts update failed:', error);
+        });
+        {% endif %}
+    }
+
+    // Update counts on page load
+    updateAuctionCounts();
+
+    // Update counts every 2 minutes
+    setInterval(updateAuctionCounts, 120000);
+});
+</script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const searchInput = document.getElementById('easymarket-search-input');
@@ -690,19 +884,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (menu) {
             menu.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
         }
-
-        // Check if this is the Deals dropdown
-        const isDealsDropdown = toggle && toggle.getAttribute('id') === 'dealsDropdown';
-
-        if (isDealsDropdown) {
-            // Deals dropdown: Click to open, click outside or on item to close
-            toggle.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-
-                const bsDropdown = bootstrap.Dropdown.getOrCreateInstance(toggle);
-                bsDropdown.toggle();
-            });
 
             // Close when clicking on dropdown items
             const dropdownItems = menu.querySelectorAll('.easymarket-dropdown-item');
