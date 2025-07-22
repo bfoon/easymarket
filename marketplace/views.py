@@ -1048,7 +1048,7 @@ def category_detail(request, pk):
             Q(name__icontains=search_query) |
             Q(description__icontains=search_query) |
             Q(brand__name__icontains=search_query) |
-            Q(tags__icontains=search_query)
+            Q(tags__name__icontains=search_query)
         ).distinct()
 
     # Apply sorting
