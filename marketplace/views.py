@@ -29,6 +29,7 @@ from django.db.models import Q, Count, F, Sum, Avg
 from decimal import Decimal
 from django.contrib import messages
 from collections import Counter
+from accounts.utils import log_admin_action
 
 # Get the custom User model
 User = get_user_model()
@@ -848,8 +849,16 @@ def product_detail(request, product_id):
         if last_space != -1:
             short_description = short_description[:last_space]
 
-
-
+        # Log the product view
+    if request.user.is_authenticated:
+        ProductView.objects.get_or_create(user=request.user, product=product)
+        log_admin_action(
+            request.user,
+            action_type='product_view',
+            message=f"Viewed product: {product.name}",
+            model='Product',
+            object_id=product.id
+        )
 
     # Review data
     reviews = Review.objects.filter(product=product)
@@ -1311,6 +1320,15 @@ def add_to_cart(request, product_id):
             tax_rate = Decimal('0.085')
             tax_amount = cart_total * tax_rate
             final_total = cart_total + tax_amount
+
+            if request.user.is_authenticated:
+                log_admin_action(
+                    request.user,
+                    action_type='cart_add',
+                    message=f"Added {product.name} to cart",
+                    model='Product',
+                    object_id=product.id
+                )
 
             return JsonResponse({
                 'success': True,
@@ -1804,6 +1822,23 @@ def toggle_wishlist(request, product_id):
         messages.success(request, f"{product.name} added to cart.")
         return redirect('marketplace:my_wishlist')
 
+    if created:
+        log_admin_action(
+            request.user,
+            action_type='wishlist_add',
+            message=f"Added {product.name} to wishlist",
+            model='Product',
+            object_id=product.id
+        )
+    else:
+        log_admin_action(
+            request.user,
+            action_type='wishlist_remove',
+            message=f"Removed {product.name} from wishlist",
+            model='Product',
+            object_id=product.id
+        )
+
     # AJAX or normal toggle
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
         if not created:
@@ -2053,7 +2088,12 @@ def search_products(request):
     # Log search if query exists
     if query:
         log_search(request, query, products.count())
-
+        log_admin_action(
+            request.user,
+            action_type='search',
+            message=f"Search performed for: '{query}'",
+            model='SearchHistory'
+        )
     # Pagination
     paginator = Paginator(products, 12)
     page_number = request.GET.get('page')

@@ -22,11 +22,13 @@ from django.views.decorators.http import require_POST
 from django.forms import modelformset_factory
 from chat.models import ChatThread, ChatMessage
 from django.contrib.auth import get_user_model
-from marketplace.models import Product, ProductImage, ProductVariant
+from marketplace.models import Product, ProductImage, ProductVariant, ProductView
 from .forms import ProductForm, ProductImageForm, ProductVariantForm
 from django.db import transaction
+from accounts.models import AdminLog
 import re
 from decimal import Decimal
+from accounts.utils import log_admin_action
 from .models import Store
 from reviews.models import Review
 from marketplace.models import Product, Category, ProductImage
@@ -546,6 +548,16 @@ def product_detail(request, product_id):
         product.view_count += 1
         product.save(update_fields=['view_count'])
 
+    if request.user.is_authenticated:
+        ProductView.objects.get_or_create(user=request.user, product=product)
+        log_admin_action(
+            request.user,
+            action_type='product_view',
+            message=f"Viewed product: {product.name}",
+            model='Product',
+            object_id=product.id
+        )
+
     context = {
         'product': product,
         'seller_store': seller_store,
@@ -656,9 +668,9 @@ def store_products(request, slug):
 #     }
 #     return render(request, 'stores/manage_products.html', context)
 
+
 @login_required
 def edit_product(request, store_id, product_id):
-    """Edit a product, including images, variants, stock, and visibility."""
     store = get_object_or_404(Store, id=store_id, owner=request.user)
     product = get_object_or_404(Product, id=product_id, seller=request.user)
     stock, _ = Stock.objects.get_or_create(product=product)
@@ -672,10 +684,43 @@ def edit_product(request, store_id, product_id):
         variant_formset = VariantFormSet(request.POST, queryset=ProductVariant.objects.filter(product=product))
         stock_quantity = request.POST.get('stock_quantity')
 
+        original = Product.objects.get(pk=product.pk)
+        changed_fields = []
+        field_diffs = []
+
+        for field in [
+            'name', 'price', 'original_price', 'description', 'specifications',
+            'is_active', 'used', 'is_featured', 'is_trending', 'has_30_day_return', 'free_shipping'
+        ]:
+            old = getattr(original, field)
+            new = request.POST.get(field)
+
+            if isinstance(old, bool):
+                new = field in request.POST
+            elif isinstance(old, Decimal):
+                try:
+                    new = Decimal(new)
+                except:
+                    continue
+
+            if old != new:
+                changed_fields.append(field)
+                field_diffs.append(f"{field}: '{old}' → '{new}'")
+
+        product._changed_fields = changed_fields
+        product._log_user = request.user
+
         # Handle promo code removals
         for promo in product.promo_codes.all():
             if request.POST.get(f'remove_promo_{promo.id}'):
                 product.promo_codes.remove(promo)
+                AdminLog.objects.create(
+                    action_type='promo_remove',
+                    related_model='PromoCode',
+                    related_object_id=str(promo.id),
+                    message=f"Promo '{promo.code}' removed from product '{product.name}'",
+                    created_by=request.user
+                )
 
         # Assign existing promo
         existing_promo_id = request.POST.get('existing_promo')
@@ -683,6 +728,13 @@ def edit_product(request, store_id, product_id):
             try:
                 promo = PromoCode.objects.get(id=existing_promo_id)
                 promo.products.add(product)
+                AdminLog.objects.create(
+                    action_type='promo_add',
+                    related_model='PromoCode',
+                    related_object_id=str(promo.id),
+                    message=f"Promo '{promo.code}' assigned to product '{product.name}'",
+                    created_by=request.user
+                )
             except PromoCode.DoesNotExist:
                 pass
 
@@ -696,23 +748,45 @@ def edit_product(request, store_id, product_id):
                 is_active=True
             )
             promo.products.add(product)
+            AdminLog.objects.create(
+                action_type='promo_create',
+                related_model='PromoCode',
+                related_object_id=str(promo.id),
+                message=f"New promo '{promo.code}' created and linked to '{product.name}'",
+                created_by=request.user
+            )
 
         if product_form.is_valid() and image_formset.is_valid() and variant_formset.is_valid():
             with transaction.atomic():
                 product = product_form.save(commit=False)
-
-                # Update active or used status from checkbox
+                product._log_user = request.user
                 product.is_active = 'is_active' in request.POST
                 product.used = 'used' in request.POST
-
                 product.save()
 
-                # Update stock
-                if stock_quantity is not None and stock_quantity.isdigit():
+                if field_diffs:
+                    AdminLog.objects.create(
+                        action_type='product_edit',
+                        related_model='Product',
+                        related_object_id=str(product.id),
+                        message=f"Updated product '{product.name}':\n" + "\n".join(field_diffs),
+                        created_by=request.user
+                    )
+
+                # Stock update
+                if stock_quantity and stock_quantity.isdigit():
+                    if stock.quantity != int(stock_quantity):
+                        AdminLog.objects.create(
+                            action_type='stock_update',
+                            related_model='Stock',
+                            related_object_id=str(stock.id),
+                            message=f"Stock for '{product.name}' updated: {stock.quantity} → {int(stock_quantity)}",
+                            created_by=request.user
+                        )
                     stock.quantity = int(stock_quantity)
                     stock.save()
 
-                # Save new product images
+                # Save product images
                 for form in image_formset:
                     if form.is_valid() and form.cleaned_data:
                         image_file = form.cleaned_data.get('image')
@@ -721,18 +795,36 @@ def edit_product(request, store_id, product_id):
                             image.product = product
                             image.save()
 
-                # Clear old variants
+                # Track variant changes
+                old_variants = set(ProductVariant.objects.filter(product=product).values_list('feature_option__value', flat=True))
                 ProductVariant.objects.filter(product=product).delete()
 
-                # Save new variants
+                new_variants = set()
                 for form in variant_formset:
                     if form.cleaned_data and form.cleaned_data.get('feature_option'):
                         variant = form.save(commit=False)
                         variant.product = product
                         variant.save()
+                        new_variants.add(variant.feature_option.value)
 
-            messages.success(request, 'Product and stock updated successfully!')
-            return redirect('stores:manage_store_products', store_id=store.id)
+                if old_variants != new_variants:
+                    added = new_variants - old_variants
+                    removed = old_variants - new_variants
+                    msg = []
+                    if added:
+                        msg.append(f"Added: {', '.join(added)}")
+                    if removed:
+                        msg.append(f"Removed: {', '.join(removed)}")
+                    AdminLog.objects.create(
+                        action_type='variant_update',
+                        related_model='ProductVariant',
+                        related_object_id=str(product.id),
+                        message=f"Variants updated for product '{product.name}'. " + " ".join(msg),
+                        created_by=request.user
+                    )
+
+                messages.success(request, 'Product and stock updated successfully!')
+                return redirect('stores:manage_store_products', store_id=store.id)
 
         else:
             if not product_form.is_valid():
@@ -757,7 +849,7 @@ def edit_product(request, store_id, product_id):
 
     all_promos = PromoCode.objects.filter(is_active=True)
 
-    context = {
+    return render(request, 'stores/edit_product.html', {
         'store': store,
         'product': product,
         'product_form': product_form,
@@ -766,10 +858,7 @@ def edit_product(request, store_id, product_id):
         'boolean_fields': boolean_fields,
         'all_promos': all_promos,
         'stock_quantity': stock.quantity,
-    }
-
-    return render(request, 'stores/edit_product.html', context)
-
+    })
 
 @login_required
 @require_POST

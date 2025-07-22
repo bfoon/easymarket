@@ -1,0 +1,757 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<link rel="stylesheet" href="{% static 'css/main.css' %}">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+<style>
+    :root {
+        --detail-border-radius: 12px;
+        --detail-shadow: 0 4px 16px rgba(0,0,0,0.1);
+        --detail-shadow-hover: 0 6px 20px rgba(0,0,0,0.15);
+        --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .detail-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: var(--detail-border-radius);
+        color: white;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .detail-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="white" opacity="0.1"/><circle cx="75" cy="75" r="1" fill="white" opacity="0.1"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+        pointer-events: none;
+    }
+
+    .breadcrumb-nav {
+        background: white;
+        border-radius: var(--detail-border-radius);
+        padding: 1rem 1.5rem;
+        margin-bottom: 1.5rem;
+        box-shadow: var(--detail-shadow);
+        border: 1px solid #e9ecef;
+    }
+
+    .detail-card {
+        background: white;
+        border-radius: var(--detail-border-radius);
+        box-shadow: var(--detail-shadow);
+        border: 1px solid #e9ecef;
+        overflow: hidden;
+        margin-bottom: 1.5rem;
+        transition: var(--transition-smooth);
+    }
+
+    .detail-card:hover {
+        box-shadow: var(--detail-shadow-hover);
+    }
+
+    .card-header {
+        background: #f8f9fa;
+        border-bottom: 1px solid #e9ecef;
+        padding: 1.25rem 1.5rem;
+        font-weight: 600;
+        color: #495057;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .card-body {
+        padding: 1.5rem;
+    }
+
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .info-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+        padding: 1rem;
+        background: #f8f9fa;
+        border-radius: 8px;
+        border-left: 4px solid #667eea;
+        transition: var(--transition-smooth);
+    }
+
+    .info-item:hover {
+        background: #e9ecef;
+        transform: translateY(-1px);
+    }
+
+    .info-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        font-size: 18px;
+    }
+
+    .info-content {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .info-label {
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 0.25rem;
+        font-size: 0.875rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .info-value {
+        color: #212529;
+        font-size: 1rem;
+        word-break: break-word;
+    }
+
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-weight: 600;
+        font-size: 0.875rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .status-reviewed {
+        background: #d1e7dd;
+        color: #0a3622;
+    }
+
+    .status-pending {
+        background: #fff3cd;
+        color: #664d03;
+    }
+
+    .status-flagged {
+        background: #f8d7da;
+        color: #58151c;
+    }
+
+    .action-type-icon {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+        color: white;
+        margin-right: 1rem;
+        flex-shrink: 0;
+    }
+
+    /* Action type specific colors */
+    .product_add .action-type-icon { background: linear-gradient(135deg, #198754, #20c997); }
+    .product_delete .action-type-icon { background: linear-gradient(135deg, #dc3545, #e85d75); }
+    .product_edit .action-type-icon { background: linear-gradient(135deg, #0dcaf0, #3dd5f3); }
+    .bad_rating .action-type-icon { background: linear-gradient(135deg, #ffc107, #ffcd39); color: #000; }
+    .store_edit .action-type-icon { background: linear-gradient(135deg, #6f42c1, #8e6bb8); }
+    .complaint .action-type-icon { background: linear-gradient(135deg, #fd7e14, #fd9644); }
+
+    .notes-form {
+        background: #f8f9fa;
+        border-radius: var(--detail-border-radius);
+        padding: 1.5rem;
+        border: 1px solid #e9ecef;
+    }
+
+    .form-floating {
+        margin-bottom: 1rem;
+    }
+
+    .form-control {
+        border-radius: 8px;
+        border: 2px solid #e9ecef;
+        transition: var(--transition-smooth);
+    }
+
+    .form-control:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        border: none;
+        border-radius: 25px;
+        padding: 0.75rem 2rem;
+        font-weight: 600;
+        transition: var(--transition-smooth);
+    }
+
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3);
+    }
+
+    .action-buttons {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+        margin-top: 1.5rem;
+    }
+
+    .btn-outline-success, .btn-outline-warning, .btn-outline-secondary {
+        border-radius: 25px;
+        padding: 0.75rem 1.5rem;
+        font-weight: 600;
+        transition: var(--transition-smooth);
+    }
+
+    .btn-outline-success:hover, .btn-outline-warning:hover, .btn-outline-secondary:hover {
+        transform: translateY(-2px);
+    }
+
+    .timeline-item {
+        position: relative;
+        padding-left: 2rem;
+        margin-bottom: 1rem;
+    }
+
+    .timeline-item::before {
+        content: '';
+        position: absolute;
+        left: 0.5rem;
+        top: 0;
+        bottom: -1rem;
+        width: 2px;
+        background: #e9ecef;
+    }
+
+    .timeline-item:last-child::before {
+        display: none;
+    }
+
+    .timeline-dot {
+        position: absolute;
+        left: 0;
+        top: 0.5rem;
+        width: 1rem;
+        height: 1rem;
+        border-radius: 50%;
+        background: #667eea;
+        border: 2px solid white;
+        box-shadow: 0 0 0 2px #667eea;
+    }
+
+    .related-object {
+        background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+        border-radius: var(--detail-border-radius);
+        padding: 1.5rem;
+        border: 1px solid #dee2e6;
+        margin-top: 1rem;
+    }
+
+    .json-viewer {
+        background: #2d3748;
+        color: #e2e8f0;
+        border-radius: 8px;
+        padding: 1rem;
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        font-size: 0.875rem;
+        overflow-x: auto;
+        max-height: 300px;
+        overflow-y: auto;
+    }
+
+    @media (max-width: 768px) {
+        .detail-header {
+            padding: 1.5rem;
+        }
+
+        .info-grid {
+            grid-template-columns: 1fr;
+            gap: 1rem;
+        }
+
+        .action-buttons {
+            flex-direction: column;
+        }
+
+        .card-body {
+            padding: 1rem;
+        }
+    }
+</style>
+
+<div class="container-fluid py-4">
+    <!-- Breadcrumb Navigation -->
+    <nav class="breadcrumb-nav" aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0">
+            <li class="breadcrumb-item">
+                <a href="{% url 'accounts:admin_logs' %}" class="text-decoration-none">
+                    <i class="fas fa-clipboard-list me-2"></i>Activity Logs
+                </a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">
+                {{ log.get_action_type_display }} Details
+            </li>
+        </ol>
+    </nav>
+
+    <!-- Enhanced Header -->
+    <div class="detail-header {{ log.action_type }}">
+        <div class="d-flex align-items-center position-relative">
+            <div class="action-type-icon">
+                {% if log.action_type == 'product_add' %}
+                    <i class="fas fa-plus"></i>
+                {% elif log.action_type == 'product_delete' %}
+                    <i class="fas fa-trash"></i>
+                {% elif log.action_type == 'product_edit' %}
+                    <i class="fas fa-edit"></i>
+                {% elif log.action_type == 'bad_rating' %}
+                    <i class="fas fa-star-half-alt"></i>
+                {% elif log.action_type == 'store_edit' %}
+                    <i class="fas fa-store"></i>
+                {% elif log.action_type == 'complaint' %}
+                    <i class="fas fa-exclamation-triangle"></i>
+                {% else %}
+                    <i class="fas fa-info-circle"></i>
+                {% endif %}
+            </div>
+            <div class="flex-grow-1">
+                <h1 class="h2 mb-2">{{ log.get_action_type_display }}</h1>
+                <p class="mb-0 opacity-75">
+                    <i class="fas fa-clock me-2"></i>
+                    <time datetime="{{ log.created_at|date:'c' }}">
+                        {{ log.created_at }} ({{ log.created_at|timesince }} ago)
+                    </time>
+                </p>
+            </div>
+            <div class="text-end">
+                {% if log.is_flagged %}
+                        <span class="status-badge status-flagged me-2">
+                            <i class="fas fa-flag"></i>
+                            Flagged for Review
+                        </span>
+                    {% endif %}
+                    {% if log.reviewed %}
+                        <span class="status-badge status-reviewed">
+                            <i class="fas fa-check-circle"></i>
+                            Reviewed
+                        </span>
+                    {% else %}
+                        <span class="status-badge status-pending">
+                            <i class="fas fa-clock"></i>
+                            Pending Review
+                        </span>
+                    {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <!-- Log Details Card -->
+            <div class="detail-card">
+                <div class="card-header">
+                    <i class="fas fa-info-circle"></i>
+                    Log Information
+                </div>
+                <div class="card-body">
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <div class="info-icon">
+                                <i class="fas fa-comment-alt"></i>
+                            </div>
+                            <div class="info-content">
+                                <div class="info-label">Message</div>
+                                <div class="info-value">{{ log.message|default:"No message provided" }}</div>
+                            </div>
+                        </div>
+
+                        <div class="info-item">
+                            <div class="info-icon">
+                                <i class="fas fa-database"></i>
+                            </div>
+                            <div class="info-content">
+                                <div class="info-label">Related Model</div>
+                                <div class="info-value">{{ log.related_model|default:"Not specified" }}</div>
+                            </div>
+                        </div>
+
+                        <div class="info-item">
+                            <div class="info-icon">
+                                <i class="fas fa-hashtag"></i>
+                            </div>
+                            <div class="info-content">
+                                <div class="info-label">Object ID</div>
+                                <div class="info-value">{{ log.related_object_id|default:"Not specified" }}</div>
+                            </div>
+                        </div>
+
+                        <div class="info-item">
+                            <div class="info-icon">
+                                <i class="fas fa-user"></i>
+                            </div>
+                            <div class="info-content">
+                                <div class="info-label">Created By</div>
+                                <div class="info-value">
+                                    {% if log.created_by %}
+                                        {{ log.created_by.get_full_name|default:log.created_by.username }}
+                                        <small class="text-muted d-block">{{ log.created_by.email }}</small>
+                                    {% else %}
+                                        System
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        {% if log.ip_address %}
+                        <div class="info-item">
+                            <div class="info-icon">
+                                <i class="fas fa-globe"></i>
+                            </div>
+                            <div class="info-content">
+                                <div class="info-label">IP Address</div>
+                                <div class="info-value">{{ log.ip_address }}</div>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        {% if log.user_agent %}
+                        <div class="info-item">
+                            <div class="info-icon">
+                                <i class="fas fa-desktop"></i>
+                            </div>
+                            <div class="info-content">
+                                <div class="info-label">User Agent</div>
+                                <div class="info-value">{{ log.user_agent|truncatechars:60 }}</div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Related Object Information -->
+                    {% if log.related_model and log.related_object_id %}
+                    <div class="related-object">
+                        <h5 class="mb-3">
+                            <i class="fas fa-link me-2"></i>
+                            Related Object Details
+                        </h5>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <strong>Model:</strong> {{ log.related_model }}<br>
+                                <strong>ID:</strong> {{ log.related_object_id }}
+                            </div>
+                            <div class="col-md-6">
+                                {% if log.object_data %}
+                                <button class="btn btn-sm btn-outline-info" onclick="toggleObjectData()">
+                                    <i class="fas fa-code me-1"></i>
+                                    View Object Data
+                                </button>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        {% if log.object_data %}
+                        <div id="object-data" class="mt-3" style="display: none;">
+                            <div class="json-viewer">
+                                <pre>{{ log.object_data|pprint }}</pre>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Notes Form -->
+            <div class="detail-card">
+                <div class="card-header">
+                    <i class="fas fa-sticky-note"></i>
+                    Administrative Notes
+                </div>
+                <div class="card-body">
+                    <form method="post" id="notes-form" onsubmit="saveLogNote(event, {{ log.pk }})">
+                        {% csrf_token %}
+                        <div class="form-floating">
+                            <textarea name="notes" class="form-control" id="notes-textarea"
+                                      style="height: 120px" placeholder="Add your notes here...">{{ log.notes }}</textarea>
+                            <label for="notes-textarea">Notes</label>
+                        </div>
+
+                        <div class="action-buttons mt-3">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-2"></i> Save Notes
+                            </button>
+
+                            {% if not log.reviewed %}
+                            <button type="button" onclick="markAsReviewed({{ log.pk }})" class="btn btn-sm btn-outline-success">
+                                <i class="fas fa-check-circle"></i> Mark as Reviewed
+                            </button>
+                            {% endif %}
+
+                            <button type="button" onclick="flagForReview({{ log.pk }})" class="btn btn-sm btn-warning">
+                                <i class="fas fa-flag me-2"></i> Flag for Review
+                            </button>
+
+                            <a href="{% url 'accounts:admin_logs' %}" class="btn btn-outline-secondary">
+                                <i class="fas fa-arrow-left me-2"></i> Back to Logs
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <!-- Activity Timeline -->
+            <div class="detail-card">
+                <div class="card-header">
+                    <i class="fas fa-history"></i>
+                    Activity Timeline
+                </div>
+                <div class="card-body">
+                    <div class="timeline-item">
+                        <div class="timeline-dot"></div>
+                        <div>
+                            <strong>Log Created</strong>
+                            <div class="text-muted small">{{ log.created_at }}</div>
+                        </div>
+                    </div>
+
+
+                    {% if log.is_flagged %}
+                        <div class="timeline-item">
+                            <div class="timeline-dot" style="background: #ffc107;"></div>
+                            <div>
+                                <strong>Flagged for Review</strong>
+                                <div class="text-muted small">
+                                    {% if log.flagged_at %}
+                                        {{ log.flagged_at }}
+                                    {% else %}
+                                        Recently flagged
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                       {% if log.reviewed_at %}
+                    <div class="timeline-item">
+                        <div class="timeline-dot" style="background: #198754;"></div>
+                        <div>
+                            <strong>Reviewed</strong>
+                            <div class="text-muted small">{{ log.reviewed_at }}</div>
+                            {% if log.reviewed_by %}
+                            <div class="text-muted small">by {{ log.reviewed_by }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if log.notes %}
+                    <div class="timeline-item">
+                        <div class="timeline-dot" style="background: #0dcaf0;"></div>
+                        <div>
+                            <strong>Notes Added</strong>
+                            <div class="text-muted small">Last updated</div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Quick Stats -->
+          <div class="detail-card">
+                <div class="card-header">
+                    <i class="fas fa-chart-bar"></i>
+                    Quick Stats
+                </div>
+                <div class="card-body">
+                    <div class="row text-center g-3">
+                        <div class="col-6">
+                            <div class="h4 text-primary mb-1">{{ log.severity|default:"Normal" }}</div>
+                            <div class="small text-muted">Severity</div>
+                        </div>
+
+                        <div class="col-6">
+                            <div class="h4 text-info mb-1">{{ log.action_type|title }}</div>
+                            <div class="small text-muted">Action Type</div>
+                        </div>
+
+                        <div class="col-6">
+                            <div class="h4 text-warning mb-1">
+                                {% if log.is_flagged %}Yes{% else %}No{% endif %}
+                            </div>
+                            <div class="small text-muted">Flagged</div>
+                            {% if log.flagged_by %}
+                            <div class="small text-muted">by {{ log.flagged_by.get_full_name|default:log.flagged_by.username }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-6">
+                            <div class="h4 text-success mb-1">
+                                {% if log.reviewed %}Yes{% else %}No{% endif %}
+                            </div>
+                            <div class="small text-muted">Reviewed</div>
+                            {% if log.reviewed_by %}
+                            <div class="small text-muted">by {{ log.reviewed_by.get_full_name|default:log.reviewed_by.username }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function saveLogNote(event, logId) {
+    event.preventDefault(); // Prevent page reload
+
+    const noteValue = document.getElementById('notes-textarea').value.trim();
+
+    if (!noteValue) {
+        alert('Note cannot be empty.');
+        return;
+    }
+
+    fetch(`/accounts/admin/logs/${logId}/save-note/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ note: noteValue })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Note saved successfully.');
+        } else {
+            alert('Failed to save note: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error saving note:', error);
+        alert('An error occurred while saving.');
+    });
+}
+
+function toggleObjectData() {
+    const objectData = document.getElementById('object-data');
+    const isVisible = objectData.style.display !== 'none';
+
+    objectData.style.display = isVisible ? 'none' : 'block';
+}
+
+function markAsReviewed(logId) {
+    if (!confirm('Mark this log as reviewed?')) return;
+
+    const url = "{% url 'accounts:mark_log_reviewed' 0 %}".replace('0', logId);
+
+    fetch(url, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ reviewed: true })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            location.reload(); // Refresh to show updated status
+        } else {
+            showErrorMessage('Failed to mark as reviewed');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showErrorMessage('An error occurred');
+    });
+}
+
+function flagForReview(logId) {
+    if (!confirm('Flag this log for further review?')) return;
+
+    const url = "{% url 'accounts:flag_log_entry' 0 %}".replace('0', logId);
+
+    fetch(url, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ flagged: true })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Log flagged successfully.');
+            location.reload();
+        } else {
+            alert('Failed to flag log.');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred.');
+    });
+}
+
+function showSuccessMessage(message) {
+    const toast = document.createElement('div');
+    toast.className = 'position-fixed top-0 end-0 m-3 alert alert-success alert-dismissible fade show';
+    toast.style.zIndex = '1060';
+    toast.innerHTML = `
+        <i class="fas fa-check-circle me-2"></i>
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+
+function showErrorMessage(message) {
+    const toast = document.createElement('div');
+    toast.className = 'position-fixed top-0 end-0 m-3 alert alert-danger alert-dismissible fade show';
+    toast.style.zIndex = '1060';
+    toast.innerHTML = `
+        <i class="fas fa-exclamation-triangle me-2"></i>
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 5000);
+}
+
+// Auto-resize textarea
+document.getElementById('notes-textarea').addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = this.scrollHeight + 'px';
+});
+</script>
+{% endblock %}

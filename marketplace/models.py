@@ -334,6 +334,30 @@ class Product(models.Model):
             return self.original_price - self.price
         return Decimal('0.00')
 
+    def save(self, *args, **kwargs):
+        is_update = self.pk is not None
+        changed_fields = []
+
+        if is_update:
+            # Fetch old state from the DB
+            old = Product.objects.get(pk=self.pk)
+            for field in self._meta.fields:
+                field_name = field.name
+                if field_name in ['updated_at', 'created_at']:
+                    continue
+                old_value = getattr(old, field_name)
+                new_value = getattr(self, field_name)
+                if old_value != new_value:
+                    changed_fields.append(field_name)
+
+        super().save(*args, **kwargs)
+
+        # Save changed fields to a temporary attribute for signal use
+        if is_update:
+            self._changed_fields = changed_fields
+        else:
+            self._changed_fields = ['__created__']
+
 
 
 class ProductImage(models.Model):

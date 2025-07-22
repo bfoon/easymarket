@@ -700,3 +700,9 @@ class ChatMessage(models.Model):
 
     def __str__(self):
         return f"Message from {self.sender.username} for Order #{self.order.id}"
+
+
+class CustomerComplaint(models.Model):
+    order = models.ForeignKey(Order, on_delete=models.CASCADE)
+    complaint = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)

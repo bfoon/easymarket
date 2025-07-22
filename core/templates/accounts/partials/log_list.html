@@ -1,0 +1,406 @@
+<ul class="list-group">
+{% load static %}
+
+{% if logs %}
+    {% for log in logs %}
+    <a href="{% url 'accounts:admin_log_detail' log.id %}" class="text-decoration-none text-dark">
+    <div class="log-entry {{ log.action_type }}"
+         data-log-id="{{ log.pk }}"
+         data-action-type="{{ log.action_type }}"
+         data-reviewed="{{ log.reviewed|yesno:'true,false' }}"
+         data-flagged="{{ log.is_flagged|yesno:'true,false' }}"
+         onclick="viewLogDetail('{{ log.pk }}')"
+         role="button"
+         tabindex="0"
+         aria-label="View details for {{ log.get_action_type_display }} activity"
+         onkeydown="handleLogKeyPress(event, '{{ log.pk }}')">
+
+        <div class="log-content">
+            <!-- Dynamic Icon Based on Action Type -->
+            <div class="log-icon">
+                <div class="log-icon">
+                    <i class="fas fa-{{ log.get_icon }}"></i>
+               </div>
+            </div>
+
+            <!-- Log Details -->
+            <div class="log-details">
+                <div class="log-message" title="{{ log.message }}">
+                    <strong>{{ log.get_action_type_display }}</strong>
+                    {% if log.message %}
+                        <span class="text-muted">—</span>
+                        {{ log.message|truncatechars:80 }}
+                    {% endif %}
+                </div>
+
+                <div class="log-meta">
+                    <!-- Timestamp -->
+                    <div class="log-time">
+                        <i class="fas fa-clock" aria-hidden="true"></i>
+                        <time datetime="{{ log.created_at|date:'c' }}" title="{{ log.created_at }}">
+                            {{ log.created_at|timesince }} ago
+                        </time>
+                    </div>
+
+                    <!-- User Info (if available) -->
+                    {% if log.user %}
+                    <div class="log-user">
+                        <i class="fas fa-user" aria-hidden="true"></i>
+                        <span>{{ log.user.get_full_name|default:log.user.username }}</span>
+                    </div>
+                    {% endif %}
+
+                    <!-- IP Address (if available) -->
+                    {% if log.ip_address %}
+                    <div class="log-ip">
+                        <i class="fas fa-globe" aria-hidden="true"></i>
+                        <span>{{ log.ip_address }}</span>
+                    </div>
+                    {% endif %}
+
+                    <!-- Priority/Severity (if available) -->
+                    {% if log.severity %}
+                    <div class="log-severity">
+                        <span class="log-status status-{{ log.severity }}">
+                            {{ log.get_severity_display }}
+                        </span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Review Status and Actions -->
+            <div class="log-actions">
+                <div class="d-flex flex-column align-items-end gap-2">
+                    <!-- Flagged Badge -->
+                    {% if log.is_flagged %}
+                    <span class="log-status status-danger"
+                          title="This log has been flagged for follow-up">
+                        <i class="fas fa-flag me-1" aria-hidden="true"></i>
+                        Flagged
+                    </span>
+                    {% endif %}
+
+                    <!-- Review Status Badge -->
+                    <span class="log-status {% if log.reviewed %}status-success{% else %}status-warning{% endif %}"
+                          title="{% if log.reviewed %}This log has been reviewed{% else %}This log is pending review{% endif %}">
+                        {% if log.reviewed %}
+                            <i class="fas fa-check-circle me-1" aria-hidden="true"></i>
+                            Reviewed
+                        {% else %}
+                            <i class="fas fa-clock me-1" aria-hidden="true"></i>
+                            Pending
+                        {% endif %}
+                    </span>
+
+                    <!-- Quick Actions -->
+                    <div class="log-quick-actions">
+                        {% if not log.reviewed %}
+                        <button class="btn btn-sm btn-outline-success me-1"
+                                onclick="markAsReviewed(event, '{{ log.pk }}')"
+                                title="Mark as reviewed"
+                                aria-label="Mark log as reviewed">
+                            <i class="fas fa-check" aria-hidden="true"></i>
+                        </button>
+                        {% endif %}
+
+                        <button class="btn btn-sm btn-outline-primary"
+                                onclick="viewLogDetail('{{ log.pk }}')"
+                                title="View details"
+                                aria-label="View log details">
+                            <i class="fas fa-eye" aria-hidden="true"></i>
+                        </button>
+
+                        {% if log.action_type == 'complaint' or log.action_type == 'bad_rating' %}
+                        <button class="btn btn-sm btn-outline-warning"
+                                onclick="flagForReview(event, '{{ log.pk }}')"
+                                title="Flag for priority review"
+                                aria-label="Flag for priority review">
+                            <i class="fas fa-flag" aria-hidden="true"></i>
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Progress indicator for ongoing actions -->
+        {% if log.status == 'processing' %}
+        <div class="progress-indicator">
+            <div class="progress" style="height: 2px;">
+                <div class="progress-bar progress-bar-striped progress-bar-animated bg-info"
+                     role="progressbar" style="width: 100%" aria-label="Processing"></div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+
+    <!-- Load More Button (if pagination is implemented) -->
+    {% if logs.has_next %}
+    <div class="text-center mt-4">
+        <button class="btn btn-outline-primary btn-lg"
+                onclick="loadMoreLogs()"
+                id="load-more-btn">
+            <i class="fas fa-chevron-down me-2"></i>
+            Load More Logs
+            <span class="badge bg-primary ms-2">{{ logs.paginator.count|add:"-"|add:logs.end_index }}</span>
+        </button>
+    </div>
+    {% endif %}
+
+{% else %}
+    <!-- Enhanced Empty State -->
+    <div class="empty-state" id="empty-state">
+        <div class="empty-state-icon">
+            <i class="fas fa-clipboard-list"></i>
+        </div>
+        <h3>No Activity Logs</h3>
+        <p class="mb-3">There are no activity logs to display at the moment.</p>
+        <button class="btn btn-primary" onclick="refreshLogs()">
+            <i class="fas fa-sync-alt me-2"></i>
+            Refresh Now
+        </button>
+    </div>
+{% endif %}
+
+<style>
+/* Additional styles for the enhanced log list */
+.log-actions {
+    display: flex;
+    align-items: center;
+    margin-left: auto;
+    opacity: 0.7;
+    transition: var(--transition-smooth);
+}
+
+.log-entry:hover .log-actions {
+    opacity: 1;
+}
+
+.log-quick-actions {
+    display: flex;
+    gap: 0.25rem;
+    opacity: 0;
+    transform: translateX(10px);
+    transition: var(--transition-smooth);
+}
+
+.log-entry:hover .log-quick-actions {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.log-quick-actions .btn {
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.log-user, .log-ip {
+    font-size: 0.875rem;
+    color: #6c757d;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.log-severity .log-status {
+    font-size: 0.7rem;
+    padding: 0.15rem 0.4rem;
+}
+
+.progress-indicator {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+}
+
+.log-entry[data-reviewed="false"] {
+    border-left-color: #ffc107 !important;
+}
+
+.log-entry[data-reviewed="true"] {
+    border-left-color: #198754 !important;
+}
+.log-entry[data-flagged="true"] {
+    border-left: 5px solid #dc3545 !important;
+    background: linear-gradient(90deg, rgba(220, 53, 69, 0.06), transparent);
+}
+
+
+/* Priority styling for critical logs */
+.log-entry.complaint,
+.log-entry.bad_rating {
+    border-left-width: 6px !important;
+}
+
+.log-entry.complaint:not([data-reviewed="true"]) {
+    background: linear-gradient(90deg, rgba(253, 126, 20, 0.05) 0%, transparent 100%);
+}
+
+.log-entry.bad_rating:not([data-reviewed="true"]) {
+    background: linear-gradient(90deg, rgba(255, 193, 7, 0.05) 0%, transparent 100%);
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+    .log-actions {
+        position: static;
+        margin-top: 0.5rem;
+        margin-left: 0;
+    }
+
+    .log-quick-actions {
+        opacity: 1;
+        transform: none;
+    }
+
+    .log-meta {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+}
+</style>
+
+<script>
+// Enhanced functionality for log interactions
+function viewLogDetail(logId) {
+    window.location.href = "{% url 'accounts:admin_log_detail' 0 %}".replace('0', logId);
+}
+
+function handleLogKeyPress(event, logId) {
+    if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        viewLogDetail(logId);
+    }
+}
+
+function markAsReviewed(event, logId) {
+    event.stopPropagation();
+
+    if (!confirm('Mark this log as reviewed?')) return;
+
+    fetch(`/admin/logs/${logId}/mark-reviewed/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ reviewed: true })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Update the UI immediately
+            const logEntry = event.target.closest('.log-entry');
+            logEntry.setAttribute('data-reviewed', 'true');
+
+            // Update the status badge
+            const statusBadge = logEntry.querySelector('.log-status');
+            statusBadge.className = 'log-status status-success';
+            statusBadge.innerHTML = '<i class="fas fa-check-circle me-1"></i>Reviewed';
+
+            // Remove the mark as reviewed button
+            event.target.remove();
+
+            showSuccessMessage('Log marked as reviewed');
+        } else {
+            showErrorMessage('Failed to update log status');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showErrorMessage('An error occurred while updating the log');
+    });
+}
+
+function flagForReview(event, logId) {
+    event.stopPropagation();
+
+    fetch(`/admin/logs/${logId}/flag/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ flagged: true })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showSuccessMessage('Log flagged for priority review');
+            event.target.classList.add('btn-warning');
+            event.target.classList.remove('btn-outline-warning');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showErrorMessage('Failed to flag log');
+    });
+}
+
+function loadMoreLogs() {
+    const loadMoreBtn = document.getElementById('load-more-btn');
+    const originalText = loadMoreBtn.innerHTML;
+
+    loadMoreBtn.innerHTML = '<div class="spinner-border spinner-border-sm me-2" role="status"></div>Loading...';
+    loadMoreBtn.disabled = true;
+
+    // Implementation would depend on your pagination setup
+    // This is a placeholder for the actual load more functionality
+    setTimeout(() => {
+        loadMoreBtn.innerHTML = originalText;
+        loadMoreBtn.disabled = false;
+    }, 1000);
+}
+
+function showSuccessMessage(message) {
+    const toast = document.createElement('div');
+    toast.className = 'position-fixed top-0 end-0 m-3 alert alert-success alert-dismissible fade show';
+    toast.style.zIndex = '1060';
+    toast.innerHTML = `
+        <i class="fas fa-check-circle me-2"></i>
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+
+function showErrorMessage(message) {
+    const toast = document.createElement('div');
+    toast.className = 'position-fixed top-0 end-0 m-3 alert alert-danger alert-dismissible fade show';
+    toast.style.zIndex = '1060';
+    toast.innerHTML = `
+        <i class="fas fa-exclamation-triangle me-2"></i>
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 5000);
+}
+
+// Add hover effects and interaction feedback
+document.addEventListener('DOMContentLoaded', function() {
+    // Add keyboard navigation support
+    document.querySelectorAll('.log-entry').forEach(entry => {
+        entry.addEventListener('focus', function() {
+            this.style.outline = '2px solid #667eea';
+            this.style.outlineOffset = '2px';
+        });
+
+        entry.addEventListener('blur', function() {
+            this.style.outline = 'none';
+        });
+    });
+});
+</script>

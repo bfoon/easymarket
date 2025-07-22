@@ -2,7 +2,7 @@ from django.shortcuts import get_object_or_404, render, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import login, get_user_model
 from django.contrib.auth import authenticate, login, logout
-from .models import User
+from .models import User, AdminLog
 from .models import Address
 from marketplace.utils import migrate_session_cart_to_user
 from django.contrib import messages
@@ -12,7 +12,12 @@ from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth import update_session_auth_hash
 from .forms import ProfileUpdateForm
 from orders.models import Order
+from django.http import JsonResponse, HttpResponseBadRequest, Http404
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
+import json
 from django.core.paginator import Paginator
+from django.utils.timezone import now
 
 
 def login_view(request):
@@ -89,6 +94,16 @@ def register_view(request):
     else:
         return render(request, 'accounts/register.html')
 
+def admin_logs(request):
+    logs = AdminLog.objects.order_by('-created_at')
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        return render(request, 'accounts/partials/log_list.html', {'logs': logs})
+    return render(request, 'accounts/admin_logs.html', {'logs': logs})
+
+def admin_log_detail(request, pk):
+    log = get_object_or_404(AdminLog, pk=pk)
+    return render(request, 'accounts/log_detail.html', {'log': log})
+
 @login_required
 def edit_address_modal(request):
     address, created = Address.objects.get_or_create(user=request.user)
@@ -148,3 +163,57 @@ def delete_address(request, address_id):
     address.delete()
     messages.success(request, 'Address removed successfully.')
     return redirect('accounts:user_profile')
+
+@csrf_exempt
+@require_POST
+def mark_log_reviewed(request, pk):
+    try:
+        data = json.loads(request.body)
+        review_note = data.get('review_note', '')
+
+        log = get_object_or_404(AdminLog, pk=pk)
+        log.reviewed = True
+        log.notes = review_note
+        log.reviewed_at = now()
+        if request.user.is_authenticated:
+            log.reviewed_by = request.user
+        log.save(update_fields=['reviewed', 'notes', 'reviewed_at', 'reviewed_by'])
+
+        return JsonResponse({'success': True, 'message': 'Log marked as reviewed.'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@csrf_exempt
+@require_POST
+def flag_log_entry(request, pk):
+    try:
+        log = AdminLog.objects.get(pk=pk)
+    except AdminLog.DoesNotExist:
+        raise Http404("Log not found")
+
+    log.is_flagged = True
+    log.flagged_at = now()
+    if request.user.is_authenticated:
+        log.flagged_by = request.user
+    log.save(update_fields=['is_flagged', 'flagged_at', 'flagged_by'])
+
+    return JsonResponse({
+        'success': True,
+        'message': 'Log flagged successfully'
+    })
+
+@csrf_exempt  # Remove if you're using CSRF token
+@require_POST
+def save_log_note(request, pk):
+    try:
+        data = json.loads(request.body)
+        note = data.get("note", "").strip()
+        if not note:
+            return JsonResponse({"success": False, "error": "Note cannot be empty."})
+        log = get_object_or_404(AdminLog, pk=pk)
+        log.notes = note
+        log.save()
+        return JsonResponse({"success": True})
+    except Exception as e:
+        return JsonResponse({"success": False, "error": str(e)})

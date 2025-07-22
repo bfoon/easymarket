@@ -1,0 +1,625 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<link rel="stylesheet" href="{% static 'css/main.css' %}">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+<style>
+    :root {
+        --log-border-radius: 12px;
+        --log-hover-bg: #f8f9fa;
+        --log-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        --log-shadow-hover: 0 4px 16px rgba(0,0,0,0.15);
+        --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .logs-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: var(--log-border-radius);
+        color: white;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .logs-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="white" opacity="0.1"/><circle cx="75" cy="75" r="1" fill="white" opacity="0.1"/><circle cx="50" cy="10" r="0.5" fill="white" opacity="0.1"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+        pointer-events: none;
+    }
+
+    .logs-controls {
+        background: white;
+        border-radius: var(--log-border-radius);
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        box-shadow: var(--log-shadow);
+        border: 1px solid #e9ecef;
+    }
+
+    .log-entry {
+        background: white;
+        border-radius: var(--log-border-radius);
+        margin-bottom: 1rem;
+        border: 1px solid #e9ecef;
+        box-shadow: var(--log-shadow);
+        transition: var(--transition-smooth);
+        overflow: hidden;
+        position: relative;
+    }
+
+    .log-entry::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 4px;
+        background: var(--log-color, #6c757d);
+        transition: var(--transition-smooth);
+    }
+
+    .log-entry:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--log-shadow-hover);
+        cursor: pointer;
+    }
+
+    .log-entry:hover::before {
+        width: 6px;
+    }
+
+    .log-entry.new-entry {
+        animation: slideInUp 0.5s ease-out;
+        border-color: #198754;
+        box-shadow: 0 0 0 2px rgba(25, 135, 84, 0.2);
+    }
+
+    @keyframes slideInUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .log-content {
+        padding: 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .log-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        color: white;
+        flex-shrink: 0;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        transition: var(--transition-smooth);
+    }
+
+    .log-entry:hover .log-icon {
+        transform: scale(1.1);
+    }
+
+    /* Enhanced log type colors with CSS custom properties */
+    .log-entry.product_add { --log-color: #198754; }
+    .log-entry.product_add .log-icon { background: linear-gradient(135deg, #198754, #20c997); }
+
+    .log-entry.product_delete { --log-color: #dc3545; }
+    .log-entry.product_delete .log-icon { background: linear-gradient(135deg, #dc3545, #e85d75); }
+
+    .log-entry.product_edit { --log-color: #0dcaf0; }
+    .log-entry.product_edit .log-icon { background: linear-gradient(135deg, #0dcaf0, #3dd5f3); }
+
+    .log-entry.bad_rating { --log-color: #ffc107; }
+    .log-entry.bad_rating .log-icon { background: linear-gradient(135deg, #ffc107, #ffcd39); color: #000; }
+
+    .log-entry.store_edit { --log-color: #6f42c1; }
+    .log-entry.store_edit .log-icon { background: linear-gradient(135deg, #6f42c1, #8e6bb8); }
+
+    .log-entry.complaint { --log-color: #fd7e14; }
+    .log-entry.complaint .log-icon { background: linear-gradient(135deg, #fd7e14, #fd9644); }
+
+    .log-details {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .log-message {
+        font-weight: 600;
+        color: #212529;
+        margin-bottom: 0.5rem;
+        line-height: 1.4;
+    }
+
+    .log-meta {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .log-time {
+        font-size: 0.875rem;
+        color: #6c757d;
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    .log-status {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 20px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .status-success { background: #d1e7dd; color: #0a3622; }
+    .status-warning { background: #fff3cd; color: #664d03; }
+    .status-danger { background: #f8d7da; color: #58151c; }
+    .status-info { background: #d1ecf1; color: #055160; }
+
+    .search-input {
+        border-radius: 25px;
+        border: 2px solid #e9ecef;
+        padding: 0.75rem 1rem 0.75rem 2.5rem;
+        transition: var(--transition-smooth);
+        background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" fill="%236c757d" viewBox="0 0 16 16"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg>');
+        background-repeat: no-repeat;
+        background-position: 0.75rem center;
+        background-size: 1rem;
+    }
+
+    .search-input:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        outline: none;
+    }
+
+    .filter-btn {
+        border-radius: 20px;
+        padding: 0.5rem 1rem;
+        border: 2px solid #e9ecef;
+        background: white;
+        transition: var(--transition-smooth);
+        font-weight: 500;
+    }
+
+    .filter-btn:hover, .filter-btn.active {
+        background: #667eea;
+        border-color: #667eea;
+        color: white;
+        transform: translateY(-1px);
+    }
+
+    .refresh-btn {
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        border: none;
+        border-radius: 50%;
+        width: 48px;
+        height: 48px;
+        color: white;
+        font-size: 1.2rem;
+        transition: var(--transition-smooth);
+        box-shadow: var(--log-shadow);
+    }
+
+    .refresh-btn:hover {
+        transform: rotate(180deg) scale(1.1);
+        box-shadow: var(--log-shadow-hover);
+    }
+
+    .refresh-btn.spinning {
+        animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+
+    .last-updated {
+        font-size: 0.875rem;
+        color: #6c757d;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .pulse-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #198754;
+        animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.3; }
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 4rem 2rem;
+        color: #6c757d;
+    }
+
+    .empty-state-icon {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+        opacity: 0.5;
+    }
+
+    @media (max-width: 768px) {
+        .logs-header {
+            padding: 1.5rem;
+        }
+
+        .logs-controls {
+            padding: 1rem;
+        }
+
+        .log-content {
+            padding: 1rem;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.75rem;
+        }
+
+        .log-meta {
+            width: 100%;
+            justify-content: space-between;
+        }
+
+        .filter-controls {
+            flex-direction: column;
+            gap: 1rem;
+        }
+    }
+</style>
+
+<div class="container-fluid py-4">
+    <!-- Enhanced Header -->
+    <div class="logs-header">
+        <div class="d-flex justify-content-between align-items-center position-relative">
+            <div>
+                <h1 class="h2 mb-2">
+                    <i class="fas fa-clipboard-list me-3"></i>
+                    Activity Logs
+                </h1>
+                <p class="mb-0 opacity-75">Monitor and track all system activities in real-time</p>
+            </div>
+            <div class="text-end">
+                <button class="refresh-btn" id="refresh-btn" onclick="refreshLogs()" title="Refresh logs" aria-label="Refresh logs">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+                <div class="last-updated mt-2" id="last-updated">
+                    <div class="pulse-dot"></div>
+                    <span>Live updates active</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Enhanced Controls -->
+    <div class="logs-controls">
+        <div class="row g-3 filter-controls">
+            <div class="col-md-6">
+                <div class="position-relative">
+                    <input type="text" class="form-control search-input" id="log-search"
+                           placeholder="Search activity logs..." aria-label="Search logs">
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="d-flex gap-2 flex-wrap">
+                    <button class="filter-btn active" data-filter="all">All</button>
+
+                    <button class="filter-btn" data-filter="product_add">
+                        <i class="fas fa-plus me-1"></i>Added
+                    </button>
+
+                    <button class="filter-btn" data-filter="product_edit">
+                        <i class="fas fa-edit me-1"></i>Edited
+                    </button>
+
+                    <button class="filter-btn" data-filter="product_delete">
+                        <i class="fas fa-trash me-1"></i>Deleted
+                    </button>
+
+                    <button class="filter-btn" data-filter="complaint">
+                        <i class="fas fa-exclamation-triangle me-1"></i>Issues
+                    </button>
+
+                    <!-- Flagged Logs Button -->
+                    <button class="filter-btn" data-filter="flagged">
+                        <i class="fas fa-flag me-1 text-danger"></i>Flagged
+                    </button>
+                </div>
+            </div>
+
+
+    <!-- Enhanced Log Container -->
+    <div id="log-container" role="log" aria-live="polite" aria-label="Activity logs">
+        {% include 'accounts/partials/log_list.html' %}
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="position-fixed top-50 start-50 translate-middle d-none" id="loading-overlay" style="z-index: 1050;">
+        <div class="bg-white rounded-circle p-3 shadow">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+class ActivityLogsManager {
+    constructor() {
+        this.refreshInterval = null;
+        this.lastUpdateTime = new Date();
+        this.isRefreshing = false;
+        this.currentFilter = 'all';
+        this.searchTerm = '';
+
+        this.init();
+    }
+
+    init() {
+        this.setupEventListeners();
+        this.startAutoRefresh();
+        this.updateLastRefreshTime();
+    }
+
+    setupEventListeners() {
+        // Search functionality
+        const searchInput = document.getElementById('log-search');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                this.searchTerm = e.target.value.toLowerCase();
+                this.filterLogs();
+            });
+        }
+
+        // Filter buttons
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                this.currentFilter = e.target.dataset.filter;
+                this.filterLogs();
+            });
+        });
+
+        // Auto-refresh toggle
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                this.stopAutoRefresh();
+            } else {
+                this.startAutoRefresh();
+                this.refreshLogs(); // Refresh when tab becomes visible
+            }
+        });
+    }
+
+    async refreshLogs() {
+        if (this.isRefreshing) return;
+
+        this.isRefreshing = true;
+        const refreshBtn = document.getElementById('refresh-btn');
+        const container = document.getElementById('log-container');
+
+        try {
+            // Add spinning animation
+            refreshBtn?.classList.add('spinning');
+
+            const response = await fetch("{% url 'accounts:admin_logs' %}", {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Cache-Control': 'no-cache'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const html = await response.text();
+
+            // Store current scroll position
+            const scrollPosition = window.scrollY;
+
+            // Update content with fade effect
+            if (container) {
+                container.style.opacity = '0.7';
+                setTimeout(() => {
+                    container.innerHTML = html;
+                    this.highlightNewEntries();
+                    this.filterLogs();
+                    container.style.opacity = '1';
+
+                    // Restore scroll position
+                    window.scrollTo(0, scrollPosition);
+                }, 150);
+            }
+
+            this.lastUpdateTime = new Date();
+            this.updateLastRefreshTime();
+
+        } catch (error) {
+            console.error('Error refreshing logs:', error);
+            this.showError('Failed to refresh logs. Please try again.');
+        } finally {
+            this.isRefreshing = false;
+            setTimeout(() => {
+                refreshBtn?.classList.remove('spinning');
+            }, 500);
+        }
+    }
+
+    highlightNewEntries() {
+        // Add animation to new entries (this would need backend support to identify new entries)
+        const entries = document.querySelectorAll('.log-entry');
+        entries.forEach((entry, index) => {
+            if (index < 3) { // Highlight first 3 entries as potentially new
+                entry.classList.add('new-entry');
+                setTimeout(() => {
+                    entry.classList.remove('new-entry');
+                }, 2000);
+            }
+        });
+    }
+
+    filterLogs() {
+        const entries = document.querySelectorAll('.log-entry');
+        let visibleCount = 0;
+
+        entries.forEach(entry => {
+            const matchesFilter = this.currentFilter === 'all' || entry.classList.contains(this.currentFilter);
+            const matchesSearch = this.searchTerm === '' ||
+                entry.textContent.toLowerCase().includes(this.searchTerm);
+
+            if (matchesFilter && matchesSearch) {
+                entry.style.display = 'block';
+                visibleCount++;
+            } else {
+                entry.style.display = 'none';
+            }
+        });
+
+        // Show empty state if no results
+        this.toggleEmptyState(visibleCount === 0);
+    }
+
+    toggleEmptyState(show) {
+        let emptyState = document.getElementById('empty-state');
+
+        if (show && !emptyState) {
+            emptyState = document.createElement('div');
+            emptyState.id = 'empty-state';
+            emptyState.className = 'empty-state';
+            emptyState.innerHTML = `
+                <div class="empty-state-icon">
+                    <i class="fas fa-search"></i>
+                </div>
+                <h3>No logs found</h3>
+                <p>Try adjusting your search or filter criteria</p>
+            `;
+            document.getElementById('log-container').appendChild(emptyState);
+        } else if (!show && emptyState) {
+            emptyState.remove();
+        }
+    }
+
+    startAutoRefresh() {
+        this.stopAutoRefresh();
+        this.refreshInterval = setInterval(() => {
+            this.refreshLogs();
+        }, 10000); // Increased to 10 seconds for better UX
+    }
+
+    stopAutoRefresh() {
+        if (this.refreshInterval) {
+            clearInterval(this.refreshInterval);
+            this.refreshInterval = null;
+        }
+    }
+
+    updateLastRefreshTime() {
+        const lastUpdatedElement = document.getElementById('last-updated');
+        if (lastUpdatedElement) {
+            const timeString = this.lastUpdateTime.toLocaleTimeString();
+            lastUpdatedElement.innerHTML = `
+                <div class="pulse-dot"></div>
+                <span>Last updated: ${timeString}</span>
+            `;
+        }
+    }
+
+    showRefreshFeedback() {
+        // Create a temporary success indicator
+        const feedback = document.createElement('div');
+        feedback.className = 'position-fixed top-0 end-0 m-3 alert alert-success alert-dismissible fade show';
+        feedback.style.zIndex = '1060';
+        feedback.innerHTML = `
+            <i class="fas fa-check-circle me-2"></i>
+            Logs refreshed successfully
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+
+        document.body.appendChild(feedback);
+
+        setTimeout(() => {
+            feedback.remove();
+        }, 3000);
+    }
+
+    showError(message) {
+        const error = document.createElement('div');
+        error.className = 'position-fixed top-0 end-0 m-3 alert alert-danger alert-dismissible fade show';
+        error.style.zIndex = '1060';
+        error.innerHTML = `
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+
+        document.body.appendChild(error);
+
+        setTimeout(() => {
+            error.remove();
+        }, 5000);
+    }
+}
+
+// Initialize the logs manager when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    window.logsManager = new ActivityLogsManager();
+});
+
+// Legacy function for backward compatibility
+function refreshLogs() {
+    if (window.logsManager) {
+        window.logsManager.refreshLogs();
+    }
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+    // Ctrl/Cmd + R to refresh
+    if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
+        e.preventDefault();
+        refreshLogs();
+    }
+
+    // Escape to clear search
+    if (e.key === 'Escape') {
+        const searchInput = document.getElementById('log-search');
+        if (searchInput && searchInput.value) {
+            searchInput.value = '';
+            searchInput.dispatchEvent(new Event('input'));
+        }
+    }
+});
+</script>
+{% endblock %}
