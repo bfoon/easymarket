@@ -50,6 +50,7 @@ class Shipment(models.Model):
         ('pending', 'Pending'),
         ('in_transit', 'In Transit'),
         ('shipped', 'Shipped'),
+        ('delivered', 'Delivered'),
     ]
 
     MATERIAL_TYPE_CHOICES = [
