@@ -264,7 +264,7 @@ class DriverListView(LoginRequiredMixin, ListView):
 
         # Add driver statistics
         for driver in context['drivers']:
-            driver.active_shipments_count = driver.shipment_set.exclude(status='shipped').count()
+            driver.active_shipments_count = driver.shipment_set.exclude(status='delivered').count()
             driver.total_shipments_count = driver.shipment_set.count()
             driver.vehicle_count = driver.vehicle_set.count()
 
@@ -283,7 +283,7 @@ class DriverDetailView(LoginRequiredMixin, DetailView):
         # Get vehicles with computed status
         vehicles = driver.vehicle_set.all()
         for vehicle in vehicles:
-            vehicle.active_shipments_count = vehicle.shipment_set.exclude(status='shipped').count()
+            vehicle.active_shipments_count = vehicle.shipment_set.exclude(status='delivered').count()
 
         context['vehicles'] = vehicles
         context['recent_shipments'] = Shipment.objects.filter(
@@ -292,8 +292,8 @@ class DriverDetailView(LoginRequiredMixin, DetailView):
 
         # Add computed statistics
         context['total_shipments'] = driver.shipment_set.count()
-        context['active_shipments'] = driver.shipment_set.exclude(status='shipped').count()
-        context['completed_shipments'] = driver.shipment_set.filter(status='shipped').count()
+        context['active_shipments'] = driver.shipment_set.exclude(status='delivered').count()
+        context['completed_shipments'] = driver.shipment_set.filter(status='delivered').count()
         context['vehicle_count'] = driver.vehicle_set.count()
 
         return context
@@ -384,8 +384,8 @@ class VehicleDetailView(LoginRequiredMixin, DetailView):
 
         # Get shipment statistics
         context['total_shipments'] = vehicle.shipment_set.count()
-        context['active_shipments'] = vehicle.shipment_set.exclude(status='shipped').count()
-        context['completed_shipments'] = vehicle.shipment_set.filter(status='shipped').count()
+        context['active_shipments'] = vehicle.shipment_set.exclude(status='delivered').count()
+        context['completed_shipments'] = vehicle.shipment_set.filter(status='delivered').count()
 
         # Get recent shipments
         context['recent_shipments'] = vehicle.shipment_set.select_related(
@@ -447,8 +447,8 @@ class WarehouseDetailView(LoginRequiredMixin, DetailView):
 
         # Get shipment statistics
         context['total_shipments'] = warehouse.shipment_set.count()
-        context['active_shipments'] = warehouse.shipment_set.exclude(status='shipped').count()
-        context['completed_shipments'] = warehouse.shipment_set.filter(status='shipped').count()
+        context['active_shipments'] = warehouse.shipment_set.exclude(status='delivered').count()
+        context['completed_shipments'] = warehouse.shipment_set.filter(status='delivered').count()
 
         # Get recent shipments
         context['recent_shipments'] = warehouse.shipment_set.select_related(
@@ -487,8 +487,8 @@ class LogisticOfficeUpdateView(LoginRequiredMixin, UpdateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         if self.object:
-            context['active_shipments_count'] = self.object.shipment_set.exclude(status='shipped').count()
-            context['completed_shipments_count'] = self.object.shipment_set.filter(status='shipped').count()
+            context['active_shipments_count'] = self.object.shipment_set.exclude(status='delivered').count()
+            context['completed_shipments_count'] = self.object.shipment_set.filter(status='delivered').count()
         return context
 
     def get_success_url(self):
@@ -515,8 +515,8 @@ class LogisticOfficeListView(LoginRequiredMixin, ListView):
 
         for office in context['offices']:
             office.total_shipments_count = office.shipment_set.count()
-            office.active_shipments_count = office.shipment_set.exclude(status='shipped').count()
-            office.completed_shipments_count = office.shipment_set.filter(status='shipped').count()
+            office.active_shipments_count = office.shipment_set.exclude(status='delivered').count()
+            office.completed_shipments_count = office.shipment_set.filter(status='delivered').count()
 
             total_shipments_sum += office.total_shipments_count
             active_shipments_sum += office.active_shipments_count
@@ -558,7 +558,7 @@ class VehicleListView(LoginRequiredMixin, ListView):
         available_count = 0
 
         for vehicle in context['vehicles']:
-            vehicle.active_shipments_count = vehicle.shipment_set.exclude(status='shipped').count()
+            vehicle.active_shipments_count = vehicle.shipment_set.exclude(status='delivered').count()
             vehicle.total_shipments_count = vehicle.shipment_set.count()
             # Calculate current load (you might want to implement this based on your business logic)
             vehicle.current_load = 0  # Placeholder - implement based on active shipments
@@ -591,8 +591,8 @@ class WarehouseListView(LoginRequiredMixin, ListView):
 
         for warehouse in context['warehouses']:
             warehouse.total_shipments_count = warehouse.shipment_set.count()
-            warehouse.active_shipments_count = warehouse.shipment_set.exclude(status='shipped').count()
-            warehouse.completed_shipments_count = warehouse.shipment_set.filter(status='shipped').count()
+            warehouse.active_shipments_count = warehouse.shipment_set.exclude(status='delivered').count()
+            warehouse.completed_shipments_count = warehouse.shipment_set.filter(status='delivered').count()
 
             total_shipments_sum += warehouse.total_shipments_count
             active_shipments_sum += warehouse.active_shipments_count
@@ -962,7 +962,7 @@ class AssignmentDashboardView(LoginRequiredMixin, ListView):
 
         # Get vehicles with their assignment status (excluding unassigned driver)
         vehicles = Vehicle.objects.select_related('driver__user').annotate(
-            active_shipments_count=Count('shipment', filter=Q(shipment__status__in=['pending', 'in_transit']))
+            active_shipments_count=Count('shipment', filter=Q(shipment__status__in=['shipped', 'in_transit']))
         ).order_by('plate_number')
 
         # Get drivers with their vehicle counts (excluding unassigned driver)
@@ -971,7 +971,7 @@ class AssignmentDashboardView(LoginRequiredMixin, ListView):
         ).annotate(
             vehicle_count=Count('vehicle', filter=~Q(vehicle__driver=unassigned_driver)),
             active_shipments_count=Count('vehicle__shipment',
-                                         filter=Q(vehicle__shipment__status__in=['pending', 'in_transit']))
+                                         filter=Q(vehicle__shipment__status__in=['shipped', 'in_transit']))
         ).order_by('user__first_name')
 
         # Get unassigned vehicles (assigned to unassigned driver)
@@ -1008,7 +1008,7 @@ class VehicleAssignmentListView(LoginRequiredMixin, ListView):
         unassigned_driver = get_or_create_unassigned_driver()
 
         queryset = Vehicle.objects.select_related('driver__user').annotate(
-            active_shipments_count=Count('shipment', filter=Q(shipment__status__in=['pending', 'in_transit']))
+            active_shipments_count=Count('shipment', filter=Q(shipment__status__in=['shipped', 'in_transit']))
         ).order_by('plate_number')
 
         # Apply filters
@@ -1062,7 +1062,7 @@ def assign_vehicle_to_driver(request):
                 driver = Driver.objects.get(id=driver_id)
 
             # Check if vehicle is currently in use for active shipments
-            active_shipments = vehicle.shipment_set.filter(status__in=['pending', 'in_transit']).count()
+            active_shipments = vehicle.shipment_set.filter(status__in=['shipped', 'in_transit']).count()
             if active_shipments > 0 and vehicle.driver != driver:
                 return JsonResponse({
                     'success': False,
@@ -1112,7 +1112,7 @@ def unassign_vehicle(request, vehicle_id):
             vehicle = get_object_or_404(Vehicle, id=vehicle_id)
 
             # Check for active shipments
-            active_shipments = vehicle.shipment_set.filter(status__in=['pending', 'in_transit']).count()
+            active_shipments = vehicle.shipment_set.filter(status__in=['shipped', 'in_transit']).count()
             if active_shipments > 0:
                 return JsonResponse({
                     'success': False,
@@ -1160,7 +1160,7 @@ def quick_assign_vehicle(request):
             driver = get_object_or_404(Driver, id=driver_id)
 
             # Check for active shipments
-            active_shipments = vehicle.shipment_set.filter(status__in=['pending', 'in_transit']).count()
+            active_shipments = vehicle.shipment_set.filter(status__in=['shipped', 'in_transit']).count()
             if active_shipments > 0 and vehicle.driver != driver:
                 messages.error(request,
                                f'Vehicle {vehicle.plate_number} has {active_shipments} active shipments and cannot be reassigned.')
@@ -1236,7 +1236,7 @@ def bulk_assign_vehicles(request):
                         driver = Driver.objects.get(id=driver_id)
 
                     # Check for active shipments
-                    active_shipments = vehicle.shipment_set.filter(status__in=['pending', 'in_transit']).count()
+                    active_shipments = vehicle.shipment_set.filter(status__in=['shipped', 'in_transit']).count()
                     if active_shipments > 0 and vehicle.driver != driver:
                         messages.warning(request,
                                          f'Skipped vehicle {vehicle.plate_number} - has active shipments')
@@ -1273,7 +1273,7 @@ class DriverDetailView(LoginRequiredMixin, DetailView):
         assigned_vehicles = vehicles.exclude(driver=unassigned_driver) if unassigned_driver else vehicles
 
         for vehicle in assigned_vehicles:
-            vehicle.active_shipments_count = vehicle.shipment_set.exclude(status='shipped').count()
+            vehicle.active_shipments_count = vehicle.shipment_set.exclude(status='delivered').count()
 
         context['vehicles'] = assigned_vehicles
         context['assigned_vehicles_count'] = assigned_vehicles.count()
@@ -1283,8 +1283,8 @@ class DriverDetailView(LoginRequiredMixin, DetailView):
 
         # Add computed statistics
         context['total_shipments'] = driver.shipment_set.count()
-        context['active_shipments'] = driver.shipment_set.exclude(status='shipped').count()
-        context['completed_shipments'] = driver.shipment_set.filter(status='shipped').count()
+        context['active_shipments'] = driver.shipment_set.exclude(status='delivered').count()
+        context['completed_shipments'] = driver.shipment_set.filter(status='delivered').count()
         context['vehicle_count'] = assigned_vehicles.count()
 
         return context
@@ -1305,7 +1305,7 @@ class DriverAssignmentListView(LoginRequiredMixin, ListView):
         ).annotate(
             vehicle_count=Count('vehicle', filter=~Q(vehicle__driver=unassigned_driver) if unassigned_driver else Q()),
             active_shipments_count=Count('vehicle__shipment',
-                                         filter=Q(vehicle__shipment__status__in=['pending', 'in_transit']))
+                                         filter=Q(vehicle__shipment__status__in=['shipped', 'in_transit']))
         ).order_by('user__first_name')
 
         # Apply filters
@@ -1349,7 +1349,7 @@ def get_driver_vehicles_ajax(request, driver_id):
 
         vehicles_data = []
         for vehicle in vehicles:
-            active_shipments = vehicle.shipment_set.filter(status__in=['pending', 'in_transit']).count()
+            active_shipments = vehicle.shipment_set.filter(status__in=['shipped', 'in_transit']).count()
             vehicles_data.append({
                 'id': vehicle.id,
                 'plate_number': vehicle.plate_number,
@@ -1377,7 +1377,7 @@ def assignment_report(request):
     unassigned_driver = get_or_create_unassigned_driver()
 
     vehicles = Vehicle.objects.select_related('driver__user').annotate(
-        active_shipments_count=Count('shipment', filter=Q(shipment__status__in=['pending', 'in_transit']))
+        active_shipments_count=Count('shipment', filter=Q(shipment__status__in=['shipped', 'in_transit']))
     ).order_by('plate_number')
 
     drivers = Driver.objects.select_related('user').filter(
@@ -1385,7 +1385,7 @@ def assignment_report(request):
     ).annotate(
         vehicle_count=Count('vehicle', filter=~Q(vehicle__driver=unassigned_driver) if unassigned_driver else Q()),
         active_shipments_count=Count('vehicle__shipment',
-                                     filter=Q(vehicle__shipment__status__in=['pending', 'in_transit']))
+                                     filter=Q(vehicle__shipment__status__in=['shipped', 'in_transit']))
     ).order_by('user__first_name')
 
     context = {
@@ -1437,8 +1437,8 @@ class AssignmentAnalyticsView(LoginRequiredMixin, ListView):
         # Vehicle utilization over time
         vehicle_utilization = Vehicle.objects.select_related('driver__user').annotate(
             total_shipments=Count('shipment'),
-            active_shipments=Count('shipment', filter=Q(shipment__status__in=['pending', 'in_transit'])),
-            utilization_score=Count('shipment', filter=Q(shipment__status__in=['pending', 'in_transit']))
+            active_shipments=Count('shipment', filter=Q(shipment__status__in=['shipped', 'in_transit'])),
+            utilization_score=Count('shipment', filter=Q(shipment__status__in=['shipped', 'in_transit']))
         ).order_by('-utilization_score')
 
         # Filter out unassigned driver vehicles
@@ -1477,7 +1477,7 @@ def assignment_report_export(request):
         ['Plate Number', 'Model', 'Capacity (kg)', 'Assigned Driver', 'Driver License', 'Status', 'Active Shipments'])
 
     vehicles = Vehicle.objects.select_related('driver__user').annotate(
-        active_shipments_count=Count('shipment', filter=Q(shipment__status__in=['pending', 'in_transit']))
+        active_shipments_count=Count('shipment', filter=Q(shipment__status__in=['shipped', 'in_transit']))
     ).order_by('plate_number')
 
     for vehicle in vehicles:
@@ -1511,7 +1511,7 @@ def assignment_report_export(request):
     ).annotate(
         vehicle_count=Count('vehicle', filter=~Q(vehicle__driver=unassigned_driver) if unassigned_driver else Q()),
         active_shipments_count=Count('vehicle__shipment',
-                                     filter=Q(vehicle__shipment__status__in=['pending', 'in_transit']))
+                                     filter=Q(vehicle__shipment__status__in=['shipped', 'in_transit']))
     ).order_by('user__first_name')
 
     for driver in drivers:
@@ -1535,7 +1535,7 @@ def assignment_report_json(request):
 
     # Get vehicle data
     vehicles = Vehicle.objects.select_related('driver__user').annotate(
-        active_shipments_count=Count('shipment', filter=Q(shipment__status__in=['pending', 'in_transit']))
+        active_shipments_count=Count('shipment', filter=Q(shipment__status__in=['shipped', 'in_transit']))
     ).order_by('plate_number')
 
     # Get driver data
@@ -1544,7 +1544,7 @@ def assignment_report_json(request):
     ).annotate(
         vehicle_count=Count('vehicle', filter=~Q(vehicle__driver=unassigned_driver) if unassigned_driver else Q()),
         active_shipments_count=Count('vehicle__shipment',
-                                     filter=Q(vehicle__shipment__status__in=['pending', 'in_transit']))
+                                     filter=Q(vehicle__shipment__status__in=['shipped', 'in_transit']))
     ).order_by('user__first_name')
 
     # Prepare vehicle data
@@ -1764,24 +1764,30 @@ def start_delivery(request, shipment_id):
 @login_required
 @require_POST
 def mark_delivered(request, shipment_id):
-    """Mark shipment as delivered"""
-    if not request.user.is_driver:
+    """Mark shipment as delivered with optional notes and verification photo"""
+    if not hasattr(request.user, 'is_driver') or not request.user.is_driver:
         return JsonResponse({'success': False, 'error': 'Permission denied'})
 
     try:
         driver = Driver.objects.get(user=request.user)
         shipment = get_object_or_404(Shipment, id=shipment_id, driver=driver)
 
-        if shipment.status not in ['in_transit']:
+        if shipment.status != 'in_transit':
             return JsonResponse({'success': False, 'error': 'Only in-transit shipments can be marked delivered'})
 
         delivery_notes = request.POST.get('delivery_notes', '')
+        verification_photo = request.FILES.get('verification_photo')
 
-        # Mark shipment as delivered
+        # Save verification photo if provided
+        if verification_photo:
+            shipment.delivery_photo = verification_photo  # Ensure this field exists on your model
+
+        shipment.delivery_notes = delivery_notes  # Optional field if you added it
         shipment.status = 'delivered'
+        shipment.delivered_at = timezone.now()
         shipment.save()
 
-        # Optionally mark order as delivered if all related shipments are delivered
+        # Optionally update order status
         if shipment.order:
             all_shipments = shipment.order.shipments.all()
             if all_shipments.exists() and all(s.status == 'delivered' for s in all_shipments):

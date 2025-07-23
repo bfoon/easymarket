@@ -95,6 +95,7 @@ class Shipment(models.Model):
     shipment_type = models.CharField(max_length=10, choices=SHIPMENT_TYPE_CHOICES)
     packing_type = models.CharField(max_length=20, choices=PACKING_TYPE_CHOICES)
     container_type = models.CharField(max_length=20, choices=CONTAINER_TYPE_CHOICES)
+    verification_photo = models.ImageField(upload_to='verification_photos/', null=True, blank=True)
 
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     created_at = models.DateTimeField(auto_now_add=True)
