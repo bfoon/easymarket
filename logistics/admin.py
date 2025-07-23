@@ -205,6 +205,16 @@ class ShipmentAdmin(admin.ModelAdmin):
         self.message_user(request, f'{updated} shipments marked as shipped.')
     mark_as_shipped.short_description = 'Mark selected shipments as shipped'
 
+    def verification_preview(self, obj):
+        if obj.verification_photo:
+            return format_html('<img src="{}" width="100"/>', obj.verification_photo.url)
+        return "-"
+
+    verification_preview.short_description = "Verification Photo"
+
+    # Add to list_display or readonly_fields
+    readonly_fields = ('created_at', 'boxes_count', 'verification_preview')
+
 
 @admin.register(ShipmentBox)
 class ShipmentBoxAdmin(admin.ModelAdmin):
