@@ -15,7 +15,6 @@ User = get_user_model()
 class DateTimeLocalWidget(forms.DateTimeInput):
     input_type = 'datetime-local'
 
-
 class ShipmentForm(forms.ModelForm):
     class Meta:
         model = Shipment
@@ -23,7 +22,8 @@ class ShipmentForm(forms.ModelForm):
             'shipping_address', 'warehouse', 'driver', 'vehicle', 'logistic_office',
             'collect_time', 'estimated_dropoff_time', 'order', 'weight_kg',
             'size_cubic_meters', 'material_type', 'shipment_type', 'packing_type',
-            'container_type', 'status'
+            'container_type', 'verification_photo',  # <-- added here
+            'status'
         ]
         widgets = {
             'collect_time': DateTimeLocalWidget(attrs={'class': 'form-control'}),
@@ -40,6 +40,7 @@ class ShipmentForm(forms.ModelForm):
             'shipment_type': forms.Select(attrs={'class': 'form-select'}),
             'packing_type': forms.Select(attrs={'class': 'form-select'}),
             'container_type': forms.Select(attrs={'class': 'form-select'}),
+            'verification_photo': forms.FileInput(attrs={'class': 'form-control'}),  # <-- widget added here
             'status': forms.Select(attrs={'class': 'form-select'}),
         }
 
@@ -54,9 +55,7 @@ class ShipmentForm(forms.ModelForm):
         is_new_shipment = not self.instance or not self.instance.pk
 
         if is_new_shipment:
-            # Default status on creation
             self.fields['status'].initial = 'pending'
-            # Limit to processing orders only
             self.fields['order'].queryset = Order.objects.filter(status='processing').order_by('-created_at')
             self.fields['order'].help_text = "Only orders with 'Processing' status are available for new shipments"
             self.fields['shipping_address'].queryset = ShippingAddress.objects.filter(
@@ -68,13 +67,11 @@ class ShipmentForm(forms.ModelForm):
             self.fields['shipping_address'].queryset = ShippingAddress.objects.order_by('-id')
             self.fields['shipping_address'].disabled = True
 
-        # Optional fields
         self.fields['warehouse'].required = False
         self.fields['driver'].required = False
         self.fields['vehicle'].required = False
         self.fields['logistic_office'].required = False
 
-        # Help texts
         self.fields['weight_kg'].help_text = "Weight in kilograms"
         self.fields['size_cubic_meters'].help_text = "Size in cubic meters"
         self.fields['collect_time'].help_text = "When the shipment will be collected"
@@ -103,6 +100,7 @@ class ShipmentForm(forms.ModelForm):
                 self.add_error('weight_kg', f"Weight ({weight_kg} kg) exceeds vehicle capacity ({vehicle.capacity_kg} kg).")
 
         return cleaned_data
+
 
 
 class DriverForm(forms.ModelForm):

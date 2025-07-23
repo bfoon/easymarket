@@ -1761,11 +1761,10 @@ def start_delivery(request, shipment_id):
         return JsonResponse({'success': False, 'error': str(e)})
 
 
-@login_required
 @require_POST
+@login_required
 def mark_delivered(request, shipment_id):
-    """Mark shipment as delivered with optional notes and verification photo"""
-    if not hasattr(request.user, 'is_driver') or not request.user.is_driver:
+    if not request.user.is_driver:
         return JsonResponse({'success': False, 'error': 'Permission denied'})
 
     try:
@@ -1778,19 +1777,19 @@ def mark_delivered(request, shipment_id):
         delivery_notes = request.POST.get('delivery_notes', '')
         verification_photo = request.FILES.get('verification_photo')
 
-        # Save verification photo if provided
-        if verification_photo:
-            shipment.delivery_photo = verification_photo  # Ensure this field exists on your model
+        if not verification_photo:
+            return JsonResponse({'success': False, 'error': 'Verification photo is required'})
 
-        shipment.delivery_notes = delivery_notes  # Optional field if you added it
+        # Save verification photo and mark as delivered
+        shipment.delivery_notes = delivery_notes
+        shipment.verification_photo = verification_photo
         shipment.status = 'delivered'
-        shipment.delivered_at = timezone.now()
         shipment.save()
 
-        # Optionally update order status
+        # Update order if all shipments are delivered
         if shipment.order:
             all_shipments = shipment.order.shipments.all()
-            if all_shipments.exists() and all(s.status == 'delivered' for s in all_shipments):
+            if all(s.status == 'delivered' for s in all_shipments):
                 shipment.order.status = 'delivered'
                 shipment.order.delivered_date = timezone.now()
                 shipment.order.save()
@@ -1801,6 +1800,7 @@ def mark_delivered(request, shipment_id):
         return JsonResponse({'success': False, 'error': 'Driver profile not found'})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
+
 
 
 

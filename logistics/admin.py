@@ -7,7 +7,7 @@ from .models import (
     Shipment, ShipmentBox, BoxItem
 )
 
-
+# ---------- LogisticOffice Admin ----------
 @admin.register(LogisticOffice)
 class LogisticOfficeAdmin(admin.ModelAdmin):
     list_display = ('name', 'location', 'shipment_count')
@@ -21,6 +21,7 @@ class LogisticOfficeAdmin(admin.ModelAdmin):
     shipment_count.short_description = 'Shipments'
 
 
+# ---------- Warehouse Admin ----------
 @admin.register(Warehouse)
 class WarehouseAdmin(admin.ModelAdmin):
     list_display = ('name', 'address', 'shipment_count', 'active_shipments')
@@ -34,13 +35,14 @@ class WarehouseAdmin(admin.ModelAdmin):
     shipment_count.short_description = 'Total Shipments'
 
     def active_shipments(self, obj):
-        count = obj.shipment_set.exclude(status='shipped').count()
+        count = obj.shipment_set.exclude(status='delivered').count()
         if count > 0:
             return format_html('<span style="color: orange;">{}</span>', count)
         return count
     active_shipments.short_description = 'Active'
 
 
+# ---------- Driver Admin ----------
 @admin.register(Driver)
 class DriverAdmin(admin.ModelAdmin):
     list_display = ('get_full_name', 'phone', 'license_number', 'vehicle_count', 'active_shipments', 'is_active')
@@ -60,7 +62,7 @@ class DriverAdmin(admin.ModelAdmin):
     vehicle_count.short_description = 'Vehicles'
 
     def active_shipments(self, obj):
-        count = obj.shipment_set.exclude(status='shipped').count()
+        count = obj.shipment_set.exclude(status='delivered').count()
         if count > 0:
             return format_html('<span style="color: orange;">{}</span>', count)
         return count
@@ -72,6 +74,7 @@ class DriverAdmin(admin.ModelAdmin):
     is_active.short_description = 'Active'
 
 
+# ---------- Vehicle Admin ----------
 @admin.register(Vehicle)
 class VehicleAdmin(admin.ModelAdmin):
     list_display = ('plate_number', 'model', 'driver_name', 'capacity_kg', 'active_shipments', 'status_indicator')
@@ -88,7 +91,7 @@ class VehicleAdmin(admin.ModelAdmin):
     driver_name.short_description = 'Driver'
 
     def active_shipments(self, obj):
-        count = obj.shipment_set.exclude(status='shipped').count()
+        count = obj.shipment_set.exclude(status='delivered').count()
         if count > 0:
             url = reverse('admin:logistics_shipment_changelist') + f'?vehicle__id__exact={obj.id}&status__exact=in_transit'
             return format_html('<a href="{}" style="color: orange;">{}</a>', url, count)
@@ -103,6 +106,7 @@ class VehicleAdmin(admin.ModelAdmin):
     status_indicator.short_description = 'Status'
 
 
+# ---------- ShipmentBox Inline ----------
 class BoxItemInline(admin.TabularInline):
     model = BoxItem
     extra = 0
@@ -121,6 +125,7 @@ class ShipmentBoxInline(admin.TabularInline):
     label_preview.short_description = 'QR Label'
 
 
+# ---------- Shipment Admin ----------
 @admin.register(Shipment)
 class ShipmentAdmin(admin.ModelAdmin):
     list_display = (
@@ -135,7 +140,7 @@ class ShipmentAdmin(admin.ModelAdmin):
     )
     ordering = ('-created_at',)
     raw_id_fields = ('shipping_address', 'warehouse', 'driver', 'vehicle', 'logistic_office', 'order')
-    readonly_fields = ('created_at', 'boxes_count')
+    readonly_fields = ('created_at', 'boxes_count', 'verification_preview')
     inlines = [ShipmentBoxInline]
 
     fieldsets = (
@@ -143,7 +148,7 @@ class ShipmentAdmin(admin.ModelAdmin):
             'fields': ('shipping_address', 'order', 'weight_kg', 'size_cubic_meters', 'created_at')
         }),
         ('Shipment Details', {
-            'fields': ('material_type', 'shipment_type', 'packing_type', 'container_type', 'status')
+            'fields': ('material_type', 'shipment_type', 'packing_type', 'container_type', 'status', 'verification_photo')
         }),
         ('Assignment', {
             'fields': ('warehouse', 'driver', 'vehicle', 'logistic_office')
@@ -152,7 +157,7 @@ class ShipmentAdmin(admin.ModelAdmin):
             'fields': ('collect_time', 'estimated_dropoff_time')
         }),
         ('Statistics', {
-            'fields': ('boxes_count',),
+            'fields': ('boxes_count', 'verification_preview'),
             'classes': ('collapse',)
         })
     )
@@ -188,10 +193,14 @@ class ShipmentAdmin(admin.ModelAdmin):
 
     def boxes_count(self, obj):
         count = obj.boxes.count()
-        if count > 0:
-            return f"{count} boxes"
-        return "No boxes"
+        return f"{count} boxes" if count > 0 else "No boxes"
     boxes_count.short_description = 'Boxes'
+
+    def verification_preview(self, obj):
+        if obj.verification_photo:
+            return format_html('<img src="{}" width="100"/>', obj.verification_photo.url)
+        return "-"
+    verification_preview.short_description = "Verification Photo"
 
     actions = ['mark_as_in_transit', 'mark_as_shipped']
 
@@ -205,17 +214,8 @@ class ShipmentAdmin(admin.ModelAdmin):
         self.message_user(request, f'{updated} shipments marked as shipped.')
     mark_as_shipped.short_description = 'Mark selected shipments as shipped'
 
-    def verification_preview(self, obj):
-        if obj.verification_photo:
-            return format_html('<img src="{}" width="100"/>', obj.verification_photo.url)
-        return "-"
 
-    verification_preview.short_description = "Verification Photo"
-
-    # Add to list_display or readonly_fields
-    readonly_fields = ('created_at', 'boxes_count', 'verification_preview')
-
-
+# ---------- ShipmentBox Admin ----------
 @admin.register(ShipmentBox)
 class ShipmentBoxAdmin(admin.ModelAdmin):
     list_display = ('__str__', 'shipment_id', 'box_number', 'weight_kg', 'items_count', 'label_status', 'created_at')
@@ -232,8 +232,7 @@ class ShipmentBoxAdmin(admin.ModelAdmin):
     shipment_id.short_description = 'Shipment'
 
     def items_count(self, obj):
-        count = obj.items.count()
-        return f"{count} items"
+        return f"{obj.items.count()} items"
     items_count.short_description = 'Items'
 
     def label_status(self, obj):
@@ -264,6 +263,7 @@ class ShipmentBoxAdmin(admin.ModelAdmin):
     generate_labels.short_description = 'Generate QR labels for selected boxes'
 
 
+# ---------- BoxItem Admin ----------
 @admin.register(BoxItem)
 class BoxItemAdmin(admin.ModelAdmin):
     list_display = ('box_info', 'product_name', 'quantity', 'order_item_price')
