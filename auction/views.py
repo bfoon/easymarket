@@ -9,7 +9,9 @@ from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.generic import ListView, DetailView
 from datetime import timedelta
+from django.core.cache import cache
 from decimal import Decimal
+from django.template.loader import render_to_string
 
 from .models import Auction, Bid, AuctionCategory, Watchlist, AuctionQuestion
 from .forms import AuctionForm, BidForm, SearchForm, QuestionForm
@@ -93,18 +95,25 @@ class AuctionListView(ListView):
 
 
 def auction_detail(request, pk):
-    """Enhanced auction detail view with full EasyMarket integration"""
-    auction = get_object_or_404(Auction.objects.select_related(
-        'category', 'seller', 'store', 'winner', 'marketplace_product'
-    ).prefetch_related(
-        'bids__bidder', 'additional_images', 'questions__questioner'
-    ), pk=pk)
+    """Enhanced auction detail view with full EasyMarket integration."""
 
-    # Increment view count
+    # Fetch auction with all related data
+    auction = get_object_or_404(
+        Auction.objects.select_related(
+            'category', 'seller', 'store', 'winner', 'marketplace_product'
+        ).prefetch_related(
+            'bids__bidder', 'additional_images', 'questions__questioner'
+        ),
+        pk=pk
+    )
+
+    # Increment view count (atomic)
     Auction.objects.filter(pk=pk).update(view_count=F('view_count') + 1)
 
+    # Latest 10 bids (most recent first)
     bids = auction.bids.select_related('bidder').order_by('-timestamp')[:10]
 
+    # Initialize context variables
     bid_form = None
     question_form = None
     is_watching = False
@@ -112,37 +121,45 @@ def auction_detail(request, pk):
     user_questions = []
     can_bid = False
 
+    # If the user is logged in
     if request.user.is_authenticated:
-        # Check if user can bid (not seller, auction is active)
-        can_bid = (
-                request.user != auction.seller and
-                auction.is_active and
-                request.user.is_buyer
-        )
+        is_buyer = getattr(request.user, 'is_buyer', False)
+        is_not_seller = request.user != auction.seller
+        is_active = auction.is_active
+        user_highest_bid = auction.bids.filter(bidder=request.user).order_by('-amount').first()
+
+        can_bid = is_buyer and is_not_seller and is_active
 
         if can_bid:
             bid_form = BidForm(auction=auction, user=request.user)
 
         question_form = QuestionForm()
         is_watching = Watchlist.objects.filter(user=request.user, auction=auction).exists()
-        user_highest_bid = bids.filter(bidder=request.user).first()
         user_questions = auction.questions.filter(questioner=request.user)
 
-    # Check if auction can be extended
+    # Auto-extend condition
     can_extend = (
             auction.auto_extend and
             auction.is_active and
-            auction.end_date - timezone.now() <= timedelta(minutes=5)
+            (auction.end_date - timezone.now() <= timedelta(minutes=5))
     )
 
-    # Get related auctions from same store
+    # Related auctions from same store
     related_auctions = Auction.objects.filter(
         store=auction.store,
         status='active'
-    ).exclude(pk=auction.pk)[:4]
+    ).exclude(pk=auction.pk).select_related('store', 'category')[:4]
 
-    # Get store reviews for trust indicators
+    # Approved reviews for store
     store_reviews = auction.store.reviews.filter(is_approved=True)[:5]
+
+    # Public questions (exclude user’s own if logged in)
+    if request.user.is_authenticated:
+        public_questions = auction.questions.filter(
+            is_public=True
+        ).exclude(questioner=request.user)
+    else:
+        public_questions = auction.questions.filter(is_public=True)
 
     context = {
         'auction': auction,
@@ -156,20 +173,18 @@ def auction_detail(request, pk):
         'can_bid': can_bid,
         'related_auctions': related_auctions,
         'store_reviews': store_reviews,
-        'public_questions': auction.questions.filter(
-            is_public=True
-        ).exclude(questioner=request.user) if request.user.is_authenticated else auction.questions.filter(
-            is_public=True)
+        'public_questions': public_questions,
     }
+
     return render(request, 'auction/detail.html', context)
 
 
 @login_required
 def place_bid(request, pk):
-    """Enhanced bidding with integration to existing payment/order system"""
+    """Place a bid on an active auction with validations and optional rate limiting."""
     auction = get_object_or_404(Auction, pk=pk)
 
-    # Validate user can bid
+    # Validate bidding permissions
     if not request.user.is_buyer:
         messages.error(request, "You need to be a registered buyer to place bids.")
         return redirect('auction:detail', pk=pk)
@@ -182,6 +197,13 @@ def place_bid(request, pk):
         messages.error(request, "You cannot bid on your own auction.")
         return redirect('auction:detail', pk=pk)
 
+    # Optional: Rate-limiting (e.g., 1 bid per 3 seconds)
+    cache_key = f"bid-rate-limit-{request.user.id}"
+    if cache.get(cache_key):
+        messages.warning(request, "You're bidding too frequently. Please wait a few seconds.")
+        return redirect('auction:detail', pk=pk)
+    cache.set(cache_key, True, timeout=3)
+
     if request.method == 'POST':
         form = BidForm(auction=auction, user=request.user, data=request.POST)
         if form.is_valid():
@@ -190,7 +212,7 @@ def place_bid(request, pk):
             bid.bidder = request.user
             bid.ip_address = request.META.get('REMOTE_ADDR')
 
-            # Handle auto-bidding
+            # Handle optional max auto-bid
             max_auto_bid = form.cleaned_data.get('max_auto_bid')
             if max_auto_bid:
                 bid.max_auto_bid = max_auto_bid
@@ -198,70 +220,79 @@ def place_bid(request, pk):
 
             bid.save()
 
-            # Auto-extend auction if needed
+            # Auto-extend auction if it's within the last 5 minutes
             if auction.auto_extend and auction.end_date - timezone.now() <= timedelta(minutes=5):
                 auction.end_date = timezone.now() + timedelta(minutes=5)
                 auction.save(update_fields=['end_date'])
                 messages.info(request, "Auction extended by 5 minutes due to last-minute bidding.")
 
-            messages.success(request, f"Your bid of ${bid.amount} has been placed!")
+            messages.success(request, f"Your bid of ${bid.amount} has been placed.")
 
-            # Check for buy-now price
+            # If bid meets/exceeds buy-now price, trigger buy-now
             if auction.buy_now_price and bid.amount >= auction.buy_now_price:
                 return redirect('auction:buy_now', pk=pk)
 
             return redirect('auction:detail', pk=pk)
         else:
-            messages.error(request, "Invalid bid amount.")
+            messages.error(request, "Invalid bid amount submitted.")
 
     return redirect('auction:detail', pk=pk)
 
 
 @login_required
 def buy_now(request, pk):
-    """Buy now functionality integrated with existing order system"""
+    """Buy Now functionality integrated with the auction and order system."""
     auction = get_object_or_404(Auction, pk=pk)
 
+    # Validations
     if not auction.is_active or not auction.buy_now_price:
-        messages.error(request, "Buy now is not available for this auction.")
+        messages.error(request, "Buy Now is not available for this auction.")
         return redirect('auction:detail', pk=pk)
 
     if auction.seller == request.user:
         messages.error(request, "You cannot buy your own auction.")
         return redirect('auction:detail', pk=pk)
 
-    if not request.user.is_buyer:
-        messages.error(request, "You need to be a registered buyer to purchase items.")
+    if not getattr(request.user, 'is_buyer', False):
+        messages.error(request, "You must be a registered buyer to purchase items.")
         return redirect('auction:detail', pk=pk)
 
-    # Create winning bid at buy-now price
+    if auction.status == 'ended' or auction.winner:
+        messages.error(request, "This auction has already ended or has a winner.")
+        return redirect('auction:detail', pk=pk)
+
+    # Create a bid at the buy now price
     bid = Bid.objects.create(
         auction=auction,
         bidder=request.user,
         amount=auction.buy_now_price,
-        ip_address=request.META.get('REMOTE_ADDR')
+        ip_address=request.META.get('REMOTE_ADDR', '')
     )
 
+    # Finalize auction
     auction.status = 'ended'
     auction.winner = request.user
+    auction.ended_at = timezone.now()
     auction.save()
 
-    # Create order through existing system
+    # Create an order (assumes method exists)
     order = auction.create_order_for_winner()
 
-    messages.success(request, f"Congratulations! You bought this item for ${auction.buy_now_price}")
+    messages.success(request, f"🎉 You bought this item for ${auction.buy_now_price:.2f}!")
 
     if order:
-        return redirect('orders:detail', pk=order.pk)
+        return redirect('orders:order_detail', pk=order.pk)
 
     return redirect('auction:detail', pk=pk)
 
 
 @login_required
 def create_auction(request):
-    """Create auction with store validation"""
-    # Check if user has an active store
+    """Create auction with store validation and marketplace product selection"""
+
+    # Ensure user is a seller with an active store
     user_store = request.user.owned_stores.filter(status='active').first()
+
     if not user_store:
         messages.error(request, "You need to have an active store to create auctions.")
         return redirect('stores:create')
@@ -270,37 +301,64 @@ def create_auction(request):
         messages.error(request, "You need to be a registered seller to create auctions.")
         return redirect('auction:index')
 
+    # Get store's marketplace products
+    from marketplace.models import Product
+    marketplace_products = Product.objects.filter(
+        store=user_store,
+        is_active=True  # assuming products have a status field
+    ).select_related('category')
+
     if request.method == 'POST':
         form = AuctionForm(user=request.user, data=request.POST, files=request.FILES)
         if form.is_valid():
             auction = form.save(commit=False)
             auction.seller = request.user
             auction.store = user_store
-
-            # Set commission rate from store or default
             auction.commission_rate = user_store.commission_rate
 
-            # Determine status based on store settings
+            # Handle marketplace product selection
+            marketplace_product_id = request.POST.get('marketplace_product')
+            if marketplace_product_id:
+                try:
+                    selected_product = marketplace_products.get(id=marketplace_product_id)
+                    auction.marketplace_product = selected_product
+
+                    # Auto-populate some fields from marketplace product
+                    if not auction.title:
+                        auction.title = selected_product.name
+                    if not auction.description:
+                        auction.description = selected_product.description
+                    if not auction.image and selected_product.image:
+                        auction.image = selected_product.image
+
+                except Product.DoesNotExist:
+                    messages.error(request, "Selected marketplace product not found.")
+                    return render(request, 'auction/create.html', {
+                        'form': form,
+                        'store': user_store,
+                        'store_slug': user_store.slug,
+                        'marketplace_products': marketplace_products,
+                    })
+
+            # Status logic
             if user_store.auto_approve_products:
                 auction.status = 'active'
+                messages.success(request, "Your auction has been created and is now live!")
             else:
                 auction.status = 'draft'
                 messages.info(request, "Your auction has been created and is pending approval.")
 
             auction.save()
-
-            if auction.status == 'active':
-                messages.success(request, "Your auction has been created and is now live!")
-
             return redirect('auction:detail', pk=auction.pk)
     else:
         form = AuctionForm(user=request.user)
 
     return render(request, 'auction/create.html', {
         'form': form,
-        'user_store': user_store
+        'store': user_store,
+        'store_slug': user_store.slug if user_store else '',
+        'marketplace_products': marketplace_products,
     })
-
 
 @login_required
 def my_auctions(request):
@@ -339,21 +397,102 @@ def my_bids(request):
 
     return render(request, 'auction/my_bids.html', {'page_obj': page_obj})
 
+def ajax_auction_bids(request, pk):
+    auction = get_object_or_404(Auction, pk=pk)
+    bids = auction.bids.select_related('bidder').order_by('-timestamp')
+    html = render_to_string('auction/partials/recent_bids.html', {'bids': bids})
+    return JsonResponse({'html': html})
+
+def ajax_current_bid(request, pk):
+    auction = get_object_or_404(Auction, pk=pk)
+    bids = auction.bids.order_by('-amount')
+    html = render_to_string('auction/partials/current_bid.html', {'bids': bids, 'auction': auction})
+    return JsonResponse({'html': html})
+
+def ajax_questions(request, pk):
+    auction = get_object_or_404(Auction, pk=pk)
+    questions = auction.public_questions.select_related('questioner')
+    html = render_to_string('auction/partials/questions.html', {'public_questions': questions})
+    return JsonResponse({'html': html})
+
 
 @login_required
 def won_auctions(request):
-    """User's won auctions with order status"""
+    """Display auctions won by the user, with order and payment info."""
+
+    # Assign winners if auctions expired
+    expired_auctions = Auction.objects.filter(
+        status='active',
+        end_date__lte=timezone.now(),
+        winner__isnull=True,
+        bids__bidder=request.user
+    ).distinct()
+
+    for auction in expired_auctions:
+        auction.assign_winner_if_expired()
+
+    # Fetch won auctions
     won_auctions = Auction.objects.filter(
         winner=request.user,
         status__in=['ended', 'sold', 'payment_pending']
-    ).select_related('store', 'order', 'payment').order_by('-end_date')
+    ).select_related('store', 'order', 'payment', 'shipment').order_by('-end_date')
 
     paginator = Paginator(won_auctions, 10)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
-    return render(request, 'auction/won_auctions.html', {'page_obj': page_obj})
+    # Safely sum up winning prices
+    total_spent = sum(
+        (auction.current_bid or auction.starting_bid or Decimal('0.00')) for auction in won_auctions
+    )
 
+    return render(request, 'auction/won_auctions.html', {
+        'page_obj': page_obj,
+        'total_spent': total_spent
+    })
+
+@login_required
+@require_POST
+def create_order_for_auction(request, pk):
+    """Create an order for a won auction"""
+    auction = get_object_or_404(Auction, pk=pk, winner=request.user)
+
+    # Validate auction state
+    if auction.order:
+        messages.info(request, "An order already exists for this auction.")
+        return redirect('orders:order_detail', pk=auction.order.pk)
+
+    if auction.status not in ['ended', 'payment_pending']:
+        messages.error(request, "Cannot create order for this auction status.")
+        return redirect('auction:won_auctions')
+
+    try:
+        # Use the existing method from the model
+        order = auction.create_order_for_winner()
+
+        if order:
+            messages.success(request, f"Order #{order.pk} created successfully!")
+            return redirect('orders:order_detail', pk=order.pk)
+        else:
+            messages.error(request, "Failed to create order. Please contact support.")
+
+    except Exception as e:
+        messages.error(request, f"Error creating order: {str(e)}")
+
+    return redirect('auction:won_auctions')
+
+
+@login_required
+def auction_order_detail(request, pk):
+    """Quick order detail view for auction context"""
+    auction = get_object_or_404(Auction, pk=pk, winner=request.user)
+
+    if not auction.order:
+        messages.error(request, "No order exists for this auction yet.")
+        return redirect('auction:won_auctions')
+
+    # Redirect to the main order detail view
+    return redirect('orders:order_detail', pk=auction.order.pk)
 
 @login_required
 def watchlist(request):
@@ -545,4 +684,28 @@ def manage_store_auctions(request, store_slug):
         'page_obj': page_obj,
         'status_filter': status_filter,
         'status_choices': Auction.STATUS_CHOICES
+    })
+
+@login_required
+def edit_auction(request, pk):
+    auction = get_object_or_404(Auction, pk=pk)
+
+    # Ensure only the store owner or manager can edit
+    if request.user != auction.store.owner and not auction.store.managers.filter(id=request.user.id).exists():
+        messages.error(request, "You do not have permission to edit this auction.")
+        return redirect('auction:manage_store_auctions', store_slug=auction.store.slug)
+
+    if request.method == 'POST':
+        form = AuctionForm(user=request.user, instance=auction, data=request.POST, files=request.FILES)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Auction updated successfully.")
+            return redirect('auction:manage_store_auctions', store_slug=auction.store.slug)
+    else:
+        form = AuctionForm(user=request.user, instance=auction)
+
+    return render(request, 'auction/edit.html', {
+        'form': form,
+        'auction': auction,
+        'store_slug': auction.store.slug,
     })

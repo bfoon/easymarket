@@ -1,0 +1,1034 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load humanize %}
+{% block title %}My Bids Dashboard{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{% static 'css/main.css' %}">
+
+<style>
+:root {
+  --mybids-primary: #667eea;
+  --mybids-primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --mybids-success-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  --mybids-warning-gradient: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+  --mybids-surface: #ffffff;
+  --mybids-surface-elevated: #f8fafc;
+  --mybids-background: #f1f5f9;
+  --mybids-text-primary: #1e293b;
+  --mybids-text-secondary: #64748b;
+  --mybids-text-muted: #94a3b8;
+  --mybids-border: #e2e8f0;
+  --mybids-border-focus: #667eea;
+  --mybids-error: #ef4444;
+  --mybids-success: #10b981;
+  --mybids-warning: #f59e0b;
+  --mybids-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --mybids-shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -1px rgb(0 0 0 / 0.06);
+  --mybids-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -2px rgb(0 0 0 / 0.05);
+  --mybids-shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  --mybids-radius: 12px;
+  --mybids-radius-lg: 16px;
+  --mybids-transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Main Container */
+.mybids-dashboard {
+  min-height: 100vh;
+  background: var(--mybids-background);
+  padding: 2rem 1rem;
+}
+
+.mybids-container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* Dashboard Header */
+.mybids-header {
+  text-align: center;
+  margin-bottom: 3rem;
+  animation: mybidsFadeInDown 0.8s ease-out;
+}
+
+.mybids-header-title {
+  font-size: 3rem;
+  font-weight: 800;
+  background: var(--mybids-primary-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 0.5rem;
+}
+
+.mybids-header-subtitle {
+  color: var(--mybids-text-secondary);
+  font-size: 1.2rem;
+  font-weight: 400;
+}
+
+/* Statistics Cards */
+.mybids-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 3rem;
+}
+
+.mybids-stat-card {
+  background: var(--mybids-surface);
+  border-radius: var(--mybids-radius-lg);
+  padding: 2rem;
+  box-shadow: var(--mybids-shadow-md);
+  position: relative;
+  overflow: hidden;
+  transition: var(--mybids-transition);
+  animation: mybidsFadeInUp 0.8s ease-out;
+}
+
+.mybids-stat-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--mybids-shadow-xl);
+}
+
+.mybids-stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--mybids-primary-gradient);
+}
+
+.mybids-stat-card.success::before {
+  background: var(--mybids-success-gradient);
+}
+
+.mybids-stat-card.warning::before {
+  background: var(--mybids-warning-gradient);
+}
+
+.mybids-stat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.mybids-stat-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  background: var(--mybids-primary-gradient);
+  color: white;
+}
+
+.mybids-stat-icon.success {
+  background: var(--mybids-success-gradient);
+}
+
+.mybids-stat-icon.warning {
+  background: var(--mybids-warning-gradient);
+}
+
+.mybids-stat-value {
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: var(--mybids-text-primary);
+  margin: 0;
+}
+
+.mybids-stat-label {
+  color: var(--mybids-text-secondary);
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+.mybids-stat-change {
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-top: 0.5rem;
+}
+
+.mybids-stat-change.positive {
+  color: var(--mybids-success);
+}
+
+.mybids-stat-change.negative {
+  color: var(--mybids-error);
+}
+
+/* Filters and Controls */
+.mybids-controls {
+  background: var(--mybids-surface);
+  border-radius: var(--mybids-radius-lg);
+  padding: 1.5rem;
+  box-shadow: var(--mybids-shadow-sm);
+  margin-bottom: 2rem;
+  animation: mybidsFadeInUp 0.8s ease-out 0.2s both;
+}
+
+.mybids-controls-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  align-items: end;
+}
+
+.mybids-filter-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.mybids-filter-label {
+  font-weight: 600;
+  color: var(--mybids-text-primary);
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.mybids-filter-select {
+  padding: 0.75rem;
+  border: 2px solid var(--mybids-border);
+  border-radius: var(--mybids-radius);
+  background: var(--mybids-surface);
+  color: var(--mybids-text-primary);
+  font-size: 0.95rem;
+  transition: var(--mybids-transition);
+  cursor: pointer;
+}
+
+.mybids-filter-select:focus {
+  outline: none;
+  border-color: var(--mybids-border-focus);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.mybids-search-input {
+  padding: 0.75rem;
+  border: 2px solid var(--mybids-border);
+  border-radius: var(--mybids-radius);
+  background: var(--mybids-surface);
+  color: var(--mybids-text-primary);
+  font-size: 0.95rem;
+  transition: var(--mybids-transition);
+}
+
+.mybids-search-input:focus {
+  outline: none;
+  border-color: var(--mybids-border-focus);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+/* Bids Grid */
+.mybids-grid {
+  display: grid;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.mybids-card {
+  background: var(--mybids-surface);
+  border-radius: var(--mybids-radius-lg);
+  padding: 2rem;
+  box-shadow: var(--mybids-shadow-md);
+  transition: var(--mybids-transition);
+  position: relative;
+  overflow: hidden;
+  animation: mybidsFadeInUp 0.6s ease-out;
+}
+
+.mybids-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--mybids-shadow-xl);
+}
+
+.mybids-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--mybids-primary-gradient);
+  transform: scaleX(0);
+  transition: var(--mybids-transition);
+}
+
+.mybids-card:hover::before {
+  transform: scaleX(1);
+}
+
+.mybids-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.5rem;
+  gap: 1rem;
+}
+
+.mybids-auction-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--mybids-text-primary);
+  text-decoration: none;
+  line-height: 1.3;
+  transition: var(--mybids-transition);
+  flex: 1;
+}
+
+.mybids-auction-title:hover {
+  color: var(--mybids-primary);
+}
+
+.mybids-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem 1rem;
+  border-radius: 50px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+
+.mybids-status-badge.ongoing {
+  background: var(--mybids-success-gradient);
+  color: white;
+}
+
+.mybids-status-badge.closed {
+  background: linear-gradient(135deg, #6b7280, #4b5563);
+  color: white;
+}
+
+.mybids-status-badge.won {
+  background: var(--mybids-warning-gradient);
+  color: white;
+}
+
+.mybids-card-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+}
+
+.mybids-info-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.mybids-info-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+}
+
+.mybids-info-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--mybids-primary);
+  flex-shrink: 0;
+}
+
+.mybids-info-label {
+  color: var(--mybids-text-secondary);
+  font-weight: 500;
+}
+
+.mybids-info-value {
+  color: var(--mybids-text-primary);
+  font-weight: 600;
+  margin-left: auto;
+}
+
+.mybids-bid-amount {
+  color: var(--mybids-success);
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.mybids-card-actions {
+  margin-top: 1.5rem;
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+}
+
+.mybids-btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: var(--mybids-radius);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: var(--mybids-transition);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.mybids-btn-primary {
+  background: var(--mybids-primary-gradient);
+  color: white;
+  box-shadow: var(--mybids-shadow-sm);
+}
+
+.mybids-btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--mybids-shadow-md);
+  color: white;
+}
+
+.mybids-btn-secondary {
+  background: var(--mybids-surface-elevated);
+  color: var(--mybids-text-secondary);
+  border: 2px solid var(--mybids-border);
+}
+
+.mybids-btn-secondary:hover {
+  background: var(--mybids-border);
+  transform: translateY(-1px);
+  color: var(--mybids-text-secondary);
+}
+
+/* Empty State */
+.mybids-empty-state {
+  text-align: center;
+  padding: 4rem 2rem;
+  background: var(--mybids-surface);
+  border-radius: var(--mybids-radius-lg);
+  box-shadow: var(--mybids-shadow-md);
+  animation: mybidsFadeIn 0.8s ease-out;
+}
+
+.mybids-empty-icon {
+  font-size: 5rem;
+  margin-bottom: 2rem;
+  opacity: 0.5;
+}
+
+.mybids-empty-title {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--mybids-text-primary);
+  margin-bottom: 1rem;
+}
+
+.mybids-empty-description {
+  color: var(--mybids-text-secondary);
+  font-size: 1.1rem;
+  line-height: 1.5;
+  margin-bottom: 2rem;
+}
+
+.mybids-empty-action {
+  background: var(--mybids-primary-gradient);
+  color: white;
+  padding: 1rem 2rem;
+  border: none;
+  border-radius: var(--mybids-radius);
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: var(--mybids-transition);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.mybids-empty-action:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--mybids-shadow-lg);
+  color: white;
+}
+
+/* Pagination */
+.mybids-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 3rem;
+}
+
+.mybids-pagination-btn {
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--mybids-border);
+  background: var(--mybids-surface);
+  color: var(--mybids-text-secondary);
+  border-radius: var(--mybids-radius);
+  text-decoration: none;
+  font-weight: 500;
+  transition: var(--mybids-transition);
+}
+
+.mybids-pagination-btn:hover {
+  border-color: var(--mybids-primary);
+  color: var(--mybids-primary);
+  background: rgba(102, 126, 234, 0.05);
+}
+
+.mybids-pagination-btn.active {
+  background: var(--mybids-primary-gradient);
+  color: white;
+  border-color: transparent;
+}
+
+.mybids-pagination-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .mybids-dashboard {
+    padding: 1rem 0.5rem;
+  }
+
+  .mybids-header-title {
+    font-size: 2rem;
+  }
+
+  .mybids-stats-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .mybids-controls-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mybids-card {
+    padding: 1.5rem;
+  }
+
+  .mybids-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .mybids-card-body {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .mybids-card-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .mybids-btn {
+    justify-content: center;
+  }
+}
+
+/* Animations */
+@keyframes mybidsFadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes mybidsFadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes mybidsFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Loading Animation */
+.mybids-loading {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(102, 126, 234, 0.3);
+  border-radius: 50%;
+  border-top-color: var(--mybids-primary);
+  animation: mybidsSpin 1s ease-in-out infinite;
+}
+
+@keyframes mybidsSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Staggered animation for cards */
+.mybids-card:nth-child(1) { animation-delay: 0.1s; }
+.mybids-card:nth-child(2) { animation-delay: 0.2s; }
+.mybids-card:nth-child(3) { animation-delay: 0.3s; }
+.mybids-card:nth-child(4) { animation-delay: 0.4s; }
+.mybids-card:nth-child(5) { animation-delay: 0.5s; }
+.mybids-card:nth-child(n+6) { animation-delay: 0.6s; }
+</style>
+
+<div class="mybids-dashboard">
+  <div class="mybids-container">
+
+    <!-- Header -->
+    <div class="mybids-header">
+      <h1 class="mybids-header-title">My Bidding Dashboard</h1>
+      <p class="mybids-header-subtitle">Track your auction activity and winning history</p>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="mybids-stats-grid">
+      <div class="mybids-stat-card">
+        <div class="mybids-stat-header">
+          <div class="mybids-stat-icon">📊</div>
+        </div>
+        <h3 class="mybids-stat-value" id="totalBids">{{ page_obj.paginator.count|default:0 }}</h3>
+        <p class="mybids-stat-label">Total Bids Placed</p>
+        <div class="mybids-stat-change positive">+12% this month</div>
+      </div>
+
+      <div class="mybids-stat-card success">
+        <div class="mybids-stat-header">
+          <div class="mybids-stat-icon success">🏆</div>
+        </div>
+        <h3 class="mybids-stat-value" id="wonAuctions">3</h3>
+        <p class="mybids-stat-label">Auctions Won</p>
+        <div class="mybids-stat-change positive">+1 this week</div>
+      </div>
+
+      <div class="mybids-stat-card warning">
+        <div class="mybids-stat-header">
+          <div class="mybids-stat-icon warning">⏰</div>
+        </div>
+        <h3 class="mybids-stat-value" id="activeBids">{{ page_obj.object_list|length|default:0 }}</h3>
+        <p class="mybids-stat-label">Active Bids</p>
+        <div class="mybids-stat-change">Currently tracking</div>
+      </div>
+
+      <div class="mybids-stat-card">
+        <div class="mybids-stat-header">
+          <div class="mybids-stat-icon">💰</div>
+        </div>
+        <h3 class="mybids-stat-value">D2,450</h3>
+        <p class="mybids-stat-label">Total Bid Value</p>
+        <div class="mybids-stat-change negative">-5% from last month</div>
+      </div>
+    </div>
+
+    <!-- Filters and Controls -->
+    <div class="mybids-controls">
+      <div class="mybids-controls-grid">
+        <div class="mybids-filter-group">
+          <label class="mybids-filter-label">Filter by Status</label>
+          <select class="mybids-filter-select" id="statusFilter">
+            <option value="">All Statuses</option>
+            <option value="ongoing">Ongoing</option>
+            <option value="closed">Closed</option>
+            <option value="won">Won</option>
+          </select>
+        </div>
+
+        <div class="mybids-filter-group">
+          <label class="mybids-filter-label">Sort by</label>
+          <select class="mybids-filter-select" id="sortFilter">
+            <option value="recent">Most Recent</option>
+            <option value="oldest">Oldest First</option>
+            <option value="highest">Highest Bid</option>
+            <option value="lowest">Lowest Bid</option>
+          </select>
+        </div>
+
+        <div class="mybids-filter-group">
+          <label class="mybids-filter-label">Search Auctions</label>
+          <input type="text" class="mybids-search-input" id="searchInput" placeholder="Search by title or store...">
+        </div>
+
+        <div class="mybids-filter-group">
+          <label class="mybids-filter-label">&nbsp;</label>
+          <button class="mybids-btn mybids-btn-secondary" onclick="clearFilters()">
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+            Clear Filters
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bids Grid -->
+    {% if page_obj.object_list %}
+      <div class="mybids-grid" id="bidsContainer">
+        {% for bid in page_obj %}
+          <div class="mybids-card" data-status="{% if bid.auction.end_date < now %}closed{% else %}ongoing{% endif %}" data-title="{{ bid.auction.title|lower }}" data-store="{{ bid.auction.store.name|lower }}" data-amount="{{ bid.amount }}">
+            <div class="mybids-card-header">
+              <a href="{% url 'auction:detail' bid.auction.pk %}" class="mybids-auction-title">
+                {{ bid.auction.title }}
+              </a>
+              {% if bid.auction.end_date < now %}
+                <span class="mybids-status-badge closed">
+                  <span>⏰</span>
+                  Closed
+                </span>
+              {% else %}
+                <span class="mybids-status-badge ongoing">
+                  <span>🔴</span>
+                  Live
+                </span>
+              {% endif %}
+            </div>
+
+            <div class="mybids-card-body">
+              <div class="mybids-info-section">
+                <div class="mybids-info-item">
+                  <svg class="mybids-info-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                  </svg>
+                  <span class="mybids-info-label">Store:</span>
+                  <span class="mybids-info-value">{{ bid.auction.store.name }}</span>
+                </div>
+
+                <div class="mybids-info-item">
+                  <svg class="mybids-info-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"/>
+                  </svg>
+                  <span class="mybids-info-label">My Bid:</span>
+                  <span class="mybids-info-value mybids-bid-amount">${{ bid.amount|floatformat:2 }}</span>
+                </div>
+
+                <div class="mybids-info-item">
+                  <svg class="mybids-info-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                  </svg>
+                  <span class="mybids-info-label">Bid Time:</span>
+                  <span class="mybids-info-value">{{ bid.timestamp|date:"M d, H:i" }}</span>
+                </div>
+              </div>
+
+              <div class="mybids-info-section">
+                <div class="mybids-info-item">
+                  <svg class="mybids-info-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                  </svg>
+                  <span class="mybids-info-label">Ends:</span>
+                  <span class="mybids-info-value">{{ bid.auction.end_date|date:"M d, H:i" }}</span>
+                </div>
+
+                {% if bid.auction.order %}
+                <div class="mybids-info-item">
+                  <svg class="mybids-info-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                  </svg>
+                  <span class="mybids-info-label">Order:</span>
+                  <a href="{% url 'orders:order_detail' bid.auction.order.pk %}" class="mybids-info-value" style="color: var(--mybids-primary);">#{{ bid.auction.order.pk }}</a>
+                </div>
+                {% endif %}
+
+                <div class="mybids-info-item">
+                  <svg class="mybids-info-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+                  </svg>
+                  <span class="mybids-info-label">Status:</span>
+                  <span class="mybids-info-value">
+                    {% if bid.auction.end_date < now %}
+                      Auction Ended
+                    {% else %}
+                      Active Bid
+                    {% endif %}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div class="mybids-card-actions">
+              <a href="{% url 'auction:detail' bid.auction.pk %}" class="mybids-btn mybids-btn-primary">
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                </svg>
+                View Auction
+              </a>
+              {% if bid.auction.end_date > now %}
+              <a href="{% url 'auction:detail' bid.auction.pk %}#bid-form" class="mybids-btn mybids-btn-secondary">
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                </svg>
+                Place New Bid
+              </a>
+              {% endif %}
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+
+      <!-- Pagination -->
+      {% if page_obj.has_other_pages %}
+      <div class="mybids-pagination">
+        {% if page_obj.has_previous %}
+          <a href="?page=1" class="mybids-pagination-btn">
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/>
+            </svg>
+            First
+          </a>
+          <a href="?page={{ page_obj.previous_page_number }}" class="mybids-pagination-btn">
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+            </svg>
+            Previous
+          </a>
+        {% endif %}
+
+        <span class="mybids-pagination-btn active">{{ page_obj.number }}</span>
+
+        {% if page_obj.has_next %}
+          <a href="?page={{ page_obj.next_page_number }}" class="mybids-pagination-btn">
+            Next
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+            </svg>
+          </a>
+          <a href="?page={{ page_obj.paginator.num_pages }}" class="mybids-pagination-btn">
+            Last
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"/>
+            </svg>
+          </a>
+        {% endif %}
+      </div>
+      {% endif %}
+
+    {% else %}
+      <!-- Empty State -->
+      <div class="mybids-empty-state">
+        <div class="mybids-empty-icon">🎯</div>
+        <h3 class="mybids-empty-title">No Bids Yet</h3>
+        <p class="mybids-empty-description">
+          You haven't placed any bids yet. Start exploring auctions and place your first bid to begin your bidding journey!
+        </p>
+        <a href="{% url 'auction:list' %}" class="mybids-empty-action">
+          <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+          </svg>
+          Explore Auctions
+        </a>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const statusFilter = document.getElementById('statusFilter');
+  const sortFilter = document.getElementById('sortFilter');
+  const searchInput = document.getElementById('searchInput');
+  const bidsContainer = document.getElementById('bidsContainer');
+
+  // Filter and search functionality
+  function filterBids() {
+    const statusValue = statusFilter.value.toLowerCase();
+    const searchValue = searchInput.value.toLowerCase();
+    const cards = bidsContainer.querySelectorAll('.mybids-card');
+
+    cards.forEach(card => {
+      const cardStatus = card.dataset.status;
+      const cardTitle = card.dataset.title;
+      const cardStore = card.dataset.store;
+
+      const statusMatch = !statusValue || cardStatus === statusValue;
+      const searchMatch = !searchValue ||
+        cardTitle.includes(searchValue) ||
+        cardStore.includes(searchValue);
+
+      if (statusMatch && searchMatch) {
+        card.style.display = 'block';
+        card.style.animation = 'mybidsFadeInUp 0.3s ease-out';
+      } else {
+        card.style.display = 'none';
+      }
+    });
+
+    // Update empty state
+    const visibleCards = bidsContainer.querySelectorAll('.mybids-card[style*="block"]');
+    if (visibleCards.length === 0 && cards.length > 0) {
+      showNoResultsMessage();
+    } else {
+      hideNoResultsMessage();
+    }
+  }
+
+  function sortBids() {
+    const sortValue = sortFilter.value;
+    const cards = Array.from(bidsContainer.querySelectorAll('.mybids-card'));
+
+    cards.sort((a, b) => {
+      switch (sortValue) {
+        case 'oldest':
+          return new Date(a.dataset.timestamp) - new Date(b.dataset.timestamp);
+        case 'highest':
+          return parseFloat(b.dataset.amount) - parseFloat(a.dataset.amount);
+        case 'lowest':
+          return parseFloat(a.dataset.amount) - parseFloat(b.dataset.amount);
+        case 'recent':
+        default:
+          return new Date(b.dataset.timestamp) - new Date(a.dataset.timestamp);
+      }
+    });
+
+    // Re-append sorted cards
+    cards.forEach(card => bidsContainer.appendChild(card));
+  }
+
+  function showNoResultsMessage() {
+    let noResults = bidsContainer.querySelector('.no-results-message');
+    if (!noResults) {
+      noResults = document.createElement('div');
+      noResults.className = 'no-results-message mybids-empty-state';
+      noResults.innerHTML = `
+        <div class="mybids-empty-icon">🔍</div>
+        <h3 class="mybids-empty-title">No Results Found</h3>
+        <p class="mybids-empty-description">
+          Try adjusting your filters or search terms to find what you're looking for.
+        </p>
+      `;
+      bidsContainer.appendChild(noResults);
+    }
+  }
+
+  function hideNoResultsMessage() {
+    const noResults = bidsContainer.querySelector('.no-results-message');
+    if (noResults) {
+      noResults.remove();
+    }
+  }
+
+  // Event listeners
+  statusFilter.addEventListener('change', filterBids);
+  sortFilter.addEventListener('change', () => {
+    sortBids();
+    filterBids();
+  });
+  searchInput.addEventListener('input', filterBids);
+
+  // Clear filters function
+  window.clearFilters = function() {
+    statusFilter.value = '';
+    sortFilter.value = 'recent';
+    searchInput.value = '';
+    filterBids();
+    sortBids();
+  };
+
+  // Add timestamp data for sorting
+  document.querySelectorAll('.mybids-card').forEach(card => {
+    const timeElement = card.querySelector('.mybids-info-value');
+    if (timeElement) {
+      card.dataset.timestamp = Date.now(); // You'd get this from Django
+    }
+  });
+
+  // Animate statistics on scroll
+  const observerOptions = {
+    threshold: 0.1,
+    rootMargin: '0px 0px -50px 0px'
+  };
+
+  const observer = new IntersectionObserver(function(entries) {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const statValue = entry.target.querySelector('.mybids-stat-value');
+        if (statValue && !statValue.dataset.animated) {
+          animateCounter(statValue);
+          statValue.dataset.animated = 'true';
+        }
+      }
+    });
+  }, observerOptions);
+
+  document.querySelectorAll('.mybids-stat-card').forEach(card => {
+    observer.observe(card);
+  });
+
+  function animateCounter(element) {
+    const target = parseInt(element.textContent.replace(/[^0-9]/g, ''));
+    const duration = 1000;
+    const step = target / (duration / 16);
+    let current = 0;
+
+    const timer = setInterval(() => {
+      current += step;
+      if (current >= target) {
+        current = target;
+        clearInterval(timer);
+      }
+
+      const formatted = Math.floor(current);
+      if (element.textContent.includes('$')) {
+        element.textContent = '$' + formatted.toLocaleString();
+      } else {
+        element.textContent = formatted.toLocaleString();
+      }
+    }, 16);
+  }
+
+  // Enhanced hover effects
+  document.querySelectorAll('.mybids-card').forEach(card => {
+    card.addEventListener('mouseenter', function() {
+      this.style.transform = 'translateY(-8px)';
+    });
+
+    card.addEventListener('mouseleave', function() {
+      this.style.transform = 'translateY(0)';
+    });
+  });
+
+  // Real-time updates simulation
+  setInterval(() => {
+    const activeBadges = document.querySelectorAll('.mybids-status-badge.ongoing');
+    activeBadges.forEach(badge => {
+      badge.style.animation = 'mybidsPulse 2s ease-in-out';
+      setTimeout(() => {
+        badge.style.animation = '';
+      }, 2000);
+    });
+  }, 10000);
+});
+
+// Additional pulse animation for live status
+const pulseKeyframes = `
+  @keyframes mybidsPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+  }
+`;
+
+const style = document.createElement('style');
+style.textContent = pulseKeyframes;
+document.head.appendChild(style);
+</script>
+{% endblock %}

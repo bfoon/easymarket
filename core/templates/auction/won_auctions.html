@@ -1,0 +1,1285 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load humanize %}
+{% block title %}My Victories{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{% static 'css/main.css' %}">
+
+<style>
+:root {
+  --victories-primary: #667eea;
+  --victories-primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --victories-success-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  --victories-warning-gradient: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  --victories-error-gradient: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  --victories-surface: #ffffff;
+  --victories-surface-elevated: #f8fafc;
+  --victories-background: #f1f5f9;
+  --victories-text-primary: #1e293b;
+  --victories-text-secondary: #64748b;
+  --victories-text-muted: #94a3b8;
+  --victories-border: #e2e8f0;
+  --victories-border-focus: #667eea;
+  --victories-error: #ef4444;
+  --victories-success: #10b981;
+  --victories-warning: #f59e0b;
+  --victories-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --victories-shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -1px rgb(0 0 0 / 0.06);
+  --victories-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -2px rgb(0 0 0 / 0.05);
+  --victories-shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  --victories-radius: 12px;
+  --victories-radius-lg: 16px;
+  --victories-transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Main Container */
+.victories-dashboard {
+  min-height: 100vh;
+  background: var(--victories-background);
+  padding: 2rem 1rem;
+}
+
+.victories-container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* Dashboard Header */
+.victories-header {
+  text-align: center;
+  margin-bottom: 3rem;
+  animation: victoriesFadeInDown 0.8s ease-out;
+}
+
+.victories-header-title {
+  font-size: 3rem;
+  font-weight: 800;
+  background: var(--victories-success-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 0.5rem;
+}
+
+.victories-header-subtitle {
+  color: var(--victories-text-secondary);
+  font-size: 1.2rem;
+  font-weight: 400;
+}
+
+/* Statistics Cards */
+.victories-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 3rem;
+}
+
+.victories-stat-card {
+  background: var(--victories-surface);
+  border-radius: var(--victories-radius-lg);
+  padding: 2rem;
+  box-shadow: var(--victories-shadow-md);
+  position: relative;
+  overflow: hidden;
+  transition: var(--victories-transition);
+  animation: victoriesFadeInUp 0.8s ease-out;
+}
+
+.victories-stat-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--victories-shadow-xl);
+}
+
+.victories-stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--victories-success-gradient);
+}
+
+.victories-stat-card.warning::before {
+  background: var(--victories-warning-gradient);
+}
+
+.victories-stat-card.primary::before {
+  background: var(--victories-primary-gradient);
+}
+
+.victories-stat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.victories-stat-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  background: var(--victories-success-gradient);
+  color: white;
+}
+
+.victories-stat-icon.warning {
+  background: var(--victories-warning-gradient);
+}
+
+.victories-stat-icon.primary {
+  background: var(--victories-primary-gradient);
+}
+
+.victories-stat-value {
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: var(--victories-text-primary);
+  margin: 0;
+}
+
+.victories-stat-label {
+  color: var(--victories-text-secondary);
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+.victories-stat-trend {
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-top: 0.5rem;
+}
+
+.victories-stat-trend.positive {
+  color: var(--victories-success);
+}
+
+.victories-stat-trend.negative {
+  color: var(--victories-error);
+}
+
+/* Filters */
+.victories-filters {
+  background: var(--victories-surface);
+  border-radius: var(--victories-radius-lg);
+  padding: 1.5rem;
+  box-shadow: var(--victories-shadow-sm);
+  margin-bottom: 2rem;
+  animation: victoriesFadeInUp 0.8s ease-out 0.2s both;
+}
+
+.victories-filters-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  align-items: end;
+}
+
+.victories-filter-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.victories-filter-label {
+  font-weight: 600;
+  color: var(--victories-text-primary);
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.victories-filter-select {
+  padding: 0.75rem;
+  border: 2px solid var(--victories-border);
+  border-radius: var(--victories-radius);
+  background: var(--victories-surface);
+  color: var(--victories-text-primary);
+  font-size: 0.95rem;
+  transition: var(--victories-transition);
+  cursor: pointer;
+}
+
+.victories-filter-select:focus {
+  outline: none;
+  border-color: var(--victories-border-focus);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+/* Victory Cards */
+.victories-grid {
+  display: grid;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.victories-card {
+  background: var(--victories-surface);
+  border-radius: var(--victories-radius-lg);
+  overflow: hidden;
+  box-shadow: var(--victories-shadow-md);
+  transition: var(--victories-transition);
+  position: relative;
+  animation: victoriesFadeInUp 0.6s ease-out;
+}
+
+.victories-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--victories-shadow-xl);
+}
+
+.victories-card-header {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.05), rgba(5, 150, 105, 0.05));
+  padding: 1.5rem 2rem 1rem 2rem;
+  border-bottom: 1px solid var(--victories-border);
+  position: relative;
+}
+
+.victories-card-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--victories-success-gradient);
+}
+
+.victories-card-header.payment-pending::before {
+  background: var(--victories-warning-gradient);
+}
+
+.victories-card-header.ended::before {
+  background: var(--victories-primary-gradient);
+}
+
+.victories-card-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+  gap: 1rem;
+}
+
+.victories-auction-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--victories-text-primary);
+  text-decoration: none;
+  line-height: 1.3;
+  transition: var(--victories-transition);
+  flex: 1;
+}
+
+.victories-auction-title:hover {
+  color: var(--victories-primary);
+}
+
+.victories-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem 1rem;
+  border-radius: 50px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+
+.victories-status-badge.ended {
+  background: var(--victories-primary-gradient);
+  color: white;
+}
+
+.victories-status-badge.sold {
+  background: var(--victories-success-gradient);
+  color: white;
+}
+
+.victories-status-badge.payment-pending {
+  background: var(--victories-warning-gradient);
+  color: white;
+  animation: victoriesPulse 2s infinite;
+}
+
+.victories-card-body {
+  padding: 2rem;
+}
+
+.victories-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+.victories-info-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.victories-info-section-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--victories-text-primary);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.victories-info-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.95rem;
+}
+
+.victories-info-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--victories-primary);
+  flex-shrink: 0;
+}
+
+.victories-info-label {
+  color: var(--victories-text-secondary);
+  font-weight: 500;
+  min-width: 100px;
+}
+
+.victories-info-value {
+  color: var(--victories-text-primary);
+  font-weight: 600;
+  flex: 1;
+}
+
+.victories-winning-amount {
+  color: var(--victories-success);
+  font-weight: 700;
+  font-size: 1.2rem;
+}
+
+.victories-order-link {
+  color: var(--victories-primary);
+  text-decoration: none;
+  font-weight: 600;
+  transition: var(--victories-transition);
+}
+
+.victories-order-link:hover {
+  color: var(--victories-primary);
+  text-decoration: underline;
+}
+
+/* Progress Indicators */
+.victories-progress-section {
+  background: var(--victories-surface-elevated);
+  border-radius: var(--victories-radius);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.victories-progress-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--victories-text-primary);
+  margin-bottom: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.victories-progress-steps {
+  display: flex;
+  justify-content: space-between;
+  position: relative;
+  margin-bottom: 1rem;
+}
+
+.victories-progress-steps::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--victories-border);
+  z-index: 1;
+}
+
+.victories-progress-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  position: relative;
+  z-index: 2;
+  background: var(--victories-surface-elevated);
+  padding: 0 0.5rem;
+}
+
+.victories-progress-step-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  font-weight: 600;
+  background: var(--victories-border);
+  color: var(--victories-text-muted);
+  transition: var(--victories-transition);
+}
+
+.victories-progress-step.completed .victories-progress-step-icon {
+  background: var(--victories-success);
+  color: white;
+}
+
+.victories-progress-step.active .victories-progress-step-icon {
+  background: var(--victories-warning);
+  color: white;
+  animation: victoriesPulse 2s infinite;
+}
+
+.victories-progress-step-label {
+  font-size: 0.8rem;
+  color: var(--victories-text-muted);
+  text-align: center;
+  line-height: 1.2;
+}
+
+.victories-progress-step.completed .victories-progress-step-label,
+.victories-progress-step.active .victories-progress-step-label {
+  color: var(--victories-text-secondary);
+  font-weight: 600;
+}
+
+/* Action Buttons */
+.victories-card-actions {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.victories-btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: var(--victories-radius);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: var(--victories-transition);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.victories-btn-primary {
+  background: var(--victories-primary-gradient);
+  color: white;
+  box-shadow: var(--victories-shadow-sm);
+}
+
+.victories-btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--victories-shadow-md);
+  color: white;
+}
+
+.victories-btn-success {
+  background: var(--victories-success-gradient);
+  color: white;
+  box-shadow: var(--victories-shadow-sm);
+}
+
+.victories-btn-success:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--victories-shadow-md);
+  color: white;
+}
+
+.victories-btn-warning {
+  background: var(--victories-warning-gradient);
+  color: white;
+  box-shadow: var(--victories-shadow-sm);
+  animation: victoriesPulse 3s infinite;
+}
+
+.victories-btn-warning:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--victories-shadow-md);
+  color: white;
+}
+
+.victories-btn-secondary {
+  background: var(--victories-surface-elevated);
+  color: var(--victories-text-secondary);
+  border: 2px solid var(--victories-border);
+}
+
+.victories-btn-secondary:hover {
+  background: var(--victories-border);
+  transform: translateY(-1px);
+  color: var(--victories-text-secondary);
+}
+
+/* Empty State */
+.victories-empty-state {
+  text-align: center;
+  padding: 4rem 2rem;
+  background: var(--victories-surface);
+  border-radius: var(--victories-radius-lg);
+  box-shadow: var(--victories-shadow-md);
+  animation: victoriesFadeIn 0.8s ease-out;
+}
+
+.victories-empty-icon {
+  font-size: 5rem;
+  margin-bottom: 2rem;
+  opacity: 0.5;
+}
+
+.victories-empty-title {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--victories-text-primary);
+  margin-bottom: 1rem;
+}
+
+.victories-empty-description {
+  color: var(--victories-text-secondary);
+  font-size: 1.1rem;
+  line-height: 1.5;
+  margin-bottom: 2rem;
+}
+
+.victories-empty-action {
+  background: var(--victories-primary-gradient);
+  color: white;
+  padding: 1rem 2rem;
+  border: none;
+  border-radius: var(--victories-radius);
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: var(--victories-transition);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.victories-empty-action:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--victories-shadow-lg);
+  color: white;
+}
+
+/* Pagination */
+.victories-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 3rem;
+}
+
+.victories-pagination-btn {
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--victories-border);
+  background: var(--victories-surface);
+  color: var(--victories-text-secondary);
+  border-radius: var(--victories-radius);
+  text-decoration: none;
+  font-weight: 500;
+  transition: var(--victories-transition);
+}
+
+.victories-pagination-btn:hover {
+  border-color: var(--victories-primary);
+  color: var(--victories-primary);
+  background: rgba(102, 126, 234, 0.05);
+}
+
+.victories-pagination-btn.active {
+  background: var(--victories-primary-gradient);
+  color: white;
+  border-color: transparent;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .victories-dashboard {
+    padding: 1rem 0.5rem;
+  }
+
+  .victories-header-title {
+    font-size: 2rem;
+  }
+
+  .victories-stats-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .victories-filters-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .victories-card-body {
+    padding: 1.5rem;
+  }
+
+  .victories-info-grid {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+
+  .victories-card-title-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .victories-card-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .victories-btn {
+    justify-content: center;
+  }
+
+  .victories-progress-steps {
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+}
+
+/* Animations */
+@keyframes victoriesFadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes victoriesFadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes victoriesFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes victoriesPulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+/* Small Button Style */
+.victories-btn-small {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.8rem;
+  border-radius: calc(var(--victories-radius) * 0.75);
+}
+
+/* Loading Animation */
+.victories-loading-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: white;
+  animation: victoriesSpin 1s ease-in-out infinite;
+}
+
+@keyframes victoriesSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Staggered animations for victory cards */
+.victories-card:nth-child(1) { animation-delay: 0.1s; }
+.victories-card:nth-child(2) { animation-delay: 0.2s; }
+.victories-card:nth-child(3) { animation-delay: 0.3s; }
+.victories-card:nth-child(4) { animation-delay: 0.4s; }
+.victories-card:nth-child(5) { animation-delay: 0.5s; }
+.victories-card:nth-child(n+6) { animation-delay: 0.6s; }
+</style>
+
+<div class="victories-dashboard">
+  <div class="victories-container">
+
+    <!-- Header -->
+    <div class="victories-header">
+      <h1 class="victories-header-title">🏆 My Victories Dashboard</h1>
+      <p class="victories-header-subtitle">Track your won auctions, payments, and deliveries</p>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="victories-stats-grid">
+      <div class="victories-stat-card">
+        <div class="victories-stat-header">
+          <div class="victories-stat-icon">🏆</div>
+        </div>
+        <h3 class="victories-stat-value">{{ page_obj.paginator.count|default:0 }}</h3>
+        <p class="victories-stat-label">Total Victories</p>
+        <div class="victories-stat-trend positive">All time wins</div>
+      </div>
+
+      <div class="victories-stat-card warning">
+        <div class="victories-stat-header">
+          <div class="victories-stat-icon warning">💳</div>
+        </div>
+        <h3 class="victories-stat-value" id="pendingPayments">
+          {% for auction in page_obj.object_list %}
+            {% if auction.status == 'payment_pending' and forloop.first %}{{ forloop.parentloop.counter0|add:1 }}{% endif %}
+          {% empty %}0{% endfor %}
+        </h3>
+        <p class="victories-stat-label">Pending Payments</p>
+        <div class="victories-stat-trend">Action required</div>
+      </div>
+
+     <div class="victories-stat-card primary">
+  <div class="victories-stat-header">
+    <div class="victories-stat-icon primary">💰</div>
+  </div>
+  <h3 class="victories-stat-value">
+    D{{ total_spent|floatformat:2 }}
+  </h3>
+  <p class="victories-stat-label">Total Spent</p>
+  <div class="victories-stat-trend positive">On winning bids</div>
+</div>
+
+      <div class="victories-stat-card">
+        <div class="victories-stat-header">
+          <div class="victories-stat-icon">📦</div>
+        </div>
+        <h3 class="victories-stat-value" id="completedOrders">
+          {% for auction in page_obj.object_list %}
+            {% if auction.status == 'sold' and forloop.first %}{{ forloop.parentloop.counter0|add:1 }}{% endif %}
+          {% empty %}0{% endfor %}
+        </h3>
+        <p class="victories-stat-label">Completed Orders</p>
+        <div class="victories-stat-trend positive">Successfully delivered</div>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="victories-filters">
+      <div class="victories-filters-grid">
+        <div class="victories-filter-group">
+          <label class="victories-filter-label">Filter by Status</label>
+          <select class="victories-filter-select" id="statusFilter" onchange="filterVictories()">
+            <option value="">All Statuses</option>
+            <option value="payment_pending">Payment Pending</option>
+            <option value="sold">Completed</option>
+            <option value="ended">Ended</option>
+          </select>
+        </div>
+
+        <div class="victories-filter-group">
+          <label class="victories-filter-label">Sort by</label>
+          <select class="victories-filter-select" id="sortFilter" onchange="sortVictories()">
+            <option value="">Most Recent</option>
+            <option value="oldest">Oldest First</option>
+            <option value="highest">Highest Amount</option>
+            <option value="lowest">Lowest Amount</option>
+          </select>
+        </div>
+
+        <div class="victories-filter-group">
+          <label class="victories-filter-label">Date Range</label>
+          <select class="victories-filter-select" id="dateFilter" onchange="filterByDate()">
+            <option value="">All Time</option>
+            <option value="week">This Week</option>
+            <option value="month">This Month</option>
+            <option value="quarter">This Quarter</option>
+          </select>
+        </div>
+
+        <div class="victories-filter-group">
+          <label class="victories-filter-label">&nbsp;</label>
+          <button class="victories-btn victories-btn-secondary" onclick="clearFilters()">
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+            Clear All
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Victory Cards -->
+    {% if page_obj.object_list %}
+      <div class="victories-grid" id="victoriesContainer">
+        {% for auction in page_obj %}
+          <div class="victories-card" data-status="{{ auction.status }}" data-amount="{% if auction.winning_bid %}{{ auction.winning_bid.amount }}{% else %}0{% endif %}" data-date="{{ auction.end_date.isoformat }}">
+
+            <div class="victories-card-header {{ auction.status }}">
+              <div class="victories-card-title-row">
+                <a href="{% url 'auction:detail' auction.pk %}" class="victories-auction-title">
+                  {{ auction.title }}
+                </a>
+                <span class="victories-status-badge {{ auction.status }}">
+                  {% if auction.status == 'payment_pending' %}
+                    <span>💳</span> Payment Pending
+                  {% elif auction.status == 'sold' %}
+                    <span>✅</span> Completed
+                  {% elif auction.status == 'ended' %}
+                    <span>🏁</span> Ended
+                  {% else %}
+                    <span>🏆</span> Won
+                  {% endif %}
+                </span>
+              </div>
+            </div>
+
+            <div class="victories-card-body">
+
+              <!-- Progress Indicator -->
+              <div class="victories-progress-section">
+                <h4 class="victories-progress-title">Order Progress</h4>
+                <div class="victories-progress-steps">
+                  <div class="victories-progress-step completed">
+                    <div class="victories-progress-step-icon">🏆</div>
+                    <div class="victories-progress-step-label">Won Auction</div>
+                  </div>
+                  <div class="victories-progress-step {% if auction.status == 'payment_pending' %}active{% elif auction.order %}completed{% endif %}">
+                    <div class="victories-progress-step-icon">💳</div>
+                    <div class="victories-progress-step-label">Payment</div>
+                  </div>
+                  <div class="victories-progress-step {% if auction.shipment %}completed{% elif auction.order and auction.order.status != 'pending' %}active{% endif %}">
+                    <div class="victories-progress-step-icon">📦</div>
+                    <div class="victories-progress-step-label">Shipping</div>
+                  </div>
+                  <div class="victories-progress-step {% if auction.status == 'sold' %}completed{% endif %}">
+                    <div class="victories-progress-step-icon">✅</div>
+                    <div class="victories-progress-step-label">Delivered</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Information Grid -->
+              <div class="victories-info-grid">
+
+                <!-- Auction Details -->
+                <div class="victories-info-section">
+                  <h4 class="victories-info-section-title">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    Auction Details
+                  </h4>
+
+                  {% if auction.store %}
+                  <div class="victories-info-item">
+                    <svg class="victories-info-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                    </svg>
+                    <span class="victories-info-label">Store:</span>
+                    <span class="victories-info-value">{{ auction.store.name }}</span>
+                  </div>
+                  {% endif %}
+
+                  <div class="victories-info-item">
+                    <svg class="victories-info-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"/>
+                    </svg>
+                    <span class="victories-info-label">Winning Bid:</span>
+                    <span class="victories-info-value victories-winning-amount">
+                      {% if auction.winning_bid %}
+                        D{{ auction.winning_bid.amount|floatformat:2 }}
+                      {% elif auction.current_bid %}
+                        D{{ auction.current_bid|floatformat:2 }}
+                      {% else %}
+                        Not available
+                      {% endif %}
+                    </span>
+                  </div>
+
+                  <div class="victories-info-item">
+                    <svg class="victories-info-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                    </svg>
+                    <span class="victories-info-label">Won On:</span>
+                    <span class="victories-info-value">{{ auction.end_date|date:"M d, Y H:i" }}</span>
+                  </div>
+                </div>
+
+                <!-- Order & Payment -->
+                <div class="victories-info-section">
+                  <h4 class="victories-info-section-title">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+                    </svg>
+                    Order & Payment
+                  </h4>
+
+                  <div class="victories-info-item">
+                    <svg class="victories-info-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    <span class="victories-info-label">Order:</span>
+                    <span class="victories-info-value">
+                      {% if auction.order %}
+                        <a href="{% url 'orders:order_detail' auction.order.pk %}" class="victories-order-link">
+                          #{{ auction.order.pk|truncatechars:8 }}
+                        </a>
+                      {% else %}
+                        <em style="color: var(--victories-text-muted);">Not created yet</em>
+                      {% endif %}
+                    </span>
+                  </div>
+
+                  <div class="victories-info-item">
+                    <svg class="victories-info-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+                    </svg>
+                    <span class="victories-info-label">Payment:</span>
+                    <span class="victories-info-value">
+                      {% if auction.payment %}
+                        {% if auction.payment.status == 'completed' %}
+                          <span style="color: var(--victories-success);">✅ Paid</span>
+                        {% elif auction.payment.status == 'pending' %}
+                          <span style="color: var(--victories-warning);">⏳ Pending</span>
+                        {% else %}
+                          <span style="color: var(--victories-error);">❌ {{ auction.payment.status|title }}</span>
+                        {% endif %}
+                      {% else %}
+                        <span style="color: var(--victories-text-muted);">Not processed</span>
+                      {% endif %}
+                    </span>
+                  </div>
+
+                  {% if auction.shipment %}
+                  <div class="victories-info-item">
+                    <svg class="victories-info-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <span class="victories-info-label">Tracking:</span>
+                    <span class="victories-info-value">
+                      <a href="#" class="victories-order-link">Track Package</a>
+                    </span>
+                  </div>
+                  {% endif %}
+                </div>
+              </div>
+
+              <!-- Action Buttons -->
+              <div class="victories-card-actions">
+                {% if auction.status == 'payment_pending' %}
+                  {% if auction.order %}
+                    <a href="{% url 'orders:order_detail' auction.order.pk %}" class="victories-btn victories-btn-warning">
+                      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+                      </svg>
+                      Complete Payment
+                    </a>
+                  {% else %}
+                    <button class="victories-btn victories-btn-warning" onclick="createOrder('{{ auction.pk }}')">
+                      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                      </svg>
+                      Create Order
+                    </button>
+                  {% endif %}
+                {% endif %}
+
+                <a href="{% url 'auction:detail' auction.pk %}" class="victories-btn victories-btn-secondary">
+                  <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                  </svg>
+                  View Auction
+                </a>
+
+                {% if auction.status == 'sold' and auction.shipment %}
+                  <button class="victories-btn victories-btn-success" onclick="trackShipment('{{ auction.shipment.pk }}')">
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    Track Package
+                  </button>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+
+      <!-- Pagination -->
+      {% if page_obj.has_other_pages %}
+      <div class="victories-pagination">
+        {% if page_obj.has_previous %}
+          <a href="?page=1" class="victories-pagination-btn">
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/>
+            </svg>
+            First
+          </a>
+          <a href="?page={{ page_obj.previous_page_number }}" class="victories-pagination-btn">
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+            </svg>
+            Previous
+          </a>
+        {% endif %}
+
+        <span class="victories-pagination-btn active">{{ page_obj.number }}</span>
+
+        {% if page_obj.has_next %}
+          <a href="?page={{ page_obj.next_page_number }}" class="victories-pagination-btn">
+            Next
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+            </svg>
+          </a>
+          <a href="?page={{ page_obj.paginator.num_pages }}" class="victories-pagination-btn">
+            Last
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"/>
+            </svg>
+          </a>
+        {% endif %}
+      </div>
+      {% endif %}
+
+    {% else %}
+      <!-- Empty State -->
+      <div class="victories-empty-state">
+        <div class="victories-empty-icon">🎯</div>
+        <h3 class="victories-empty-title">No Victories Yet</h3>
+        <p class="victories-empty-description">
+          You haven't won any auctions yet. Start bidding on exciting auctions to see your victories here!
+        </p>
+        <a href="{% url 'auction:index' %}" class="victories-empty-action">
+          <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+          </svg>
+          Explore Auctions
+        </a>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Initialize statistics animation
+  animateStatistics();
+
+  // Calculate real stats from page data
+  updateStatistics();
+});
+
+function filterVictories() {
+  const statusValue = document.getElementById('statusFilter').value.toLowerCase();
+  const cards = document.querySelectorAll('.victories-card');
+
+  cards.forEach(card => {
+    const cardStatus = card.dataset.status;
+    const shouldShow = !statusValue || cardStatus === statusValue;
+
+    if (shouldShow) {
+      card.style.display = 'block';
+      card.style.animation = 'victoriesFadeInUp 0.3s ease-out';
+    } else {
+      card.style.display = 'none';
+    }
+  });
+
+  updateVisibleCount();
+}
+
+function sortVictories() {
+  const sortValue = document.getElementById('sortFilter').value;
+  const container = document.getElementById('victoriesContainer');
+  const cards = Array.from(container.querySelectorAll('.victories-card'));
+
+  cards.sort((a, b) => {
+    switch (sortValue) {
+      case 'oldest':
+        return new Date(a.dataset.date) - new Date(b.dataset.date);
+      case 'highest':
+        return parseFloat(b.dataset.amount) - parseFloat(a.dataset.amount);
+      case 'lowest':
+        return parseFloat(a.dataset.amount) - parseFloat(b.dataset.amount);
+      default: // most recent
+        return new Date(b.dataset.date) - new Date(a.dataset.date);
+    }
+  });
+
+  cards.forEach(card => container.appendChild(card));
+}
+
+function filterByDate() {
+  const dateValue = document.getElementById('dateFilter').value;
+  const cards = document.querySelectorAll('.victories-card');
+  const now = new Date();
+
+  cards.forEach(card => {
+    const cardDate = new Date(card.dataset.date);
+    let shouldShow = true;
+
+    switch (dateValue) {
+      case 'week':
+        shouldShow = (now - cardDate) <= (7 * 24 * 60 * 60 * 1000);
+        break;
+      case 'month':
+        shouldShow = (now - cardDate) <= (30 * 24 * 60 * 60 * 1000);
+        break;
+      case 'quarter':
+        shouldShow = (now - cardDate) <= (90 * 24 * 60 * 60 * 1000);
+        break;
+      default:
+        shouldShow = true;
+    }
+
+    if (shouldShow) {
+      card.style.display = 'block';
+      card.style.animation = 'victoriesFadeInUp 0.3s ease-out';
+    } else {
+      card.style.display = 'none';
+    }
+  });
+
+  updateVisibleCount();
+}
+
+function clearFilters() {
+  document.getElementById('statusFilter').value = '';
+  document.getElementById('sortFilter').value = '';
+  document.getElementById('dateFilter').value = '';
+
+  document.querySelectorAll('.victories-card').forEach(card => {
+    card.style.display = 'block';
+  });
+
+  updateVisibleCount();
+}
+
+function updateVisibleCount() {
+  const visibleCards = document.querySelectorAll('.victories-card[style*="block"], .victories-card:not([style*="none"])');
+  // Update any visible count displays if needed
+}
+
+function updateStatistics() {
+  const cards = document.querySelectorAll('.victories-card');
+  const pendingPayments = document.querySelectorAll('.victories-card[data-status="payment_pending"]').length;
+  const completedOrders = document.querySelectorAll('.victories-card[data-status="sold"]').length;
+
+  document.getElementById('pendingPayments').textContent = pendingPayments;
+  document.getElementById('completedOrders').textContent = completedOrders;
+}
+
+function animateStatistics() {
+  const statValues = document.querySelectorAll('.victories-stat-value');
+
+  statValues.forEach(stat => {
+    const target = parseInt(stat.textContent.replace(/[^0-9]/g, ''));
+    const duration = 1000;
+    const step = target / (duration / 16);
+    let current = 0;
+
+    const timer = setInterval(() => {
+      current += step;
+      if (current >= target) {
+        current = target;
+        clearInterval(timer);
+      }
+
+      const formatted = Math.floor(current);
+      if (stat.textContent.includes('$')) {
+        stat.textContent = '$' + formatted.toLocaleString();
+      } else {
+        stat.textContent = formatted.toLocaleString();
+      }
+    }, 16);
+  });
+}
+
+function createOrder(auctionId) {
+  if (!confirm('Create an order for this auction? This will start the payment process.')) {
+    return;
+  }
+
+  // Show loading state
+  const button = event.target;
+  const originalContent = button.innerHTML;
+  button.disabled = true;
+  button.innerHTML = `
+    <div class="victories-loading-spinner"></div>
+    Creating Order...
+  `;
+
+  // Create form and submit
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = `/auction/won/${auctionId}/create-order/`;
+
+  // Add CSRF token
+  const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+  if (csrfToken) {
+    const csrfInput = document.createElement('input');
+    csrfInput.type = 'hidden';
+    csrfInput.name = 'csrfmiddlewaretoken';
+    csrfInput.value = csrfToken.value;
+    form.appendChild(csrfInput);
+  }
+
+  document.body.appendChild(form);
+  form.submit();
+}
+
+function trackShipment(shipmentId) {
+  // Placeholder for tracking shipment
+  alert('Tracking shipment: ' + shipmentId);
+  // In real implementation, this would open tracking modal or redirect to tracking page
+}
+
+// Enhanced hover effects
+document.querySelectorAll('.victories-card').forEach(card => {
+  card.addEventListener('mouseenter', function() {
+    this.style.transform = 'translateY(-8px)';
+  });
+
+  card.addEventListener('mouseleave', function() {
+    this.style.transform = 'translateY(0)';
+  });
+});
+</script>
+{% endblock %}

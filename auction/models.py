@@ -332,6 +332,24 @@ class Auction(models.Model):
 
         return shipment
 
+    def assign_winner_if_expired(self):
+        """Assign the highest bidder as the winner if auction has ended and no winner assigned."""
+        if self.status == 'active' and timezone.now() >= self.end_date and not self.winner:
+            highest_bid = self.bids.order_by('-amount', 'timestamp').first()
+            if highest_bid:
+                # Mark bid as winning
+                highest_bid.is_winning = True
+                highest_bid.save()
+
+                # Assign winner and finalize auction
+                self.winner = highest_bid.bidder
+                self.current_bid = highest_bid.amount
+                self.status = 'ended'
+                self.save()
+
+                # Create order automatically
+                self.create_order_for_winner()
+
 
 class Bid(models.Model):
     auction = models.ForeignKey(Auction, on_delete=models.CASCADE, related_name='bids')

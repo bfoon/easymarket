@@ -80,7 +80,7 @@ class AuctionAdmin(admin.ModelAdmin):
         price = obj.current_price
         color = 'green' if obj.reserve_met else 'red'
         return format_html(
-            '<span style="color: {};">${}</span>',
+            '<span style="color: {};">D{}</span>',
             color, price
         )
 

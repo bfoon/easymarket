@@ -1,0 +1,916 @@
+{% extends 'base.html' %}
+{% block title %}Create Auction{% endblock %}
+{% load static %}
+{% block content %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+
+<style>
+/* Scoped CSS Variables for Auction Creator */
+.auction-creator {
+  --ac-primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --ac-success-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  --ac-surface: #ffffff;
+  --ac-surface-elevated: #f8fafc;
+  --ac-on-surface: #1e293b;
+  --ac-on-surface-variant: #64748b;
+  --ac-border-color: #e2e8f0;
+  --ac-border-focus: #667eea;
+  --ac-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --ac-shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -1px rgb(0 0 0 / 0.06);
+  --ac-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -2px rgb(0 0 0 / 0.05);
+  --ac-shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  --ac-border-radius: 12px;
+  --ac-border-radius-lg: 16px;
+  --ac-transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Container and Layout */
+.auction-creator {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  padding: 2rem 1rem;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+.auction-creator-container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+/* Header Section */
+.auction-creator-header {
+  text-align: center;
+  margin-bottom: 3rem;
+  animation: ac-slideInDown 0.8s ease-out;
+}
+
+.auction-creator-title {
+  font-size: 3rem;
+  font-weight: 800;
+  background: var(--ac-primary-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 0.5rem;
+}
+
+.auction-creator-subtitle {
+  color: var(--ac-on-surface-variant);
+  font-size: 1.2rem;
+  font-weight: 400;
+}
+
+/* Progress Steps */
+.auction-progress-container {
+  margin-bottom: 2rem;
+  animation: ac-fadeInUp 0.8s ease-out 0.2s both;
+}
+
+.auction-progress-steps {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--ac-surface);
+  padding: 1.5rem;
+  border-radius: var(--ac-border-radius-lg);
+  box-shadow: var(--ac-shadow-sm);
+  position: relative;
+  overflow: hidden;
+}
+
+.auction-progress-steps::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 4px;
+  background: var(--ac-primary-gradient);
+  width: 33.33%;
+  transition: var(--ac-transition);
+}
+
+.auction-step {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+  color: var(--ac-on-surface-variant);
+  transition: var(--ac-transition);
+}
+
+.auction-step-number {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--ac-surface-elevated);
+  border: 2px solid var(--ac-border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  transition: var(--ac-transition);
+}
+
+.auction-step.active {
+  color: var(--ac-on-surface);
+}
+
+.auction-step.active .auction-step-number {
+  background: var(--ac-primary-gradient);
+  color: white;
+  border-color: transparent;
+  transform: scale(1.1);
+}
+
+.auction-step.completed .auction-step-number {
+  background: var(--ac-success-gradient);
+  color: white;
+  border-color: transparent;
+}
+
+.auction-step.completed .auction-step-number::after {
+  content: '✓';
+}
+
+/* Form Container */
+.auction-form-container {
+  background: var(--ac-surface);
+  border-radius: var(--ac-border-radius-lg);
+  box-shadow: var(--ac-shadow-lg);
+  overflow: hidden;
+  animation: ac-fadeInUp 0.8s ease-out 0.4s both;
+}
+
+.auction-form-section {
+  padding: 2rem;
+  border-bottom: 1px solid var(--ac-border-color);
+  display: none;
+  animation: ac-fadeIn 0.5s ease-out;
+}
+
+.auction-form-section.active {
+  display: block;
+}
+
+.auction-form-section:last-child {
+  border-bottom: none;
+}
+
+.auction-section-header {
+  margin-bottom: 2rem;
+}
+
+.auction-section-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--ac-on-surface);
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.auction-section-icon {
+  width: 24px;
+  height: 24px;
+  background: var(--ac-primary-gradient);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 0.875rem;
+}
+
+.auction-section-description {
+  color: var(--ac-on-surface-variant);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+/* Modern Form Fields */
+.auction-form-group {
+  margin-bottom: 1.5rem;
+  position: relative;
+}
+
+.auction-form-label {
+  display: block;
+  font-weight: 600;
+  color: var(--ac-on-surface);
+  margin-bottom: 0.5rem;
+  font-size: 0.95rem;
+}
+
+.auction-form-input {
+  width: 100%;
+  padding: 1rem;
+  border: 2px solid var(--ac-border-color);
+  border-radius: var(--ac-border-radius);
+  font-size: 1rem;
+  background: var(--ac-surface);
+  color: var(--ac-on-surface);
+  transition: var(--ac-transition);
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.auction-form-input:focus {
+  outline: none;
+  border-color: var(--ac-border-focus);
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  transform: translateY(-1px);
+}
+
+.auction-form-textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.auction-form-select {
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 0.75rem center;
+  background-repeat: no-repeat;
+  background-size: 1.5em 1.5em;
+  padding-right: 3rem;
+}
+
+/* File Upload Styling */
+.auction-file-upload-wrapper {
+  position: relative;
+  display: block;
+}
+
+.auction-file-upload {
+  display: none;
+}
+
+.auction-file-upload-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 200px;
+  border: 2px dashed var(--ac-border-color);
+  border-radius: var(--ac-border-radius);
+  background: var(--ac-surface-elevated);
+  cursor: pointer;
+  transition: var(--ac-transition);
+  position: relative;
+  overflow: hidden;
+}
+
+.auction-file-upload-label:hover {
+  border-color: var(--ac-border-focus);
+  background: rgba(102, 126, 234, 0.05);
+  transform: translateY(-2px);
+}
+
+.auction-file-upload-icon {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 1rem;
+  color: var(--ac-on-surface-variant);
+}
+
+.auction-file-upload-text {
+  font-weight: 600;
+  color: var(--ac-on-surface);
+  margin-bottom: 0.25rem;
+}
+
+.auction-file-upload-hint {
+  font-size: 0.875rem;
+  color: var(--ac-on-surface-variant);
+}
+
+/* Form Actions */
+.auction-form-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2rem;
+  background: var(--ac-surface-elevated);
+  border-top: 1px solid var(--ac-border-color);
+}
+
+.auction-btn {
+  padding: 0.75rem 2rem;
+  border-radius: var(--ac-border-radius);
+  font-weight: 600;
+  font-size: 1rem;
+  border: none;
+  cursor: pointer;
+  transition: var(--ac-transition);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-decoration: none;
+}
+
+.auction-btn-secondary {
+  background: var(--ac-surface-elevated);
+  color: var(--ac-on-surface-variant);
+  border: 2px solid var(--ac-border-color);
+}
+
+.auction-btn-secondary:hover {
+  background: var(--ac-border-color);
+  transform: translateY(-1px);
+}
+
+.auction-btn-primary {
+  background: var(--ac-primary-gradient);
+  color: white;
+  box-shadow: var(--ac-shadow-md);
+}
+
+.auction-btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--ac-shadow-lg);
+}
+
+.auction-btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Success Animation */
+.auction-btn-success {
+  background: var(--ac-success-gradient);
+}
+
+/* Tips Section */
+.auction-tips-section {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.05), rgba(118, 75, 162, 0.05));
+  border: 1px solid rgba(102, 126, 234, 0.1);
+  border-radius: var(--ac-border-radius);
+  padding: 1.5rem;
+  margin-top: 2rem;
+}
+
+.auction-tips-title {
+  font-weight: 600;
+  color: var(--ac-on-surface);
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.auction-tips-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.auction-tips-list li {
+  padding: 0.5rem 0;
+  color: var(--ac-on-surface-variant);
+  font-size: 0.925rem;
+  position: relative;
+  padding-left: 1.5rem;
+}
+
+.auction-tips-list li::before {
+  content: '💡';
+  position: absolute;
+  left: 0;
+  top: 0.5rem;
+}
+
+/* Grid Layout for Form Fields */
+.auction-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+/* Preview Styles */
+.auction-preview-box {
+  background: var(--ac-surface-elevated);
+  border-radius: var(--ac-border-radius);
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.auction-preview-title {
+  margin-top: 0;
+  color: var(--ac-on-surface);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .auction-creator {
+    padding: 1rem 0.5rem;
+  }
+
+  .auction-creator-title {
+    font-size: 2rem;
+  }
+
+  .auction-progress-steps {
+    flex-direction: column;
+    gap: 1rem;
+    text-align: center;
+  }
+
+  .auction-progress-steps::before {
+    display: none;
+  }
+
+  .auction-form-section {
+    padding: 1.5rem;
+  }
+
+  .auction-form-actions {
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .auction-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .auction-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Animations */
+@keyframes ac-slideInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ac-fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ac-fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes ac-pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+/* Form Validation Styles */
+.auction-form-input.error {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
+
+.auction-form-input.success {
+  border-color: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+}
+
+.auction-error-message {
+  color: #ef4444;
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* Loading Animation */
+.auction-loading-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: white;
+  animation: ac-spin 1s ease-in-out infinite;
+}
+
+@keyframes ac-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Spacer utility */
+.auction-flex-spacer {
+  flex: 1;
+}
+
+/* Hidden utility */
+.auction-hidden-fields {
+  display: none;
+}
+</style>
+
+<div class="auction-creator">
+  <div class="auction-creator-container">
+    <!-- Header -->
+    <div class="auction-creator-header">
+        <div class="mb-4 text-start">
+  <a href="{% url 'auction:manage_store_auctions' store_slug %}" class="btn btn-outline-primary">
+    <i class="fas fa-arrow-left me-2"></i>Back to Store Dashboard
+  </a>
+</div>
+
+      <h1 class="auction-creator-title">Create Amazing Auction</h1>
+      <p class="auction-creator-subtitle">Turn your items into exciting bidding experiences</p>
+    </div>
+
+    <!-- Progress Steps -->
+    <div class="auction-progress-container">
+      <div class="auction-progress-steps">
+        <div class="auction-step active" data-step="1">
+          <div class="auction-step-number">1</div>
+          <span>Basic Info</span>
+        </div>
+        <div class="auction-step" data-step="2">
+          <div class="auction-step-number">2</div>
+          <span>Details</span>
+        </div>
+        <div class="auction-step" data-step="3">
+          <div class="auction-step-number">3</div>
+          <span>Review</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Form Container -->
+    <form method="post" enctype="multipart/form-data" id="auctionForm" class="auction-form-container">
+      {% csrf_token %}
+
+      <!-- Step 1: Basic Information -->
+      <div class="auction-form-section active" data-section="1">
+        <div class="auction-section-header">
+          <h2 class="auction-section-title">
+            <div class="auction-section-icon">📝</div>
+            Basic Information
+          </h2>
+          <p class="auction-section-description">
+            Let's start with the essentials. Give your auction a compelling title and description that will attract bidders.
+          </p>
+        </div>
+
+        <div class="auction-form-group">
+          <label class="auction-form-label" for="{{ form.title.id_for_label }}">{{ form.title.label }}</label>
+          <input type="text" name="{{ form.title.name }}" id="{{ form.title.id_for_label }}" class="auction-form-input" {% if form.title.value %}value="{{ form.title.value }}"{% endif %} {% if form.title.field.required %}required{% endif %}>
+          {% if form.title.errors %}
+            <div class="auction-error-message">⚠️ {{ form.title.errors.0 }}</div>
+          {% endif %}
+        </div>
+
+        <div class="auction-form-group">
+          <label class="auction-form-label" for="{{ form.description.id_for_label }}">{{ form.description.label }}</label>
+          <textarea name="{{ form.description.name }}" id="{{ form.description.id_for_label }}" class="auction-form-input auction-form-textarea" {% if form.description.field.required %}required{% endif %}>{% if form.description.value %}{{ form.description.value }}{% endif %}</textarea>
+          {% if form.description.errors %}
+            <div class="auction-error-message">⚠️ {{ form.description.errors.0 }}</div>
+          {% endif %}
+        </div>
+
+        <div class="auction-form-group">
+          <label class="auction-form-label" for="{{ form.category.id_for_label }}">{{ form.category.label }}</label>
+          <select name="{{ form.category.name }}" id="{{ form.category.id_for_label }}" class="auction-form-input auction-form-select" {% if form.category.field.required %}required{% endif %}>
+            {% for choice in form.category.field.choices %}
+              <option value="{{ choice.0 }}" {% if form.category.value == choice.0 %}selected{% endif %}>{{ choice.1 }}</option>
+            {% endfor %}
+          </select>
+          {% if form.category.errors %}
+            <div class="auction-error-message">⚠️ {{ form.category.errors.0 }}</div>
+          {% endif %}
+        </div>
+
+        <div class="auction-tips-section">
+          <h3 class="auction-tips-title">
+            <span>💡</span>
+            Pro Tips for Great Auctions
+          </h3>
+          <ul class="auction-tips-list">
+            <li>Use clear, descriptive titles that highlight key features</li>
+            <li>Include detailed descriptions with condition and specifications</li>
+            <li>Choose the most relevant category for better discoverability</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Step 2: Auction Details -->
+      <div class="auction-form-section" data-section="2">
+        <div class="auction-section-header">
+          <h2 class="auction-section-title">
+            <div class="auction-section-icon">⚙️</div>
+            Auction Details
+          </h2>
+          <p class="auction-section-description">
+            Set your pricing strategy and timeline. These details determine how your auction will run.
+          </p>
+        </div>
+
+        <div class="auction-form-grid">
+          <div class="auction-form-group">
+            <label class="auction-form-label" for="{{ form.starting_bid.id_for_label }}">{{ form.starting_bid.label }}</label>
+            <input type="number" name="{{ form.starting_bid.name }}" id="{{ form.starting_bid.id_for_label }}" class="auction-form-input" step="0.01" {% if form.starting_bid.value %}value="{{ form.starting_bid.value }}"{% endif %} {% if form.starting_bid.field.required %}required{% endif %}>
+            {% if form.starting_bid.errors %}
+              <div class="auction-error-message">⚠️ {{ form.starting_bid.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          <div class="auction-form-group">
+            <label class="auction-form-label" for="{{ form.reserve_price.id_for_label }}">{{ form.reserve_price.label }}</label>
+            <input type="number" name="{{ form.reserve_price.name }}" id="{{ form.reserve_price.id_for_label }}" class="auction-form-input" step="0.01" {% if form.reserve_price.value %}value="{{ form.reserve_price.value }}"{% endif %}>
+            {% if form.reserve_price.errors %}
+              <div class="auction-error-message">⚠️ {{ form.reserve_price.errors.0 }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="auction-form-grid">
+          <div class="auction-form-group">
+            <label class="auction-form-label" for="{{ form.start_date.id_for_label }}">{{ form.start_date.label }}</label>
+            <input type="datetime-local" name="{{ form.start_date.name }}" id="{{ form.start_date.id_for_label }}" class="auction-form-input" {% if form.start_date.value %}value="{{ form.start_date.value|date:'Y-m-d\TH:i' }}"{% endif %} {% if form.start_date.field.required %}required{% endif %}>
+            {% if form.start_date.errors %}
+              <div class="auction-error-message">⚠️ {{ form.start_date.errors.0 }}</div>
+            {% endif %}
+          </div>
+
+          <div class="auction-form-group">
+            <label class="auction-form-label" for="{{ form.end_date.id_for_label }}">{{ form.end_date.label }}</label>
+            <input type="datetime-local" name="{{ form.end_date.name }}" id="{{ form.end_date.id_for_label }}" class="auction-form-input" {% if form.end_date.value %}value="{{ form.end_date.value|date:'Y-m-d\TH:i' }}"{% endif %} {% if form.end_date.field.required %}required{% endif %}>
+            {% if form.end_date.errors %}
+              <div class="auction-error-message">⚠️ {{ form.end_date.errors.0 }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        {% if form.images %}
+        <div class="auction-form-group">
+          <label class="auction-form-label" for="{{ form.images.id_for_label }}">{{ form.images.label }}</label>
+          <div class="auction-file-upload-wrapper">
+            <input type="file" name="{{ form.images.name }}" id="{{ form.images.id_for_label }}" class="auction-file-upload" multiple accept="image/*">
+            <label for="{{ form.images.id_for_label }}" class="auction-file-upload-label">
+              <svg class="auction-file-upload-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+              </svg>
+              <div class="auction-file-upload-text">Click to upload images</div>
+              <div class="auction-file-upload-hint">PNG, JPG up to 10MB each</div>
+            </label>
+          </div>
+          {% if form.images.errors %}
+            <div class="auction-error-message">⚠️ {{ form.images.errors.0 }}</div>
+          {% endif %}
+        </div>
+        {% endif %}
+
+        <div class="auction-tips-section">
+          <h3 class="auction-tips-title">
+            <span>💰</span>
+            Pricing Strategy Tips
+          </h3>
+          <ul class="auction-tips-list">
+            <li>Set starting bids lower to encourage more participants</li>
+            <li>Use reserve prices to protect valuable items</li>
+            <li>Choose auction duration based on item complexity</li>
+            <li>High-quality images can increase final bid prices by 30%</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Step 3: Review -->
+      <div class="auction-form-section" data-section="3">
+        <div class="auction-section-header">
+          <h2 class="auction-section-title">
+            <div class="auction-section-icon">✅</div>
+            Review & Launch
+          </h2>
+          <p class="auction-section-description">
+            Almost there! Review your auction details and launch when you're ready.
+          </p>
+        </div>
+
+        <div class="auction-preview-box">
+          <h3 class="auction-preview-title">Auction Preview</h3>
+          <div id="auction-preview">
+            <p><strong>Title:</strong> <span id="preview-title">-</span></p>
+            <p><strong>Category:</strong> <span id="preview-category">-</span></p>
+            <p><strong>Starting Bid:</strong> $<span id="preview-starting-bid">-</span></p>
+            <p><strong>Duration:</strong> <span id="preview-duration">-</span></p>
+          </div>
+        </div>
+
+        <!-- Hidden fields for other form fields -->
+        <div class="auction-hidden-fields">
+          {% for field in form %}
+            {% if field.name not in "title,description,category,starting_bid,reserve_price,start_date,end_date,images" %}
+              {{ field }}
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Form Actions -->
+      <div class="auction-form-actions">
+        <button type="button" class="auction-btn auction-btn-secondary" id="prevBtn" style="display: none;">
+          ← Previous Step
+        </button>
+        <div class="auction-flex-spacer"></div>
+        <button type="button" class="auction-btn auction-btn-primary" id="nextBtn">
+          Next Step →
+        </button>
+        <button type="submit" class="auction-btn auction-btn-success" id="submitBtn" style="display: none;">
+          <span class="submit-text">🚀 Launch Auction</span>
+          <div class="auction-loading-spinner" style="display: none;"></div>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  let currentStep = 1;
+  const totalSteps = 3;
+
+  const nextBtn = document.getElementById('nextBtn');
+  const prevBtn = document.getElementById('prevBtn');
+  const submitBtn = document.getElementById('submitBtn');
+  const form = document.getElementById('auctionForm');
+
+  // Update step display
+  function updateStep() {
+    // Update sections
+    document.querySelectorAll('.auction-form-section').forEach(section => {
+      section.classList.remove('active');
+    });
+    document.querySelector(`[data-section="${currentStep}"]`).classList.add('active');
+
+    // Update progress
+    document.querySelectorAll('.auction-step').forEach(step => {
+      const stepNum = parseInt(step.dataset.step);
+      step.classList.remove('active', 'completed');
+
+      if (stepNum < currentStep) {
+        step.classList.add('completed');
+      } else if (stepNum === currentStep) {
+        step.classList.add('active');
+      }
+    });
+
+    // Update progress bar
+    const progressBar = document.querySelector('.auction-progress-steps::before');
+    const progressWidth = ((currentStep - 1) / (totalSteps - 1)) * 100;
+    document.querySelector('.auction-progress-steps').style.setProperty('--progress-width', `${progressWidth}%`);
+
+    // Update buttons
+    prevBtn.style.display = currentStep > 1 ? 'inline-flex' : 'none';
+    nextBtn.style.display = currentStep < totalSteps ? 'inline-flex' : 'none';
+    submitBtn.style.display = currentStep === totalSteps ? 'inline-flex' : 'none';
+
+    // Update preview on step 3
+    if (currentStep === 3) {
+      updatePreview();
+    }
+  }
+
+  // Update preview
+  function updatePreview() {
+    const titleField = document.querySelector('[name="title"]');
+    const categoryField = document.querySelector('[name="category"]');
+    const startingBidField = document.querySelector('[name="starting_bid"]');
+    const startDateField = document.querySelector('[name="start_date"]');
+    const endDateField = document.querySelector('[name="end_date"]');
+
+    document.getElementById('preview-title').textContent = titleField.value || 'Not set';
+    document.getElementById('preview-category').textContent = categoryField.selectedOptions[0]?.text || 'Not selected';
+    document.getElementById('preview-starting-bid').textContent = startingBidField.value || '0';
+
+    if (startDateField.value && endDateField.value) {
+      const start = new Date(startDateField.value);
+      const end = new Date(endDateField.value);
+      const duration = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+      document.getElementById('preview-duration').textContent = `${duration} days`;
+    } else {
+      document.getElementById('preview-duration').textContent = 'Not set';
+    }
+  }
+
+  // Navigate steps
+  nextBtn.addEventListener('click', function() {
+    if (validateCurrentStep()) {
+      currentStep++;
+      updateStep();
+      scrollToTop();
+    }
+  });
+
+  prevBtn.addEventListener('click', function() {
+    currentStep--;
+    updateStep();
+    scrollToTop();
+  });
+
+  // Validate current step
+  function validateCurrentStep() {
+    let isValid = true;
+    const currentSection = document.querySelector(`[data-section="${currentStep}"]`);
+    const inputs = currentSection.querySelectorAll('.auction-form-input');
+
+    inputs.forEach(input => {
+      input.classList.remove('error', 'success');
+
+      if (input.hasAttribute('required') && !input.value.trim()) {
+        input.classList.add('error');
+        isValid = false;
+      } else if (input.value.trim()) {
+        input.classList.add('success');
+      }
+    });
+
+    return isValid;
+  }
+
+  // Form submission
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    const submitText = submitBtn.querySelector('.submit-text');
+    const spinner = submitBtn.querySelector('.auction-loading-spinner');
+
+    // Show loading state
+    submitText.style.display = 'none';
+    spinner.style.display = 'inline-block';
+    submitBtn.disabled = true;
+
+    // Simulate processing time, then submit
+    setTimeout(() => {
+      form.submit();
+    }, 1000);
+  });
+
+  // File upload handling
+  const fileInput = document.querySelector('.auction-file-upload');
+  if (fileInput) {
+    fileInput.addEventListener('change', function(e) {
+      const label = document.querySelector('.auction-file-upload-label');
+      const files = e.target.files;
+
+      if (files.length > 0) {
+        label.innerHTML = `
+          <svg class="auction-file-upload-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          <div class="auction-file-upload-text">${files.length} file(s) selected</div>
+          <div class="auction-file-upload-hint">Click to change selection</div>
+        `;
+        label.style.borderColor = 'var(--ac-border-focus)';
+        label.style.background = 'rgba(102, 126, 234, 0.05)';
+      }
+    });
+  }
+
+  // Smooth scrolling
+  function scrollToTop() {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  // Add floating label effect
+  document.querySelectorAll('.auction-form-input').forEach(input => {
+    input.addEventListener('focus', function() {
+      this.parentNode.classList.add('focused');
+    });
+
+    input.addEventListener('blur', function() {
+      if (!this.value) {
+        this.parentNode.classList.remove('focused');
+      }
+    });
+  });
+
+  // Initialize
+  updateStep();
+});
+</script>
+{% endblock %}
