@@ -159,13 +159,18 @@
                                     <i class="fas fa-credit-card me-2"></i> Proceed to Checkout
                                 </button>
                             </form>
-
+                            <button class="btn btn-outline-secondary" id="copyCartBtn">
+                                <i class="fas fa-copy me-1"></i> Copy Cart
+                            </button>
+                            <button class="btn btn-outline-success" id="whatsappShareBtn">
+                                <i class="fab fa-whatsapp me-1"></i> Share on WhatsApp
+                            </button>
                             <a href="{% url 'marketplace:all_products' %}" class="btn btn-outline-primary">
                                 <i class="fas fa-arrow-left me-2"></i> Continue Shopping
                             </a>
                         </div>
                     </div>
-                </div>
+                    </div>
 
                <!-- Promo Code -->
                 <div class="card shadow-sm mt-3">
@@ -225,6 +230,40 @@
 <script src="{% static 'js/main.js' %}"></script>
 <script src="{% static 'js/cart.js' %}"></script>
 <link rel="stylesheet" type="text/css" href="{% static 'css/cart.css' %}">
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const copyCartBtn = document.getElementById('copyCartBtn');
+    const whatsappShareBtn = document.getElementById('whatsappShareBtn');
+
+    if (copyCartBtn || whatsappShareBtn) {
+        fetch("{% url 'marketplace:share_cart' %}", {
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            }
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.share_url) {
+                if (copyCartBtn) {
+                    copyCartBtn.addEventListener('click', function() {
+                        navigator.clipboard.writeText(data.share_url);
+                        alert("Cart share link copied! You can send it to others.");
+                    });
+                }
+                if (whatsappShareBtn) {
+                    whatsappShareBtn.addEventListener('click', function() {
+                        const message = encodeURIComponent("Check out my cart: " + data.share_url);
+                        const whatsappUrl = `https://wa.me/?text=${message}`;
+                        window.open(whatsappUrl, '_blank');
+                    });
+                }
+            }
+        });
+    }
+});
+</script>
+
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {

@@ -4,7 +4,7 @@ from unicodedata import category
 from .models import (Category, Product, ProductView,
                      CartItem, Cart, CelebrityFeature, Wishlist,
                      SearchHistory, PopularSearch, ProductFeature,
-                     ProductFeatureOption, ProductVariant)
+                     ProductFeatureOption, ProductVariant, SharedCart)
 from chat.models import ChatThread, ChatMessage
 from accounts.models import Address
 from stores.models import Store
@@ -2191,6 +2191,34 @@ def clear_search_history(request):
         SearchHistory.objects.filter(user=request.user).delete()
         return JsonResponse({'success': True})
     return JsonResponse({'success': False})
+
+
+@login_required
+def share_cart(request):
+    shared_cart, created = SharedCart.objects.get_or_create(user=request.user)
+    share_url = request.build_absolute_uri(shared_cart.get_absolute_url())
+    return JsonResponse({'share_url': share_url})
+
+@login_required
+def copy_shared_cart(request, token):
+    shared = get_object_or_404(SharedCart, token=token)
+    source_cart = Cart.objects.get(user=shared.user)
+    target_cart, _ = Cart.objects.get_or_create(user=request.user)
+
+    for item in source_cart.items.all():
+        CartItem.objects.update_or_create(
+            cart=target_cart,
+            product=item.product,
+            defaults={
+                'quantity': item.quantity,
+                'selected_features': item.selected_features
+            }
+        )
+
+    messages.success(request, "Shared cart copied to your cart.")
+    return redirect('marketplace:cart_view')
+
+
 
 def about(request):
     return render(request, 'marketplace/about.html')

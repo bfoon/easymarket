@@ -2,220 +2,294 @@
 {% block title %}{{ product.name }} - EasyMarket{% endblock %}
 {% load static %}
 {% load humanize %}
-{% block content %}
 
+{% block extra_head %}
+<!-- SEO and Performance Optimizations -->
+<meta name="description" content="{{ product.name }} - {{ product.description|truncatechars:160 }}">
+<meta property="og:title" content="{{ product.name }} - EasyMarket">
+<meta property="og:description" content="{{ product.description|truncatechars:160 }}">
+<meta property="og:image" content="{{ product.image.url }}">
+<meta property="og:url" content="{{ request.build_absolute_uri }}">
+<meta property="product:price:amount" content="{{ product.price }}">
+<meta property="product:price:currency" content="GMD">
+
+<!-- Structured Data for SEO -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org/",
+  "@type": "Product",
+  "name": "{{ product.name }}",
+  "image": "{{ product.image.url }}",
+  "description": "{{ product.description|escapejs }}",
+  "brand": {
+    "@type": "Brand",
+    "name": "{% if product.brand %}{{ product.brand.name }}{% else %}EasyMarket{% endif %}"
+  },
+  "offers": {
+    "@type": "Offer",
+    "url": "{{ request.build_absolute_uri }}",
+    "priceCurrency": "GMD",
+    "price": "{{ product.price }}",
+    "availability": "{% if product.is_in_stock %}https://schema.org/InStock{% else %}https://schema.org/OutOfStock{% endif %}"
+  },
+  "aggregateRating": {
+    "@type": "AggregateRating",
+    "ratingValue": "{{ avg_rating|default:0 }}",
+    "reviewCount": "{{ review_count|default:0 }}"
+  }
+}
+</script>
+
+<!-- Preload critical resources -->
+<link rel="preload" href="{{ product.image.url }}" as="image">
+{% endblock %}
+
+{% block content %}
 <link rel="stylesheet" href="{% static 'css/main.css' %}">
 <link rel="stylesheet" href="{% static 'css/product_detail.css' %}">
 <link rel="stylesheet" href="{% static 'css/message.css' %}">
-<!-- Amazon-Style Breadcrumb -->
-<section class="amazon-breadcrumb py-2 bg-light border-bottom">
+
+<!-- Enhanced Breadcrumb with structured data -->
+<nav class="amazon-breadcrumb py-2 bg-light border-bottom" aria-label="Breadcrumb navigation">
     <div class="container">
-        <nav aria-label="breadcrumb">
-            <ol class="breadcrumb mb-0">
+        <ol class="breadcrumb mb-0" itemscope itemtype="https://schema.org/BreadcrumbList">
+            <!-- Home -->
+            <li class="breadcrumb-item" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+                <a href="{% url 'marketplace:product_list' %}" itemprop="item">
+                    <span itemprop="name"><i class="fas fa-home me-1" aria-hidden="true"></i> Home</span>
+                </a>
+                <meta itemprop="position" content="1" />
+            </li>
 
-                <!-- Home -->
-                <li class="breadcrumb-item">
-                    <a href="{% url 'marketplace:product_list' %}">
-                        <i class="fas fa-home me-1"></i> Home
-                    </a>
-                </li>
+            <!-- Parent Category -->
+            {% if product.category and product.category.parent %}
+            <li class="breadcrumb-item" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+                <a href="{% url 'marketplace:category_detail' product.category.parent.id %}" itemprop="item">
+                    <span itemprop="name">{{ product.category.parent.name }}</span>
+                </a>
+                <meta itemprop="position" content="2" />
+            </li>
+            {% endif %}
 
-                <!-- Parent Category (if exists) -->
-                {% if product.category and product.category.parent %}
-                <li class="breadcrumb-item">
-                    <a href="{% url 'marketplace:category_detail' product.category.parent.id %}">
-                        {{ product.category.parent.name }}
-                    </a>
-                </li>
-                {% endif %}
+            <!-- Current Category -->
+            {% if product.category %}
+            <li class="breadcrumb-item" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+                <a href="{% url 'marketplace:category_detail' product.category.id %}" itemprop="item">
+                    <span itemprop="name">{{ product.category.name }}</span>
+                </a>
+                <meta itemprop="position" content="{% if product.category.parent %}3{% else %}2{% endif %}" />
+            </li>
+            {% endif %}
 
-                <!-- Current Category -->
-                {% if product.category %}
-                <li class="breadcrumb-item">
-                    <a href="{% url 'marketplace:category_detail' product.category.id %}">
-                        {{ product.category.name }}
-                    </a>
-                </li>
-                {% endif %}
+            <!-- Brand -->
+            {% if product.brand %}
+            <li class="breadcrumb-item" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+                <a href="{% url 'marketplace:brand_detail' product.brand.id %}" itemprop="item">
+                    <span itemprop="name">{{ product.brand.name }}</span>
+                </a>
+                <meta itemprop="position" content="{% if product.category %}{% if product.category.parent %}4{% else %}3{% endif %}{% else %}2{% endif %}" />
+            </li>
+            {% endif %}
 
-                <!-- Subcategory (if exists) -->
-                {% if product.subcategory %}
-                <li class="breadcrumb-item">
-                    <a href="{% url 'marketplace:category_detail' product.subcategory.id %}">
-                        {{ product.subcategory.name }}
-                    </a>
-                </li>
-                {% endif %}
-
-                <!-- Brand (if exists) -->
-                {% if product.brand %}
-                <li class="breadcrumb-item">
-                    <a href="{% url 'marketplace:brand_detail' product.brand.id %}">
-                        {{ product.brand.name }}
-                    </a>
-                </li>
-                {% endif %}
-
-                <!-- Current Product Name -->
-                <li class="breadcrumb-item active" aria-current="page">
-                    {{ product.name|truncatechars:40 }}
-                </li>
-            </ol>
-        </nav>
+            <!-- Current Product -->
+            <li class="breadcrumb-item active" aria-current="page">
+                {{ product.name|truncatechars:40 }}
+            </li>
+        </ol>
     </div>
-</section>
+</nav>
 
-
-<!-- Product Details Section -->
-<section class="container my-5">
+<!-- Main Product Section -->
+<main class="container my-5">
     <div class="row g-4">
-
         <!-- Product Gallery -->
-        <div class="col-lg-5">
+        <section class="col-lg-5" aria-label="Product images">
             <div class="product-gallery shadow-sm p-3 bg-white rounded">
-
                 <div class="main-image-container position-relative mb-3">
-                    <img src="{{ product.image.url }}" alt="{{ product.name }}" class="img-fluid w-100 rounded" id="mainProductImage">
-                    <div class="zoom-indicator">
+                    <img src="{{ product.image.url }}"
+                         alt="{{ product.name }}"
+                         class="img-fluid w-100 rounded"
+                         id="mainProductImage"
+                         loading="eager"
+                         width="500"
+                         height="500">
+                    <div class="zoom-indicator" aria-hidden="true">
                         <i class="fas fa-search-plus"></i> Hover to zoom
                     </div>
                 </div>
 
                 {% if product.images.all %}
-                <div class="d-flex flex-wrap gap-2 thumbnail-gallery">
-                    <div class="thumbnail-item active" onclick="changeMainImage(this, '{{ product.image.url }}')">
-                        <img src="{{ product.image.url }}" alt="Main image" class="img-thumbnail">
-                    </div>
+                <div class="d-flex flex-wrap gap-2 thumbnail-gallery" role="tablist" aria-label="Product image thumbnails">
+                    <button class="thumbnail-item active border-0 p-0"
+                            onclick="changeMainImage(this, '{{ product.image.url }}')"
+                            role="tab"
+                            aria-selected="true"
+                            aria-label="Main product image">
+                        <img src="{{ product.image.url }}"
+                             alt="Main image"
+                             class="img-thumbnail"
+                             loading="lazy">
+                    </button>
                     {% for img in product.images.all %}
-                    <div class="thumbnail-item" onclick="changeMainImage(this, '{{ img.image.url }}')">
-                        <img src="{{ img.image.url }}" alt="Product image" class="img-thumbnail">
-                    </div>
+                    <button class="thumbnail-item border-0 p-0"
+                            onclick="changeMainImage(this, '{{ img.image.url }}')"
+                            role="tab"
+                            aria-selected="false"
+                            aria-label="Product image {{ forloop.counter }}">
+                        <img src="{{ img.image.url }}"
+                             alt="Product image {{ forloop.counter }}"
+                             class="img-thumbnail"
+                             loading="lazy">
+                    </button>
                     {% endfor %}
                 </div>
                 {% endif %}
 
                 {% if product.video %}
                 <div class="video-container mt-3">
-                    <video controls class="w-100 rounded">
+                    <video controls class="w-100 rounded" preload="metadata">
                         <source src="{{ product.video.url }}" type="video/mp4">
-                        Your browser does not support the video tag.
+                        <p>Your browser does not support the video tag. <a href="{{ product.video.url }}">Download the video</a> instead.</p>
                     </video>
                 </div>
                 {% endif %}
             </div>
-        </div>
+        </section>
 
-        <!-- Product Info -->
-        <div class="col-lg-7">
+        <!-- Product Information -->
+        <section class="col-lg-7" aria-label="Product details">
             <div class="product-info">
-
                 <h1 class="product-title fw-bold mb-3">{{ product.name }}</h1>
 
-         <!-- Rating Display -->
-                <div class="d-flex align-items-center mb-3">
-                    <div class="text-warning me-2">
+                <!-- Rating and Reviews -->
+                <div class="d-flex align-items-center mb-3" role="region" aria-label="Product rating">
+                    <div class="text-warning me-2" aria-label="Rating {{ avg_rating|floatformat:1 }} out of 5 stars">
                         {% for i in rating_range %}
                             {% if avg_rating >= i %}
-                                <i class="fas fa-star"></i>  {# Full Star #}
+                                <i class="fas fa-star" aria-hidden="true"></i>
                             {% elif avg_rating >= i|add:"-0.5" %}
-                                <i class="fas fa-star-half-alt"></i>  {# Half Star #}
+                                <i class="fas fa-star-half-alt" aria-hidden="true"></i>
                             {% else %}
-                                <i class="far fa-star"></i>  {# Empty Star #}
+                                <i class="far fa-star" aria-hidden="true"></i>
                             {% endif %}
                         {% endfor %}
                     </div>
-                    <span class="me-2 text-muted">{{ avg_rating|floatformat:1 }} ({{ review_count }} reviews)</span>
-                    <span class="text-muted">|</span>
+                    <span class="me-2 text-muted">{{ avg_rating|floatformat:1 }} ({{ review_count }} review{{ review_count|pluralize }})</span>
+                    <span class="text-muted" aria-hidden="true">|</span>
                     <span class="ms-2 text-muted">{{ product.sold_count|default:"0" }} sold</span>
                 </div>
-                <!-- Price Section -->
-                <div class="price-section mb-3">
-                    <span class="current-price h4 fw-bold text-danger">D{{ product.price|intcomma }}</span>
 
+                <!-- Price Section -->
+                <div class="price-section mb-3" role="region" aria-label="Product pricing">
+                    <span class="current-price h4 fw-bold text-danger">D{{ product.price|intcomma }}</span>
                     {% if product.original_price %}
                         <span class="ms-2 text-muted text-decoration-line-through">D{{ product.original_price|intcomma }}</span>
                         <span class="badge bg-success ms-2">
                             {{ product.discount_percentage|floatformat:0 }}% OFF
                         </span>
                     {% endif %}
-
                     {% if product.used %}
                         <span class="badge bg-warning text-dark ms-2">
-                            <i class="fas fa-recycle me-1"></i>Used
+                            <i class="fas fa-recycle me-1" aria-hidden="true"></i>Used
                         </span>
                     {% endif %}
                 </div>
-                 <!-- Stock and Features -->
-                <ul class="list-unstyled mb-4">
+
+                <!-- Product Features -->
+                <ul class="list-unstyled mb-4" role="list" aria-label="Product features">
                     <li class="mb-2">
                         {% if product.is_in_stock %}
-                        <i class="fas fa-check-circle text-success"></i> {{ product.get_stock_status }}
+                        <i class="fas fa-check-circle text-success" aria-hidden="true"></i>
+                        <span class="text-success">{{ product.get_stock_status }}</span>
                         {% else %}
-                        <i class="fas fa-times-circle text-danger"></i> Out of Stock
+                        <i class="fas fa-times-circle text-danger" aria-hidden="true"></i>
+                        <span class="text-danger">Out of Stock</span>
                         {% endif %}
                     </li>
-                    <li class="mb-2"><i class="fas fa-shield-alt text-success"></i> Secure Payment</li>
-                    <li class="mb-2"><i class="fas fa-truck text-success"></i> Fast Delivery ({{ store.processing_time }}-3 Days)</li>
+                    <li class="mb-2">
+                        <i class="fas fa-shield-alt text-success" aria-hidden="true"></i> Secure Payment
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-truck text-success" aria-hidden="true"></i>
+                        Fast Delivery ({{ store.processing_time|default:"1" }}-3 Days)
+                    </li>
                     <li class="mb-2">
                         {% if store.return_settings.return_window_days and product.has_30_day_return %}
-                        <i class="fas fa-undo text-success"></i>
+                        <i class="fas fa-undo text-success" aria-hidden="true"></i>
                         {{ store.return_settings.return_window_days }}-Day Return Policy
-                    {% else %}
-                        <i class="fas fa-times text-danger"></i>
+                        {% else %}
+                        <i class="fas fa-times text-danger" aria-hidden="true"></i>
                         No return policy for this item
-                    {% endif %}
-
+                        {% endif %}
                     </li>
                 </ul>
-                <!-- Enhanced Feature Selection -->
-               {% for feature, options in feature_data.items %}
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">{{ feature }}</label>
-                        <div class="d-flex flex-wrap gap-2 feature-group" data-feature="{{ feature }}">
-                            {% for option in options %}
-                                <input type="radio"
-                                       class="btn-check"
-                                       name="feature_{{ feature|slugify }}"
-                                       id="feature_{{ option.id }}"
-                                       value="{{ option.value }}"
-                                       autocomplete="off">
-                                <label class="btn btn-outline-dark btn-sm px-3" for="feature_{{ option.id }}">
-                                    {% if feature|lower == "color" %}
-                                        <span class="d-inline-block rounded-circle"
-                                              style="width: 16px; height: 16px; background-color: {{ option.value|default:'#ccc' }}; border: 1px solid #ccc;"></span>
-                                        <span class="ms-2">{{ option.value }}</span>
-                                    {% else %}
-                                        {{ option.value }}
-                                    {% endif %}
-                                </label>
-                            {% endfor %}
-                        </div>
+
+                <!-- Product Features/Variants -->
+                {% for feature, options in feature_data.items %}
+                <fieldset class="mb-3">
+                    <legend class="form-label fw-bold">{{ feature }}</legend>
+                    <div class="d-flex flex-wrap gap-2 feature-group" data-feature="{{ feature }}" role="radiogroup">
+                        {% for option in options %}
+                            <input type="radio"
+                                   class="btn-check"
+                                   name="feature_{{ feature|slugify }}"
+                                   id="feature_{{ option.id }}"
+                                   value="{{ option.value }}"
+                                   autocomplete="off">
+                            <label class="btn btn-outline-dark btn-sm px-3" for="feature_{{ option.id }}">
+                                {% if feature|lower == "color" %}
+                                    <span class="d-inline-block rounded-circle"
+                                          style="width: 16px; height: 16px; background-color: {{ option.value|default:'#ccc' }}; border: 1px solid #ccc;"
+                                          aria-hidden="true"></span>
+                                    <span class="ms-2">{{ option.value }}</span>
+                                {% else %}
+                                    {{ option.value }}
+                                {% endif %}
+                            </label>
+                        {% endfor %}
                     </div>
+                </fieldset>
                 {% endfor %}
-              <!-- Quantity Selector -->
+
+                <!-- Quantity Selector -->
                 {% if product.stock.quantity > 0 %}
                 <div class="d-flex align-items-center mb-3">
-                    <label class="me-2">Quantity:</label>
+                    <label for="quantity" class="me-2">Quantity:</label>
                     <div class="input-group" style="width: 120px;">
-                        <button class="btn btn-outline-secondary" type="button" onclick="changeQuantity(-1)">-</button>
-                        <input type="number" class="form-control text-center" id="quantity" value="1" min="1" max="{{ product.stock.quantity }}">
-                        <button class="btn btn-outline-secondary" type="button" onclick="changeQuantity(1)">+</button>
+                        <button class="btn btn-outline-secondary"
+                                type="button"
+                                onclick="changeQuantity(-1)"
+                                aria-label="Decrease quantity">-</button>
+                        <input type="number"
+                               class="form-control text-center"
+                               id="quantity"
+                               value="1"
+                               min="1"
+                               max="{{ product.stock.quantity }}"
+                               aria-label="Product quantity">
+                        <button class="btn btn-outline-secondary"
+                                type="button"
+                                onclick="changeQuantity(1)"
+                                aria-label="Increase quantity">+</button>
                     </div>
                 </div>
                 {% endif %}
 
                 <!-- Action Buttons -->
-                <div class="d-flex flex-wrap gap-2 mb-4">
+                <div class="d-flex flex-wrap gap-2 mb-4" role="group" aria-label="Product actions">
                     <!-- Add to Cart -->
-                    <button class="btn btn-primary" onclick="addToCart({{ product.id }}, this)"
-                        {% if not product.stock or product.stock.quantity == 0 %}disabled{% endif %}>
-                        <i class="fas fa-cart-plus me-1"></i> Add to Cart
+                    <button class="btn btn-primary"
+                            onclick="addToCart({{ product.id }}, this)"
+                            {% if not product.stock or product.stock.quantity == 0 %}disabled aria-disabled="true"{% endif %}>
+                        <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                        <i class="fas fa-cart-plus me-1" aria-hidden="true"></i> Add to Cart
                     </button>
 
                     <!-- Buy Now Button -->
-                    <button class="btn btn-warning" onclick="buyNow({{ product.id }})"
-                        {% if not product.stock or product.stock.quantity == 0 %}disabled{% endif %}>
-                        <i class="fas fa-bolt me-1"></i> Buy Now
+                    <button class="btn btn-warning"
+                            onclick="buyNow({{ product.id }})"
+                            {% if not product.stock or product.stock.quantity == 0 %}disabled aria-disabled="true"{% endif %}>
+                        <i class="fas fa-bolt me-1" aria-hidden="true"></i> Buy Now
                     </button>
 
                     <!-- Hidden Buy Now Form -->
@@ -225,148 +299,180 @@
                         <input type="hidden" name="quantity" id="buyNowQuantity">
                     </form>
 
-                    <!-- Wishlist Toggle Button -->
-                    <button class="btn btn-outline-secondary" onclick="toggleWishlist({{ product.id }})" id="wishlistBtn-{{ product.id }}">
-                        <i id="wishlistIcon-{{ product.id }}" class="{% if product.id in user_wishlist_product_ids %}fas fa-heart text-danger{% else %}far fa-heart{% endif %}"></i>
+                    <!-- Wishlist Button -->
+                    <button class="btn btn-outline-secondary"
+                            onclick="toggleWishlist({{ product.id }})"
+                            id="wishlistBtn-{{ product.id }}"
+                            aria-label="{% if product.id in user_wishlist_product_ids %}Remove from wishlist{% else %}Add to wishlist{% endif %}">
+                        <i id="wishlistIcon-{{ product.id }}"
+                           class="{% if product.id in user_wishlist_product_ids %}fas fa-heart text-danger{% else %}far fa-heart{% endif %}"
+                           aria-hidden="true"></i>
                     </button>
-
                 </div>
 
-                <!-- Shipping Info -->
+                <!-- Shipping Information -->
                 {% if user.is_authenticated %}
-                <div class="shipping-info mb-4">
-                    <!-- Change Address Button -->
-                <p>
-                    <i class="fas fa-map-marker-alt text-primary me-1"></i> Deliver to:
-                    {{ address_display|default:"Please add your delivery address" }}
+                <section class="shipping-info mb-4" aria-label="Shipping information">
+                    <p>
+                        <i class="fas fa-map-marker-alt text-primary me-1" aria-hidden="true"></i>
+                        <strong>Deliver to:</strong>
+                        {{ address_display|default:"Please add your delivery address" }}
+                        {% if address.geo_code %}
+                            <br>
+                            <a href="https://www.google.com/maps?q={{ address.geo_code }}"
+                               target="_blank"
+                               rel="noopener noreferrer"
+                               class="text-decoration-underline text-info small">
+                                View on Google Maps ({{ address.geo_code }})
+                            </a>
+                        {% endif %}
+                        <button class="btn btn-link btn-sm ms-2 p-0"
+                                data-bs-toggle="modal"
+                                data-bs-target="#editAddressModal"
+                                aria-label="Change delivery address">
+                            <i class="fas fa-edit" aria-hidden="true"></i> Change
+                        </button>
+                    </p>
 
-                    {% if address.geo_code %}
-                        <br>
-                        <a href="https://www.google.com/maps?q={{ address.geo_code }}" target="_blank"
-                           class="text-decoration-underline text-info small">
-                            View on Google Maps ({{ address.geo_code }})
-                        </a>
-                    {% endif %}
-
-                    <button class="btn btn-link btn-sm ms-2 p-0" data-bs-toggle="modal" data-bs-target="#editAddressModal">
-                        <i class="fas fa-edit"></i> Change
-                    </button>
-                </p>
-
-                <!-- Edit Address Modal -->
-                <div class="modal fade" id="editAddressModal" tabindex="-1" aria-labelledby="editAddressModalLabel" aria-hidden="true">
-                  <div class="modal-dialog modal-dialog-centered">
-                    <div class="modal-content shadow rounded-4">
-                      <div class="modal-header bg-primary text-white">
-                        <h5 class="modal-title" id="editAddressModalLabel"><i class="fas fa-map-marker-alt me-2"></i>Edit Delivery Address</h5>
-                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-                      </div>
-
-                      <form method="POST" action="{% url 'accounts:edit_address_modal' %}">
-                        {% csrf_token %}
-                        <div class="modal-body">
-                          <div class="mb-3">
-                            <label for="address1" class="form-label">Address Line 1</label>
-                            <textarea class="form-control" id="address1" name="address1" rows="2" required>{{ address.address1 }}</textarea>
-                          </div>
-                          <div class="mb-3">
-                            <label for="address2" class="form-label">Address Line 2</label>
-                            <textarea class="form-control" id="address2" name="address2" rows="2">{{ address.address2 }}</textarea>
-                          </div>
-                          <div class="mb-3">
-                            <label for="country" class="form-label">Country</label>
-                            <input type="text" class="form-control" id="country" name="country" value="{{ address.country }}" required>
-                          </div>
-                            <div class="mb-3">
-                                <label for="geo_code" class="form-label">Geo Code (on the fence)</label>
-                                <input type="text" name="geo_code" id="geo_code" class="form-control" placeholder="e.g., GC-9A23-KL4" value="{{ address.geo_code }}">
+                    <!-- Address Edit Modal -->
+                    <div class="modal fade" id="editAddressModal" tabindex="-1" aria-labelledby="editAddressModalLabel" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered">
+                            <div class="modal-content shadow rounded-4">
+                                <div class="modal-header bg-primary text-white">
+                                    <h5 class="modal-title" id="editAddressModalLabel">
+                                        <i class="fas fa-map-marker-alt me-2" aria-hidden="true"></i>Edit Delivery Address
+                                    </h5>
+                                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                                </div>
+                                <form method="POST" action="{% url 'accounts:edit_address_modal' %}" novalidate>
+                                    {% csrf_token %}
+                                    <div class="modal-body">
+                                        <div class="mb-3">
+                                            <label for="address1" class="form-label">Address Line 1 <span class="text-danger">*</span></label>
+                                            <textarea class="form-control"
+                                                      id="address1"
+                                                      name="address1"
+                                                      rows="2"
+                                                      required
+                                                      aria-describedby="address1Help">{{ address.address1 }}</textarea>
+                                            <div id="address1Help" class="form-text">Enter your street address</div>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="address2" class="form-label">Address Line 2</label>
+                                            <textarea class="form-control"
+                                                      id="address2"
+                                                      name="address2"
+                                                      rows="2"
+                                                      aria-describedby="address2Help">{{ address.address2 }}</textarea>
+                                            <div id="address2Help" class="form-text">Apartment, suite, etc. (optional)</div>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="country" class="form-label">Country <span class="text-danger">*</span></label>
+                                            <input type="text"
+                                                   class="form-control"
+                                                   id="country"
+                                                   name="country"
+                                                   value="{{ address.country }}"
+                                                   required>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="geo_code" class="form-label">Geo Code</label>
+                                            <input type="text"
+                                                   name="geo_code"
+                                                   id="geo_code"
+                                                   class="form-control"
+                                                   placeholder="e.g., GC-9A23-KL4"
+                                                   value="{{ address.geo_code }}"
+                                                   aria-describedby="geoCodeHelp">
+                                            <div id="geoCodeHelp" class="form-text">Optional location code for precise delivery</div>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer justify-content-between">
+                                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                                        <button type="submit" class="btn btn-success">
+                                            <i class="fas fa-save me-1" aria-hidden="true"></i> Save Address
+                                        </button>
+                                    </div>
+                                </form>
                             </div>
-
                         </div>
-
-                        <div class="modal-footer justify-content-between">
-                          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                          <button type="submit" class="btn btn-success">
-                            <i class="fas fa-save me-1"></i> Save Address
-                          </button>
-                        </div>
-                      </form>
                     </div>
-                  </div>
-                </div>
 
-
-                    <p><i class="fas fa-clock text-primary me-1"></i> Estimated Delivery: Tomorrow</p>
-                    <p><i class="fas fa-dollar-sign text-primary me-1"></i> Free Shipping on orders over D2,000</p>
-                </div>
+                    <p><i class="fas fa-clock text-primary me-1" aria-hidden="true"></i> Estimated Delivery: Tomorrow</p>
+                    <p><i class="fas fa-dollar-sign text-primary me-1" aria-hidden="true"></i> Free Shipping on orders over D2,000</p>
+                </section>
                 {% else %}
                 <div class="alert alert-light text-center">
-                    <i class="fas fa-user-lock fa-2x mb-2"></i>
+                    <i class="fas fa-user-lock fa-2x mb-2" aria-hidden="true"></i>
                     <p class="mb-2">Please <a href="{% url 'accounts:sign_in' %}">Login</a> to see shipping options</p>
                 </div>
                 {% endif %}
 
-                <!-- Seller Info -->
-                <div class="seller-info border-top pt-3 mt-3">
+                <!-- Seller Information -->
+                <section class="seller-info border-top pt-3 mt-3" aria-label="Seller information">
                     {% if seller_store %}
-                        <h6><i class="fas fa-store me-2"></i>
-                          Seller:
-                          {% if store %}
-                            <a href="{% url 'stores:store_detail' store.slug %}">
-                              {{ store.name }}
-                            </a>
-                          {% else %}
-                            {{ product.seller.get_full_name|default:product.seller.username }}
-                          {% endif %}
+                        <h6>
+                            <i class="fas fa-store me-2" aria-hidden="true"></i>
+                            Seller:
+                            {% if store %}
+                                <a href="{% url 'stores:store_detail' store.slug %}">{{ store.name }}</a>
+                            {% else %}
+                                {{ product.seller.get_full_name|default:product.seller.username }}
+                            {% endif %}
                         </h6>
-
                         <p class="text-muted small">
-                          Seller Rating:
-                          {% if store %}
-                            {{ store.get_average_rating|floatformat:1 }}/5.0
-                          {% else %}
-                            0.0/5.0
-                          {% endif %}
-                        </p
-
-                    <!-- Visit Store -->
-                    <a href="{% url 'stores:store_detail' seller_store.slug %}" class="btn btn-outline-primary btn-sm me-2">Visit Store</a>
-
-                    <!-- Chat Toggle Button -->
-                    {% if request.user.is_authenticated and request.user != product.seller %}
-                    <button type="button" class="btn btn-outline-success btn-sm" onclick="toggleChatBox()">
-                        <i class="fas fa-comments me-1"></i> Chat with Seller
-                    </button>
-                    {% endif %}
+                            Seller Rating: {{ store.get_average_rating|default:0|floatformat:1 }}/5.0
+                        </p>
+                        <div class="d-flex gap-2">
+                            <a href="{% url 'stores:store_detail' seller_store.slug %}" class="btn btn-outline-primary btn-sm">
+                                Visit Store
+                            </a>
+                            {% if request.user.is_authenticated and request.user != product.seller %}
+                            <button type="button"
+                                    class="btn btn-outline-success btn-sm"
+                                    onclick="toggleChatBox()"
+                                    aria-label="Start chat with seller">
+                                <i class="fas fa-comments me-1" aria-hidden="true"></i> Chat with Seller
+                            </button>
+                            {% endif %}
+                        </div>
                     {% else %}
-                    <span class="text-muted">Unknown Seller</span>
-                  {% endif %}
+                        <span class="text-muted">Unknown Seller</span>
+                    {% endif %}
 
-                     <!-- Enhanced Floating Chat Box -->
-                    <div id="chatBox" class="floating-chat-box d-none">
+                    <!-- Enhanced Chat Box -->
+                    <div id="chatBox" class="floating-chat-box d-none" role="dialog" aria-labelledby="chatHeader" aria-modal="false">
                         <div class="chat-header d-flex justify-content-between align-items-center p-3 bg-gradient-success text-white rounded-top position-relative overflow-hidden">
-                            <div class="header-shimmer position-absolute top-0 start-0 w-100 h-100"></div>
+                            <div class="header-shimmer position-absolute top-0 start-0 w-100 h-100" aria-hidden="true"></div>
                             <div class="seller-info d-flex align-items-center gap-2 position-relative">
                                 <div class="seller-avatar d-flex align-items-center justify-content-center rounded-circle bg-white text-success fw-bold position-relative overflow-hidden">
-                                    <i class="fas fa-user"></i>
-                                    <div class="avatar-glow position-absolute top-0 start-0 w-100 h-100"></div>
+                                    <i class="fas fa-user" aria-hidden="true"></i>
+                                    <div class="avatar-glow position-absolute top-0 start-0 w-100 h-100" aria-hidden="true"></div>
                                 </div>
                                 <div class="seller-details">
-                                    <strong class="d-block mb-0">{{ product.seller.get_full_name|default:product.seller.username }}</strong>
+                                    <strong class="d-block mb-0" id="chatHeader">{{ product.seller.get_full_name|default:product.seller.username }}</strong>
                                     <small class="d-flex align-items-center gap-1 opacity-75">
-                                        <span class="status-dot rounded-circle bg-light"></span>
+                                        <span class="status-dot rounded-circle bg-light" aria-hidden="true"></span>
                                         <span>Online now</span>
                                     </small>
                                 </div>
                             </div>
-                            <button type="button" class="btn-close btn-close-white close-btn" onclick="toggleChatBox()"></button>
+                            <button type="button"
+                                    class="btn-close btn-close-white close-btn"
+                                    onclick="toggleChatBox()"
+                                    aria-label="Close chat">
+                            </button>
                         </div>
 
-                        <div class="chat-body p-3 position-relative" style="height: 280px; overflow-y: auto; background: linear-gradient(to bottom, #f8f9fa, #e9ecef);" id="chatMessages">
+                        <div class="chat-body p-3 position-relative"
+                             style="height: 280px; overflow-y: auto; background: linear-gradient(to bottom, #f8f9fa, #e9ecef);"
+                             id="chatMessages"
+                             role="log"
+                             aria-label="Chat messages">
                             {% if product %}
                                 <div class="product-preview mb-3 p-2 bg-white rounded shadow-sm border-start border-success border-3">
                                     <div class="d-flex align-items-center gap-2">
-                                        <i class="fas fa-box text-success"></i>
+                                        <i class="fas fa-box text-success" aria-hidden="true"></i>
                                         <small><strong>{{ product.name }}</strong> - D{{ product.price }}</small>
                                     </div>
                                 </div>
@@ -383,57 +489,93 @@
                                 {% endfor %}
                             {% else %}
                                 <div class="empty-state text-center py-5 text-muted">
-                                    <i class="fas fa-comments fa-3x mb-3 opacity-25 floating-icon"></i>
+                                    <i class="fas fa-comments fa-3x mb-3 opacity-25 floating-icon" aria-hidden="true"></i>
                                     <p class="small">No messages yet. Start the conversation!</p>
                                 </div>
                             {% endif %}
 
-                            <div class="typing-indicator d-none py-2 text-muted">
-                                <small><i class="fas fa-circle typing-dot"></i> <span class="typing-text">Typing...</span></small>
+                            <div class="typing-indicator d-none py-2 text-muted" aria-live="polite">
+                                <small><i class="fas fa-circle typing-dot" aria-hidden="true"></i> <span class="typing-text">Typing...</span></small>
                             </div>
                         </div>
 
                         <div class="chat-footer p-3 border-top bg-white">
-                            <form method="post" action="{% url 'chat:start_chat' %}" id="chatForm">
+                            <form method="post" action="{% url 'chat:start_chat' %}" id="chatForm" novalidate>
                                 {% csrf_token %}
                                 <input type="hidden" name="recipient_id" value="{{ product.seller.id }}">
                                 <input type="hidden" name="product_id" value="{{ product.id }}">
                                 <div class="input-group">
-                                    <input type="text" name="message" class="form-control enhanced-input rounded-pill border-2 px-3" placeholder="Type your message..." required>
-                                    <button class="btn btn-success enhanced-send-btn rounded-circle ms-2 d-flex align-items-center justify-content-center" type="submit">
-                                        <i class="fas fa-paper-plane"></i>
+                                    <label for="chatMessage" class="visually-hidden">Type your message</label>
+                                    <input type="text"
+                                           name="message"
+                                           id="chatMessage"
+                                           class="form-control enhanced-input rounded-pill border-2 px-3"
+                                           placeholder="Type your message..."
+                                           required
+                                           maxlength="500">
+                                    <button class="btn btn-success enhanced-send-btn rounded-circle ms-2 d-flex align-items-center justify-content-center"
+                                            type="submit"
+                                            aria-label="Send message">
+                                        <i class="fas fa-paper-plane" aria-hidden="true"></i>
                                     </button>
                                 </div>
                             </form>
                         </div>
                     </div>
-
-                </div>
-
+                </section>
             </div>
-        </div>
+        </section>
     </div>
 
-        <!-- Enhanced Product Description -->
-    <div class="row mt-5">
+    <!-- Social Sharing -->
+    <section class="mt-3" aria-label="Share this product">
+        <label class="form-label">Share this product:</label>
+        <div class="d-flex gap-2 flex-wrap">
+            <a class="btn btn-outline-primary"
+               href="https://wa.me/?text={{ request.build_absolute_uri|urlencode }}"
+               target="_blank"
+               rel="noopener noreferrer"
+               aria-label="Share on WhatsApp">
+                <i class="fab fa-whatsapp" aria-hidden="true"></i> WhatsApp
+            </a>
+            <a class="btn btn-outline-info"
+               href="https://www.facebook.com/sharer/sharer.php?u={{ request.build_absolute_uri|urlencode }}"
+               target="_blank"
+               rel="noopener noreferrer"
+               aria-label="Share on Facebook">
+                <i class="fab fa-facebook" aria-hidden="true"></i> Facebook
+            </a>
+            <button class="btn btn-outline-secondary"
+                    onclick="copyToClipboard('{{ request.build_absolute_uri }}')"
+                    aria-label="Copy product link">
+                <i class="fas fa-link" aria-hidden="true"></i> Copy Link
+            </button>
+        </div>
+    </section>
+
+    <!-- Product Description -->
+    <section class="row mt-5">
         <div class="col-12">
             <div class="bg-white shadow-sm p-4 rounded">
-                <h3 class="section-title">About this item</h3>
-
+                <h2 class="section-title">About this item</h2>
                 <div id="descShort" class="fade-in">
-                    <ul class="list-unstyled">
-                        {% for bullet in short_description.splitlines %}
-                        {% if bullet.strip %}
-                        {% with bullet.split as words %}
-                        <li class="feature-item">
-                            <i class="fas fa-check-circle text-primary me-2"></i>
-                            <strong>{{ words.0 }}</strong>
-                            {% for word in words|slice:"1:" %} {{ word }}{% endfor %}
-                        </li>
-                        {% endwith %}
-                        {% endif %}
-                        {% endfor %}
-                    </ul>
+                    {% if short_description %}
+                        <ul class="list-unstyled">
+                            {% for bullet in short_description.splitlines %}
+                            {% if bullet.strip %}
+                            {% with bullet.split as words %}
+                            <li class="feature-item">
+                                <i class="fas fa-check-circle text-primary me-2" aria-hidden="true"></i>
+                                <strong>{{ words.0 }}</strong>
+                                {% for word in words|slice:"1:" %} {{ word }}{% endfor %}
+                            </li>
+                            {% endwith %}
+                            {% endif %}
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p>{{ product.description|linebreaks }}</p>
+                    {% endif %}
                 </div>
 
                 {% if description_truncated %}
@@ -443,7 +585,7 @@
                         {% if bullet.strip %}
                         {% with bullet.split as words %}
                         <li class="feature-item">
-                            <i class="fas fa-check-circle text-primary me-2"></i>
+                            <i class="fas fa-check-circle text-primary me-2" aria-hidden="true"></i>
                             <strong>{{ words.0 }}</strong>
                             {% for word in words|slice:"1:" %} {{ word }}{% endfor %}
                         </li>
@@ -452,30 +594,33 @@
                         {% endfor %}
                     </ul>
                 </div>
-
-                <button class="btn btn-link p-0 mt-3" type="button" data-bs-toggle="collapse"
-                        data-bs-target="#fullDescription" id="toggleDescBtn">
-                    <i class="fas fa-chevron-down me-2"></i>Show More
+                <button class="btn btn-link p-0 mt-3"
+                        type="button"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#fullDescription"
+                        id="toggleDescBtn"
+                        aria-expanded="false"
+                        aria-controls="fullDescription">
+                    <i class="fas fa-chevron-down me-2" aria-hidden="true"></i><span>Show More</span>
                 </button>
                 {% endif %}
             </div>
         </div>
-    </div>
+    </section>
 
-    <!-- Enhanced Specifications -->
+    <!-- Specifications -->
     {% if specifications %}
-    <div class="row mt-4">
+    <section class="row mt-4">
         <div class="col-12">
             <div class="bg-white shadow-sm p-4 rounded">
-                <h3 class="section-title">Technical Specifications</h3>
-
+                <h2 class="section-title">Technical Specifications</h2>
                 <div class="spec-table">
                     <table class="table table-striped mb-0">
                         <tbody>
                             {% for key, value in specifications %}
                             {% if forloop.counter <= 3 %}
                             <tr>
-                                <th style="width: 30%;">{{ key }}</th>
+                                <th scope="row" style="width: 30%;">{{ key }}</th>
                                 <td>{{ value }}</td>
                             </tr>
                             {% endif %}
@@ -485,7 +630,7 @@
                             {% for key, value in specifications %}
                             {% if forloop.counter > 3 %}
                             <tr class="collapse" id="specCollapse">
-                                <th style="width: 30%;">{{ key }}</th>
+                                <th scope="row" style="width: 30%;">{{ key }}</th>
                                 <td>{{ value }}</td>
                             </tr>
                             {% endif %}
@@ -497,152 +642,164 @@
 
                 {% if specifications|length > 3 %}
                 <div class="text-center mt-3">
-                    <button class="btn btn-outline-primary" type="button" data-bs-toggle="collapse"
-                            data-bs-target="#specCollapse" id="toggleSpecBtn">
-                        <i class="fas fa-chevron-down me-2"></i>Show More Specs
+                    <button class="btn btn-outline-primary"
+                            type="button"
+                            data-bs-toggle="collapse"
+                            data-bs-target="#specCollapse"
+                            id="toggleSpecBtn"
+                            aria-expanded="false"
+                            aria-controls="specCollapse">
+                        <i class="fas fa-chevron-down me-2" aria-hidden="true"></i><span>Show More Specs</span>
                     </button>
                 </div>
                 {% endif %}
             </div>
         </div>
-    </div>
+    </section>
     {% endif %}
-</section>
-<section class="container my-5">
-        <!-- Section Header -->
-        <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-            <h3 class="fw-bold mb-0">Recommended for You</h3>
-            <a href="{% url 'marketplace:all_products' %}" class="btn btn-outline-primary btn-sm">
-                View All Products
-            </a>
-        </div>
+</main>
 
-<!-- Recommended Products Grid with Dynamic Reviews -->
-<div class="row g-4">
-    {% for item in recommended_items %}
-    <div class="col-xl-3 col-lg-4 col-md-6 col-sm-6">
-        <div class="card h-100 shadow-sm border-0 position-relative product-card">
-
-            <!-- Percentage Tag -->
-            {% if item.discount_percentage %}
-            <span class="badge bg-danger text-white position-absolute" style="top: 10px; right: 10px; z-index: 2;">
-                {{ item.discount_percentage|floatformat:0 }}% OFF
-            </span>
-            {% endif %}
-
-            <!-- Product Image -->
-            <a href="{% url 'marketplace:product_detail' item.id %}" class="d-block">
-                <img src="{{ item.image.url }}" class="card-img-top product-image" alt="{{ item.name }}"
-                     style="height: 200px; object-fit: cover;">
-            </a>
-
-            <div class="card-body d-flex flex-column justify-content-between">
-
-                <!-- Product Title -->
-                <h6 class="card-title mb-2" style="min-height: 2.5rem;">
-                    <a href="{% url 'marketplace:product_detail' item.id %}" class="text-decoration-none text-dark">
-                        {{ item.name|truncatechars:40 }}
-                    </a>
-                </h6>
-
-                <!-- Price -->
-                <div class="mb-2">
-                    <span class="fw-bold text-danger fs-5">D{{ item.price|intcomma }}</span>
-                    {% if item.original_price %}
-                    <small class="text-muted text-decoration-line-through ms-1">D{{ item.original_price }}</small>
-                    {% endif %}
-                </div>
-
-                <!-- Dynamic Rating Display -->
-                <div class="mb-2 d-flex align-items-center">
-                    <div class="text-warning me-2">
-                        {% with avg=item.average_rating|default:0 %}
-                            {% for i in rating_range %}
-                                {% if avg >= i %}
-                                    <i class="fas fa-star"></i>
-                                {% elif avg >= i|add:"-0.5" %}
-                                    <i class="fas fa-star-half-alt"></i>
-                                {% else %}
-                                    <i class="far fa-star"></i>
-                                {% endif %}
-                            {% endfor %}
-                        {% endwith %}
-                    </div>
-                    <small class="text-muted">
-                        {{ item.average_rating|default:0|floatformat:1 }}
-                        ({{ item.review_count|default:0 }} review{{ item.review_count|default:0|pluralize }})
-                    </small>
-                </div>
-
-                <!-- Category and Sold Count -->
-                <div class="d-flex justify-content-between align-items-center">
-                    <small class="text-primary">
-                        <i class="fas fa-tag me-1"></i> {{ item.category.name }}
-                    </small>
-                    <small class="text-muted">
-                        {{ item.sold_count|default:"0" }} sold
-                    </small>
-                </div>
-
-                <!-- Quick Action Buttons -->
-                <div class="mt-3 d-flex gap-2">
-                    <a href="{% url 'marketplace:product_detail' item.id %}"
-                       class="btn btn-outline-primary btn-sm flex-fill">
-                        <i class="fas fa-eye me-1"></i> View
-                    </a>
-                    {% if user.is_authenticated %}
-                        <button class="btn btn-outline-success btn-sm" onclick="addToCart({{ item.id }}, this)"
-                        {% if not item.stock or item.stock.quantity == 0 %}disabled{% endif %}>
-                            <i class="fas fa-cart-plus"></i>
-                        </button>
-
-                             <button class="btn btn-outline-danger btn-sm" onclick="toggleWishlist({{ item.id }})" id="wishlistBtn-{{ item.id }}">
-                        <i id="wishlistIcon-{{ item.id }}" class="{% if item.id in user_wishlist_product_ids %}fas fa-heart {% else %}far fa-heart{% endif %}"></i>
-                    </button>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-    </div>
-    {% empty %}
-    <div class="col-12 text-center py-5">
-        <i class="fas fa-box-open fa-3x text-muted mb-3"></i>
-        <h5 class="text-muted">No recommended items available</h5>
-        <p class="text-muted">Check back later for personalized recommendations!</p>
-    </div>
-    {% endfor %}
-</div>
-
-</section>
-
-<section class="container my-5">
+<!-- Recommended Products -->
+<section class="container my-5" aria-label="Recommended products">
     <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-        <h3 class="fw-bold mb-0">
-            <i class="fas fa-star text-warning me-2"></i> Featured Celebrities
-        </h3>
+        <h2 class="fw-bold mb-0">Recommended for You</h2>
+        <a href="{% url 'marketplace:all_products' %}" class="btn btn-outline-primary btn-sm">
+            View All Products
+        </a>
+    </div>
+
+    <div class="row g-4">
+        {% for item in recommended_items %}
+        <div class="col-xl-3 col-lg-4 col-md-6 col-sm-6">
+            <article class="card h-100 shadow-sm border-0 position-relative product-card">
+                {% if item.discount_percentage %}
+                <span class="badge bg-danger text-white position-absolute"
+                      style="top: 10px; right: 10px; z-index: 2;"
+                      aria-label="{{ item.discount_percentage|floatformat:0 }} percent off">
+                    {{ item.discount_percentage|floatformat:0 }}% OFF
+                </span>
+                {% endif %}
+
+                <a href="{% url 'marketplace:product_detail' item.id %}" class="d-block">
+                    <img src="{{ item.image.url }}"
+                         class="card-img-top product-image"
+                         alt="{{ item.name }}"
+                         style="height: 200px; object-fit: cover;"
+                         loading="lazy">
+                </a>
+
+                <div class="card-body d-flex flex-column justify-content-between">
+                    <h3 class="card-title mb-2 h6" style="min-height: 2.5rem;">
+                        <a href="{% url 'marketplace:product_detail' item.id %}" class="text-decoration-none text-dark">
+                            {{ item.name|truncatechars:40 }}
+                        </a>
+                    </h3>
+
+                    <div class="mb-2">
+                        <span class="fw-bold text-danger fs-5">D{{ item.price|intcomma }}</span>
+                        {% if item.original_price %}
+                        <small class="text-muted text-decoration-line-through ms-1">D{{ item.original_price }}</small>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-2 d-flex align-items-center">
+                        <div class="text-warning me-2" aria-label="Rating {{ item.average_rating|default:0|floatformat:1 }} out of 5 stars">
+                            {% with avg=item.average_rating|default:0 %}
+                                {% for i in rating_range %}
+                                    {% if avg >= i %}
+                                        <i class="fas fa-star" aria-hidden="true"></i>
+                                    {% elif avg >= i|add:"-0.5" %}
+                                        <i class="fas fa-star-half-alt" aria-hidden="true"></i>
+                                    {% else %}
+                                        <i class="far fa-star" aria-hidden="true"></i>
+                                    {% endif %}
+                                {% endfor %}
+                            {% endwith %}
+                        </div>
+                        <small class="text-muted">
+                            {{ item.average_rating|default:0|floatformat:1 }}
+                            ({{ item.review_count|default:0 }} review{{ item.review_count|default:0|pluralize }})
+                        </small>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center">
+                        <small class="text-primary">
+                            <i class="fas fa-tag me-1" aria-hidden="true"></i> {{ item.category.name }}
+                        </small>
+                        <small class="text-muted">
+                            {{ item.sold_count|default:"0" }} sold
+                        </small>
+                    </div>
+
+                    <div class="mt-3 d-flex gap-2">
+                        <a href="{% url 'marketplace:product_detail' item.id %}"
+                           class="btn btn-outline-primary btn-sm flex-fill">
+                            <i class="fas fa-eye me-1" aria-hidden="true"></i> View
+                        </a>
+                        {% if user.is_authenticated %}
+                            <button class="btn btn-outline-success btn-sm"
+                                    onclick="addToCart({{ item.id }}, this)"
+                                    {% if not item.stock or item.stock.quantity == 0 %}disabled{% endif %}
+                                    aria-label="Add {{ item.name }} to cart">
+                                <i class="fas fa-cart-plus" aria-hidden="true"></i>
+                            </button>
+                            <button class="btn btn-outline-danger btn-sm"
+                                    onclick="toggleWishlist({{ item.id }})"
+                                    id="wishlistBtn-{{ item.id }}"
+                                    aria-label="{% if item.id in user_wishlist_product_ids %}Remove from wishlist{% else %}Add to wishlist{% endif %}">
+                                <i id="wishlistIcon-{{ item.id }}"
+                                   class="{% if item.id in user_wishlist_product_ids %}fas fa-heart {% else %}far fa-heart{% endif %}"
+                                   aria-hidden="true"></i>
+                            </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </article>
+        </div>
+        {% empty %}
+        <div class="col-12 text-center py-5">
+            <i class="fas fa-box-open fa-3x text-muted mb-3" aria-hidden="true"></i>
+            <h3 class="text-muted">No recommended items available</h3>
+            <p class="text-muted">Check back later for personalized recommendations!</p>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+
+<!-- Featured Celebrities -->
+{% if featured_celebrities %}
+<section class="container my-5" aria-label="Featured celebrities">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <h2 class="fw-bold mb-0">
+            <i class="fas fa-star text-warning me-2" aria-hidden="true"></i> Featured Celebrities
+        </h2>
     </div>
 
     <div class="row g-4">
         {% for celeb in featured_celebrities %}
         <div class="col-md-4 col-lg-3">
-            <div class="card border-0 shadow-sm h-100">
+            <article class="card border-0 shadow-sm h-100">
                 <div class="position-relative">
                     {% if celeb.celebrity_image %}
-                    <img src="{{ celeb.celebrity_image.url }}" class="card-img-top" alt="{{ celeb.celebrity_name }}" style="height: 220px; object-fit: cover;">
+                    <img src="{{ celeb.celebrity_image.url }}"
+                         class="card-img-top"
+                         alt="{{ celeb.celebrity_name }}"
+                         style="height: 220px; object-fit: cover;"
+                         loading="lazy">
                     {% else %}
                     <div class="bg-light d-flex align-items-center justify-content-center" style="height: 220px;">
-                        <i class="fas fa-user fa-4x text-muted"></i>
+                        <i class="fas fa-user fa-4x text-muted" aria-hidden="true"></i>
                     </div>
                     {% endif %}
                     <div class="position-absolute top-0 end-0 m-2">
                         <span class="badge bg-warning text-dark">
-                            <i class="fas fa-crown me-1"></i> Celebrity Pick
+                            <i class="fas fa-crown me-1" aria-hidden="true"></i> Celebrity Pick
                         </span>
                     </div>
                 </div>
 
                 <div class="card-body">
-                    <h5 class="card-title mb-1">{{ celeb.celebrity_name }}</h5>
+                    <h3 class="card-title mb-1 h5">{{ celeb.celebrity_name }}</h3>
                     <p class="text-muted small mb-2">{{ celeb.celebrity_title|default:"Celebrity" }}</p>
                     <blockquote class="blockquote-footer mb-3">
                         <small>"{{ celeb.testimonial|default:"Loving this product!" }}"</small>
@@ -650,117 +807,277 @@
 
                     <div class="d-flex gap-2">
                         {% if celeb.instagram_link %}
-                        <a href="{{ celeb.instagram_link }}" target="_blank" class="text-danger">
-                            <i class="fab fa-instagram fa-lg"></i>
+                        <a href="{{ celeb.instagram_link }}"
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           class="text-danger"
+                           aria-label="{{ celeb.celebrity_name }} on Instagram">
+                            <i class="fab fa-instagram fa-lg" aria-hidden="true"></i>
                         </a>
                         {% endif %}
                         {% if celeb.twitter_link %}
-                        <a href="{{ celeb.twitter_link }}" target="_blank" class="text-info">
-                            <i class="fab fa-twitter fa-lg"></i>
+                        <a href="{{ celeb.twitter_link }}"
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           class="text-info"
+                           aria-label="{{ celeb.celebrity_name }} on Twitter">
+                            <i class="fab fa-twitter fa-lg" aria-hidden="true"></i>
                         </a>
                         {% endif %}
                         {% if celeb.facebook_link %}
-                        <a href="{{ celeb.facebook_link }}" target="_blank" class="text-primary">
-                            <i class="fab fa-facebook fa-lg"></i>
+                        <a href="{{ celeb.facebook_link }}"
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           class="text-primary"
+                           aria-label="{{ celeb.celebrity_name }} on Facebook">
+                            <i class="fab fa-facebook fa-lg" aria-hidden="true"></i>
                         </a>
                         {% endif %}
                         {% if celeb.youtube_link %}
-                        <a href="{{ celeb.youtube_link }}" target="_blank" class="text-danger">
-                            <i class="fab fa-youtube fa-lg"></i>
+                        <a href="{{ celeb.youtube_link }}"
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           class="text-danger"
+                           aria-label="{{ celeb.celebrity_name }} on YouTube">
+                            <i class="fab fa-youtube fa-lg" aria-hidden="true"></i>
                         </a>
                         {% endif %}
                         {% if celeb.tiktok_link %}
-                        <a href="{{ celeb.tiktok_link }}" target="_blank" class="text-dark">
-                            <i class="fab fa-tiktok fa-lg"></i>
+                        <a href="{{ celeb.tiktok_link }}"
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           class="text-dark"
+                           aria-label="{{ celeb.celebrity_name }} on TikTok">
+                            <i class="fab fa-tiktok fa-lg" aria-hidden="true"></i>
                         </a>
                         {% endif %}
                     </div>
                 </div>
-            </div>
+            </article>
         </div>
         {% empty %}
         <div class="col-12 text-center py-5">
-            <i class="fas fa-user fa-3x text-muted mb-3"></i>
-            <h5 class="text-muted">No featured celebrities at the moment</h5>
+            <i class="fas fa-user fa-3x text-muted mb-3" aria-hidden="true"></i>
+            <h3 class="text-muted">No featured celebrities at the moment</h3>
         </div>
         {% endfor %}
     </div>
+</section>
+{% endif %}
 
-    <!-- Reviews Section -->
-    <div class="mt-5">
-        <h4>Customer Reviews</h4>
+<!-- Reviews Section -->
+<section class="container my-5" aria-label="Customer reviews">
+    <h2>Customer Reviews</h2>
 
-        <!-- Review Form -->
-        {% if user.is_authenticated %}
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h6>Write a Review</h6>
-                </div>
-                <div class="card-body">
-                    <form id="review-form">
-                        {% csrf_token %}
-                        <input type="hidden" name="product_id" value="{{ product.id }}">
-
-                        <div class="mb-3">
-                            <label class="form-label">Rating</label>
-                            <div class="star-rating">
-                                {% for i in rating_range %}
-                                    <i class="far fa-star star-input" data-rating="{{ i }}"></i>
-                                {% endfor %}
-                            </div>
-                            <input type="hidden" name="rating" id="rating-input" required>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">Comment</label>
-                            <textarea name="comment" class="form-control" rows="4" placeholder="Share your experience with this product..."></textarea>
-                        </div>
-
-                        <button type="submit" class="btn btn-primary">
-                            <span class="spinner-border spinner-border-sm d-none" id="submit-spinner"></span>
-                            Submit Review
-                        </button>
-                    </form>
-                </div>
+    <!-- Review Form -->
+    {% if user.is_authenticated %}
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="h6 mb-0">Write a Review</h3>
             </div>
-        {% else %}
-            <div class="alert alert-secondary">
-                <a href="{% url 'accounts:sign_in' %}">Login</a> to leave a review.
+            <div class="card-body">
+                <form id="review-form" novalidate>
+                    {% csrf_token %}
+                    <input type="hidden" name="product_id" value="{{ product.id }}">
+
+                    <fieldset class="mb-3">
+                        <legend class="form-label">Rating <span class="text-danger">*</span></legend>
+                        <div class="star-rating" role="radiogroup" aria-required="true">
+                            {% for i in rating_range %}
+                                <button type="button"
+                                        class="btn p-0 border-0 bg-transparent star-input"
+                                        data-rating="{{ i }}"
+                                        role="radio"
+                                        aria-checked="false"
+                                        aria-label="{{ i }} star{{ i|pluralize }}">
+                                    <i class="far fa-star" aria-hidden="true"></i>
+                                </button>
+                            {% endfor %}
+                        </div>
+                        <input type="hidden" name="rating" id="rating-input" required>
+                        <div class="invalid-feedback">Please select a rating.</div>
+                    </fieldset>
+
+                    <div class="mb-3">
+                        <label for="comment" class="form-label">Comment</label>
+                        <textarea name="comment"
+                                  id="comment"
+                                  class="form-control"
+                                  rows="4"
+                                  placeholder="Share your experience with this product..."
+                                  maxlength="1000"></textarea>
+                        <div class="form-text">Maximum 1000 characters</div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">
+                        <span class="spinner-border spinner-border-sm d-none" id="submit-spinner" role="status" aria-hidden="true"></span>
+                        <span class="submit-text">Submit Review</span>
+                    </button>
+                </form>
             </div>
-        {% endif %}
-
-        <!-- Reviews List -->
-        <div id="reviews-container">
         </div>
-
-        <!-- Load More Button -->
-        <div class="text-center mt-4">
-            <button class="btn btn-outline-primary" id="load-more-reviews" data-page="2">
-                Load More Reviews
-            </button>
+    {% else %}
+        <div class="alert alert-secondary">
+            <a href="{% url 'accounts:sign_in' %}">Login</a> to leave a review.
         </div>
+    {% endif %}
+
+    <!-- Reviews List -->
+    <div id="reviews-container" role="region" aria-label="Product reviews">
+        <!-- Reviews will be loaded here via AJAX -->
     </div>
 
+    <!-- Load More Button -->
+    <div class="text-center mt-4">
+        <button class="btn btn-outline-primary"
+                id="load-more-reviews"
+                data-page="2"
+                aria-label="Load more reviews">
+            <span class="load-text">Load More Reviews</span>
+            <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+        </button>
+    </div>
 </section>
-<style>
 
-</style>
-<!-- Reviews List Template -->
-<script id="reviews-template" type="text/template">
-<!-- This will be loaded via AJAX -->
-</script>
-<!-- Set global variables for JavaScript -->
+<!-- Enhanced JavaScript -->
 <script>
-    // Make product ID available to JavaScript
+    // Global variables
     window.PRODUCT_ID = {{ product.id }};
-
-    // You can add other global variables here if needed
     window.CSRF_TOKEN = '{{ csrf_token }}';
+
+    // Enhanced copy to clipboard function
+    function copyToClipboard(text) {
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text).then(() => {
+                showToast('Link copied to clipboard!', 'success');
+            }).catch(() => {
+                fallbackCopyTextToClipboard(text);
+            });
+        } else {
+            fallbackCopyTextToClipboard(text);
+        }
+    }
+
+    // Fallback for older browsers
+    function fallbackCopyTextToClipboard(text) {
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        textArea.style.opacity = "0";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            showToast('Link copied!', 'success');
+        } catch (err) {
+            showToast('Failed to copy link', 'error');
+        }
+        document.body.removeChild(textArea);
+    }
+
+    // Enhanced toast notification
+    function showToast(message, type = 'info') {
+        // Remove existing toasts
+        const existingToasts = document.querySelectorAll('.toast-notification');
+        existingToasts.forEach(toast => toast.remove());
+
+        const toast = document.createElement('div');
+        toast.className = `toast-notification alert alert-${type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info'} position-fixed`;
+        toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 250px;';
+        toast.innerHTML = `
+            <div class="d-flex align-items-center">
+                <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'} me-2"></i>
+                ${message}
+                <button type="button" class="btn-close ms-auto" onclick="this.parentElement.parentElement.remove()"></button>
+            </div>
+        `;
+        document.body.appendChild(toast);
+
+        // Auto remove after 3 seconds
+        setTimeout(() => {
+            if (toast.parentElement) {
+                toast.remove();
+            }
+        }, 3000);
+    }
+
+    // Enhanced description toggle
+    document.addEventListener('DOMContentLoaded', function() {
+        const toggleBtn = document.getElementById('toggleDescBtn');
+        const toggleSpecBtn = document.getElementById('toggleSpecBtn');
+
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', function() {
+                const icon = this.querySelector('i');
+                const text = this.querySelector('span');
+                const isExpanded = this.getAttribute('aria-expanded') === 'true';
+
+                if (isExpanded) {
+                    icon.className = 'fas fa-chevron-down me-2';
+                    text.textContent = 'Show More';
+                } else {
+                    icon.className = 'fas fa-chevron-up me-2';
+                    text.textContent = 'Show Less';
+                }
+            });
+        }
+
+        if (toggleSpecBtn) {
+            toggleSpecBtn.addEventListener('click', function() {
+                const icon = this.querySelector('i');
+                const text = this.querySelector('span');
+                const isExpanded = this.getAttribute('aria-expanded') === 'true';
+
+                if (isExpanded) {
+                    icon.className = 'fas fa-chevron-down me-2';
+                    text.textContent = 'Show More Specs';
+                } else {
+                    icon.className = 'fas fa-chevron-up me-2';
+                    text.textContent = 'Show Less Specs';
+                }
+            });
+        }
+
+        // Enhanced star rating
+        const starInputs = document.querySelectorAll('.star-input');
+        const ratingInput = document.getElementById('rating-input');
+
+        starInputs.forEach((star, index) => {
+            star.addEventListener('click', function() {
+                const rating = parseInt(this.dataset.rating);
+                ratingInput.value = rating;
+
+                // Update visual state
+                starInputs.forEach((s, i) => {
+                    const icon = s.querySelector('i');
+                    s.setAttribute('aria-checked', i < rating ? 'true' : 'false');
+                    icon.className = i < rating ? 'fas fa-star text-warning' : 'far fa-star';
+                });
+            });
+
+            // Hover effect
+            star.addEventListener('mouseenter', function() {
+                const rating = parseInt(this.dataset.rating);
+                starInputs.forEach((s, i) => {
+                    const icon = s.querySelector('i');
+                    icon.className = i < rating ? 'fas fa-star text-warning' : 'far fa-star';
+                });
+            });
+        });
+
+        // Reset stars on mouse leave
+        document.querySelector('.star-rating')?.addEventListener('mouseleave', function() {
+            const currentRating = parseInt(ratingInput.value) || 0;
+            starInputs.forEach((s, i) => {
+                const icon = s.querySelector('i');
+                icon.className = i < currentRating ? 'fas fa-star text-warning' : 'far fa-star';
+            });
+        });
+    });
 </script>
 
-<!-- Include the external JavaScript file -->
 <script src="{% static 'js/message-review.js' %}"></script>
-
 <script src="{% static 'js/main.js' %}"></script>
 <script src="{% static 'js/product_detail.js' %}"></script>
 {% endblock %}

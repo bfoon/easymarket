@@ -1223,3 +1223,63 @@ window.subscribeNewsletter = (event) => {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = StorePageManager;
 }
+
+function shareStore() {
+  const storeUrl = window.location.href;
+  const storeTitle = document.title || "Check out this store on EasyMarket!";
+
+  // Try Web Share API (Mobile-friendly)
+  if (navigator.share) {
+    navigator.share({
+      title: storeTitle,
+      text: "Check out this store on EasyMarket!",
+      url: storeUrl
+    }).then(() => {
+      console.log("Store shared successfully");
+    }).catch((err) => {
+      console.warn("Web Share failed, falling back to clipboard", err);
+      fallbackCopy(storeUrl);
+    });
+  } else {
+    // Clipboard fallback
+    fallbackCopy(storeUrl);
+  }
+}
+
+// Fallback: Copy to clipboard safely
+function fallbackCopy(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(() => {
+      alert("Store link copied to clipboard!");
+    }).catch(err => {
+      console.error("Clipboard copy failed:", err);
+      manualCopyFallback(text);
+    });
+  } else {
+    manualCopyFallback(text);
+  }
+}
+
+// Old-school fallback (for older browsers or non-HTTPS)
+function manualCopyFallback(text) {
+  const temp = document.createElement("textarea");
+  temp.value = text;
+  temp.style.position = "fixed";
+  temp.style.left = "-9999px";
+  document.body.appendChild(temp);
+  temp.focus();
+  temp.select();
+
+  try {
+    const success = document.execCommand("copy");
+    if (success) {
+      alert("Store link copied!");
+    } else {
+      alert("Copy failed. Please copy manually.");
+    }
+  } catch (err) {
+    alert("Copy not supported in this browser.");
+  }
+
+  document.body.removeChild(temp);
+}

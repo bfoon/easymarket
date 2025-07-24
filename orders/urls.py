@@ -33,6 +33,8 @@ urlpatterns = [
     path('update-status/<int:order_id>/', views.update_order_status, name='update_order_status'),
     path('stats/', views.order_stats, name='order_stats'),
     path('validate-promo/', views.validate_promo, name='validate_promo'),
+    path('copy-order/<uuid:order_id>/', views.copy_order_to_cart, name='copy_order_to_cart'),
+
 
     # API endpoints
     path('api/pending-orders-count/', views.pending_orders_count_api, name='pending_orders_count_api'),

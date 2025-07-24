@@ -839,3 +839,21 @@ def validate_promo(request):
             'success': False,
             'message': 'Promo code not found'
         })
+
+@login_required
+def copy_order_to_cart(request, order_id):
+    order = get_object_or_404(Order, id=order_id, user=request.user)
+    cart, _ = Cart.objects.get_or_create(user=request.user)
+
+    for item in order.items.all():
+        CartItem.objects.update_or_create(
+            cart=cart,
+            product=item.product,
+            defaults={
+                'quantity': item.quantity,
+                'selected_features': item.selected_features if hasattr(item, 'selected_features') else {}
+            }
+        )
+
+    messages.success(request, "Order copied to cart.")
+    return redirect('marketplace:cart_view')

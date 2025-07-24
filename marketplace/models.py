@@ -5,6 +5,7 @@ from django.urls import reverse
 from django.db.models import Avg
 from decimal import Decimal
 from django.utils import timezone
+import uuid
 
 
 class Category(models.Model):
@@ -490,3 +491,13 @@ class PopularSearch(models.Model):
 
     def __str__(self):
         return f"{self.query} ({self.search_count} searches)"
+
+class SharedCart(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def get_absolute_url(self):
+        return reverse('marketplace:copy_shared_cart', kwargs={'token': self.token})
+
+

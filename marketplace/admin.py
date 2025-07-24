@@ -2,7 +2,7 @@ from django.contrib import admin
 from .models import (Product, Category, ProductImage, ProductView,
                      Cart, CartItem, CelebrityFeature, Wishlist,
                      SearchHistory, PopularSearch, ProductFeature, ProductFeatureOption,
-                     ProductVariant)
+                     ProductVariant, SharedCart)
 
 class CategoryAdmin(admin.ModelAdmin):
     list_display = ('name', 'parent',)
@@ -20,6 +20,7 @@ admin.site.register(Wishlist)
 admin.site.register(ProductFeature)
 admin.site.register(ProductFeatureOption)
 admin.site.register(ProductVariant)
+admin.site.register(SharedCart)
 
 
 @admin.register(SearchHistory)

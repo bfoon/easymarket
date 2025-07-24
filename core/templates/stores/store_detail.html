@@ -180,8 +180,9 @@
 
 <!-- Enhanced Store Navigation with skip links -->
 <nav class="store-navigation" role="navigation" aria-label="Store sections navigation">
-  <div class="container">
-    <ul class="nav nav-pills" id="storeNav" role="tablist">
+  <div class="nav-scroll-outer">
+    <div class="nav-scroll-wrapper px-3">
+      <ul class="nav nav-pills flex-nowrap" id="storeNav" role="tablist">
       <li class="nav-item" role="presentation">
         <button class="nav-link active"
                 type="button"
@@ -719,17 +720,25 @@
                 </a>
               </div>
               {% endif %}
-
-              {% if store.hours %}
-              <div class="contact-item">
-                <i class="fas fa-clock" aria-hidden="true"></i>
-                <div class="opening-hours" itemprop="openingHours">
-                  {{ store.hours|linebreaks }}
+              {% if store.hours.all %}
+                <div class="contact-item">
+                  <i class="fas fa-clock" aria-hidden="true"></i>
+                  <div class="opening-hours" itemprop="openingHours">
+                    <ul class="list-unstyled mb-0">
+                      {% for hour in store.hours.all %}
+                        <li>
+                          <strong>{{ hour.get_day_of_week_display }}:</strong>
+                          {% if hour.is_closed %}
+                            Closed
+                          {% else %}
+                            {{ hour.opening_time|time:"H:i" }} - {{ hour.closing_time|time:"H:i" }}
+                          {% endif %}
+                        </li>
+                      {% endfor %}
+                    </ul>
+                  </div>
                 </div>
-              </div>
               {% endif %}
-            </div>
-
             <button class="btn btn-primary btn-block" data-bs-toggle="modal" data-bs-target="#contactModal">
               <i class="fas fa-envelope" aria-hidden="true"></i>
               <span>Send Message</span>
@@ -961,14 +970,6 @@
     </div>
   </div>
 </div>
-
-<!-- Back to Top Button -->
-<button id="backToTop"
-        class="btn btn-primary back-to-top"
-        title="Back to top"
-        aria-label="Back to top">
-  <i class="fas fa-arrow-up" aria-hidden="true"></i>
-</button>
 
 <!-- Enhanced JavaScript -->
 <script src="{% static 'js/main.js' %}"></script>

@@ -26,4 +26,8 @@ urlpatterns = [
     path('search/suggestions/', views.search_suggestions, name='search_suggestions'),
     path('search/popular/', views.get_popular_searches, name='popular_searches'),
     path('search/clear-history/', views.clear_search_history, name='clear_search_history'),
+
+    path('share-cart/', views.share_cart, name='share_cart'),
+    path('copy-shared-cart/<uuid:token>/', views.copy_shared_cart, name='copy_shared_cart'),
+
 ]
