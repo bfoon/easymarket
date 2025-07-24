@@ -30,6 +30,7 @@ from decimal import Decimal
 from django.contrib import messages
 from collections import Counter
 from accounts.utils import log_admin_action
+from .notifications import send_email, send_whatsapp
 
 # Get the custom User model
 User = get_user_model()

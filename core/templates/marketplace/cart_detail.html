@@ -230,39 +230,71 @@
 <script src="{% static 'js/main.js' %}"></script>
 <script src="{% static 'js/cart.js' %}"></script>
 <link rel="stylesheet" type="text/css" href="{% static 'css/cart.css' %}">
-
 <script>
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     const copyCartBtn = document.getElementById('copyCartBtn');
     const whatsappShareBtn = document.getElementById('whatsappShareBtn');
+    let shareUrl = null;
 
-    if (copyCartBtn || whatsappShareBtn) {
-        fetch("{% url 'marketplace:share_cart' %}", {
-            headers: {
-                'X-CSRFToken': '{{ csrf_token }}'
-            }
-        })
-        .then(res => res.json())
+    // Fetch share URL without headers
+    fetch("{% url 'marketplace:share_cart' %}")
+        .then(response => response.json())
         .then(data => {
             if (data.share_url) {
-                if (copyCartBtn) {
-                    copyCartBtn.addEventListener('click', function() {
-                        navigator.clipboard.writeText(data.share_url);
-                        alert("Cart share link copied! You can send it to others.");
-                    });
-                }
-                if (whatsappShareBtn) {
-                    whatsappShareBtn.addEventListener('click', function() {
-                        const message = encodeURIComponent("Check out my cart: " + data.share_url);
-                        const whatsappUrl = `https://wa.me/?text=${message}`;
-                        window.open(whatsappUrl, '_blank');
-                    });
-                }
+                shareUrl = data.share_url;
+            } else {
+                console.warn("No share_url in response", data);
+            }
+        })
+        .catch(err => {
+            console.error("Fetch failed:", err);
+        });
+
+    if (copyCartBtn) {
+        copyCartBtn.addEventListener('click', function () {
+            if (!shareUrl) {
+                alert("Please wait, generating share link...");
+                return;
+            }
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(shareUrl)
+                    .then(() => alert("Cart share link copied!"))
+                    .catch(() => fallbackCopyText(shareUrl));
+            } else {
+                fallbackCopyText(shareUrl);
             }
         });
     }
+
+    if (whatsappShareBtn) {
+        whatsappShareBtn.addEventListener('click', function () {
+            if (!shareUrl) {
+                alert("Please wait, generating share link...");
+                return;
+            }
+            const message = encodeURIComponent(`🛒 Check out my cart on EasyMarket!\n${shareUrl}`);
+            const whatsappUrl = `https://wa.me/?text=${message}`;
+            window.open(whatsappUrl, '_blank');
+        });
+    }
+
+    function fallbackCopyText(text) {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        try {
+            document.execCommand('copy');
+            alert("Cart link copied!");
+        } catch (err) {
+            alert("Failed to copy. Please copy manually:\n" + text);
+        }
+        document.body.removeChild(textarea);
+    }
 });
+
 </script>
+
 
 
 <script>

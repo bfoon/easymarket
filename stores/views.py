@@ -39,6 +39,8 @@ from functools import wraps
 from .forms import ProductForm, ProductImageForm
 from stock.models import Stock
 import csv
+from django.conf import settings
+
 
 from .models import (
     Store, StoreHours, StoreShippingZone, StoreReturnSettings,
@@ -48,6 +50,28 @@ from .forms import (
     StoreSettingsForm, StoreHoursFormSet, StoreShippingZoneFormSet,
     StoreReturnSettingsForm, StoreFinancialForm
 )
+
+from marketplace.notifications import send_email, send_whatsapp
+
+def notify_logistics_shipment_to_warehouse(order, store, items):
+    logistics_team_email = settings.LOGISTICS_EMAIL
+    logistics_whatsapp = settings.LOGISTICS_PHONE
+
+    item_list = "\n".join(
+        [f"- {item.product.name} x{item.quantity}" for item in items]
+    )
+
+    msg = (
+        f"📦 The store '{store.name}' has shipped items for Order #{order.id} to the warehouse.\n\n"
+        f"Items:\n{item_list}\n\n"
+        f"Total items: {items.count()}\n"
+        f"Time: {timezone.now().strftime('%Y-%m-%d %H:%M')}"
+    )
+
+    send_email("New Shipment to Warehouse", msg, [logistics_team_email])
+    send_whatsapp(logistics_whatsapp, msg)
+
+
 
 def store_owner_required(view_func):
     @wraps(view_func)
@@ -954,6 +978,12 @@ def store_order_detail(request, store_id, order_id):
     # Capture "ship to warehouse" action
     if request.method == "POST" and 'ship_to_warehouse' in request.POST:
         store_order_items.update(shipped_to_warehouse=True, shipped_at=timezone.now())
+
+        try:
+            notify_logistics_shipment_to_warehouse(order, store, store_order_items)
+        except Exception as e:
+            print("Failed to notify logistics:", e)
+
         messages.success(request, "Items marked as shipped to warehouse.")
 
     # Calculate subtotal

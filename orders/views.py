@@ -3,7 +3,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from django.db.models import Q
+from django.db.models import Q, Sum
 from django.core.paginator import Paginator
 from django.utils import timezone
 from datetime import timedelta
@@ -26,7 +26,71 @@ from django.http import HttpResponse
 from django.urls import reverse
 from weasyprint import HTML
 import tempfile
+from django.contrib.auth import get_user_model
+import threading
+from marketplace.notifications import send_whatsapp, send_email
 
+
+def notify_store_new_order(order):
+    User = get_user_model()
+
+    # Get distinct sellers from this order
+    seller_ids = (
+        order.items
+        .select_related('product__seller')
+        .values_list('product__seller', flat=True)
+        .distinct()
+    )
+
+    for seller_id in seller_ids:
+        try:
+            seller = User.objects.get(id=seller_id)
+            seller_items = order.items.filter(product__seller=seller)
+
+            # 🧾 Build order summary for this seller
+            item_lines = []
+            for item in seller_items:
+                feature_str = ""
+                if item.selected_features:
+                    feature_str = " | Features: " + ", ".join(
+                        f"{k}: {v}" for k, v in item.selected_features.items()
+                    )
+
+                item_lines.append(
+                    f"- {item.product.name} x{item.quantity}{feature_str}"
+                )
+
+            summary = "\n".join(item_lines)
+
+            subject = f"🛒 New Order #{order.id} - {seller_items.count()} Item(s)"
+            message = (
+                f"You have received a new order from {order.buyer.get_full_name()}.\n\n"
+                f"Order Number: {order.id}\n"
+                f"Buyer Email: {order.buyer.email}\n"
+                f"Items:\n{summary}\n\n"
+                f"View and fulfill the order from your dashboard."
+            )
+
+            # Send batched email and WhatsApp
+            send_email(subject, message, [seller.email])
+            send_whatsapp(seller.telephone, message)
+
+        except Exception as e:
+            print(f"[Notify Seller] Error for seller {seller_id}: {e}")
+
+
+def notify_store_new_order_async(order):
+    """Run notify_store_new_order in a background thread."""
+    thread = threading.Thread(target=notify_store_new_order, args=(order,))
+    thread.setDaemon(True)
+    thread.start()
+
+def notify_buyer_new_message(message):
+    buyer = message.recipient
+    subject = "You have a new message"
+    msg = f"You have a new message from {message.sender.get_full_name()}: {message.content[:50]}"
+    send_email(subject, msg, [buyer.email])
+    send_whatsapp(buyer.telephone, msg)
 
 
 
@@ -110,6 +174,8 @@ def checkout_cart(request):
             if promo:
                 promo.increment_usage()
 
+            notify_store_new_order_async(order)
+
             messages.success(request, "Order placed successfully!")
             return redirect('orders:order_detail', order_id=order.id)
 
@@ -166,6 +232,8 @@ def quick_checkout(request):
                 product=locked_product,
                 quantity=quantity
             )
+
+            notify_store_new_order_async(order)
 
             messages.success(request, "Quick checkout successful!")
             return redirect('orders:order_detail', order_id=order.id)

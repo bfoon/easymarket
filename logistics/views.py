@@ -34,8 +34,36 @@ from .utils import (
 )
 from orders.models import Order, OrderItem
 from .forms import ShipmentBoxForm, BoxItemForm
+from marketplace.notifications import send_whatsapp, send_email
 
 User = get_user_model()
+
+def notify_driver_delivery_assigned(driver, shipment):
+    msg = f"You have been assigned delivery #{shipment.id}. Pickup at {shipment.warehouse}"
+    send_email("New Delivery Assignment", msg, [driver.user.email])
+    send_whatsapp(driver.phone, msg)
+
+def notify_buyer_order_shipped(order):
+    buyer = order.buyer
+    tracking = order.tracking_number
+    msg = f"Your order #{order.id} has been shipped. Tracking No: {tracking}"
+    send_email("Order Shipped", msg, [buyer.email])
+    send_whatsapp(buyer.telephone, msg)
+
+
+def notify_buyer_shipment_delivered(order):
+    buyer = order.buyer
+    delivery_time = timezone.now().strftime("%Y-%m-%d %H:%M")
+
+    message = (
+        f"📦 Your order #{order.id} has been delivered!\n\n"
+        f"Delivery Time: {delivery_time}\n"
+        f"Thank you for shopping with EasyMarket."
+    )
+
+    send_email("Your Order Has Been Delivered", message, [buyer.email])
+    send_whatsapp(buyer.telephone, message)
+
 
 class ShipmentListView(LoginRequiredMixin, ListView):
     model = Shipment
@@ -128,7 +156,6 @@ class ShipmentDetailView(LoginRequiredMixin, DetailView):
         return context
 
 
-
 class ShipmentCreateView(LoginRequiredMixin, CreateView):
     model = Shipment
     template_name = 'logistics/shipment_form.html'
@@ -145,6 +172,14 @@ class ShipmentCreateView(LoginRequiredMixin, CreateView):
     def form_valid(self, form):
         # You can also assign request.user or other meta info here
         response = super().form_valid(form)
+
+        shipment = self.object
+        order = shipment.order  # assuming Shipment has a ForeignKey to Order
+
+        # Notify Buyer
+        if order and order.buyer:
+            notify_buyer_order_shipped(order)
+
         messages.success(self.request, 'Shipment created successfully!')
         return response
 
@@ -617,6 +652,8 @@ def update_shipment_status(request, pk):
 
             if new_status == 'shipped':
                 shipment.mark_as_shipped()
+                if shipment.driver:
+                    notify_driver_delivery_assigned(shipment.driver, shipment)
 
             return JsonResponse({
                 'success': True,
@@ -666,6 +703,7 @@ def mark_order_as_delivered(request, shipment_pk):
             order.delivered_date = timezone.now()
 
         order.save()
+        notify_buyer_shipment_delivered(order)
 
         # Update shipment status (you might want to add a 'delivered' status to Shipment model)
         # For now, we'll keep it as 'shipped' since the shipment itself is complete

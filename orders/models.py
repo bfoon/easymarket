@@ -194,7 +194,8 @@ class OrderItem(models.Model):
     selected_features = models.JSONField(blank=True, null=True)
     price_at_time = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
 
-    shipped_to_warehouse = models.BooleanField(default=False)  # ✅ New field
+    shipped_to_warehouse = models.BooleanField(default=False)  # New field
+    shipped_at = models.DateTimeField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
 

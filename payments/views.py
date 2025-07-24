@@ -9,11 +9,56 @@ from django.core.exceptions import ValidationError
 from datetime import timedelta
 import json
 import logging
+from marketplace.notifications import send_whatsapp, send_email
 
 from orders.models import Order, ShippingAddress
 from .models import Payment
+from django.contrib.auth import get_user_model
+import threading
+from django.db.models import Sum
 
-logger = logging.getLogger(__name__)
+
+def notify_seller_payment(order):
+    User = get_user_model()
+    seller_ids = (
+        order.items
+        .select_related('product__seller')
+        .values_list('product__seller', flat=True)
+        .distinct()
+    )
+
+    for seller_id in seller_ids:
+        try:
+            seller = User.objects.get(id=seller_id)
+            seller_items = order.items.filter(product__seller=seller)
+
+            item_lines = []
+            for item in seller_items:
+                features = ""
+                if item.selected_features:
+                    features = " | Features: " + ", ".join(
+                        f"{k}: {v}" for k, v in item.selected_features.items()
+                    )
+                item_lines.append(f"- {item.product.name} x{item.quantity}{features}")
+
+            item_summary = "\n".join(item_lines)
+
+            msg = (
+                f"💰 A buyer has completed payment for Order #{order.id}.\n\n"
+                f"Items to ship:\n{item_summary}\n\n"
+                f"Please prepare your items for shipment."
+            )
+
+            send_email("Payment Received", msg, [seller.email])
+            send_whatsapp(seller.telephone, msg)
+
+        except Exception as e:
+            print(f"[Payment Notify] Failed for seller {seller_id}: {e}")
+
+def notify_seller_payment_async(order):
+    thread = threading.Thread(target=notify_seller_payment, args=(order,))
+    thread.setDaemon(True)
+    thread.start()
 
 
 @login_required
@@ -97,7 +142,7 @@ def process_payment(request, order_id):
                     product.sold_count = (product.sold_count or 0) + item.quantity
                     product.save()
 
-                logger.info(f"Payment successful for order {order.id}")
+                notify_seller_payment_async(order)
 
                 return JsonResponse({
                     'success': True,
@@ -107,15 +152,12 @@ def process_payment(request, order_id):
                 })
             else:
                 payment.mark_as_failed(notes=payment_result.get('error'))
-                logger.warning(f"Payment failed for order {order.id}: {payment_result.get('error')}")
-
                 return JsonResponse({
                     'success': False,
                     'error': payment_result.get('error', 'Payment processing failed')
                 })
 
     except Exception as e:
-        logger.error(f"Payment processing error for order {order_id}: {str(e)}")
         return JsonResponse({'success': False, 'error': 'An unexpected error occurred. Please try again.'})
 
 

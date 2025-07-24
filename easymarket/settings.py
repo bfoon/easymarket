@@ -164,21 +164,45 @@ MESSAGE_TAGS = {
     messages.ERROR: 'error',
 }
 
-# Email settings (for password reset functionality)
 # Configure these according to your email provider
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'  # Change to your SMTP server
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'your-email@gmail.com'  # Your email
-EMAIL_HOST_PASSWORD = 'your-app-password'  # Your email password or app password
-DEFAULT_FROM_EMAIL = 'EasyMarket <noreply@easymarket.com>'
+EMAIL_HOST_USER = 'equallify.info@gmail.com'  # Your email
+EMAIL_HOST_PASSWORD = 'ozlo bvfv cbcs bypx'  # Your email password or app password
+DEFAULT_FROM_EMAIL = 'EasyMarket <baboucarrfoon@gmail.com>'
 EMAIL_AUCTION_SETTINGS = {
     'OUTBID_NOTIFICATION': True,
     'AUCTION_ENDING_NOTIFICATION': True,
     'AUCTION_WON_NOTIFICATION': True,
     'NEW_BID_NOTIFICATION_SELLER': True,
 }
+# WhatsApp
+TWILIO_ACCOUNT_SID = 'ACa0ca58dacb6f9255c9efb3eeaa17026c'
+TWILIO_AUTH_TOKEN = '5106264d473ae30e893d039250be41e3'
+TWILIO_WHATSAPP_NUMBER = 'whatsapp:+14155238886'
+
+LOGISTICS_EMAIL = 'baboucarrfoon@gmail.com'
+LOGISTICS_PHONE = '+2203930160'
+
+EMAIL_TIMEOUT = 30
+EMAIL_USE_LOCALTIME = True
+
+
+# Notification rate limiting
+NOTIFICATION_SETTINGS = {
+    'EMAIL_RATE_LIMIT': 100,  # per hour
+    'WHATSAPP_RATE_LIMIT': 50,  # per hour
+    'RETRY_ATTEMPTS': 3,
+    'RETRY_DELAY': 300,  # 5 minutes
+}
+
+# Celery for async notifications (recommended)
+CELERY_BROKER_URL = 'redis://localhost:6379'
+CELERY_RESULT_BACKEND = 'redis://localhost:6379'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
