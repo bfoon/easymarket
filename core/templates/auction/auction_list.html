@@ -4,42 +4,435 @@
 {% block content %}
 <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
 
-<div class="container py-4">
-    <h2 class="mb-3">Live Auctions</h2>
+<style>
+    /* Scoped styles for auction browse page only */
+    .auction-browse-wrapper .abw-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 3rem 0;
+        margin-bottom: 2rem;
+    }
 
+    .auction-browse-wrapper .abw-search-container {
+        background: white;
+        border-radius: 15px;
+        padding: 2rem;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        margin-top: -1rem;
+        position: relative;
+        z-index: 10;
+    }
+
+    .auction-browse-wrapper .abw-auction-card {
+        border: none;
+        border-radius: 15px;
+        overflow: hidden;
+        transition: all 0.3s ease;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+        position: relative;
+    }
+
+    .auction-browse-wrapper .abw-auction-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 15px 35px rgba(0,0,0,0.15);
+    }
+
+    .auction-browse-wrapper .abw-auction-image {
+        height: 200px;
+        background: linear-gradient(45deg, #f8f9fa, #e9ecef);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .auction-browse-wrapper .abw-auction-image::before {
+        content: '🎨';
+        font-size: 3rem;
+        opacity: 0.3;
+    }
+
+    .auction-browse-wrapper .abw-status-badge {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: bold;
+        text-transform: uppercase;
+    }
+
+    .auction-browse-wrapper .abw-status-live {
+        background: #28a745;
+        color: white;
+        animation: abw-pulse 2s infinite;
+    }
+
+    .auction-browse-wrapper .abw-status-ending-soon {
+        background: #ffc107;
+        color: #212529;
+    }
+
+    .auction-browse-wrapper .abw-status-ended {
+        background: #6c757d;
+        color: white;
+    }
+
+    @keyframes abw-pulse {
+        0% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7); }
+        70% { box-shadow: 0 0 0 10px rgba(40, 167, 69, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); }
+    }
+
+    .auction-browse-wrapper .abw-countdown-timer {
+        background: linear-gradient(45deg, #FF6B6B, #FF8E8E);
+        color: white;
+        padding: 0.5rem;
+        border-radius: 8px;
+        font-weight: bold;
+        text-align: center;
+        margin: 0.5rem 0;
+        font-family: 'Courier New', monospace;
+    }
+
+    .auction-browse-wrapper .abw-bid-info {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.75rem;
+        background: #f8f9fa;
+        border-radius: 8px;
+        margin: 0.75rem 0;
+    }
+
+    .auction-browse-wrapper .abw-current-bid {
+        font-size: 1.25rem;
+        font-weight: bold;
+        color: #28a745;
+    }
+
+    .auction-browse-wrapper .abw-bid-count {
+        font-size: 0.9rem;
+        color: #6c757d;
+    }
+
+    .auction-browse-wrapper .abw-filter-tabs {
+        border-bottom: 2px solid #e9ecef;
+        margin-bottom: 2rem;
+    }
+
+    .auction-browse-wrapper .abw-filter-tab {
+        padding: 0.75rem 1.5rem;
+        border: none;
+        background: none;
+        color: #6c757d;
+        font-weight: 500;
+        border-bottom: 2px solid transparent;
+        transition: all 0.3s ease;
+    }
+
+    .auction-browse-wrapper .abw-filter-tab.active {
+        color: #667eea;
+        border-bottom-color: #667eea;
+    }
+
+    .auction-browse-wrapper .abw-sort-dropdown {
+        border-radius: 10px;
+        border: 2px solid #e9ecef;
+        padding: 0.5rem 1rem;
+    }
+
+    .auction-browse-wrapper .abw-view-auction-btn {
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        border: none;
+        color: white;
+        padding: 0.75rem 2rem;
+        border-radius: 25px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        width: 100%;
+        text-decoration: none;
+    }
+
+    .auction-browse-wrapper .abw-view-auction-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        color: white;
+        text-decoration: none;
+    }
+
+    .auction-browse-wrapper .abw-no-auctions {
+        text-align: center;
+        padding: 4rem 2rem;
+        color: #6c757d;
+    }
+
+    .auction-browse-wrapper .abw-no-auctions i {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+        opacity: 0.5;
+    }
+
+    .auction-browse-wrapper .abw-search-form {
+        display: grid;
+        grid-template-columns: 2fr 1fr 1fr auto;
+        gap: 1rem;
+        align-items: end;
+    }
+
+    .auction-browse-wrapper .abw-custom-input {
+        border-radius: 10px !important;
+        border: 2px solid #e9ecef !important;
+        padding: 0.75rem !important;
+    }
+
+    @media (max-width: 768px) {
+        .auction-browse-wrapper .abw-search-form {
+            grid-template-columns: 1fr;
+        }
+
+        .auction-browse-wrapper .abw-header {
+            padding: 2rem 0;
+        }
+    }
+</style>
+
+<div class="auction-browse-wrapper">
+<div class="abw-header">
+    <div class="container text-center">
+        <h1 class="display-4 fw-bold mb-2">🎯 Live Auctions</h1>
+        <p class="lead">Discover amazing deals and bid on exclusive items</p>
+    </div>
+</div>
+
+<div class="container">
     <!-- Display Django messages -->
     {% if messages %}
-        <div class="mb-3">
+        <div class="mb-4">
             {% for message in messages %}
-                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                    {{ message }}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show rounded-pill" role="alert">
+                    <i class="fas fa-info-circle me-2"></i>{{ message }}
                     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                 </div>
             {% endfor %}
         </div>
     {% endif %}
 
-    <form method="get" class="mb-4">
-        {{ search_form.as_p }}
-        <button class="btn btn-primary">Search</button>
-    </form>
+    <!-- Enhanced Search Container -->
+    <div class="abw-search-container mb-5">
+        <form method="get">
+            <div class="abw-search-form">
+                <div>
+                    <label class="form-label fw-semibold">Search Auctions</label>
+                    {{ search_form.query }}
+                </div>
+                <div>
+                    <label class="form-label fw-semibold">Category</label>
+                    {{ search_form.category }}
+                </div>
+                <div>
+                    <label class="form-label fw-semibold">Sort By</label>
+                    <select class="form-control abw-sort-dropdown" name="sort">
+                        <option value="end_date">Ending Soon</option>
+                        <option value="created_date">Newest</option>
+                        <option value="current_bid">Highest Bid</option>
+                        <option value="bid_count">Most Bids</option>
+                    </select>
+                </div>
+                <div>
+                    <button class="btn btn-primary px-4 py-2 rounded-pill" type="submit">
+                        <i class="fas fa-search me-2"></i>Search
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
 
-    <div class="row">
+    <!-- Filter Tabs -->
+    <div class="abw-filter-tabs">
+        <button class="abw-filter-tab active" data-filter="all">All Auctions</button>
+        <button class="abw-filter-tab" data-filter="ending-soon">Ending Soon</button>
+        <button class="abw-filter-tab" data-filter="new">New Today</button>
+        <button class="abw-filter-tab" data-filter="popular">Popular</button>
+    </div>
+
+    <!-- Auction Grid -->
+    <div class="row g-4">
         {% for auction in auctions %}
-            <div class="col-md-4 mb-4">
-                <div class="card h-100">
-                    <div class="card-body">
-                        <h5>{{ auction.title }}</h5>
-                        <p class="text-muted">Ends: {{ auction.end_date|date:"M d, H:i" }}</p>
-                        <a href="{% url 'auction:detail' auction.pk %}" class="btn btn-sm btn-outline-primary">View Auction</a>
+            <div class="col-lg-4 col-md-6">
+                <div class="card abw-auction-card h-100">
+                    <!-- Auction Image Placeholder -->
+                    <div class="abw-auction-image">
+                        {% if auction.image %}
+                            <img src="{{ auction.image.url }}" alt="{{ auction.title }}" class="w-100 h-100 object-fit-cover">
+                        {% endif %}
+
+                        <!-- Status Badge -->
+                        {% if auction.is_active %}
+                            {% if auction.hours_remaining <= 2 %}
+                                <span class="abw-status-badge abw-status-ending-soon">Ending Soon</span>
+                            {% else %}
+                                <span class="abw-status-badge abw-status-live">Live</span>
+                            {% endif %}
+                        {% else %}
+                            <span class="abw-status-badge abw-status-ended">Ended</span>
+                        {% endif %}
+                    </div>
+
+                    <div class="card-body d-flex flex-column">
+                        <h5 class="card-title fw-bold">{{ auction.title|truncatechars:45 }}</h5>
+                        <p class="card-text text-muted small mb-3">{{ auction.description|truncatechars:80 }}</p>
+
+                        <!-- Countdown Timer -->
+                        {% if auction.is_active %}
+                            <div class="abw-countdown-timer" data-end-date="{{ auction.end_date|date:'c' }}">
+                                <i class="fas fa-clock me-2"></i>
+                                <span class="countdown-text">Calculating...</span>
+                            </div>
+                        {% endif %}
+
+                        <!-- Bid Information -->
+                        <div class="abw-bid-info">
+                            <div>
+                                <div class="abw-current-bid">
+                                    ${{ auction.current_bid|default:auction.starting_price|floatformat:2 }}
+                                </div>
+                                <small class="text-muted">Current Bid</small>
+                            </div>
+                            <div class="text-end">
+                                <div class="abw-bid-count">{{ auction.bid_count|default:0 }} bid{{ auction.bid_count|pluralize }}</div>
+                                <small class="text-muted">{{ auction.watchers_count|default:0 }} watching</small>
+                            </div>
+                        </div>
+
+                        <!-- Action Button -->
+                        <div class="mt-auto pt-3">
+                            <a href="{% url 'auction:detail' auction.pk %}" class="abw-view-auction-btn btn">
+                                {% if auction.is_active %}
+                                    <i class="fas fa-gavel me-2"></i>Place Bid
+                                {% else %}
+                                    <i class="fas fa-eye me-2"></i>View Results
+                                {% endif %}
+                            </a>
+                        </div>
                     </div>
                 </div>
             </div>
         {% empty %}
-            <p>No auctions found.</p>
+            <div class="col-12">
+                <div class="abw-no-auctions">
+                    <i class="fas fa-search"></i>
+                    <h4>No auctions found</h4>
+                    <p>Try adjusting your search criteria or check back later for new auctions.</p>
+                    <a href="#" class="btn btn-outline-primary rounded-pill px-4">
+                        View All Auctions
+                    </a>
+                </div>
+            </div>
         {% endfor %}
     </div>
 
-    {% include 'auction/partials/pagination.html' with page_obj=page_obj %}
+    <!-- Enhanced Pagination -->
+    {% if page_obj.has_other_pages %}
+        <nav aria-label="Auction pagination" class="mt-5">
+            <ul class="pagination justify-content-center">
+                {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link rounded-pill me-2" href="?page={{ page_obj.previous_page_number }}">
+                            <i class="fas fa-chevron-left"></i> Previous
+                        </a>
+                    </li>
+                {% endif %}
+
+                {% for num in page_obj.paginator.page_range %}
+                    {% if page_obj.number == num %}
+                        <li class="page-item active">
+                            <span class="page-link rounded-pill mx-1">{{ num }}</span>
+                        </li>
+                    {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                        <li class="page-item">
+                            <a class="page-link rounded-pill mx-1" href="?page={{ num }}">{{ num }}</a>
+                        </li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link rounded-pill ms-2" href="?page={{ page_obj.next_page_number }}">
+                            Next <i class="fas fa-chevron-right"></i>
+                        </a>
+                    </li>
+                {% endif %}
+            </ul>
+        </nav>
+    {% endif %}
 </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Countdown Timer Functionality
+    function updateCountdowns() {
+        document.querySelectorAll('.abw-countdown-timer').forEach(timer => {
+            const endDate = new Date(timer.dataset.endDate);
+            const now = new Date();
+            const timeDiff = endDate - now;
+
+            if (timeDiff > 0) {
+                const days = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
+                const hours = Math.floor((timeDiff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((timeDiff % (1000 * 60)) / 1000);
+
+                let countdownText = '';
+                if (days > 0) {
+                    countdownText = `${days}d ${hours}h ${minutes}m`;
+                } else if (hours > 0) {
+                    countdownText = `${hours}h ${minutes}m ${seconds}s`;
+                } else {
+                    countdownText = `${minutes}m ${seconds}s`;
+                }
+
+                timer.querySelector('.countdown-text').textContent = countdownText;
+
+                // Add urgency styling for last hour
+                if (timeDiff < 3600000) { // Less than 1 hour
+                    timer.style.background = 'linear-gradient(45deg, #dc3545, #ff6b6b)';
+                    timer.style.animation = 'abw-pulse 1s infinite';
+                }
+            } else {
+                timer.querySelector('.countdown-text').textContent = 'Auction Ended';
+                timer.style.background = '#6c757d';
+            }
+        });
+    }
+
+    // Update countdowns every second
+    updateCountdowns();
+    setInterval(updateCountdowns, 1000);
+
+    // Filter Tab Functionality
+    document.querySelectorAll('.abw-filter-tab').forEach(tab => {
+        tab.addEventListener('click', function() {
+            // Remove active class from all tabs
+            document.querySelectorAll('.abw-filter-tab').forEach(t => t.classList.remove('active'));
+            // Add active class to clicked tab
+            this.classList.add('active');
+
+            // Here you would typically filter the auctions
+            // For now, this is just visual feedback
+        });
+    });
+
+    // Enhanced form styling for auction browse wrapper only
+    document.querySelectorAll('.auction-browse-wrapper input, .auction-browse-wrapper select').forEach(input => {
+        if (!input.classList.contains('btn')) {
+            input.classList.add('form-control', 'abw-custom-input');
+        }
+    });
+});
+</script>
+
 {% endblock %}
