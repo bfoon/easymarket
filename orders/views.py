@@ -82,7 +82,6 @@ def notify_store_new_order(order):
 def notify_store_new_order_async(order):
     """Run notify_store_new_order in a background thread."""
     thread = threading.Thread(target=notify_store_new_order, args=(order,))
-    thread.setDaemon(True)
     thread.start()
 
 def notify_buyer_new_message(message):

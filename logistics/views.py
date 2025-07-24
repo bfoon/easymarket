@@ -10,6 +10,7 @@ from logistics.models import Shipment, Driver
 from logistics.forms import ShipmentForm
 from orders.models import Order, ShippingAddress, OrderStatusHistory
 from django.utils import timezone
+import threading
 from datetime import timedelta
 from django.db import transaction
 from django.contrib.auth import get_user_model
@@ -64,6 +65,18 @@ def notify_buyer_shipment_delivered(order):
     send_email("Your Order Has Been Delivered", message, [buyer.email])
     send_whatsapp(buyer.telephone, message)
 
+
+
+# --- Background wrappers using threads ---
+
+def run_notify_driver_delivery_assigned(driver, shipment):
+    threading.Thread(target=notify_driver_delivery_assigned, args=(driver, shipment), daemon=True).start()
+
+def run_notify_buyer_order_shipped(order):
+    threading.Thread(target=notify_buyer_order_shipped, args=(order,), daemon=True).start()
+
+def run_notify_buyer_shipment_delivered(order):
+    threading.Thread(target=notify_buyer_shipment_delivered, args=(order,), daemon=True).start()
 
 class ShipmentListView(LoginRequiredMixin, ListView):
     model = Shipment
@@ -178,7 +191,7 @@ class ShipmentCreateView(LoginRequiredMixin, CreateView):
 
         # Notify Buyer
         if order and order.buyer:
-            notify_buyer_order_shipped(order)
+            run_notify_buyer_order_shipped(order)
 
         messages.success(self.request, 'Shipment created successfully!')
         return response
@@ -653,7 +666,7 @@ def update_shipment_status(request, pk):
             if new_status == 'shipped':
                 shipment.mark_as_shipped()
                 if shipment.driver:
-                    notify_driver_delivery_assigned(shipment.driver, shipment)
+                    run_notify_driver_delivery_assigned(shipment.driver, shipment)
 
             return JsonResponse({
                 'success': True,
@@ -703,7 +716,7 @@ def mark_order_as_delivered(request, shipment_pk):
             order.delivered_date = timezone.now()
 
         order.save()
-        notify_buyer_shipment_delivered(order)
+        run_notify_buyer_shipment_delivered(order)
 
         # Update shipment status (you might want to add a 'delivered' status to Shipment model)
         # For now, we'll keep it as 'shipped' since the shipment itself is complete

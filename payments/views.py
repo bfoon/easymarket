@@ -57,7 +57,6 @@ def notify_seller_payment(order):
 
 def notify_seller_payment_async(order):
     thread = threading.Thread(target=notify_seller_payment, args=(order,))
-    thread.setDaemon(True)
     thread.start()
 
 
