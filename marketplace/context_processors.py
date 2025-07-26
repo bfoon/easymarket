@@ -1,6 +1,9 @@
 from .models import Cart, Wishlist, Product, Category
 from django.db.models import Sum, Q
 
+from django.db.models import Sum
+from .models import Cart, Wishlist
+
 def cart_count(request):
     count = 0
 
@@ -10,9 +13,10 @@ def cart_count(request):
             count = cart.items.aggregate(total=Sum('quantity'))['total'] or 0
     else:
         session_cart = request.session.get('cart', {})
-        count = sum(item['quantity'] for item in session_cart.values())
+        count = sum(item.get('quantity', 0) for item in session_cart.values())
 
     return {'cart_count': count}
+
 
 def wishlist_count(request):
     count = 0

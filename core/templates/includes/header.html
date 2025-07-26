@@ -691,6 +691,17 @@
     }
 }
 
+.cart-update-pulse {
+    animation: cartPulse 0.5s ease-in-out;
+}
+
+@keyframes cartPulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.3); }
+    100% { transform: scale(1); }
+}
+
+
 /* Enhanced EasyMarket mobile navbar */
 @media (max-width: 991.98px) {
     .easymarket-navbar .easymarket-toggler {
@@ -740,6 +751,62 @@
   }
 }
 </style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    function refreshCartUI() {
+        fetch('/get-cart-count/', {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                const count = data.cart_count || 0;
+                const total = data.cart_total || null;
+
+                const badge = document.getElementById('easymarket-cart-badge');
+                const numberSpan = badge?.querySelector('.easymarket-cart-number');
+
+                if (badge && numberSpan) {
+                    const previousCount = parseInt(numberSpan.textContent.trim());
+                    numberSpan.textContent = count;
+                    numberSpan.setAttribute('data-count', count);
+                    badge.style.display = count > 0 ? 'inline-block' : 'none';
+
+                    // Optional: pulse animation if count changed
+                    if (previousCount !== count) {
+                        badge.classList.add('cart-update-pulse');
+                        setTimeout(() => {
+                            badge.classList.remove('cart-update-pulse');
+                        }, 500);
+                    }
+                }
+
+                // Optional: update cart total in navbar or elsewhere
+                const totalEl = document.getElementById('easymarket-cart-total');
+                if (total && totalEl) {
+                    totalEl.textContent = `D${total}`;
+                }
+            }
+        })
+        .catch(err => {
+            console.warn('Cart refresh error:', err);
+        });
+    }
+
+    // Refresh every 10 seconds
+    setInterval(refreshCartUI, 10000);
+
+    // Refresh on tab focus
+    window.addEventListener('focus', refreshCartUI);
+
+    // Initial run
+    refreshCartUI();
+});
+</script>
+
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
@@ -1151,6 +1218,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.addEventListener('DOMContentLoaded', protectEasyMarketCartBadge);
 });
 </script>
+
 
 </body>
 </html>
