@@ -204,12 +204,11 @@ function addToCart(productId, button) {
 
     // Collect selected features
     const selectedFeatures = {};
-    document.querySelectorAll('.feature-group').forEach(group => {
+    document.querySelectorAll('.temu-feature-options').forEach(group => {
         const featureName = group.getAttribute('data-feature');
         const selectedInput = group.querySelector('input[type="radio"]:checked');
         if (selectedInput) {
-            const label = selectedInput.nextElementSibling;
-            const value = label ? label.textContent.trim() : 'Unknown';
+            const value = selectedInput.value || selectedInput.nextElementSibling?.textContent.trim() || 'Unknown';
             selectedFeatures[featureName] = value;
         }
     });
@@ -269,34 +268,35 @@ function resetButton(button, originalContent) {
     }
 }
 
+// Product Quick View Modal
 function quickView(productId) {
-  const modal = new bootstrap.Modal(document.getElementById('quickViewModal'));
-  document.getElementById('quickViewContent').innerHTML = `
-    <div class="text-center py-4">
-      <div class="spinner-border text-primary" role="status">
-        <span class="visually-hidden">Loading...</span>
-      </div>
-    </div>
-  `;
-  modal.show();
-
-  fetch(`/product/${productId}/quick-view/`)
-    .then(response => {
-      if (!response.ok) throw new Error("Failed to fetch product details");
-      return response.text();
-    })
-    .then(html => {
-      document.getElementById('quickViewContent').innerHTML = html;
-    })
-    .catch(error => {
-      document.getElementById('quickViewContent').innerHTML = `
-        <div class="text-center p-4">
-          <h5>Unable to load product details.</h5>
-          <p>Please try again later.</p>
-          <a href="/product/${productId}/" class="btn btn-primary">View Full Product</a>
+    const modal = new bootstrap.Modal(document.getElementById('quickViewModal'));
+    document.getElementById('quickViewContent').innerHTML = `
+        <div class="text-center py-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
         </div>
-      `;
-    });
+    `;
+    modal.show();
+
+    fetch(`/product/${productId}/quick-view/`)
+        .then(response => {
+            if (!response.ok) throw new Error("Failed to fetch product details");
+            return response.text();
+        })
+        .then(html => {
+            document.getElementById('quickViewContent').innerHTML = html;
+        })
+        .catch(error => {
+            document.getElementById('quickViewContent').innerHTML = `
+                <div class="text-center p-4">
+                    <h5>Unable to load product details.</h5>
+                    <p>Please try again later.</p>
+                    <a href="/product/${productId}/" class="btn btn-primary">View Full Product</a>
+                </div>
+            `;
+        });
 }
 
 // ==============================================
