@@ -39,19 +39,38 @@ from functools import wraps
 from .forms import ProductForm, ProductImageForm
 from stock.models import Stock
 import csv
+import threading
 from django.conf import settings
+from django.core.mail import send_mail
 
 
 from .models import (
     Store, StoreHours, StoreShippingZone, StoreReturnSettings,
-    StoreInventoryTracking, StoreMetrics
+    StoreInventoryTracking, StoreMetrics, StoreReferral
 )
 from .forms import (
     StoreSettingsForm, StoreHoursFormSet, StoreShippingZoneFormSet,
-    StoreReturnSettingsForm, StoreFinancialForm
+    StoreReturnSettingsForm, StoreFinancialForm, StoreReferralForm
 )
 
 from marketplace.notifications import send_email, send_whatsapp
+
+def notify_referrer_referral_used(referral):
+    """Send notification to referrer that their referral was used."""
+    subject = f"🎉 Your referral for {referral.store.name} was used!"
+    message = (
+        f"Hi {referral.referrer.get_full_name()},\n\n"
+        f"Someone just used your referral link for {referral.store.name} on EasyMarket.\n"
+        f"If they complete a purchase, you may earn a reward.\n\n"
+        f"Keep referring and enjoy more benefits!\n\n"
+        f"- EasyMarket Team"
+    )
+    send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [referral.referrer.email])
+
+
+def notify_referrer_referral_used_async(referral):
+    thread = threading.Thread(target=notify_referrer_referral_used, args=(referral,))
+    thread.start()
 
 def notify_logistics_shipment_to_warehouse(order, store, items):
     logistics_team_email = settings.LOGISTICS_EMAIL
@@ -611,27 +630,53 @@ def product_detail(request, product_id):
 
     return render(request, 'marketplace/product_detail.html', context)
 
-# Add these public store views as well
+
+
 def store_detail(request, slug):
     """Public store detail page."""
     store = get_object_or_404(Store, slug=slug, status='active')
 
-    # Get products by this store owner
+    # ✅ Capture referral code from URL
+    ref_code = request.GET.get('ref')
+    if ref_code and store.allow_referrals:
+        # Save referral info in session
+        request.session['store_referral_code'] = ref_code
+        request.session['store_referral_store_id'] = str(store.id)
+
+        # ✅ Immediately mark referral as used if valid
+        try:
+            referral = StoreReferral.objects.get(
+                referral_code=ref_code,
+                store=store,
+                is_used=False
+            )
+            referral.is_used = True
+            referral.save()
+
+            # ✅ Send referral usage email in thread
+            notify_referrer_referral_used_async(referral)
+
+        except StoreReferral.DoesNotExist:
+            pass  # Invalid or already used code
+
+    # 🛍️ Get products by this store owner
     products = Product.objects.filter(seller=store.owner).order_by('-created_at')[:8]
     product_ids = products.values_list('id', flat=True)
 
-    # Recent reviews
-    recent_reviews = Review.objects.filter(product_id__in=product_ids).select_related('user').order_by('-created_at')[:5]
+    # ⭐ Recent reviews
+    recent_reviews = Review.objects.filter(
+        product_id__in=product_ids
+    ).select_related('user').order_by('-created_at')[:5]
 
-    # All reviews for this store's products
+    # 🔢 All reviews for this store's products
     reviews = Review.objects.filter(product_id__in=product_ids)
     review_count = reviews.count()
     average_rating = reviews.aggregate(avg=Avg('rating'))['avg'] or 0
 
-    # Rating breakdown
+    # 📊 Rating breakdown
     rating_breakdown = {i: reviews.filter(rating=i).count() for i in range(1, 6)}
 
-    # Get store's product categories with product counts
+    # 🏷️ Product categories for the store
     categories = (
         Category.objects
         .filter(product__seller=store.owner)
@@ -1498,20 +1543,19 @@ def store_dashboard(request, store_id):
 
     return render(request, 'stores/store_dashboard.html', context)
 
-
 @login_required
 @store_owner_required
 def store_settings(request, store_id):
     """Comprehensive store settings management"""
     store = get_object_or_404(Store, id=store_id, owner=request.user)
 
-    # Get or create related settings
-    return_settings, created = StoreReturnSettings.objects.get_or_create(store=store)
+    # Get or create related return settings
+    return_settings, _ = StoreReturnSettings.objects.get_or_create(store=store)
 
-    # Get existing store hours or create default ones
+    # Create or fetch store hours defaults
     store_hours = []
     for day in range(7):
-        hour, created = StoreHours.objects.get_or_create(
+        hour, _ = StoreHours.objects.get_or_create(
             store=store,
             day_of_week=day,
             defaults={'is_closed': True}
@@ -1547,10 +1591,9 @@ def store_settings(request, store_id):
             if shipping_formset.is_valid():
                 with transaction.atomic():
                     for form in shipping_formset:
-                        if form.is_valid() and form.cleaned_data:
-                            if form.cleaned_data.get('DELETE'):
-                                if form.instance.pk:
-                                    form.instance.delete()
+                        if form.cleaned_data:
+                            if form.cleaned_data.get('DELETE') and form.instance.pk:
+                                form.instance.delete()
                             else:
                                 zone = form.save(commit=False)
                                 zone.store = store
@@ -1572,7 +1615,7 @@ def store_settings(request, store_id):
                 messages.success(request, 'Financial settings updated successfully!')
                 return redirect('stores:store_settings', store_id=store.id)
 
-    # Initialize forms
+    # Initial load of all forms
     basic_form = StoreSettingsForm(instance=store)
     hours_formset = StoreHoursFormSet(queryset=StoreHours.objects.filter(store=store).order_by('day_of_week'))
     shipping_formset = StoreShippingZoneFormSet(queryset=StoreShippingZone.objects.filter(store=store))
@@ -2436,3 +2479,49 @@ def get_store_dashboard_data(store):
         'top_products': top_products,
         'store': store
     }
+
+
+@login_required
+def create_store_referral(request, store_id):
+    store = get_object_or_404(Store, id=store_id, status='active')
+
+    if request.method == "POST":
+        form = StoreReferralForm(request.POST)
+        if form.is_valid():
+            referred_email = form.cleaned_data['referred_email']
+
+            # Avoid duplicate referral
+            if StoreReferral.objects.filter(referrer=request.user, referred_email=referred_email, store=store).exists():
+                messages.warning(request, "You already referred this email to this store.")
+            else:
+                referral = StoreReferral.objects.create(
+                    referrer=request.user,
+                    referred_email=referred_email,
+                    store=store
+                )
+
+                referral_url = request.build_absolute_uri(
+                    reverse("stores:store_detail", args=[store.slug]) + f"?ref={referral.referral_code}"
+                )
+
+                # Send referral email
+                message = (
+                    f"👋 {request.user.get_full_name()} has invited you to shop at {store.name} on EasyMarket!\n\n"
+                    f"Use this referral link to visit the store and get special deals:\n{referral_url}\n\n"
+                    f"Thanks for joining EasyMarket!"
+                )
+
+                send_email(
+                    subject=f"{request.user.get_full_name()} invited you to EasyMarket",
+                    message=message,
+                    recipient_list=[referred_email]
+                )
+
+                messages.success(request, f"Referral sent to {referred_email}.")
+        else:
+            messages.error(request, "Please provide a valid email address.")
+
+        return redirect("stores:store_detail", store.slug)
+
+    # Fallback if accessed via GET (not intended)
+    return redirect("stores:store_detail", store.slug)

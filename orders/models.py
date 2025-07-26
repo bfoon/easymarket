@@ -92,6 +92,8 @@ class Order(models.Model):
         default='marketplace'
     )
 
+    store_referral = models.ForeignKey('stores.StoreReferral', null=True, blank=True, on_delete=models.SET_NULL)
+
     class Meta:
         ordering = ['-created_at']
 

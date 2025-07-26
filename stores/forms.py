@@ -149,7 +149,7 @@ class StoreSettingsForm(forms.ModelForm):
             'business_registration_number', 'tax_identification_number',
             'commission_rate', 'minimum_order_amount', 'processing_time',
             'return_policy_days', 'facebook_url', 'twitter_url', 'instagram_url',
-            'accept_cash_risk'
+            'accept_cash_risk','allow_referrals'
         ]
 
         widgets = {
@@ -250,6 +250,9 @@ class StoreSettingsForm(forms.ModelForm):
                 'placeholder': 'https://instagram.com/yourstore'
             }),
             'accept_cash_risk': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
+            }),
+            'allow_referrals': forms.CheckboxInput(attrs={
                 'class': 'form-check-input'
             }),
 
@@ -463,3 +466,9 @@ StoreShippingZoneFormSet = forms.modelformset_factory(
     extra=1,
     can_delete=True
 )
+
+class StoreReferralForm(forms.Form):
+    referred_email = forms.EmailField(label="Friend's Email", widget=forms.EmailInput(attrs={
+        'class': 'form-control',
+        'placeholder': 'Enter your friend\'s email'
+    }))

@@ -9,6 +9,7 @@ from .models import (
     StoreInventoryTracking,
     StoreReturnSettings,
     StoreMetrics,
+    StoreReferral,
 )
 
 
@@ -85,3 +86,15 @@ class StoreMetricsAdmin(admin.ModelAdmin):
     list_display = ('store', 'date', 'total_orders', 'total_sales', 'total_returns', 'return_rate_percentage')
     list_filter = ('date',)
     search_fields = ('store__name',)
+
+@admin.register(StoreReferral)
+class StoreReferralAdmin(admin.ModelAdmin):
+    list_display = ('referrer', 'referred_email', 'store', 'referral_code', 'is_used', 'reward_issued', 'created_at')
+    list_filter = ('is_used', 'reward_issued', 'store', 'created_at')
+    search_fields = ('referrer__username', 'referrer__email', 'referred_email', 'referral_code')
+    readonly_fields = ('referral_code', 'created_at')
+    ordering = ('-created_at',)
+
+    def has_add_permission(self, request):
+        # Optional: Only allow add through code logic, not admin
+        return True

@@ -65,4 +65,5 @@ urlpatterns = [
     # Public store display URLs (using slug for SEO-friendly URLs) - MUST come last to avoid conflicts
     path('<slug:slug>/', views.store_detail, name='store_detail'),
     path('<slug:slug>/products/', views.store_products, name='store_products'),
+    path('refer/store/<uuid:store_id>/', views.create_store_referral, name='refer_store'),
 ]

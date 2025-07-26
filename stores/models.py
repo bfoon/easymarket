@@ -5,9 +5,14 @@ from django.utils import timezone
 from decimal import Decimal
 from django.db.models import Avg, Sum, F, ExpressionWrapper, DecimalField
 import uuid
+import random
+import string
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from PIL import Image
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
 
 
 class StoreCategory(models.Model):
@@ -116,6 +121,10 @@ class Store(models.Model):
         help_text="Automatically approve auctions without admin review"
     )
     accept_cash_risk = models.BooleanField(default=False)
+    allow_referrals = models.BooleanField(
+        default=False,
+        help_text="Allow buyers to refer this store and earn rewards."
+    )
 
     class Meta:
         ordering = ['-created_at']
@@ -566,3 +575,27 @@ def get_featured_stores(limit=10):
         status='active',
         is_featured=True
     ).order_by('-created_at')[:limit]
+
+def generate_referral_code(length=8):
+    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
+
+class StoreReferral(models.Model):
+    referrer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='store_referrals')
+    referred_email = models.EmailField()
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name='referrals')
+    referral_code = models.CharField(max_length=10, unique=True, blank=True)
+    is_used = models.BooleanField(default=False)
+    reward_issued = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('referrer', 'referred_email', 'store')
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.referrer} referred {self.referred_email} to {self.store}"
+
+    def save(self, *args, **kwargs):
+        if not self.referral_code:
+            self.referral_code = generate_referral_code()
+        super().save(*args, **kwargs)
