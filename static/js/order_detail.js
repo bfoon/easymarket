@@ -145,7 +145,7 @@ async function processPayment(orderId) {
             if (modalEl) bootstrap.Modal.getInstance(modalEl)?.hide();
             setTimeout(() => window.location.reload(), 2000);
         } else {
-            showPaymentError(result.error);
+            showPaymentError(result.error, result.code || null);
         }
     } catch (err) {
         console.error(err);
@@ -290,9 +290,26 @@ function showPaymentSuccess(result) {
     showAlert(`<strong>Payment Successful!</strong> ${result.message} ${result.transaction_id ? `<br><small>Transaction ID: ${result.transaction_id}</small>` : ''}`, 'success');
 }
 
-function showPaymentError(message) {
-    showAlert(message, 'danger');
+function showPaymentError(message, code = null) {
+    const modalErrorBox = document.getElementById('paymentModalError');
+    const modalErrorMsg = document.getElementById('paymentModalErrorMsg');
+
+    if (modalErrorBox && modalErrorMsg) {
+        modalErrorMsg.textContent = message;
+        modalErrorBox.classList.remove('d-none');
+        modalErrorBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else {
+        // Fallback global alert
+        showAlert(message, 'danger');
+    }
+
+    // Optionally mark invalid
+    const methodField = document.getElementById('paymentMethod');
+    if (code === 'cod_limit' && methodField) {
+        methodField.classList.add('is-invalid');
+    }
 }
+
 
 function showSuccessMessage(message) {
     const html = `<div class="alert alert-success alert-dismissible fade show position-fixed" style="top:20px;right:20px;z-index:9999;min-width:300px;">

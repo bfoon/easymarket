@@ -148,7 +148,8 @@ class StoreSettingsForm(forms.ModelForm):
             'postal_code', 'country', 'logo', 'banner',
             'business_registration_number', 'tax_identification_number',
             'commission_rate', 'minimum_order_amount', 'processing_time',
-            'return_policy_days', 'facebook_url', 'twitter_url', 'instagram_url'
+            'return_policy_days', 'facebook_url', 'twitter_url', 'instagram_url',
+            'accept_cash_risk'
         ]
 
         widgets = {
@@ -248,6 +249,10 @@ class StoreSettingsForm(forms.ModelForm):
                 'class': 'form-control',
                 'placeholder': 'https://instagram.com/yourstore'
             }),
+            'accept_cash_risk': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
+            }),
+
         }
 
     def clean_slug(self):

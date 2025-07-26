@@ -262,10 +262,18 @@ def order_detail(request, order_id):
     # Get chat messages for this order
     chat_messages = ChatMessage.objects.filter(order=order).order_by('created_at')
 
+    cod_allowed = True
+    if order.get_total > 500:
+        cod_allowed = all([
+            item.product.store and item.product.store.accept_cash_risk
+            for item in order.items.select_related('product__store')
+        ])
+
     context = {
         'order': order,
         'other_orders': other_orders,
         'chat_messages': chat_messages,
+        'cod_allowed': cod_allowed,
     }
 
     return render(request, 'orders/order_detail.html', context)

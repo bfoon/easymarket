@@ -115,6 +115,7 @@ class Store(models.Model):
         default=False,
         help_text="Automatically approve auctions without admin review"
     )
+    accept_cash_risk = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['-created_at']

@@ -11,7 +11,446 @@
 <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
 <link rel="stylesheet" type="text/css" href="{% static 'css/category_product.css' %}">
 
-<!-- Hero Section -->
+<style>
+/* Temu/Alibaba Style Enhancements for Category Page */
+:root {
+    --temu-orange: #ff6b35;
+    --temu-red: #ff4757;
+    --temu-yellow: #ffc048;
+    --temu-green: #2ed573;
+    --temu-blue: #3742fa;
+}
+
+/* Product Grid - Dense Temu Style */
+.temu-category-products-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 0.8rem;
+    padding: 1rem 0;
+}
+
+.temu-category-product-card {
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    transition: all 0.3s ease;
+    border: 1px solid #e9ecef;
+    cursor: pointer;
+    position: relative;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.temu-category-product-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+}
+
+.temu-category-image-container {
+    position: relative;
+    width: 100%;
+    padding-bottom: 100%; /* 1:1 Aspect Ratio */
+    overflow: hidden;
+}
+
+.temu-category-product-image {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+
+.temu-category-product-card:hover .temu-category-product-image {
+    transform: scale(1.05);
+}
+
+/* Enhanced Badges */
+.temu-product-badges {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.temu-badge-discount {
+    background: linear-gradient(45deg, #ff4757, #ff3742);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 8px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    box-shadow: 0 2px 8px rgba(255, 71, 87, 0.4);
+}
+
+.temu-badge-new {
+    background: linear-gradient(45deg, var(--temu-green), #26de81);
+    color: white;
+    padding: 3px 6px;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    font-weight: 700;
+}
+
+.temu-badge-hot {
+    background: linear-gradient(45deg, var(--temu-yellow), #ffa726);
+    color: #2c2c54;
+    padding: 3px 6px;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    font-weight: 700;
+}
+
+.temu-badge-out-of-stock {
+    background: rgba(108, 117, 125, 0.9);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+/* Quick Actions */
+.temu-category-quick-actions {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: 2;
+}
+
+.temu-category-product-card:hover .temu-category-quick-actions {
+    opacity: 1;
+}
+
+.temu-category-quick-btn {
+    background: rgba(255, 255, 255, 0.9);
+    border: none;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    color: #2c2c54;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(5px);
+}
+
+.temu-category-quick-btn:hover {
+    background: var(--temu-orange);
+    color: white;
+    transform: scale(1.1);
+}
+
+/* Product Info */
+.temu-category-product-info {
+    padding: 12px;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.temu-category-product-name {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #2c2c54;
+    line-height: 1.3;
+    margin-bottom: 8px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    min-height: 2.2em;
+}
+
+.temu-category-product-name a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.temu-category-product-name a:hover {
+    color: var(--temu-orange);
+}
+
+.temu-category-brand {
+    font-size: 0.75rem;
+    color: #666;
+    margin-bottom: 6px;
+}
+
+.temu-category-rating {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.temu-category-rating-stars {
+    color: var(--temu-yellow);
+    font-size: 0.8rem;
+}
+
+.temu-category-rating-count {
+    font-size: 0.75rem;
+    color: #666;
+}
+
+.temu-category-price-container {
+    margin-bottom: 8px;
+}
+
+.temu-category-current-price {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--temu-red);
+}
+
+.temu-category-original-price {
+    font-size: 0.8rem;
+    color: #999;
+    text-decoration: line-through;
+    margin-right: 6px;
+}
+
+.temu-category-save-badge {
+    background: var(--temu-green);
+    color: white;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+.temu-category-condition {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.temu-category-condition-badge {
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 500;
+}
+
+.temu-category-stock-status {
+    font-size: 0.75rem;
+    margin-bottom: 8px;
+}
+
+.temu-category-add-to-cart {
+    width: 100%;
+    background: linear-gradient(45deg, var(--temu-orange), var(--temu-red));
+    border: none;
+    border-radius: 6px;
+    padding: 8px 12px;
+    color: white;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-top: auto;
+}
+
+.temu-category-add-to-cart:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(255, 107, 53, 0.4);
+}
+
+.temu-category-add-to-cart:disabled {
+    background: #6c757d;
+    cursor: not-allowed;
+}
+
+/* Subcategories - Temu Style */
+.temu-subcategories-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 0.8rem;
+    margin: 1rem 0;
+}
+
+.temu-subcategory-item {
+    background: white;
+    border-radius: 12px;
+    padding: 1rem 0.8rem;
+    text-align: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    transition: all 0.3s ease;
+    border: 1px solid #e9ecef;
+    cursor: pointer;
+    min-height: 100px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.temu-subcategory-item:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+    border-color: var(--temu-orange);
+}
+
+.temu-subcategory-icon {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+    background: linear-gradient(45deg, var(--temu-orange), var(--temu-red));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.temu-subcategory-name {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #2c2c54;
+    margin-bottom: 0.25rem;
+}
+
+.temu-subcategory-count {
+    font-size: 0.7rem;
+    color: #666;
+}
+
+/* Related Categories */
+.temu-related-categories-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0.8rem;
+    margin: 1rem 0;
+}
+
+.temu-related-category-item {
+    background: white;
+    border-radius: 12px;
+    padding: 1rem;
+    text-align: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    transition: all 0.3s ease;
+    border: 1px solid #e9ecef;
+    cursor: pointer;
+}
+
+.temu-related-category-item:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+}
+
+/* Recently Viewed */
+.temu-recently-viewed-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 0.8rem;
+    margin: 1rem 0;
+}
+
+.temu-recently-viewed-item {
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    transition: all 0.3s ease;
+    border: 1px solid #e9ecef;
+    cursor: pointer;
+}
+
+.temu-recently-viewed-item:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+}
+
+.temu-recently-viewed-image {
+    width: 100%;
+    height: 100px;
+    object-fit: cover;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .temu-category-products-grid {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 0.5rem;
+    }
+
+    .temu-subcategories-grid {
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+        gap: 0.6rem;
+    }
+
+    .temu-related-categories-grid {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    }
+}
+
+@media (max-width: 576px) {
+    .temu-category-products-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* Filter and Search Enhancements */
+.temu-filter-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    margin: 1rem 0;
+}
+
+.temu-filter-tag {
+    background: var(--temu-blue);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.temu-filter-tag-close {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    cursor: pointer;
+    text-decoration: none;
+    color: inherit;
+}
+
+.temu-search-sort-container {
+    background: white;
+    border-radius: 12px;
+    padding: 1rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    border: 1px solid #e9ecef;
+    margin-bottom: 1rem;
+}
+</style>
+
+<!-- Hero Section (unchanged) -->
 <section class="hero-section text-white py-4" style="border-bottom: 3px solid var(--amazon-orange);">
     <div class="container">
         <div class="row align-items-center hero-content">
@@ -123,44 +562,46 @@
                 {% endif %}
             </div>
             <div class="col-md-6">
-                <div class="row" style="--bs-gutter-x: 0.25rem; --bs-gutter-y: 0.25rem;">
-                    <!-- Search within category -->
-                    <div class="col-md-8">
-                        <form method="GET" class="d-flex">
-                            <input type="search"
-                                   name="q"
-                                   class="form-control form-control-sm"
-                                   placeholder="Search in {{ category.name }}..."
-                                   value="{{ request.GET.q }}"
-                                   aria-label="Search products in {{ category.name }}">
-                            <button type="submit" class="btn btn-outline-primary btn-sm ms-2">
-                                <i class="fas fa-search" aria-hidden="true"></i>
-                            </button>
-                        </form>
-                    </div>
-                    <!-- Sort Options -->
-                    <div class="col-md-4">
-                        <div class="dropdown">
-                            <button class="btn btn-outline-primary btn-sm dropdown-toggle w-100"
-                                    type="button"
-                                    data-bs-toggle="dropdown"
-                                    aria-expanded="false">
-                                <i class="fas fa-sort me-1" aria-hidden="true"></i> Sort by
-                            </button>
-                            <ul class="dropdown-menu">
-                                <li><a class="dropdown-item {% if current_sort == 'name' %}active{% endif %}"
-                                       href="?sort=name{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}">
-                                       Name A-Z
-                                    </a></li>
-                                <li><a class="dropdown-item {% if request.GET.sort == '-name' %}active{% endif %}"
-                                       href="?sort=-name{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}">Name Z-A</a></li>
-                                <li><a class="dropdown-item {% if request.GET.sort == 'price' %}active{% endif %}"
-                                       href="?sort=price{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}">Price: Low to High</a></li>
-                                <li><a class="dropdown-item {% if request.GET.sort == '-price' %}active{% endif %}"
-                                       href="?sort=-price{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}">Price: High to Low</a></li>
-                                <li><a class="dropdown-item {% if request.GET.sort == '-created_at' %}active{% endif %}"
-                                       href="?sort=-created_at{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}">Newest First</a></li>
-                            </ul>
+                <div class="temu-search-sort-container">
+                    <div class="row g-2">
+                        <!-- Search within category -->
+                        <div class="col-md-8">
+                            <form method="GET" class="d-flex">
+                                <input type="search"
+                                       name="q"
+                                       class="form-control form-control-sm"
+                                       placeholder="Search in {{ category.name }}..."
+                                       value="{{ request.GET.q }}"
+                                       aria-label="Search products in {{ category.name }}">
+                                <button type="submit" class="btn btn-outline-primary btn-sm ms-2">
+                                    <i class="fas fa-search" aria-hidden="true"></i>
+                                </button>
+                            </form>
+                        </div>
+                        <!-- Sort Options -->
+                        <div class="col-md-4">
+                            <div class="dropdown">
+                                <button class="btn btn-outline-primary btn-sm dropdown-toggle w-100"
+                                        type="button"
+                                        data-bs-toggle="dropdown"
+                                        aria-expanded="false">
+                                    <i class="fas fa-sort me-1" aria-hidden="true"></i> Sort by
+                                </button>
+                                <ul class="dropdown-menu">
+                                    <li><a class="dropdown-item {% if current_sort == 'name' %}active{% endif %}"
+                                           href="?sort=name{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}">
+                                           Name A-Z
+                                        </a></li>
+                                    <li><a class="dropdown-item {% if request.GET.sort == '-name' %}active{% endif %}"
+                                           href="?sort=-name{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}">Name Z-A</a></li>
+                                    <li><a class="dropdown-item {% if request.GET.sort == 'price' %}active{% endif %}"
+                                           href="?sort=price{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}">Price: Low to High</a></li>
+                                    <li><a class="dropdown-item {% if request.GET.sort == '-price' %}active{% endif %}"
+                                           href="?sort=-price{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}">Price: High to Low</a></li>
+                                    <li><a class="dropdown-item {% if request.GET.sort == '-created_at' %}active{% endif %}"
+                                           href="?sort=-created_at{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}">Newest First</a></li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -169,225 +610,206 @@
 
         <!-- Filter Tags (if search or filters are active) -->
         {% if request.GET.q or request.GET.sort %}
-        <div class="mb-3">
-            <div class="d-flex flex-wrap gap-2 align-items-center">
-                <span class="text-muted small">Active filters:</span>
-                {% if request.GET.q %}
-                <span class="badge bg-primary">
-                    Search: "{{ request.GET.q }}"
-                    <a href="?{% if request.GET.sort %}sort={{ request.GET.sort }}{% endif %}"
-                       class="text-white ms-1 text-decoration-none">×</a>
-                </span>
-                {% endif %}
-                {% if request.GET.sort %}
-                <span class="badge bg-secondary">
-                    Sort: {{ request.GET.sort|title }}
-                    <a href="?{% if request.GET.q %}q={{ request.GET.q }}{% endif %}"
-                       class="text-white ms-1 text-decoration-none">×</a>
-                </span>
-                {% endif %}
-                <a href="{% url 'marketplace:category_detail' category.id %}"
-                   class="btn btn-outline-secondary btn-sm">Clear All</a>
-            </div>
+        <div class="temu-filter-tags">
+            <span class="text-muted small">Active filters:</span>
+            {% if request.GET.q %}
+            <span class="temu-filter-tag">
+                Search: "{{ request.GET.q }}"
+                <a href="?{% if request.GET.sort %}sort={{ request.GET.sort }}{% endif %}"
+                   class="temu-filter-tag-close">×</a>
+            </span>
+            {% endif %}
+            {% if request.GET.sort %}
+            <span class="temu-filter-tag">
+                Sort: {{ request.GET.sort|title }}
+                <a href="?{% if request.GET.q %}q={{ request.GET.q }}{% endif %}"
+                   class="temu-filter-tag-close">×</a>
+            </span>
+            {% endif %}
+            <a href="{% url 'marketplace:category_detail' category.id %}"
+               class="btn btn-outline-secondary btn-sm">Clear All</a>
         </div>
         {% endif %}
 
         {% if products %}
-        <!-- Subcategories -->
+        <!-- Subcategories - Temu Style -->
         {% if subcategories %}
         <div class="mb-4">
             <h5 class="section-title">
                 <i class="fas fa-sitemap me-2" aria-hidden="true"></i> Explore Subcategories
             </h5>
-            <div class="row" style="--bs-gutter-x: 0.25rem; --bs-gutter-y: 0.25rem;">
+            <div class="temu-subcategories-grid">
                 {% for subcat in subcategories %}
-                <div class="col-6 col-md-3 col-lg-2">
-                    <a href="{% url 'marketplace:category_detail' subcat.id %}"
-                       class="text-decoration-none"
-                       title="Browse {{ subcat.name }} products">
-                        <div class="category-card text-center py-3 h-100 hover-shadow">
-                            <div class="category-icon">
-                                <i class="fas fa-{{ subcat.icon|default:'tags' }}" aria-hidden="true"></i>
-                            </div>
-                            <div class="fw-bold">{{ subcat.name }}</div>
-                            {% if subcat.product_count %}
-                            <small class="text-muted">({{ subcat.product_count }} items)</small>
-                            {% endif %}
+                <a href="{% url 'marketplace:category_detail' subcat.id %}" class="text-decoration-none">
+                    <div class="temu-subcategory-item">
+                        <div class="temu-subcategory-icon">
+                            <i class="fas fa-{{ subcat.icon|default:'tags' }}" aria-hidden="true"></i>
                         </div>
-                    </a>
-                </div>
+                        <div class="temu-subcategory-name">{{ subcat.name }}</div>
+                        {% if subcat.product_count %}
+                        <div class="temu-subcategory-count">({{ subcat.product_count }} items)</div>
+                        {% endif %}
+                    </div>
+                </a>
                 {% endfor %}
             </div>
         </div>
         {% endif %}
 
-        <!-- Products Grid -->
-        <div class="row" id="products-grid">
+        <!-- Products Grid - Temu Style -->
+        <div class="temu-category-products-grid" id="products-grid">
             {% for product in products %}
-            <div class="col-6 col-md-4 col-lg-3 product-item" data-product-id="{{ product.id }}">
-                <div class="product-card h-100">
-                    <div class="product-image-container position-relative">
-                        <a href="{% url 'marketplace:product_detail' product.id %}"
-                           title="View {{ product.name }} details">
-                            {% if product.image %}
-                            <img src="{{ product.image.url }}"
-                                 class="product-image"
-                                 alt="{{ product.name }}"
-                                 loading="lazy"
-                                 onerror="this.src='{% static 'images/placeholder.png' %}'">
-                            {% else %}
-                            <div class="product-image d-flex align-items-center justify-content-center bg-light">
-                                <i class="fas fa-image text-muted" style="font-size: 2rem;" aria-hidden="true"></i>
-                            </div>
-                            {% endif %}
-                        </a>
-
-                        <!-- Product Badges -->
-                        <div class="product-badges">
-                            {% if product.is_new %}
-                            <span class="badge-new">NEW</span>
-                            {% endif %}
-
-                            {% if product.discount_percentage %}
-                            <span class="badge-discount">{{ product.discount_percentage }}% OFF</span>
-                            {% if product.is_featured %}
-                            <span class="badge-choice">
-                                <i class="fas fa-fire me-1" aria-hidden="true"></i>
-                                HOT
-                            </span>
-                            {% endif %}
-                            {% elif product.is_featured %}
-                            <span class="badge-choice">
-                                <i class="fas fa-fire me-1" aria-hidden="true"></i>
-                                HOT
-                            </span>
-                            {% endif %}
-
-                            {% if not product.is_in_stock %}
-                            <span class="badge-out-of-stock">OUT OF STOCK</span>
-                            {% endif %}
+            <div class="temu-category-product-card" data-product-id="{{ product.id }}">
+                <div class="temu-category-image-container">
+                    <a href="{% url 'marketplace:product_detail' product.id %}" title="View {{ product.name }} details">
+                        {% if product.image %}
+                        <img src="{{ product.image.url }}"
+                             class="temu-category-product-image"
+                             alt="{{ product.name }}"
+                             loading="lazy"
+                             onerror="this.src='{% static 'images/placeholder.png' %}'; this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                        <div class="temu-category-product-image d-none" style="background: #f8f9fa; display: flex; align-items: center; justify-content: center; color: #999; flex-direction: column;">
+                            <i class="fas fa-image fa-2x"></i>
+                            <small>No image</small>
                         </div>
-
-                        <!-- Quick Actions -->
-                        <div class="product-quick-actions">
-                            <button class="btn btn-sm"
-                                    onclick="addToWishlist({{ product.id }}, this)"
-                                    title="Add to wishlist"
-                                    aria-label="Add {{ product.name }} to wishlist">
-                                <i class="far fa-heart" aria-hidden="true"></i>
-                            </button>
-                            <button class="btn btn-sm"
-                                    onclick="quickView({{ product.id }})"
-                                    title="Quick view"
-                                    aria-label="Quick view {{ product.name }}">
-                                <i class="fas fa-eye" aria-hidden="true"></i>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Product Details -->
-                    <div class="card-body d-flex flex-column">
-                        <h6 class="card-title mb-2">
-                            <a href="{% url 'marketplace:product_detail' product.id %}"
-                               class="text-decoration-none"
-                               title="{{ product.name }}">
-                                {{ product.name|truncatechars:35 }}
-                            </a>
-                        </h6>
-
-                        <!-- Brand -->
-                        {% if product.brand %}
-                        <div class="product-brand mb-1">
-                            <small class="text-muted">{{ product.brand }}</small>
+                        {% else %}
+                        <div class="temu-category-product-image" style="background: #f8f9fa; display: flex; align-items: center; justify-content: center; color: #999; flex-direction: column;">
+                            <i class="fas fa-image fa-2x"></i>
+                            <small>No image</small>
                         </div>
                         {% endif %}
+                    </a>
 
-                        <!-- Rating -->
-                        {% if product.average_rating %}
-                        <div class="rating mb-2" role="img" aria-label="Rating: {{ product.average_rating }} out of 5 stars">
+                    <!-- Product Badges -->
+                    <div class="temu-product-badges">
+                        {% if product.is_new %}
+                        <span class="temu-badge-new">NEW</span>
+                        {% endif %}
+
+                        {% if product.discount_percentage %}
+                        <span class="temu-badge-discount">{{ product.discount_percentage }}% OFF</span>
+                        {% if product.is_featured %}
+                        <span class="temu-badge-hot">
+                            <i class="fas fa-fire me-1" aria-hidden="true"></i>
+                            HOT
+                        </span>
+                        {% endif %}
+                        {% elif product.is_featured %}
+                        <span class="temu-badge-hot">
+                            <i class="fas fa-fire me-1" aria-hidden="true"></i>
+                            HOT
+                        </span>
+                        {% endif %}
+
+                        {% if not product.is_in_stock %}
+                        <span class="temu-badge-out-of-stock">OUT OF STOCK</span>
+                        {% endif %}
+                    </div>
+
+                    <!-- Quick Actions -->
+                    <div class="temu-category-quick-actions">
+                        <button class="temu-category-quick-btn"
+                                onclick="addToWishlist({{ product.id }}, this)"
+                                title="Add to wishlist"
+                                aria-label="Add {{ product.name }} to wishlist">
+                            <i class="far fa-heart" aria-hidden="true"></i>
+                        </button>
+                        <button class="temu-category-quick-btn"
+                                onclick="quickView({{ product.id }})"
+                                title="Quick view"
+                                aria-label="Quick view {{ product.name }}">
+                            <i class="fas fa-eye" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Product Details -->
+                <div class="temu-category-product-info">
+                    <h6 class="temu-category-product-name">
+                        <a href="{% url 'marketplace:product_detail' product.id %}" title="{{ product.name }}">
+                            {{ product.name|truncatechars:40 }}
+                        </a>
+                    </h6>
+
+                    <!-- Brand -->
+                    {% if product.brand %}
+                    <div class="temu-category-brand">{{ product.brand }}</div>
+                    {% endif %}
+
+                    <!-- Rating -->
+                    {% if product.average_rating %}
+                    <div class="temu-category-rating" role="img" aria-label="Rating: {{ product.average_rating }} out of 5 stars">
+                        <div class="temu-category-rating-stars">
                             {% for i in "12345" %}
                                 {% if forloop.counter <= product.average_rating %}
-                                    <i class="fas fa-star text-warning" aria-hidden="true"></i>
+                                    <i class="fas fa-star" aria-hidden="true"></i>
                                 {% else %}
-                                    <i class="far fa-star text-warning" aria-hidden="true"></i>
+                                    <i class="far fa-star" aria-hidden="true"></i>
                                 {% endif %}
                             {% endfor %}
-                            {% if product.review_count %}
-                            <span class="rating-count text-muted">({{ product.review_count|floatformat:0 }})</span>
-                            {% endif %}
                         </div>
+                        {% if product.review_count %}
+                        <span class="temu-category-rating-count">({{ product.review_count|floatformat:0 }})</span>
                         {% endif %}
-
-                       <!-- Price -->
-                        <div class="price-container mb-2">
-                            {% if product.original_price and product.original_price != product.price %}
-                                <!-- Original Price (crossed out) -->
-                                <div class="mb-1">
-                                    <span class="original-price text-muted text-decoration-line-through small">
-                                        D{{ product.original_price }}
-                                    </span>
-                                </div>
-
-                                <!-- Current Price and Save Amount Stacked -->
-                                <div class="d-flex align-items-center gap-2">
-                                    <span class="current-price fw-bold">
-                                        D{{ product.price }}
-                                    </span>
-                                    <span class="badge bg-success small">
-                                        Save D{{ product.amount_saved|floatformat:2 }}
-                                    </span>
-                                </div>
-                            {% else %}
-                                <!-- Current Price Only -->
-                                <span class="current-price d-block fw-bold">
-                                    D{{ product.price }}
-                                </span>
-                            {% endif %}
-                        </div>
-                        <div class="product-condition d-flex align-items-center small mt-2">
-                            <i class="fas {% if product.used %}fa-recycle text-secondary{% else %}fa-certificate text-success{% endif %} me-2"></i>
-                            <span class="text-muted me-1">Condition:</span>
-                            <span class="{% if product.used %}badge bg-secondary{% else %}badge bg-success{% endif %}">
-                                {% if product.used %}Used - Inspected{% else %}Brand New{% endif %}
-                            </span>
-                        </div>
-
-                        <!-- Stock Status -->
-                        {% if product.stock.quantity %}
-                        <div class="stock-status mb-2">
-                            {% if product.stock.quantity <= 5 %}
-                            <small class="text-warning">
-                                <i class="fas fa-exclamation-triangle me-1" aria-hidden="true"></i>
-                                Only {{ product.stock.quantity }} left!
-                            </small>
-                            {% elif product.stock.quantity <= 10 %}
-                            <small class="text-info">{{ product.stock.quantity }} in stock</small>
-                            {% else %}
-                            <small class="text-success">In stock</small>
-                            {% endif %}
-                        </div>
-                        {% endif %}
-
-                        <!-- Add to Cart Button -->
-                        <div class="mt-auto">
-                            {% if product.is_in_stock %}
-                            <button class="add-to-cart-btn"
-                                    onclick="addToCart({{ product.id }}, this)"
-                                    data-product-id="{{ product.id }}"
-                                    data-stock="{{ product.stock.quantity|default:0 }}"
-                                    aria-label="Add {{ product.name }} to cart">
-                                <i class="fas fa-cart-plus me-1" aria-hidden="true"></i>
-                                <span class="btn-text">Add to Cart</span>
-                            </button>
-                            {% else %}
-                            <button class="add-to-cart-btn" disabled
-                                    aria-label="{{ product.name }} is out of stock">
-                                <i class="fas fa-ban me-1" aria-hidden="true"></i>
-                                Out of Stock
-                            </button>
-                            {% endif %}
-                        </div>
                     </div>
+                    {% endif %}
+
+                   <!-- Price -->
+                    <div class="temu-category-price-container">
+                        {% if product.original_price and product.original_price != product.price %}
+                            <!-- Original Price (crossed out) and Current Price -->
+                            <div class="d-flex align-items-center gap-2 mb-1">
+                                <span class="temu-category-current-price">D{{ product.price }}</span>
+                                <span class="temu-category-original-price">D{{ product.original_price }}</span>
+                            </div>
+                            <span class="temu-category-save-badge">Save D{{ product.amount_saved|floatformat:2 }}</span>
+                        {% else %}
+                            <!-- Current Price Only -->
+                            <span class="temu-category-current-price">D{{ product.price }}</span>
+                        {% endif %}
+                    </div>
+
+                    <!-- Condition -->
+                    <div class="temu-category-condition">
+                        <i class="fas {% if product.used %}fa-recycle text-secondary{% else %}fa-certificate text-success{% endif %}" aria-hidden="true"></i>
+                        <span class="temu-category-condition-badge {% if product.used %}bg-secondary text-white{% else %}bg-success text-white{% endif %}">
+                            {% if product.used %}Used - Inspected{% else %}Brand New{% endif %}
+                        </span>
+                    </div>
+
+                    <!-- Stock Status -->
+                    {% if product.stock.quantity %}
+                    <div class="temu-category-stock-status">
+                        {% if product.stock.quantity <= 5 %}
+                        <span class="text-warning">
+                            <i class="fas fa-exclamation-triangle me-1" aria-hidden="true"></i>
+                            Only {{ product.stock.quantity }} left!
+                        </span>
+                        {% elif product.stock.quantity <= 10 %}
+                        <span class="text-info">{{ product.stock.quantity }} in stock</span>
+                        {% else %}
+                        <span class="text-success">In stock</span>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
+                    <!-- Add to Cart Button -->
+                    {% if product.is_in_stock %}
+                    <button class="temu-category-add-to-cart"
+                            onclick="addToCart({{ product.id }}, this)"
+                            data-product-id="{{ product.id }}"
+                            data-stock="{{ product.stock.quantity|default:0 }}"
+                            aria-label="Add {{ product.name }} to cart">
+                        <i class="fas fa-cart-plus me-1" aria-hidden="true"></i>
+                        <span class="btn-text">Add to Cart</span>
+                    </button>
+                    {% else %}
+                    <button class="temu-category-add-to-cart" disabled
+                            aria-label="{{ product.name }} is out of stock">
+                        <i class="fas fa-ban me-1" aria-hidden="true"></i>
+                        Out of Stock
+                    </button>
+                    {% endif %}
                 </div>
             </div>
             {% endfor %}
@@ -470,60 +892,56 @@
         </div>
         {% endif %}
 
-        <!-- Related Categories -->
+        <!-- Related Categories - Temu Style -->
         {% if related_categories %}
         <div class="mt-5">
             <h5 class="section-title">
                 <i class="fas fa-layer-group me-2" aria-hidden="true"></i>You might also like
             </h5>
-            <div class="row" style="--bs-gutter-x: 0.25rem; --bs-gutter-y: 0.25rem;">
+            <div class="temu-related-categories-grid">
                 {% for related_category in related_categories %}
-                <div class="col-6 col-md-4 col-lg-3">
-                    <a href="{% url 'marketplace:category_detail' related_category.id %}"
-                       class="text-decoration-none"
-                       title="Browse {{ related_category.name }} products">
-                        <div class="category-card hover-shadow">
-                            <div class="category-icon">
-                                <i class="fas fa-{{ related_category.icon|default:'tag' }}" aria-hidden="true"></i>
-                            </div>
-                            <h6 class="mb-1">{{ related_category.name }}</h6>
-                            {% if related_category.product_count %}
-                            <small class="text-muted">{{ related_category.product_count }} products</small>
-                            {% endif %}
+                <a href="{% url 'marketplace:category_detail' related_category.id %}" class="text-decoration-none">
+                    <div class="temu-related-category-item">
+                        <div class="temu-subcategory-icon">
+                            <i class="fas fa-{{ related_category.icon|default:'tag' }}" aria-hidden="true"></i>
                         </div>
-                    </a>
-                </div>
+                        <h6 class="mb-1">{{ related_category.name }}</h6>
+                        {% if related_category.product_count %}
+                        <small class="text-muted">{{ related_category.product_count }} products</small>
+                        {% endif %}
+                    </div>
+                </a>
                 {% endfor %}
             </div>
         </div>
         {% endif %}
 
-        <!-- Recently Viewed Products -->
+        <!-- Recently Viewed Products - Temu Style -->
         {% if recently_viewed %}
         <div class="mt-5">
             <h5 class="section-title">
                 <i class="fas fa-history me-2" aria-hidden="true"></i>Recently Viewed
             </h5>
-            <div class="row g-2">
+            <div class="temu-recently-viewed-grid">
                 {% for product in recently_viewed %}
-                <div class="col-6 col-md-3 col-lg-2">
-                    <div class="product-card-small">
-                        <a href="{% url 'marketplace:product_detail' product.id %}">
-                            {% if product.image %}
-                            <img src="{{ product.image.url }}"
-                                 class="product-image-small"
-                                 alt="{{ product.name }}"
-                                 loading="lazy">
-                            {% else %}
-                            <div class="product-image-small bg-light d-flex align-items-center justify-content-center">
-                                <i class="fas fa-image text-muted" aria-hidden="true"></i>
-                            </div>
-                            {% endif %}
-                        </a>
-                        <div class="p-2">
-                            <h6 class="small mb-1">{{ product.name|truncatechars:25 }}</h6>
-                            <div class="text-primary fw-bold">D{{ product.price }}</div>
-                        </div>
+                <div class="temu-recently-viewed-item" onclick="window.location.href='{% url 'marketplace:product_detail' product.id %}'">
+                    {% if product.image %}
+                    <img src="{{ product.image.url }}"
+                         class="temu-recently-viewed-image"
+                         alt="{{ product.name }}"
+                         loading="lazy"
+                         onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                    <div class="temu-recently-viewed-image d-none" style="background: #f8f9fa; display: flex; align-items: center; justify-content: center; color: #999;">
+                        <i class="fas fa-image"></i>
+                    </div>
+                    {% else %}
+                    <div class="temu-recently-viewed-image" style="background: #f8f9fa; display: flex; align-items: center; justify-content: center; color: #999;">
+                        <i class="fas fa-image"></i>
+                    </div>
+                    {% endif %}
+                    <div class="p-2">
+                        <h6 class="small mb-1">{{ product.name|truncatechars:25 }}</h6>
+                        <div class="text-danger fw-bold">D{{ product.price }}</div>
                     </div>
                 </div>
                 {% endfor %}
@@ -536,12 +954,67 @@
 <script src="{% static 'js/main.js' %}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    // Enhanced add to cart functionality with Temu-style animations
+    document.querySelectorAll('.temu-category-add-to-cart').forEach(button => {
+        button.addEventListener('click', function(e) {
+            if (this.disabled) return;
+
+            const originalText = this.innerHTML;
+            this.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Adding...';
+            this.disabled = true;
+
+            // Simulate loading (your actual addToCart function will handle this)
+            setTimeout(() => {
+                this.innerHTML = '<i class="fas fa-check me-1"></i> Added!';
+                this.style.background = 'var(--temu-green)';
+
+                // Add bounce animation to the product card
+                const productCard = this.closest('.temu-category-product-card');
+                productCard.style.transform = 'scale(1.05)';
+                setTimeout(() => {
+                    productCard.style.transform = '';
+                }, 200);
+
+                setTimeout(() => {
+                    this.innerHTML = originalText;
+                    this.style.background = '';
+                    this.disabled = false;
+                }, 1500);
+            }, 800);
+        });
+    });
+
     // Scroll to top button
     const scrollToTopBtn = document.createElement('button');
     scrollToTopBtn.innerHTML = '<i class="fas fa-arrow-up"></i>';
     scrollToTopBtn.className = 'scroll-to-top d-none';
+    scrollToTopBtn.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 1000;
+        background: var(--temu-orange);
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        cursor: pointer;
+        box-shadow: 0 4px 12px rgba(255, 107, 53, 0.3);
+        transition: all 0.3s ease;
+    `;
     scrollToTopBtn.setAttribute('aria-label', 'Scroll to top');
     document.body.appendChild(scrollToTopBtn);
+
+    scrollToTopBtn.addEventListener('mouseenter', function() {
+        this.style.transform = 'scale(1.1)';
+        this.style.boxShadow = '0 6px 20px rgba(255, 107, 53, 0.4)';
+    });
+
+    scrollToTopBtn.addEventListener('mouseleave', function() {
+        this.style.transform = 'scale(1)';
+        this.style.boxShadow = '0 4px 12px rgba(255, 107, 53, 0.3)';
+    });
 
     window.addEventListener('scroll', function () {
         if (window.scrollY > 300) {
@@ -578,7 +1051,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // Enhanced product card interactions
-    document.querySelectorAll('.product-card').forEach(card => {
+    document.querySelectorAll('.temu-category-product-card').forEach(card => {
         card.addEventListener('mouseenter', () => {
             card.style.willChange = 'transform, box-shadow';
         });

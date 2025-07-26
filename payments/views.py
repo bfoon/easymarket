@@ -102,6 +102,18 @@ def process_payment(request, order_id):
             if payment_method not in dict(Payment.PAYMENT_METHOD_CHOICES):
                 return JsonResponse({'success': False, 'error': 'Invalid payment method'})
 
+            # Cash on Delivery logic
+            if payment_method == 'cash':
+                order_total = order.get_total
+                if order_total > 500:
+                    stores = order.items.select_related('product__store').values_list(
+                        'product__store__accept_cash_risk', flat=True).distinct()
+                    if not all(stores):
+                        return JsonResponse({
+                            'success': False,
+                            'error': 'Cash on Delivery is not allowed for orders above 500 unless all stores accept the risk.'
+                        })
+
             # Extra card validation if needed
             if payment_method == 'verve_card':
                 card_validation = validate_card_details(data)

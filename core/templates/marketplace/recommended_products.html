@@ -5,169 +5,751 @@
 {% block content %}
 <link rel="stylesheet" href="{% static 'css/main.css' %}">
 
-<!-- Recommended for You Section -->
-<div class="recommended-section py-4">
+<style>
+/* Temu/Alibaba Style Enhancements for Recommendations Page */
+:root {
+    --temu-orange: #ff6b35;
+    --temu-red: #ff4757;
+    --temu-yellow: #ffc048;
+    --temu-green: #2ed573;
+    --temu-blue: #3742fa;
+    --temu-purple: #5f27cd;
+}
+
+/* Recommended Section Enhancement */
+.temu-recommended-section {
+    background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+    padding: 2rem 0;
+    min-height: 100vh;
+}
+
+.temu-section-header {
+    background: white;
+    border-radius: 20px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 6px 25px rgba(0,0,0,0.08);
+    border: 1px solid #e9ecef;
+    position: relative;
+    overflow: hidden;
+}
+
+.temu-section-header::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, var(--temu-orange), var(--temu-red), var(--temu-yellow));
+}
+
+.temu-section-title {
+    font-size: 2rem;
+    font-weight: 800;
+    color: #2c2c54;
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.temu-section-icon {
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(45deg, var(--temu-orange), var(--temu-red));
+    border-radius: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.8rem;
+    color: white;
+    box-shadow: 0 4px 15px rgba(255, 107, 53, 0.3);
+}
+
+.temu-section-subtitle {
+    color: #666;
+    font-size: 1rem;
+    margin: 0;
+}
+
+.temu-view-all-btn {
+    background: linear-gradient(45deg, var(--temu-blue), #4834d4);
+    color: white;
+    border: none;
+    border-radius: 25px;
+    padding: 12px 24px;
+    font-weight: 700;
+    text-decoration: none;
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.temu-view-all-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(72, 52, 212, 0.4);
+    color: white;
+}
+
+/* Product Container Enhancement */
+.temu-products-wrapper {
+    background: white;
+    border-radius: 20px;
+    padding: 2rem;
+    box-shadow: 0 6px 25px rgba(0,0,0,0.08);
+    border: 1px solid #e9ecef;
+    position: relative;
+}
+
+.temu-products-container {
+    display: flex;
+    overflow-x: auto;
+    gap: 1.5rem;
+    padding: 1rem 0;
+    scroll-behavior: smooth;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.temu-products-container::-webkit-scrollbar {
+    display: none;
+}
+
+/* Scroll Buttons Enhancement */
+.temu-scroll-btn {
+    background: white;
+    border: 2px solid var(--temu-orange);
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+    transition: all 0.3s ease;
+    cursor: pointer;
+    z-index: 10;
+    color: var(--temu-orange);
+    font-size: 1.1rem;
+}
+
+.temu-scroll-btn:hover {
+    background: var(--temu-orange);
+    color: white;
+    transform: scale(1.15);
+    box-shadow: 0 8px 25px rgba(255, 107, 53, 0.4);
+}
+
+.temu-scroll-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Product Cards - Dense Temu Style */
+.temu-product-item {
+    flex: 0 0 240px;
+    position: relative;
+}
+
+.temu-product-card {
+    background: white;
+    border-radius: 15px;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+    transition: all 0.3s ease;
+    border: 1px solid #e9ecef;
+    cursor: pointer;
+    position: relative;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.temu-product-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 12px 35px rgba(0,0,0,0.15);
+    border-color: var(--temu-orange);
+}
+
+.temu-product-image-container {
+    position: relative;
+    width: 100%;
+    height: 200px;
+    overflow: hidden;
+}
+
+.temu-product-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+
+.temu-product-card:hover .temu-product-image {
+    transform: scale(1.08);
+}
+
+/* Enhanced Badges */
+.temu-product-badges {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.temu-badge-discount {
+    background: linear-gradient(45deg, #ff4757, #ff3742);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    box-shadow: 0 4px 15px rgba(255, 71, 87, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.temu-badge-bestseller {
+    background: linear-gradient(45deg, var(--temu-yellow), #ffa726);
+    color: #2c2c54;
+    padding: 4px 10px;
+    border-radius: 15px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    box-shadow: 0 4px 15px rgba(255, 192, 72, 0.4);
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.temu-badge-recommended {
+    background: linear-gradient(45deg, var(--temu-green), #26de81);
+    color: white;
+    padding: 4px 10px;
+    border-radius: 15px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    box-shadow: 0 4px 15px rgba(46, 213, 115, 0.4);
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.temu-badge-views {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: rgba(0, 0, 0, 0.6);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    backdrop-filter: blur(5px);
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+/* Quick Actions Enhancement */
+.temu-quick-actions {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: 3;
+}
+
+.temu-product-card:hover .temu-quick-actions {
+    opacity: 1;
+}
+
+.temu-quick-btn {
+    background: rgba(255, 255, 255, 0.95);
+    border: none;
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    color: #2c2c54;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.temu-quick-btn:hover {
+    background: var(--temu-orange);
+    color: white;
+    transform: scale(1.1);
+}
+
+.temu-quick-btn.wishlist-active {
+    background: var(--temu-red);
+    color: white;
+}
+
+/* Quick Add Overlay */
+.temu-quick-add-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+    padding: 1rem;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.temu-product-card:hover .temu-quick-add-overlay {
+    opacity: 1;
+}
+
+.temu-quick-add-btn {
+    background: linear-gradient(45deg, var(--temu-orange), var(--temu-red));
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 8px 16px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    width: 100%;
+    transition: all 0.3s ease;
+}
+
+.temu-quick-add-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(255, 107, 53, 0.4);
+}
+
+/* Product Content Enhancement */
+.temu-product-content {
+    padding: 1.25rem;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.temu-product-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #2c2c54;
+    margin-bottom: 0.75rem;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    min-height: 2.6em;
+}
+
+.temu-product-title a {
+    color: inherit;
+    text-decoration: none;
+    transition: color 0.3s ease;
+}
+
+.temu-product-title a:hover {
+    color: var(--temu-orange);
+}
+
+.temu-product-rating {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 0.75rem;
+}
+
+.temu-rating-stars {
+    color: var(--temu-yellow);
+    font-size: 0.9rem;
+}
+
+.temu-rating-count {
+    color: #666;
+    font-size: 0.8rem;
+}
+
+.temu-product-views {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #666;
+    font-size: 0.8rem;
+    margin-bottom: 0.75rem;
+}
+
+.temu-product-pricing {
+    margin-bottom: 0.75rem;
+}
+
+.temu-current-price {
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: var(--temu-red);
+    display: block;
+    margin-bottom: 0.25rem;
+}
+
+.temu-original-price {
+    font-size: 0.9rem;
+    color: #999;
+    text-decoration: line-through;
+    margin-right: 0.5rem;
+}
+
+.temu-savings {
+    color: var(--temu-green);
+    font-size: 0.8rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.temu-product-features {
+    margin-top: auto;
+}
+
+.temu-feature-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8rem;
+    margin-bottom: 0.5rem;
+}
+
+.temu-feature-item:last-child {
+    margin-bottom: 0;
+}
+
+.temu-feature-shipping {
+    color: var(--temu-green);
+}
+
+.temu-feature-match {
+    color: var(--temu-blue);
+}
+
+/* Empty State Enhancement */
+.temu-empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    background: #f8f9fa;
+    border-radius: 20px;
+    margin: 2rem 0;
+    border: 2px dashed #ddd;
+}
+
+.temu-empty-icon {
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(45deg, var(--temu-orange), var(--temu-red));
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    color: white;
+    margin: 0 auto 1.5rem;
+    box-shadow: 0 8px 25px rgba(255, 107, 53, 0.3);
+}
+
+.temu-empty-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #2c2c54;
+    margin-bottom: 1rem;
+}
+
+.temu-empty-description {
+    color: #666;
+    font-size: 1rem;
+    margin-bottom: 2rem;
+    line-height: 1.5;
+}
+
+.temu-empty-btn {
+    background: linear-gradient(45deg, var(--temu-orange), var(--temu-red));
+    color: white;
+    border: none;
+    border-radius: 25px;
+    padding: 12px 24px;
+    font-weight: 700;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.temu-empty-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(255, 107, 53, 0.4);
+    color: white;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .temu-product-item {
+        flex: 0 0 200px;
+    }
+
+    .temu-product-image-container {
+        height: 160px;
+    }
+
+    .temu-section-title {
+        font-size: 1.6rem;
+    }
+
+    .temu-section-icon {
+        width: 50px;
+        height: 50px;
+        font-size: 1.5rem;
+    }
+
+    .temu-scroll-btn {
+        width: 40px;
+        height: 40px;
+        font-size: 1rem;
+    }
+}
+
+@media (max-width: 576px) {
+    .temu-product-item {
+        flex: 0 0 180px;
+    }
+
+    .temu-product-image-container {
+        height: 140px;
+    }
+
+    .temu-product-content {
+        padding: 1rem;
+    }
+
+    .temu-section-header {
+        padding: 1.5rem;
+    }
+
+    .temu-products-wrapper {
+        padding: 1.5rem;
+    }
+}
+
+/* Loading Animation */
+@keyframes temu-pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+.temu-loading {
+    animation: temu-pulse 1.5s ease-in-out infinite;
+}
+</style>
+
+<!-- Enhanced Recommended for You Section -->
+<div class="temu-recommended-section">
     <div class="container-fluid">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <div>
-                <h3 class="fw-bold mb-1">Recommended for You</h3>
-                <p class="text-muted mb-0">Handpicked items based on your preferences</p>
+        <div class="temu-section-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center">
+                    <div class="temu-section-icon">
+                        <i class="fas fa-sparkles"></i>
+                    </div>
+                    <div>
+                        <h3 class="temu-section-title">Recommended for You</h3>
+                        <p class="temu-section-subtitle">Handpicked items based on your preferences</p>
+                    </div>
+                </div>
+                <a href="{% url 'marketplace:product_list' %}" class="temu-view-all-btn">
+                    View All <i class="fas fa-arrow-right"></i>
+                </a>
             </div>
-            <a href="{% url 'marketplace:product_list' %}" class="btn btn-outline-primary btn-sm">
-                View All <i class="fas fa-arrow-right ms-1"></i>
-            </a>
         </div>
 
-        <div class="position-relative">
-            <button class="btn btn-light position-absolute top-50 start-0 translate-middle-y shadow-sm z-3 d-none d-md-block"
-                    style="width: 40px; height: 40px; border-radius: 50%;"
-                    onclick="scrollProducts('left')"
-                    id="scrollLeftBtn">
-                <i class="fas fa-chevron-left"></i>
-            </button>
-            <button class="btn btn-light position-absolute top-50 end-0 translate-middle-y shadow-sm z-3 d-none d-md-block"
-                    style="width: 40px; height: 40px; border-radius: 50%;"
-                    onclick="scrollProducts('right')"
-                    id="scrollRightBtn">
-                <i class="fas fa-chevron-right"></i>
-            </button>
+        <div class="temu-products-wrapper">
+            <div class="position-relative">
+                <button class="temu-scroll-btn position-absolute top-50 start-0 translate-middle-y d-none d-md-flex"
+                        style="margin-left: -30px; z-index: 10;"
+                        onclick="scrollProducts('left')"
+                        id="scrollLeftBtn">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <button class="temu-scroll-btn position-absolute top-50 end-0 translate-middle-y d-none d-md-flex"
+                        style="margin-right: -30px; z-index: 10;"
+                        onclick="scrollProducts('right')"
+                        id="scrollRightBtn">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
 
-            <div class="products-container d-flex overflow-auto pb-3 gap-4" id="recommendedProductsContainer"
-                 style="scroll-behavior: smooth; scrollbar-width: none; -ms-overflow-style: none;">
-
-                {% for product in recommended_products %}
-                <div class="product-item flex-shrink-0" style="width: 220px;">
-                    <div class="card product-card h-100 border-0 shadow-sm hover-lift transition-all" style="border-radius: 15px; overflow: hidden;">
-
-                        <!-- Product Image -->
-                        <div class="position-relative overflow-hidden">
-                            <a href="{% url 'marketplace:product_detail' product.id %}" class="d-block">
-                                <img src="{{ product.image.url }}" class="product-image img-fluid w-100 hover-zoom transition-transform" alt="{{ product.name }}" style="height: 180px; object-fit: cover;">
-                            </a>
-
-                            <!-- Badges -->
-                            <div class="position-absolute top-0 start-0 p-2">
-                                {% if product.discount_percentage %}
-                                <span class="badge bg-danger shadow-sm">-{{ product.discount_percentage }}%</span>
-                                {% endif %}
-                                {% if product.is_trending %}
-                                <span class="badge bg-warning text-dark shadow-sm mt-1">Best Seller</span>
-                                {% endif %}
-                                {% if product.is_recommended %}
-                                <span class="badge bg-success shadow-sm mt-1">
-                                    <i class="fas fa-star me-1"></i>Recommended
-                                </span>
-                                {% endif %}
-                            </div>
-
-                            <!-- Optional: Views Badge -->
-                            {% if product.view_count %}
-                            <div class="position-absolute top-0 end-0 p-2">
-                                <span class="badge bg-secondary shadow-sm small">
-                                    <i class="fas fa-eye me-1"></i>{{ product.view_count }}
-                                </span>
-                            </div>
-                            {% endif %}
-
-                            <!-- Quick Actions -->
-                            <div class="position-absolute top-0 end-0 p-2">
-                                <button class="btn btn-light btn-sm rounded-circle shadow-sm opacity-75 hover-opacity-100 mb-1"
-                                        onclick="toggleWishlist({{ product.id }})"
-                                        title="Add to Wishlist"
-                                        id="wishlistBtn-{{ product.id }}">
-                                    <i class="fas fa-heart"></i>
-                                </button>
-                                <button class="btn btn-light btn-sm rounded-circle shadow-sm opacity-75 hover-opacity-100"
-                                        title="Quick View"
-                                        onclick="quickView({{ product.id }}, '{{ product.name }}', '{{ product.image.url }}', '{{ product.description|default:"No description available" }}', '{{ product.price }}')">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                            </div>
-
-                            <!-- Quick Add to Cart -->
-                            <div class="position-absolute bottom-0 start-0 end-0 p-2 bg-gradient-to-t from-dark to-transparent opacity-0 hover-opacity-100 transition-opacity">
-                                <button class="btn btn-primary btn-sm w-100" onclick="addToCart({{ product.id }})">
-                                    <i class="fas fa-shopping-cart me-1"></i> Quick Add
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Product Details -->
-                        <div class="card-body p-3">
-                            <h6 class="card-title mb-2 lh-sm" style="font-size: 0.9rem; min-height: 2.5rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
-                                <a href="{% url 'marketplace:product_detail' product.id %}" class="text-decoration-none text-dark hover-text-primary">
-                                    {{ product.name }}
-                                </a>
-                            </h6>
-
-                            <!-- Rating -->
-                            <div class="d-flex align-items-center mb-2">
-                                <div class="rating-stars text-warning small me-1">
-                                    {% for i in "12345" %}
-                                        {% if product.average_rating|floatformat:1 >= i %}
-                                            <i class="fas fa-star"></i>
-                                        {% elif product.average_rating|floatformat:1 >= i|add:"-0.5" %}
-                                            <i class="fas fa-star-half-alt"></i>
-                                        {% else %}
-                                            <i class="far fa-star"></i>
-                                        {% endif %}
-                                    {% endfor %}
+                <div class="temu-products-container" id="recommendedProductsContainer">
+                    {% for product in recommended_products %}
+                    <div class="temu-product-item">
+                        <div class="temu-product-card" onclick="window.location.href='{% url 'marketplace:product_detail' product.id %}'">
+                            <!-- Product Image -->
+                            <div class="temu-product-image-container">
+                                {% if product.image %}
+                                <img src="{{ product.image.url }}"
+                                     class="temu-product-image"
+                                     alt="{{ product.name }}"
+                                     loading="lazy"
+                                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                <div class="temu-product-image d-none" style="background: #f8f9fa; display: flex; align-items: center; justify-content: center; color: #999; flex-direction: column;">
+                                    <i class="fas fa-image fa-2x"></i>
+                                    <small>No image</small>
                                 </div>
-                                <small class="text-muted">({{ product.reviews.count }})</small>
-                            </div>
+                                {% else %}
+                                <div class="temu-product-image" style="background: #f8f9fa; display: flex; align-items: center; justify-content: center; color: #999; flex-direction: column;">
+                                    <i class="fas fa-image fa-2x"></i>
+                                    <small>No image</small>
+                                </div>
+                                {% endif %}
 
-                            <!-- Views -->
-                            {% if product.view_count %}
-                            <div class="d-flex align-items-center text-muted small mb-2">
-                                <i class="fas fa-eye me-2"></i> {{ product.view_count }} views
-                            </div>
-                            {% endif %}
-
-                            <!-- Pricing -->
-                            {% if product.price %}
-                            <div class="pricing mb-2">
-                                <div class="d-flex align-items-baseline gap-2">
-                                    <span class="h6 fw-bold text-danger mb-0">D{{ product.price }}</span>
-                                    {% if product.original_price %}
-                                    <small class="text-muted text-decoration-line-through">D{{ product.original_price }}</small>
+                                <!-- Badges -->
+                                <div class="temu-product-badges">
+                                    {% if product.discount_percentage %}
+                                    <span class="temu-badge-discount">-{{ product.discount_percentage }}%</span>
+                                    {% endif %}
+                                    {% if product.is_trending %}
+                                    <span class="temu-badge-bestseller">
+                                        <i class="fas fa-fire"></i>Best Seller
+                                    </span>
+                                    {% endif %}
+                                    {% if product.is_recommended %}
+                                    <span class="temu-badge-recommended">
+                                        <i class="fas fa-star"></i>Recommended
+                                    </span>
                                     {% endif %}
                                 </div>
-                                {% if product.discount %}
-                                <small class="text-success fw-medium">Save D{{ product.discount }}</small>
-                                {% endif %}
-                            </div>
-                            {% endif %}
 
-                            <!-- Features -->
-                            <div class="product-features">
-                                {% if product.free_shipping %}
-                                <div class="d-flex align-items-center text-success small mb-1">
-                                    <i class="fas fa-shipping-fast me-2"></i>
-                                    <span>Free delivery</span>
+                                <!-- Views Badge -->
+                                {% if product.view_count %}
+                                <div class="temu-badge-views">
+                                    <i class="fas fa-eye"></i>{{ product.view_count }}
                                 </div>
                                 {% endif %}
-                                {% if product.match_percentage %}
-                                <div class="d-flex align-items-center text-primary small mb-1">
-                                    <i class="fas fa-check-circle me-2"></i>
-                                    <span>{{ product.match_percentage }}% match</span>
+
+                                <!-- Quick Actions -->
+                                <div class="temu-quick-actions">
+                                    <button class="temu-quick-btn"
+                                            onclick="event.stopPropagation(); toggleWishlist({{ product.id }})"
+                                            title="Add to Wishlist"
+                                            id="wishlistBtn-{{ product.id }}">
+                                        <i class="fas fa-heart"></i>
+                                    </button>
+                                    <button class="temu-quick-btn"
+                                            title="Quick View"
+                                            onclick="event.stopPropagation(); quickView({{ product.id }}, '{{ product.name }}', '{{ product.image.url }}', '{{ product.description|default:"No description available" }}', '{{ product.price }}')">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+
+                                <!-- Quick Add to Cart -->
+                                <div class="temu-quick-add-overlay">
+                                    <button class="temu-quick-add-btn" onclick="event.stopPropagation(); addToCart({{ product.id }})">
+                                        <i class="fas fa-shopping-cart me-1"></i> Quick Add
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Product Details -->
+                            <div class="temu-product-content">
+                                <h6 class="temu-product-title">
+                                    <a href="{% url 'marketplace:product_detail' product.id %}">
+                                        {{ product.name }}
+                                    </a>
+                                </h6>
+
+                                <!-- Rating -->
+                                <div class="temu-product-rating">
+                                    <div class="temu-rating-stars">
+                                        {% for i in "12345" %}
+                                            {% if product.average_rating|floatformat:1 >= i %}
+                                                <i class="fas fa-star"></i>
+                                            {% elif product.average_rating|floatformat:1 >= i|add:"-0.5" %}
+                                                <i class="fas fa-star-half-alt"></i>
+                                            {% else %}
+                                                <i class="far fa-star"></i>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </div>
+                                    <span class="temu-rating-count">({{ product.reviews.count }})</span>
+                                </div>
+
+                                <!-- Views -->
+                                {% if product.view_count %}
+                                <div class="temu-product-views">
+                                    <i class="fas fa-eye"></i> {{ product.view_count }} views
                                 </div>
                                 {% endif %}
+
+                                <!-- Pricing -->
+                                {% if product.price %}
+                                <div class="temu-product-pricing">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="temu-current-price">D{{ product.price }}</span>
+                                        {% if product.original_price %}
+                                        <span class="temu-original-price">D{{ product.original_price }}</span>
+                                        {% endif %}
+                                    </div>
+                                    {% if product.discount %}
+                                    <div class="temu-savings">
+                                        <i class="fas fa-tag"></i>Save D{{ product.discount }}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+
+                                <!-- Features -->
+                                <div class="temu-product-features">
+                                    {% if product.free_shipping %}
+                                    <div class="temu-feature-item temu-feature-shipping">
+                                        <i class="fas fa-shipping-fast"></i>
+                                        <span>Free delivery</span>
+                                    </div>
+                                    {% endif %}
+                                    {% if product.match_percentage %}
+                                    <div class="temu-feature-item temu-feature-match">
+                                        <i class="fas fa-check-circle"></i>
+                                        <span>{{ product.match_percentage }}% match</span>
+                                    </div>
+                                    {% endif %}
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-                {% empty %}
-                <div class="text-center py-5 w-100">
-                    <div class="mb-3">
-                        <i class="fas fa-heart text-muted" style="font-size: 3rem;"></i>
+                    {% empty %}
+                    <div class="temu-empty-state w-100">
+                        <div class="temu-empty-icon">
+                            <i class="fas fa-heart"></i>
+                        </div>
+                        <h5 class="temu-empty-title">No recommendations yet</h5>
+                        <p class="temu-empty-description">Browse more products to get personalized recommendations tailored just for you!</p>
+                        <a href="{% url 'marketplace:product_list' %}" class="temu-empty-btn">
+                            <i class="fas fa-search"></i>Explore Products
+                        </a>
                     </div>
-                    <h5 class="text-muted mb-2">No recommendations yet</h5>
-                    <p class="text-muted mb-3">Browse more products to get personalized recommendations</p>
-                    <a href="{% url 'marketplace:product_list' %}" class="btn btn-primary">
-                        <i class="fas fa-search me-2"></i>Explore Products
-                    </a>
+                    {% endfor %}
                 </div>
-                {% endfor %}
             </div>
         </div>
     </div>
@@ -175,11 +757,12 @@
 
 <script src="{% static 'js/main.js' %}"></script>
 
-<!-- JavaScript for Scrolling -->
+<!-- Enhanced JavaScript for Scrolling and Interactions -->
 <script>
+// Enhanced scroll functionality with Temu-style animations
 function scrollProducts(direction) {
     const container = document.getElementById('recommendedProductsContainer');
-    const scrollAmount = 240;
+    const scrollAmount = 260; // Adjusted for new card width
 
     if (direction === 'left') {
         container.scrollLeft -= scrollAmount;
@@ -194,15 +777,219 @@ document.addEventListener('DOMContentLoaded', function() {
     const rightBtn = document.getElementById('scrollRightBtn');
 
     if (container && leftBtn && rightBtn) {
+        // Enhanced scroll button management
         function updateScrollButtons() {
-            leftBtn.style.display = container.scrollLeft > 0 ? 'block' : 'none';
-            rightBtn.style.display =
-                container.scrollLeft < (container.scrollWidth - container.clientWidth) ? 'block' : 'none';
+            const isAtStart = container.scrollLeft <= 0;
+            const isAtEnd = container.scrollLeft >= (container.scrollWidth - container.clientWidth - 10);
+
+            leftBtn.style.opacity = isAtStart ? '0.3' : '1';
+            leftBtn.disabled = isAtStart;
+
+            rightBtn.style.opacity = isAtEnd ? '0.3' : '1';
+            rightBtn.disabled = isAtEnd;
+
+            // Show/hide buttons based on content overflow
+            const hasOverflow = container.scrollWidth > container.clientWidth;
+            leftBtn.style.display = hasOverflow ? 'flex' : 'none';
+            rightBtn.style.display = hasOverflow ? 'flex' : 'none';
         }
 
         container.addEventListener('scroll', updateScrollButtons);
+        window.addEventListener('resize', updateScrollButtons);
         updateScrollButtons();
+
+        // Add hover effects to scroll buttons
+        [leftBtn, rightBtn].forEach(btn => {
+            btn.addEventListener('mouseenter', function() {
+                if (!this.disabled) {
+                    this.style.transform = 'scale(1.15)';
+                }
+            });
+
+            btn.addEventListener('mouseleave', function() {
+                this.style.transform = this.disabled ? 'scale(1)' : 'scale(1)';
+            });
+        });
     }
+
+    // Enhanced wishlist toggle functionality
+    window.toggleWishlist = function(productId) {
+        const button = document.getElementById(`wishlistBtn-${productId}`);
+        if (!button) return;
+
+        const icon = button.querySelector('i');
+        const isActive = button.classList.contains('wishlist-active');
+
+        if (isActive) {
+            button.classList.remove('wishlist-active');
+            icon.className = 'fas fa-heart';
+            showToast('Removed from wishlist', 'info');
+        } else {
+            button.classList.add('wishlist-active');
+            icon.className = 'fas fa-heart';
+            showToast('Added to wishlist!', 'success');
+        }
+
+        // Add animation
+        button.style.transform = 'scale(1.2)';
+        setTimeout(() => {
+            button.style.transform = 'scale(1)';
+        }, 200);
+    };
+
+    // Enhanced add to cart functionality
+    window.addToCart = function(productId) {
+        const buttons = document.querySelectorAll(`[onclick*="addToCart(${productId})"]`);
+
+        buttons.forEach(button => {
+            const originalText = button.innerHTML;
+            button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Adding...';
+            button.disabled = true;
+
+            // Find the product card
+            const productCard = button.closest('.temu-product-card');
+            if (productCard) {
+                productCard.style.transform = 'translateY(-8px) scale(1.02)';
+                productCard.style.boxShadow = '0 15px 40px rgba(46, 213, 115, 0.3)';
+            }
+
+            // Simulate API call
+            setTimeout(() => {
+                button.innerHTML = '<i class="fas fa-check me-1"></i> Added!';
+                button.style.background = 'var(--temu-green)';
+                showToast('Product added to cart!', 'success');
+
+                // Reset product card
+                if (productCard) {
+                    setTimeout(() => {
+                        productCard.style.transform = '';
+                        productCard.style.boxShadow = '';
+                    }, 300);
+                }
+
+                // Reset button
+                setTimeout(() => {
+                    button.innerHTML = originalText;
+                    button.style.background = '';
+                    button.disabled = false;
+                }, 2000);
+            }, 1000);
+        });
+    };
+
+    // Enhanced quick view functionality
+    window.quickView = function(productId, name, imageUrl, description, price) {
+        // Create quick view modal
+        const modal = document.createElement('div');
+        modal.className = 'modal fade';
+        modal.innerHTML = `
+            <div class="modal-dialog modal-lg modal-dialog-centered">
+                <div class="modal-content" style="border-radius: 20px; overflow: hidden;">
+                    <div class="modal-header" style="background: linear-gradient(45deg, var(--temu-orange), var(--temu-red)); color: white;">
+                        <h5 class="modal-title">Quick View</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <img src="${imageUrl}" class="img-fluid rounded" alt="${name}">
+                            </div>
+                            <div class="col-md-6">
+                                <h4>${name}</h4>
+                                <p class="text-muted">${description}</p>
+                                <h5 class="text-danger">D${price}</h5>
+                                <div class="d-flex gap-2 mt-3">
+                                    <button class="btn btn-primary" onclick="addToCart(${productId})">
+                                        <i class="fas fa-cart-plus me-1"></i> Add to Cart
+                                    </button>
+                                    <a href="/product/${productId}/" class="btn btn-outline-primary">
+                                        View Details
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        // Show modal using Bootstrap
+        if (typeof bootstrap !== 'undefined') {
+            const bsModal = new bootstrap.Modal(modal);
+            bsModal.show();
+
+            // Remove modal from DOM when hidden
+            modal.addEventListener('hidden.bs.modal', () => {
+                modal.remove();
+            });
+        }
+    };
+
+    // Enhanced toast notification system
+    window.showToast = function(message, type = 'info') {
+        // Remove existing toasts
+        const existingToasts = document.querySelectorAll('.temu-toast');
+        existingToasts.forEach(toast => toast.remove());
+
+        const toast = document.createElement('div');
+        toast.className = `temu-toast position-fixed`;
+        toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+
+        const bgColor = type === 'success' ? '#2ed573' : type === 'error' ? '#ff4757' : '#3742fa';
+        const icon = type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle';
+
+        toast.innerHTML = `
+            <div class="alert alert-dismissible" style="background: ${bgColor}; color: white; border: none; border-radius: 15px; box-shadow: 0 8px 25px rgba(0,0,0,0.2);">
+                <div class="d-flex align-items-center">
+                    <i class="fas fa-${icon} me-2"></i>
+                    <span>${message}</span>
+                    <button type="button" class="btn-close btn-close-white ms-auto" onclick="this.parentElement.parentElement.remove()"></button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(toast);
+
+        // Auto remove after 4 seconds
+        setTimeout(() => {
+            if (toast.parentElement) {
+                toast.style.transform = 'translateX(100%)';
+                setTimeout(() => toast.remove(), 300);
+            }
+        }, 4000);
+    };
+
+    // Enhanced product card animations
+    document.querySelectorAll('.temu-product-card').forEach(card => {
+        card.addEventListener('mouseenter', () => {
+            card.style.willChange = 'transform, box-shadow';
+        });
+
+        card.addEventListener('mouseleave', () => {
+            card.style.willChange = 'auto';
+        });
+    });
+
+    // Intersection Observer for lazy loading animations
+    const observer = new IntersectionObserver(entries => {
+        entries.forEach((entry, index) => {
+            if (entry.isIntersecting) {
+                setTimeout(() => {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }, index * 100); // Stagger animation
+            }
+        });
+    }, { threshold: 0.1 });
+
+    document.querySelectorAll('.temu-product-card').forEach(card => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(30px)';
+        card.style.transition = 'opacity 0.8s ease, transform 0.8s ease';
+        observer.observe(card);
+    });
 });
 </script>
 

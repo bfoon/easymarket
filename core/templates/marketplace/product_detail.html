@@ -49,8 +49,791 @@
 <link rel="stylesheet" href="{% static 'css/product_detail.css' %}">
 <link rel="stylesheet" href="{% static 'css/message.css' %}">
 
+<style>
+/* Temu/Alibaba Style Enhancements for Product Detail Page */
+:root {
+    --temu-orange: #ff6b35;
+    --temu-red: #ff4757;
+    --temu-yellow: #ffc048;
+    --temu-green: #2ed573;
+    --temu-blue: #3742fa;
+    --temu-purple: #5f27cd;
+}
+
+/* Enhanced Breadcrumb */
+.temu-breadcrumb {
+    background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+    border-bottom: 2px solid #e9ecef;
+    padding: 1rem 0;
+}
+
+.temu-breadcrumb .breadcrumb-item a {
+    color: var(--temu-blue);
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.3s ease;
+}
+
+.temu-breadcrumb .breadcrumb-item a:hover {
+    color: var(--temu-orange);
+}
+
+.temu-breadcrumb .breadcrumb-item.active {
+    color: #2c2c54;
+    font-weight: 600;
+}
+
+/* Product Gallery Enhancement */
+.temu-product-gallery {
+    background: white;
+    border-radius: 20px;
+    padding: 1.5rem;
+    box-shadow: 0 6px 25px rgba(0,0,0,0.08);
+    border: 1px solid #e9ecef;
+    position: sticky;
+    top: 20px;
+}
+
+.temu-main-image-container {
+    position: relative;
+    margin-bottom: 1rem;
+    border-radius: 15px;
+    overflow: hidden;
+}
+
+.temu-main-product-image {
+    width: 100%;
+    border-radius: 15px;
+    transition: transform 0.3s ease;
+}
+
+.temu-main-product-image:hover {
+    transform: scale(1.02);
+}
+
+.temu-zoom-indicator {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    background: rgba(0,0,0,0.7);
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    backdrop-filter: blur(5px);
+}
+
+.temu-thumbnail-gallery {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.temu-thumbnail-item {
+    border: 2px solid transparent;
+    border-radius: 10px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    width: 70px;
+    height: 70px;
+}
+
+.temu-thumbnail-item.active {
+    border-color: var(--temu-orange);
+    box-shadow: 0 0 10px rgba(255, 107, 53, 0.3);
+}
+
+.temu-thumbnail-item:hover {
+    border-color: var(--temu-blue);
+    transform: scale(1.05);
+}
+
+.temu-thumbnail-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Product Information Enhancement */
+.temu-product-info {
+    background: white;
+    border-radius: 20px;
+    padding: 2rem;
+    box-shadow: 0 6px 25px rgba(0,0,0,0.08);
+    border: 1px solid #e9ecef;
+}
+
+.temu-product-title {
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: #2c2c54;
+    margin-bottom: 1rem;
+    line-height: 1.3;
+}
+
+.temu-rating-section {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: #f8f9fa;
+    border-radius: 12px;
+}
+
+.temu-rating-stars {
+    color: var(--temu-yellow);
+    font-size: 1.1rem;
+}
+
+.temu-rating-text {
+    color: #666;
+    font-weight: 500;
+}
+
+.temu-price-section {
+    background: linear-gradient(135deg, #fff5f5 0%, #ffffff 100%);
+    border: 2px solid #ffe6e6;
+    border-radius: 15px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.temu-current-price {
+    font-size: 2.2rem;
+    font-weight: 900;
+    color: var(--temu-red);
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+.temu-original-price {
+    font-size: 1.2rem;
+    color: #999;
+    text-decoration: line-through;
+    margin-right: 1rem;
+}
+
+.temu-discount-badge {
+    background: linear-gradient(45deg, var(--temu-red), #ff3742);
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 0.9rem;
+    box-shadow: 0 4px 15px rgba(255, 71, 87, 0.3);
+}
+
+.temu-used-badge {
+    background: linear-gradient(45deg, var(--temu-purple), #4834d4);
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 0.9rem;
+    box-shadow: 0 4px 15px rgba(95, 39, 205, 0.3);
+}
+
+.temu-features-list {
+    background: #f8f9fa;
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.temu-features-list li {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.temu-features-list li:last-child {
+    border-bottom: none;
+}
+
+.temu-features-list i {
+    margin-right: 0.75rem;
+    font-size: 1.1rem;
+}
+
+/* Product Features/Variants */
+.temu-feature-group {
+    background: white;
+    border: 2px solid #e9ecef;
+    border-radius: 15px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.temu-feature-legend {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #2c2c54;
+    margin-bottom: 1rem;
+}
+
+.temu-feature-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.temu-feature-option {
+    border: 2px solid #e9ecef;
+    border-radius: 10px;
+    transition: all 0.3s ease;
+    overflow: hidden;
+}
+
+.temu-feature-option:hover {
+    border-color: var(--temu-orange);
+    transform: translateY(-2px);
+}
+
+.temu-feature-option input:checked + label {
+    background: var(--temu-blue);
+    color: white;
+    border-color: var(--temu-blue);
+}
+
+.temu-feature-option label {
+    padding: 0.75rem 1rem;
+    margin: 0;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Color Swatches */
+.temu-color-option {
+    position: relative;
+}
+
+.temu-color-swatch {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px #ddd;
+}
+
+/* Quantity Selector */
+.temu-quantity-selector {
+    background: white;
+    border: 2px solid #e9ecef;
+    border-radius: 12px;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.temu-quantity-input-group {
+    background: #f8f9fa;
+    border-radius: 10px;
+    overflow: hidden;
+    width: 140px;
+}
+
+.temu-quantity-btn {
+    background: var(--temu-blue);
+    color: white;
+    border: none;
+    padding: 0.75rem;
+    font-weight: 700;
+    transition: all 0.3s ease;
+}
+
+.temu-quantity-btn:hover {
+    background: var(--temu-orange);
+}
+
+.temu-quantity-input {
+    border: none;
+    background: white;
+    text-align: center;
+    font-weight: 600;
+    padding: 0.75rem;
+}
+
+/* Action Buttons */
+.temu-action-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.temu-btn-add-cart {
+    background: linear-gradient(45deg, var(--temu-orange), var(--temu-red));
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 1rem 2rem;
+    font-weight: 700;
+    font-size: 1.1rem;
+    flex: 1;
+    min-width: 200px;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.temu-btn-add-cart:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(255, 107, 53, 0.4);
+}
+
+.temu-btn-buy-now {
+    background: linear-gradient(45deg, var(--temu-yellow), #ffa726);
+    color: #2c2c54;
+    border: none;
+    border-radius: 12px;
+    padding: 1rem 2rem;
+    font-weight: 700;
+    font-size: 1.1rem;
+    flex: 1;
+    min-width: 200px;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.temu-btn-buy-now:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(255, 192, 72, 0.4);
+}
+
+.temu-btn-wishlist {
+    background: white;
+    border: 2px solid var(--temu-red);
+    color: var(--temu-red);
+    border-radius: 12px;
+    padding: 1rem;
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.temu-btn-wishlist:hover {
+    background: var(--temu-red);
+    color: white;
+    transform: scale(1.1);
+}
+
+/* Shipping Information */
+.temu-shipping-info {
+    background: linear-gradient(135deg, #e8f5e8 0%, #ffffff 100%);
+    border: 2px solid #d4edda;
+    border-radius: 15px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.temu-shipping-info h6 {
+    color: var(--temu-green);
+    font-weight: 700;
+    margin-bottom: 1rem;
+}
+
+/* Seller Information */
+.temu-seller-info {
+    background: white;
+    border: 2px solid #e9ecef;
+    border-radius: 15px;
+    padding: 1.5rem;
+    margin-top: 2rem;
+}
+
+.temu-seller-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.temu-seller-avatar {
+    width: 50px;
+    height: 50px;
+    background: var(--temu-blue);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+}
+
+.temu-seller-actions {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.temu-btn-visit-store {
+    background: linear-gradient(45deg, var(--temu-blue), #4834d4);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 0.75rem 1.5rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    text-decoration: none;
+}
+
+.temu-btn-visit-store:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(72, 52, 212, 0.4);
+    color: white;
+}
+
+.temu-btn-chat {
+    background: var(--temu-green);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 0.75rem 1.5rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.temu-btn-chat:hover {
+    background: #26de81;
+    transform: translateY(-2px);
+}
+
+/* Enhanced Chat Box */
+.temu-floating-chat {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 350px;
+    max-height: 500px;
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 15px 50px rgba(0,0,0,0.2);
+    border: 1px solid #e9ecef;
+    z-index: 1050;
+    overflow: hidden;
+}
+
+.temu-chat-header {
+    background: linear-gradient(45deg, var(--temu-green), #26de81);
+    color: white;
+    padding: 1rem;
+    display: flex;
+    justify-content: between;
+    align-items: center;
+}
+
+.temu-chat-body {
+    padding: 1rem;
+    height: 280px;
+    overflow-y: auto;
+    background: #f8f9fa;
+}
+
+.temu-chat-footer {
+    padding: 1rem;
+    background: white;
+    border-top: 1px solid #e9ecef;
+}
+
+/* Social Sharing */
+.temu-social-sharing {
+    background: white;
+    border-radius: 15px;
+    padding: 1.5rem;
+    margin: 2rem 0;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+    border: 1px solid #e9ecef;
+}
+
+.temu-social-buttons {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.temu-social-btn {
+    border: 2px solid #e9ecef;
+    border-radius: 10px;
+    padding: 0.75rem 1.5rem;
+    text-decoration: none;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.temu-social-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.1);
+}
+
+/* Product Description */
+.temu-description-section {
+    background: white;
+    border-radius: 20px;
+    padding: 2rem;
+    box-shadow: 0 6px 25px rgba(0,0,0,0.08);
+    border: 1px solid #e9ecef;
+    margin: 2rem 0;
+}
+
+.temu-section-title {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #2c2c54;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.temu-section-title::before {
+    content: '';
+    width: 4px;
+    height: 30px;
+    background: var(--temu-orange);
+    border-radius: 2px;
+}
+
+/* Recommended Products */
+.temu-recommended-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+}
+
+.temu-recommended-card {
+    background: white;
+    border-radius: 15px;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+    transition: all 0.3s ease;
+    border: 1px solid #e9ecef;
+    cursor: pointer;
+    position: relative;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.temu-recommended-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 12px 35px rgba(0,0,0,0.15);
+    border-color: var(--temu-orange);
+}
+
+.temu-recommended-image-container {
+    position: relative;
+    height: 200px;
+    overflow: hidden;
+}
+
+.temu-recommended-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+
+.temu-recommended-card:hover .temu-recommended-image {
+    transform: scale(1.05);
+}
+
+.temu-recommended-discount {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: linear-gradient(45deg, #ff4757, #ff3742);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 8px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    z-index: 2;
+}
+
+.temu-recommended-content {
+    padding: 1.25rem;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.temu-recommended-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #2c2c54;
+    margin-bottom: 0.75rem;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    min-height: 2.6em;
+}
+
+.temu-recommended-price {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--temu-red);
+    margin-bottom: 0.5rem;
+}
+
+.temu-recommended-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: auto;
+}
+
+.temu-btn-view {
+    background: var(--temu-blue);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    font-weight: 600;
+    text-decoration: none;
+    flex: 1;
+    text-align: center;
+    font-size: 0.85rem;
+    transition: all 0.3s ease;
+}
+
+.temu-btn-view:hover {
+    background: var(--temu-orange);
+    color: white;
+    transform: translateY(-1px);
+}
+
+.temu-btn-quick-cart {
+    background: var(--temu-green);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 0.5rem;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.temu-btn-quick-cart:hover:not(:disabled) {
+    background: #26de81;
+    transform: scale(1.1);
+}
+
+.temu-btn-quick-wishlist {
+    background: transparent;
+    color: var(--temu-red);
+    border: 2px solid var(--temu-red);
+    border-radius: 8px;
+    padding: 0.5rem;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.temu-btn-quick-wishlist:hover {
+    background: var(--temu-red);
+    color: white;
+}
+
+/* Reviews Section */
+.temu-reviews-section {
+    background: white;
+    border-radius: 20px;
+    padding: 2rem;
+    box-shadow: 0 6px 25px rgba(0,0,0,0.08);
+    border: 1px solid #e9ecef;
+    margin: 2rem 0;
+}
+
+.temu-review-form {
+    background: #f8f9fa;
+    border-radius: 15px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.temu-star-rating {
+    display: flex;
+    gap: 0.25rem;
+    margin-bottom: 1rem;
+}
+
+.temu-star-input {
+    background: transparent;
+    border: none;
+    color: #ddd;
+    font-size: 1.5rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.temu-star-input:hover,
+.temu-star-input.active {
+    color: var(--temu-yellow);
+    transform: scale(1.1);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .temu-recommended-grid {
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 1rem;
+    }
+
+    .temu-action-buttons {
+        flex-direction: column;
+    }
+
+    .temu-btn-add-cart,
+    .temu-btn-buy-now {
+        min-width: auto;
+    }
+
+    .temu-floating-chat {
+        width: 300px;
+        bottom: 10px;
+        right: 10px;
+    }
+}
+
+@media (max-width: 576px) {
+    .temu-recommended-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.75rem;
+    }
+
+    .temu-product-info,
+    .temu-product-gallery {
+        padding: 1rem;
+    }
+
+    .temu-current-price {
+        font-size: 1.8rem;
+    }
+}
+</style>
+
 <!-- Enhanced Breadcrumb with structured data -->
-<nav class="amazon-breadcrumb py-2 bg-light border-bottom" aria-label="Breadcrumb navigation">
+<nav class="temu-breadcrumb" aria-label="Breadcrumb navigation">
     <div class="container">
         <ol class="breadcrumb mb-0" itemscope itemtype="https://schema.org/BreadcrumbList">
             <!-- Home -->
@@ -100,45 +883,43 @@
 </nav>
 
 <!-- Main Product Section -->
-<main class="container my-5">
+<main class="container my-4">
     <div class="row g-4">
         <!-- Product Gallery -->
         <section class="col-lg-5" aria-label="Product images">
-            <div class="product-gallery shadow-sm p-3 bg-white rounded">
-                <div class="main-image-container position-relative mb-3">
+            <div class="temu-product-gallery">
+                <div class="temu-main-image-container">
                     <img src="{{ product.image.url }}"
                          alt="{{ product.name }}"
-                         class="img-fluid w-100 rounded"
+                         class="temu-main-product-image"
                          id="mainProductImage"
                          loading="eager"
                          width="500"
                          height="500">
-                    <div class="zoom-indicator" aria-hidden="true">
+                    <div class="temu-zoom-indicator" aria-hidden="true">
                         <i class="fas fa-search-plus"></i> Hover to zoom
                     </div>
                 </div>
 
                 {% if product.images.all %}
-                <div class="d-flex flex-wrap gap-2 thumbnail-gallery" role="tablist" aria-label="Product image thumbnails">
-                    <button class="thumbnail-item active border-0 p-0"
+                <div class="temu-thumbnail-gallery" role="tablist" aria-label="Product image thumbnails">
+                    <button class="temu-thumbnail-item active"
                             onclick="changeMainImage(this, '{{ product.image.url }}')"
                             role="tab"
                             aria-selected="true"
                             aria-label="Main product image">
                         <img src="{{ product.image.url }}"
                              alt="Main image"
-                             class="img-thumbnail"
                              loading="lazy">
                     </button>
                     {% for img in product.images.all %}
-                    <button class="thumbnail-item border-0 p-0"
+                    <button class="temu-thumbnail-item"
                             onclick="changeMainImage(this, '{{ img.image.url }}')"
                             role="tab"
                             aria-selected="false"
                             aria-label="Product image {{ forloop.counter }}">
                         <img src="{{ img.image.url }}"
                              alt="Product image {{ forloop.counter }}"
-                             class="img-thumbnail"
                              loading="lazy">
                     </button>
                     {% endfor %}
@@ -158,12 +939,12 @@
 
         <!-- Product Information -->
         <section class="col-lg-7" aria-label="Product details">
-            <div class="product-info">
-                <h1 class="product-title fw-bold mb-3">{{ product.name }}</h1>
+            <div class="temu-product-info">
+                <h1 class="temu-product-title">{{ product.name }}</h1>
 
                 <!-- Rating and Reviews -->
-                <div class="d-flex align-items-center mb-3" role="region" aria-label="Product rating">
-                    <div class="text-warning me-2" aria-label="Rating {{ avg_rating|floatformat:1 }} out of 5 stars">
+                <div class="temu-rating-section" role="region" aria-label="Product rating">
+                    <div class="temu-rating-stars" aria-label="Rating {{ avg_rating|floatformat:1 }} out of 5 stars">
                         {% for i in rating_range %}
                             {% if avg_rating >= i %}
                                 <i class="fas fa-star" aria-hidden="true"></i>
@@ -174,30 +955,32 @@
                             {% endif %}
                         {% endfor %}
                     </div>
-                    <span class="me-2 text-muted">{{ avg_rating|floatformat:1 }} ({{ review_count }} review{{ review_count|pluralize }})</span>
+                    <span class="temu-rating-text">{{ avg_rating|floatformat:1 }} ({{ review_count }} review{{ review_count|pluralize }})</span>
                     <span class="text-muted" aria-hidden="true">|</span>
-                    <span class="ms-2 text-muted">{{ product.sold_count|default:"0" }} sold</span>
+                    <span class="temu-rating-text">{{ product.sold_count|default:"0" }} sold</span>
                 </div>
 
                 <!-- Price Section -->
-                <div class="price-section mb-3" role="region" aria-label="Product pricing">
-                    <span class="current-price h4 fw-bold text-danger">D{{ product.price|intcomma }}</span>
-                    {% if product.original_price %}
-                        <span class="ms-2 text-muted text-decoration-line-through">D{{ product.original_price|intcomma }}</span>
-                        <span class="badge bg-success ms-2">
-                            {{ product.discount_percentage|floatformat:0 }}% OFF
-                        </span>
-                    {% endif %}
-                    {% if product.used %}
-                        <span class="badge bg-warning text-dark ms-2">
-                            <i class="fas fa-recycle me-1" aria-hidden="true"></i>Used
-                        </span>
-                    {% endif %}
+                <div class="temu-price-section" role="region" aria-label="Product pricing">
+                    <span class="temu-current-price">D{{ product.price|intcomma }}</span>
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        {% if product.original_price %}
+                            <span class="temu-original-price">D{{ product.original_price|intcomma }}</span>
+                            <span class="temu-discount-badge">
+                                {{ product.discount_percentage|floatformat:0 }}% OFF
+                            </span>
+                        {% endif %}
+                        {% if product.used %}
+                            <span class="temu-used-badge">
+                                <i class="fas fa-recycle me-1" aria-hidden="true"></i>Used
+                            </span>
+                        {% endif %}
+                    </div>
                 </div>
 
                 <!-- Product Features -->
-                <ul class="list-unstyled mb-4" role="list" aria-label="Product features">
-                    <li class="mb-2">
+                <ul class="temu-features-list" role="list" aria-label="Product features">
+                    <li>
                         {% if product.is_in_stock %}
                         <i class="fas fa-check-circle text-success" aria-hidden="true"></i>
                         <span class="text-success">{{ product.get_stock_status }}</span>
@@ -206,14 +989,14 @@
                         <span class="text-danger">Out of Stock</span>
                         {% endif %}
                     </li>
-                    <li class="mb-2">
+                    <li>
                         <i class="fas fa-shield-alt text-success" aria-hidden="true"></i> Secure Payment
                     </li>
-                    <li class="mb-2">
+                    <li>
                         <i class="fas fa-truck text-success" aria-hidden="true"></i>
                         Fast Delivery ({{ store.processing_time|default:"1" }}-3 Days)
                     </li>
-                    <li class="mb-2">
+                    <li>
                         {% if store.return_settings.return_window_days and product.has_30_day_return %}
                         <i class="fas fa-undo text-success" aria-hidden="true"></i>
                         {{ store.return_settings.return_window_days }}-Day Return Policy
@@ -226,26 +1009,36 @@
 
                 <!-- Product Features/Variants -->
                 {% for feature, options in feature_data.items %}
-                <fieldset class="mb-3">
-                    <legend class="form-label fw-bold">{{ feature }}</legend>
-                    <div class="d-flex flex-wrap gap-2 feature-group" data-feature="{{ feature }}" role="radiogroup">
+                <fieldset class="temu-feature-group">
+                    <legend class="temu-feature-legend">{{ feature }}</legend>
+                    <div class="temu-feature-options" data-feature="{{ feature }}" role="radiogroup">
                         {% for option in options %}
-                            <input type="radio"
-                                   class="btn-check"
-                                   name="feature_{{ feature|slugify }}"
-                                   id="feature_{{ option.id }}"
-                                   value="{{ option.value }}"
-                                   autocomplete="off">
-                            <label class="btn btn-outline-dark btn-sm px-3" for="feature_{{ option.id }}">
-                                {% if feature|lower == "color" %}
-                                    <span class="d-inline-block rounded-circle"
-                                          style="width: 16px; height: 16px; background-color: {{ option.value|default:'#ccc' }}; border: 1px solid #ccc;"
-                                          aria-hidden="true"></span>
-                                    <span class="ms-2">{{ option.value }}</span>
-                                {% else %}
+                            {% if feature|lower == "color" %}
+                            <div class="temu-color-option temu-feature-option">
+                                <input type="radio"
+                                       class="btn-check"
+                                       name="feature_{{ feature|slugify }}"
+                                       id="feature_{{ option.id }}"
+                                       value="{{ option.value }}"
+                                       autocomplete="off">
+                                <label class="temu-feature-option label" for="feature_{{ option.id }}">
+                                    <span class="temu-color-swatch" data-color="{{ option.value }}"></span>
+                                    <span class="color-name">{{ option.value }}</span>
+                                </label>
+                            </div>
+                            {% else %}
+                            <div class="temu-feature-option">
+                                <input type="radio"
+                                       class="btn-check"
+                                       name="feature_{{ feature|slugify }}"
+                                       id="feature_{{ option.id }}"
+                                       value="{{ option.value }}"
+                                       autocomplete="off">
+                                <label class="temu-feature-option label" for="feature_{{ option.id }}">
                                     {{ option.value }}
-                                {% endif %}
-                            </label>
+                                </label>
+                            </div>
+                            {% endif %}
                         {% endfor %}
                     </div>
                 </fieldset>
@@ -253,21 +1046,21 @@
 
                 <!-- Quantity Selector -->
                 {% if product.stock.quantity > 0 %}
-                <div class="d-flex align-items-center mb-3">
-                    <label for="quantity" class="me-2">Quantity:</label>
-                    <div class="input-group" style="width: 120px;">
-                        <button class="btn btn-outline-secondary"
+                <div class="temu-quantity-selector">
+                    <label for="quantity" class="form-label fw-bold">Quantity:</label>
+                    <div class="temu-quantity-input-group">
+                        <button class="temu-quantity-btn"
                                 type="button"
                                 onclick="changeQuantity(-1)"
                                 aria-label="Decrease quantity">-</button>
                         <input type="number"
-                               class="form-control text-center"
+                               class="temu-quantity-input"
                                id="quantity"
                                value="1"
                                min="1"
                                max="{{ product.stock.quantity }}"
                                aria-label="Product quantity">
-                        <button class="btn btn-outline-secondary"
+                        <button class="temu-quantity-btn"
                                 type="button"
                                 onclick="changeQuantity(1)"
                                 aria-label="Increase quantity">+</button>
@@ -276,9 +1069,9 @@
                 {% endif %}
 
                 <!-- Action Buttons -->
-                <div class="d-flex flex-wrap gap-2 mb-4" role="group" aria-label="Product actions">
+                <div class="temu-action-buttons" role="group" aria-label="Product actions">
                     <!-- Add to Cart -->
-                    <button class="btn btn-primary"
+                    <button class="temu-btn-add-cart"
                             onclick="addToCart({{ product.id }}, this)"
                             {% if not product.stock or product.stock.quantity == 0 %}disabled aria-disabled="true"{% endif %}>
                         <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
@@ -286,7 +1079,7 @@
                     </button>
 
                     <!-- Buy Now Button -->
-                    <button class="btn btn-warning"
+                    <button class="temu-btn-buy-now"
                             onclick="buyNow({{ product.id }})"
                             {% if not product.stock or product.stock.quantity == 0 %}disabled aria-disabled="true"{% endif %}>
                         <i class="fas fa-bolt me-1" aria-hidden="true"></i> Buy Now
@@ -300,39 +1093,39 @@
                     </form>
 
                     <!-- Wishlist Button -->
-                    <button class="btn btn-outline-secondary"
+                    <button class="temu-btn-wishlist"
                             onclick="toggleWishlist({{ product.id }})"
                             id="wishlistBtn-{{ product.id }}"
                             aria-label="{% if product.id in user_wishlist_product_ids %}Remove from wishlist{% else %}Add to wishlist{% endif %}">
                         <i id="wishlistIcon-{{ product.id }}"
-                           class="{% if product.id in user_wishlist_product_ids %}fas fa-heart text-danger{% else %}far fa-heart{% endif %}"
+                           class="{% if product.id in user_wishlist_product_ids %}fas fa-heart{% else %}far fa-heart{% endif %}"
                            aria-hidden="true"></i>
                     </button>
                 </div>
 
                 <!-- Shipping Information -->
                 {% if user.is_authenticated %}
-                <section class="shipping-info mb-4" aria-label="Shipping information">
-                    <p>
-                        <i class="fas fa-map-marker-alt text-primary me-1" aria-hidden="true"></i>
-                        <strong>Deliver to:</strong>
-                        {{ address_display|default:"Please add your delivery address" }}
-                        {% if address.geo_code %}
-                            <br>
+                <section class="temu-shipping-info" aria-label="Shipping information">
+                    <h6>
+                        <i class="fas fa-map-marker-alt me-1" aria-hidden="true"></i>
+                        Deliver to: {{ address_display|default:"Please add your delivery address" }}
+                    </h6>
+                    {% if address.geo_code %}
+                        <p class="mb-2">
                             <a href="https://www.google.com/maps?q={{ address.geo_code }}"
                                target="_blank"
                                rel="noopener noreferrer"
                                class="text-decoration-underline text-info small">
                                 View on Google Maps ({{ address.geo_code }})
                             </a>
-                        {% endif %}
-                        <button class="btn btn-link btn-sm ms-2 p-0"
-                                data-bs-toggle="modal"
-                                data-bs-target="#editAddressModal"
-                                aria-label="Change delivery address">
-                            <i class="fas fa-edit" aria-hidden="true"></i> Change
-                        </button>
-                    </p>
+                        </p>
+                    {% endif %}
+                    <button class="btn btn-outline-primary btn-sm"
+                            data-bs-toggle="modal"
+                            data-bs-target="#editAddressModal"
+                            aria-label="Change delivery address">
+                        <i class="fas fa-edit" aria-hidden="true"></i> Change Address
+                    </button>
 
                     <!-- Address Edit Modal -->
                     <div class="modal fade" id="editAddressModal" tabindex="-1" aria-labelledby="editAddressModalLabel" aria-hidden="true">
@@ -398,8 +1191,8 @@
                         </div>
                     </div>
 
-                    <p><i class="fas fa-clock text-primary me-1" aria-hidden="true"></i> Estimated Delivery: Tomorrow</p>
-                    <p><i class="fas fa-dollar-sign text-primary me-1" aria-hidden="true"></i> Free Shipping on orders over D2,000</p>
+                    <p class="mt-2 mb-1"><i class="fas fa-clock text-primary me-1" aria-hidden="true"></i> Estimated Delivery: Tomorrow</p>
+                    <p class="mb-0"><i class="fas fa-dollar-sign text-primary me-1" aria-hidden="true"></i> Free Shipping on orders over D2,000</p>
                 </section>
                 {% else %}
                 <div class="alert alert-light text-center">
@@ -409,27 +1202,32 @@
                 {% endif %}
 
                 <!-- Seller Information -->
-                <section class="seller-info border-top pt-3 mt-3" aria-label="Seller information">
+                <section class="temu-seller-info" aria-label="Seller information">
                     {% if seller_store %}
-                        <h6>
-                            <i class="fas fa-store me-2" aria-hidden="true"></i>
-                            Seller:
-                            {% if store %}
-                                <a href="{% url 'stores:store_detail' store.slug %}">{{ store.name }}</a>
-                            {% else %}
-                                {{ product.seller.get_full_name|default:product.seller.username }}
-                            {% endif %}
-                        </h6>
-                        <p class="text-muted small">
-                            Seller Rating: {{ store.get_average_rating|default:0|floatformat:1 }}/5.0
-                        </p>
-                        <div class="d-flex gap-2">
-                            <a href="{% url 'stores:store_detail' seller_store.slug %}" class="btn btn-outline-primary btn-sm">
-                                Visit Store
+                        <div class="temu-seller-header">
+                            <div class="temu-seller-avatar">
+                                <i class="fas fa-store" aria-hidden="true"></i>
+                            </div>
+                            <div>
+                                <h6 class="mb-1">
+                                    {% if store %}
+                                        <a href="{% url 'stores:store_detail' store.slug %}">{{ store.name }}</a>
+                                    {% else %}
+                                        {{ product.seller.get_full_name|default:product.seller.username }}
+                                    {% endif %}
+                                </h6>
+                                <p class="text-muted small mb-0">
+                                    Seller Rating: {{ store.get_average_rating|default:0|floatformat:1 }}/5.0
+                                </p>
+                            </div>
+                        </div>
+                        <div class="temu-seller-actions">
+                            <a href="{% url 'stores:store_detail' seller_store.slug %}" class="temu-btn-visit-store">
+                                <i class="fas fa-store me-1" aria-hidden="true"></i> Visit Store
                             </a>
                             {% if request.user.is_authenticated and request.user != product.seller %}
                             <button type="button"
-                                    class="btn btn-outline-success btn-sm"
+                                    class="temu-btn-chat"
                                     onclick="toggleChatBox()"
                                     aria-label="Start chat with seller">
                                 <i class="fas fa-comments me-1" aria-hidden="true"></i> Chat with Seller
@@ -441,34 +1239,25 @@
                     {% endif %}
 
                     <!-- Enhanced Chat Box -->
-                    <div id="chatBox" class="floating-chat-box d-none" role="dialog" aria-labelledby="chatHeader" aria-modal="false">
-                        <div class="chat-header d-flex justify-content-between align-items-center p-3 bg-gradient-success text-white rounded-top position-relative overflow-hidden">
-                            <div class="header-shimmer position-absolute top-0 start-0 w-100 h-100" aria-hidden="true"></div>
-                            <div class="seller-info d-flex align-items-center gap-2 position-relative">
-                                <div class="seller-avatar d-flex align-items-center justify-content-center rounded-circle bg-white text-success fw-bold position-relative overflow-hidden">
+                    <div id="chatBox" class="temu-floating-chat d-none" role="dialog" aria-labelledby="chatHeader" aria-modal="false">
+                        <div class="temu-chat-header">
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="temu-seller-avatar" style="width: 40px; height: 40px; font-size: 1rem;">
                                     <i class="fas fa-user" aria-hidden="true"></i>
-                                    <div class="avatar-glow position-absolute top-0 start-0 w-100 h-100" aria-hidden="true"></div>
                                 </div>
-                                <div class="seller-details">
-                                    <strong class="d-block mb-0" id="chatHeader">{{ product.seller.get_full_name|default:product.seller.username }}</strong>
-                                    <small class="d-flex align-items-center gap-1 opacity-75">
-                                        <span class="status-dot rounded-circle bg-light" aria-hidden="true"></span>
-                                        <span>Online now</span>
-                                    </small>
+                                <div>
+                                    <strong id="chatHeader">{{ product.seller.get_full_name|default:product.seller.username }}</strong>
+                                    <small class="d-block opacity-75">Online now</small>
                                 </div>
                             </div>
                             <button type="button"
-                                    class="btn-close btn-close-white close-btn"
+                                    class="btn-close btn-close-white"
                                     onclick="toggleChatBox()"
                                     aria-label="Close chat">
                             </button>
                         </div>
 
-                        <div class="chat-body p-3 position-relative"
-                             style="height: 280px; overflow-y: auto; background: linear-gradient(to bottom, #f8f9fa, #e9ecef);"
-                             id="chatMessages"
-                             role="log"
-                             aria-label="Chat messages">
+                        <div class="temu-chat-body" id="chatMessages" role="log" aria-label="Chat messages">
                             {% if product %}
                                 <div class="product-preview mb-3 p-2 bg-white rounded shadow-sm border-start border-success border-3">
                                     <div class="d-flex align-items-center gap-2">
@@ -480,8 +1269,8 @@
 
                             {% if messages %}
                                 {% for msg in messages %}
-                                    <div class="message-container mb-3 {% if msg.sender == request.user %}text-end{% endif %}" data-aos="fade-up" data-aos-duration="400">
-                                        <div class="message p-2 rounded-4 d-inline-block position-relative {% if msg.sender == request.user %}bg-gradient-success text-white message-sent{% else %}bg-white message-received{% endif %}">
+                                    <div class="message-container mb-3 {% if msg.sender == request.user %}text-end{% endif %}">
+                                        <div class="message p-2 rounded-4 d-inline-block {% if msg.sender == request.user %}bg-primary text-white{% else %}bg-white{% endif %}">
                                             <small class="message-text">{{ msg.message }}</small><br>
                                             <small class="message-time opacity-75">{{ msg.timestamp|timesince }} ago</small>
                                         </div>
@@ -489,17 +1278,13 @@
                                 {% endfor %}
                             {% else %}
                                 <div class="empty-state text-center py-5 text-muted">
-                                    <i class="fas fa-comments fa-3x mb-3 opacity-25 floating-icon" aria-hidden="true"></i>
+                                    <i class="fas fa-comments fa-3x mb-3 opacity-25" aria-hidden="true"></i>
                                     <p class="small">No messages yet. Start the conversation!</p>
                                 </div>
                             {% endif %}
-
-                            <div class="typing-indicator d-none py-2 text-muted" aria-live="polite">
-                                <small><i class="fas fa-circle typing-dot" aria-hidden="true"></i> <span class="typing-text">Typing...</span></small>
-                            </div>
                         </div>
 
-                        <div class="chat-footer p-3 border-top bg-white">
+                        <div class="temu-chat-footer">
                             <form method="post" action="{% url 'chat:start_chat' %}" id="chatForm" novalidate>
                                 {% csrf_token %}
                                 <input type="hidden" name="recipient_id" value="{{ product.seller.id }}">
@@ -509,12 +1294,13 @@
                                     <input type="text"
                                            name="message"
                                            id="chatMessage"
-                                           class="form-control enhanced-input rounded-pill border-2 px-3"
+                                           class="form-control rounded-pill border-2 px-3"
                                            placeholder="Type your message..."
                                            required
                                            maxlength="500">
-                                    <button class="btn btn-success enhanced-send-btn rounded-circle ms-2 d-flex align-items-center justify-content-center"
+                                    <button class="btn btn-success rounded-circle ms-2"
                                             type="submit"
+                                            style="width: 40px; height: 40px;"
                                             aria-label="Send message">
                                         <i class="fas fa-paper-plane" aria-hidden="true"></i>
                                     </button>
@@ -528,25 +1314,28 @@
     </div>
 
     <!-- Social Sharing -->
-    <section class="mt-3" aria-label="Share this product">
-        <label class="form-label">Share this product:</label>
-        <div class="d-flex gap-2 flex-wrap">
-            <a class="btn btn-outline-primary"
+    <section class="temu-social-sharing" aria-label="Share this product">
+        <h6 class="mb-3">Share this product:</h6>
+        <div class="temu-social-buttons">
+            <a class="temu-social-btn"
                href="https://wa.me/?text={{ request.build_absolute_uri|urlencode }}"
                target="_blank"
                rel="noopener noreferrer"
+               style="border-color: #25d366; color: #25d366;"
                aria-label="Share on WhatsApp">
                 <i class="fab fa-whatsapp" aria-hidden="true"></i> WhatsApp
             </a>
-            <a class="btn btn-outline-info"
+            <a class="temu-social-btn"
                href="https://www.facebook.com/sharer/sharer.php?u={{ request.build_absolute_uri|urlencode }}"
                target="_blank"
                rel="noopener noreferrer"
+               style="border-color: #1877f2; color: #1877f2;"
                aria-label="Share on Facebook">
                 <i class="fab fa-facebook" aria-hidden="true"></i> Facebook
             </a>
-            <button class="btn btn-outline-secondary"
+            <button class="temu-social-btn"
                     onclick="copyToClipboard('{{ request.build_absolute_uri }}')"
+                    style="border-color: #6c757d; color: #6c757d;"
                     aria-label="Copy product link">
                 <i class="fas fa-link" aria-hidden="true"></i> Copy Link
             </button>
@@ -554,107 +1343,99 @@
     </section>
 
     <!-- Product Description -->
-    <section class="row mt-5">
-        <div class="col-12">
-            <div class="bg-white shadow-sm p-4 rounded">
-                <h2 class="section-title">About this item</h2>
-                <div id="descShort" class="fade-in">
-                    {% if short_description %}
-                        <ul class="list-unstyled">
-                            {% for bullet in short_description.splitlines %}
-                            {% if bullet.strip %}
-                            {% with bullet.split as words %}
-                            <li class="feature-item">
-                                <i class="fas fa-check-circle text-primary me-2" aria-hidden="true"></i>
-                                <strong>{{ words.0 }}</strong>
-                                {% for word in words|slice:"1:" %} {{ word }}{% endfor %}
-                            </li>
-                            {% endwith %}
-                            {% endif %}
-                            {% endfor %}
-                        </ul>
-                    {% else %}
-                        <p>{{ product.description|linebreaks }}</p>
+    <section class="temu-description-section">
+        <h2 class="temu-section-title">About this item</h2>
+        <div id="descShort" class="fade-in">
+            {% if short_description %}
+                <ul class="list-unstyled">
+                    {% for bullet in short_description.splitlines %}
+                    {% if bullet.strip %}
+                    {% with bullet.split as words %}
+                    <li class="feature-item mb-3">
+                        <i class="fas fa-check-circle text-primary me-2" aria-hidden="true"></i>
+                        <strong>{{ words.0 }}</strong>
+                        {% for word in words|slice:"1:" %} {{ word }}{% endfor %}
+                    </li>
+                    {% endwith %}
                     {% endif %}
-                </div>
-
-                {% if description_truncated %}
-                <div class="collapse" id="fullDescription">
-                    <ul class="list-unstyled">
-                        {% for bullet in product.description.splitlines %}
-                        {% if bullet.strip %}
-                        {% with bullet.split as words %}
-                        <li class="feature-item">
-                            <i class="fas fa-check-circle text-primary me-2" aria-hidden="true"></i>
-                            <strong>{{ words.0 }}</strong>
-                            {% for word in words|slice:"1:" %} {{ word }}{% endfor %}
-                        </li>
-                        {% endwith %}
-                        {% endif %}
-                        {% endfor %}
-                    </ul>
-                </div>
-                <button class="btn btn-link p-0 mt-3"
-                        type="button"
-                        data-bs-toggle="collapse"
-                        data-bs-target="#fullDescription"
-                        id="toggleDescBtn"
-                        aria-expanded="false"
-                        aria-controls="fullDescription">
-                    <i class="fas fa-chevron-down me-2" aria-hidden="true"></i><span>Show More</span>
-                </button>
-                {% endif %}
-            </div>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p>{{ product.description|linebreaks }}</p>
+            {% endif %}
         </div>
+
+        {% if description_truncated %}
+        <div class="collapse" id="fullDescription">
+            <ul class="list-unstyled">
+                {% for bullet in product.description.splitlines %}
+                {% if bullet.strip %}
+                {% with bullet.split as words %}
+                <li class="feature-item mb-3">
+                    <i class="fas fa-check-circle text-primary me-2" aria-hidden="true"></i>
+                    <strong>{{ words.0 }}</strong>
+                    {% for word in words|slice:"1:" %} {{ word }}{% endfor %}
+                </li>
+                {% endwith %}
+                {% endif %}
+                {% endfor %}
+            </ul>
+        </div>
+        <button class="btn btn-outline-primary mt-3"
+                type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#fullDescription"
+                id="toggleDescBtn"
+                aria-expanded="false"
+                aria-controls="fullDescription">
+            <i class="fas fa-chevron-down me-2" aria-hidden="true"></i><span>Show More</span>
+        </button>
+        {% endif %}
     </section>
 
     <!-- Specifications -->
     {% if specifications %}
-    <section class="row mt-4">
-        <div class="col-12">
-            <div class="bg-white shadow-sm p-4 rounded">
-                <h2 class="section-title">Technical Specifications</h2>
-                <div class="spec-table">
-                    <table class="table table-striped mb-0">
-                        <tbody>
-                            {% for key, value in specifications %}
-                            {% if forloop.counter <= 3 %}
-                            <tr>
-                                <th scope="row" style="width: 30%;">{{ key }}</th>
-                                <td>{{ value }}</td>
-                            </tr>
-                            {% endif %}
-                            {% endfor %}
+    <section class="temu-description-section">
+        <h2 class="temu-section-title">Technical Specifications</h2>
+        <div class="table-responsive">
+            <table class="table table-striped mb-0">
+                <tbody>
+                    {% for key, value in specifications %}
+                    {% if forloop.counter <= 3 %}
+                    <tr>
+                        <th scope="row" style="width: 30%;">{{ key }}</th>
+                        <td>{{ value }}</td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
 
-                            {% if specifications|length > 3 %}
-                            {% for key, value in specifications %}
-                            {% if forloop.counter > 3 %}
-                            <tr class="collapse" id="specCollapse">
-                                <th scope="row" style="width: 30%;">{{ key }}</th>
-                                <td>{{ value }}</td>
-                            </tr>
-                            {% endif %}
-                            {% endfor %}
-                            {% endif %}
-                        </tbody>
-                    </table>
-                </div>
-
-                {% if specifications|length > 3 %}
-                <div class="text-center mt-3">
-                    <button class="btn btn-outline-primary"
-                            type="button"
-                            data-bs-toggle="collapse"
-                            data-bs-target="#specCollapse"
-                            id="toggleSpecBtn"
-                            aria-expanded="false"
-                            aria-controls="specCollapse">
-                        <i class="fas fa-chevron-down me-2" aria-hidden="true"></i><span>Show More Specs</span>
-                    </button>
-                </div>
-                {% endif %}
-            </div>
+                    {% if specifications|length > 3 %}
+                    {% for key, value in specifications %}
+                    {% if forloop.counter > 3 %}
+                    <tr class="collapse" id="specCollapse">
+                        <th scope="row" style="width: 30%;">{{ key }}</th>
+                        <td>{{ value }}</td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                    {% endif %}
+                </tbody>
+            </table>
         </div>
+
+        {% if specifications|length > 3 %}
+        <div class="text-center mt-3">
+            <button class="btn btn-outline-primary"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#specCollapse"
+                    id="toggleSpecBtn"
+                    aria-expanded="false"
+                    aria-controls="specCollapse">
+                <i class="fas fa-chevron-down me-2" aria-hidden="true"></i><span>Show More Specs</span>
+            </button>
+        </div>
+        {% endif %}
     </section>
     {% endif %}
 </main>
@@ -662,100 +1443,94 @@
 <!-- Recommended Products -->
 <section class="container my-5" aria-label="Recommended products">
     <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-        <h2 class="fw-bold mb-0">Recommended for You</h2>
-        <a href="{% url 'marketplace:all_products' %}" class="btn btn-outline-primary btn-sm">
+        <h2 class="temu-section-title mb-0">Recommended for You</h2>
+        <a href="{% url 'marketplace:all_products' %}" class="btn btn-outline-primary">
             View All Products
         </a>
     </div>
 
-    <div class="row g-4">
+    <div class="temu-recommended-grid">
         {% for item in recommended_items %}
-        <div class="col-xl-3 col-lg-4 col-md-6 col-sm-6">
-            <article class="card h-100 shadow-sm border-0 position-relative product-card">
-                {% if item.discount_percentage %}
-                <span class="badge bg-danger text-white position-absolute"
-                      style="top: 10px; right: 10px; z-index: 2;"
-                      aria-label="{{ item.discount_percentage|floatformat:0 }} percent off">
-                    {{ item.discount_percentage|floatformat:0 }}% OFF
-                </span>
+        <article class="temu-recommended-card" onclick="window.location.href='{% url 'marketplace:product_detail' item.id %}'">
+            {% if item.discount_percentage %}
+            <span class="temu-recommended-discount">
+                {{ item.discount_percentage|floatformat:0 }}% OFF
+            </span>
+            {% endif %}
+
+            <div class="temu-recommended-image-container">
+                <img src="{{ item.image.url }}"
+                     class="temu-recommended-image"
+                     alt="{{ item.name }}"
+                     loading="lazy"
+                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                <div class="temu-recommended-image d-none" style="background: #f8f9fa; display: flex; align-items: center; justify-content: center; color: #999; flex-direction: column;">
+                    <i class="fas fa-image fa-2x"></i>
+                    <small>No image</small>
+                </div>
+            </div>
+
+            <div class="temu-recommended-content">
+                <h3 class="temu-recommended-title">{{ item.name|truncatechars:40 }}</h3>
+
+                <div class="temu-recommended-price">D{{ item.price|intcomma }}</div>
+                {% if item.original_price %}
+                <small class="text-muted text-decoration-line-through">D{{ item.original_price }}</small>
                 {% endif %}
 
-                <a href="{% url 'marketplace:product_detail' item.id %}" class="d-block">
-                    <img src="{{ item.image.url }}"
-                         class="card-img-top product-image"
-                         alt="{{ item.name }}"
-                         style="height: 200px; object-fit: cover;"
-                         loading="lazy">
-                </a>
-
-                <div class="card-body d-flex flex-column justify-content-between">
-                    <h3 class="card-title mb-2 h6" style="min-height: 2.5rem;">
-                        <a href="{% url 'marketplace:product_detail' item.id %}" class="text-decoration-none text-dark">
-                            {{ item.name|truncatechars:40 }}
-                        </a>
-                    </h3>
-
-                    <div class="mb-2">
-                        <span class="fw-bold text-danger fs-5">D{{ item.price|intcomma }}</span>
-                        {% if item.original_price %}
-                        <small class="text-muted text-decoration-line-through ms-1">D{{ item.original_price }}</small>
-                        {% endif %}
+                <div class="mb-2 d-flex align-items-center">
+                    <div class="text-warning me-2" aria-label="Rating {{ item.average_rating|default:0|floatformat:1 }} out of 5 stars">
+                        {% with avg=item.average_rating|default:0 %}
+                            {% for i in rating_range %}
+                                {% if avg >= i %}
+                                    <i class="fas fa-star" aria-hidden="true"></i>
+                                {% elif avg >= i|add:"-0.5" %}
+                                    <i class="fas fa-star-half-alt" aria-hidden="true"></i>
+                                {% else %}
+                                    <i class="far fa-star" aria-hidden="true"></i>
+                                {% endif %}
+                            {% endfor %}
+                        {% endwith %}
                     </div>
-
-                    <div class="mb-2 d-flex align-items-center">
-                        <div class="text-warning me-2" aria-label="Rating {{ item.average_rating|default:0|floatformat:1 }} out of 5 stars">
-                            {% with avg=item.average_rating|default:0 %}
-                                {% for i in rating_range %}
-                                    {% if avg >= i %}
-                                        <i class="fas fa-star" aria-hidden="true"></i>
-                                    {% elif avg >= i|add:"-0.5" %}
-                                        <i class="fas fa-star-half-alt" aria-hidden="true"></i>
-                                    {% else %}
-                                        <i class="far fa-star" aria-hidden="true"></i>
-                                    {% endif %}
-                                {% endfor %}
-                            {% endwith %}
-                        </div>
-                        <small class="text-muted">
-                            {{ item.average_rating|default:0|floatformat:1 }}
-                            ({{ item.review_count|default:0 }} review{{ item.review_count|default:0|pluralize }})
-                        </small>
-                    </div>
-
-                    <div class="d-flex justify-content-between align-items-center">
-                        <small class="text-primary">
-                            <i class="fas fa-tag me-1" aria-hidden="true"></i> {{ item.category.name }}
-                        </small>
-                        <small class="text-muted">
-                            {{ item.sold_count|default:"0" }} sold
-                        </small>
-                    </div>
-
-                    <div class="mt-3 d-flex gap-2">
-                        <a href="{% url 'marketplace:product_detail' item.id %}"
-                           class="btn btn-outline-primary btn-sm flex-fill">
-                            <i class="fas fa-eye me-1" aria-hidden="true"></i> View
-                        </a>
-                        {% if user.is_authenticated %}
-                            <button class="btn btn-outline-success btn-sm"
-                                    onclick="addToCart({{ item.id }}, this)"
-                                    {% if not item.stock or item.stock.quantity == 0 %}disabled{% endif %}
-                                    aria-label="Add {{ item.name }} to cart">
-                                <i class="fas fa-cart-plus" aria-hidden="true"></i>
-                            </button>
-                            <button class="btn btn-outline-danger btn-sm"
-                                    onclick="toggleWishlist({{ item.id }})"
-                                    id="wishlistBtn-{{ item.id }}"
-                                    aria-label="{% if item.id in user_wishlist_product_ids %}Remove from wishlist{% else %}Add to wishlist{% endif %}">
-                                <i id="wishlistIcon-{{ item.id }}"
-                                   class="{% if item.id in user_wishlist_product_ids %}fas fa-heart {% else %}far fa-heart{% endif %}"
-                                   aria-hidden="true"></i>
-                            </button>
-                        {% endif %}
-                    </div>
+                    <small class="text-muted">
+                        ({{ item.review_count|default:0 }})
+                    </small>
                 </div>
-            </article>
-        </div>
+
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <small class="text-primary">
+                        <i class="fas fa-tag me-1" aria-hidden="true"></i> {{ item.category.name }}
+                    </small>
+                    <small class="text-muted">
+                        {{ item.sold_count|default:"0" }} sold
+                    </small>
+                </div>
+
+                <div class="temu-recommended-actions">
+                    <a href="{% url 'marketplace:product_detail' item.id %}"
+                       class="temu-btn-view"
+                       onclick="event.stopPropagation();">
+                        <i class="fas fa-eye me-1" aria-hidden="true"></i> View
+                    </a>
+                    {% if user.is_authenticated %}
+                        <button class="temu-btn-quick-cart"
+                                onclick="event.stopPropagation(); addToCart({{ item.id }}, this)"
+                                {% if not item.stock or item.stock.quantity == 0 %}disabled{% endif %}
+                                aria-label="Add {{ item.name }} to cart">
+                            <i class="fas fa-cart-plus" aria-hidden="true"></i>
+                        </button>
+                        <button class="temu-btn-quick-wishlist"
+                                onclick="event.stopPropagation(); toggleWishlist({{ item.id }})"
+                                id="wishlistBtn-{{ item.id }}"
+                                aria-label="{% if item.id in user_wishlist_product_ids %}Remove from wishlist{% else %}Add to wishlist{% endif %}">
+                            <i id="wishlistIcon-{{ item.id }}"
+                               class="{% if item.id in user_wishlist_product_ids %}fas fa-heart {% else %}far fa-heart{% endif %}"
+                               aria-hidden="true"></i>
+                        </button>
+                    {% endif %}
+                </div>
+            </div>
+        </article>
         {% empty %}
         <div class="col-12 text-center py-5">
             <i class="fas fa-box-open fa-3x text-muted mb-3" aria-hidden="true"></i>
@@ -770,7 +1545,7 @@
 {% if featured_celebrities %}
 <section class="container my-5" aria-label="Featured celebrities">
     <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-        <h2 class="fw-bold mb-0">
+        <h2 class="temu-section-title mb-0">
             <i class="fas fa-star text-warning me-2" aria-hidden="true"></i> Featured Celebrities
         </h2>
     </div>
@@ -867,25 +1642,23 @@
 
 <!-- Reviews Section -->
 <section class="container my-5" aria-label="Customer reviews">
-    <h2>Customer Reviews</h2>
+    <div class="temu-reviews-section">
+        <h2 class="temu-section-title">Customer Reviews</h2>
 
-    <!-- Review Form -->
-    {% if user.is_authenticated %}
-        <div class="card mb-4">
-            <div class="card-header">
-                <h3 class="h6 mb-0">Write a Review</h3>
-            </div>
-            <div class="card-body">
+        <!-- Review Form -->
+        {% if user.is_authenticated %}
+            <div class="temu-review-form">
+                <h6 class="mb-3">Write a Review</h6>
                 <form id="review-form" novalidate>
                     {% csrf_token %}
                     <input type="hidden" name="product_id" value="{{ product.id }}">
 
                     <fieldset class="mb-3">
                         <legend class="form-label">Rating <span class="text-danger">*</span></legend>
-                        <div class="star-rating" role="radiogroup" aria-required="true">
+                        <div class="temu-star-rating" role="radiogroup" aria-required="true">
                             {% for i in rating_range %}
                                 <button type="button"
-                                        class="btn p-0 border-0 bg-transparent star-input"
+                                        class="temu-star-input"
                                         data-rating="{{ i }}"
                                         role="radio"
                                         aria-checked="false"
@@ -915,27 +1688,27 @@
                     </button>
                 </form>
             </div>
-        </div>
-    {% else %}
-        <div class="alert alert-secondary">
-            <a href="{% url 'accounts:sign_in' %}">Login</a> to leave a review.
-        </div>
-    {% endif %}
+        {% else %}
+            <div class="alert alert-secondary">
+                <a href="{% url 'accounts:sign_in' %}">Login</a> to leave a review.
+            </div>
+        {% endif %}
 
-    <!-- Reviews List -->
-    <div id="reviews-container" role="region" aria-label="Product reviews">
-        <!-- Reviews will be loaded here via AJAX -->
-    </div>
+        <!-- Reviews List -->
+        <div id="reviews-container" role="region" aria-label="Product reviews">
+            <!-- Reviews will be loaded here via AJAX -->
+        </div>
 
-    <!-- Load More Button -->
-    <div class="text-center mt-4">
-        <button class="btn btn-outline-primary"
-                id="load-more-reviews"
-                data-page="2"
-                aria-label="Load more reviews">
-            <span class="load-text">Load More Reviews</span>
-            <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
-        </button>
+        <!-- Load More Button -->
+        <div class="text-center mt-4">
+            <button class="btn btn-outline-primary"
+                    id="load-more-reviews"
+                    data-page="2"
+                    aria-label="Load more reviews">
+                <span class="load-text">Load More Reviews</span>
+                <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+            </button>
+        </div>
     </div>
 </section>
 
@@ -1002,6 +1775,43 @@
         }, 3000);
     }
 
+    // Enhanced thumbnail image switching
+    function changeMainImage(thumbnail, imageUrl) {
+        const mainImage = document.getElementById('mainProductImage');
+        if (mainImage) {
+            mainImage.src = imageUrl;
+        }
+
+        // Update active thumbnail
+        document.querySelectorAll('.temu-thumbnail-item').forEach(item => {
+            item.classList.remove('active');
+        });
+        thumbnail.classList.add('active');
+    }
+
+    // Enhanced quantity change
+    function changeQuantity(change) {
+        const quantityInput = document.getElementById('quantity');
+        if (quantityInput) {
+            const currentValue = parseInt(quantityInput.value);
+            const newValue = currentValue + change;
+            const min = parseInt(quantityInput.min);
+            const max = parseInt(quantityInput.max);
+
+            if (newValue >= min && newValue <= max) {
+                quantityInput.value = newValue;
+            }
+        }
+    }
+
+    // Chat toggle function
+    function toggleChatBox() {
+        const chatBox = document.getElementById('chatBox');
+        if (chatBox) {
+            chatBox.classList.toggle('d-none');
+        }
+    }
+
     // Enhanced description toggle
     document.addEventListener('DOMContentLoaded', function() {
         const toggleBtn = document.getElementById('toggleDescBtn');
@@ -1040,7 +1850,7 @@
         }
 
         // Enhanced star rating
-        const starInputs = document.querySelectorAll('.star-input');
+        const starInputs = document.querySelectorAll('.temu-star-input');
         const ratingInput = document.getElementById('rating-input');
 
         starInputs.forEach((star, index) => {
@@ -1052,7 +1862,8 @@
                 starInputs.forEach((s, i) => {
                     const icon = s.querySelector('i');
                     s.setAttribute('aria-checked', i < rating ? 'true' : 'false');
-                    icon.className = i < rating ? 'fas fa-star text-warning' : 'far fa-star';
+                    s.classList.toggle('active', i < rating);
+                    icon.className = i < rating ? 'fas fa-star' : 'far fa-star';
                 });
             });
 
@@ -1061,17 +1872,17 @@
                 const rating = parseInt(this.dataset.rating);
                 starInputs.forEach((s, i) => {
                     const icon = s.querySelector('i');
-                    icon.className = i < rating ? 'fas fa-star text-warning' : 'far fa-star';
+                    icon.className = i < rating ? 'fas fa-star' : 'far fa-star';
                 });
             });
         });
 
         // Reset stars on mouse leave
-        document.querySelector('.star-rating')?.addEventListener('mouseleave', function() {
+        document.querySelector('.temu-star-rating')?.addEventListener('mouseleave', function() {
             const currentRating = parseInt(ratingInput.value) || 0;
             starInputs.forEach((s, i) => {
                 const icon = s.querySelector('i');
-                icon.className = i < currentRating ? 'fas fa-star text-warning' : 'far fa-star';
+                icon.className = i < currentRating ? 'fas fa-star' : 'far fa-star';
             });
         });
     });

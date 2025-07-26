@@ -519,6 +519,12 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
+                    <div id="paymentModalError" class="alert alert-danger d-none">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <span id="paymentModalErrorMsg">Error processing payment</span>
+                    </div>
+
+
                     <!-- Order Summary in Modal -->
                     <div class="alert alert-light border">
                         <div class="d-flex justify-content-between">
@@ -537,7 +543,7 @@
                             <option value="wave">Wave Money</option>
                             <option value="qmoney">QMoney</option>
                             <option value="afrimoney">AfriMoney</option>
-                            <option value="cash">Cash on Delivery</option>
+                            <option value="cash" id="cashOption">Cash on Delivery</option>
                             <option value="verve_card">Verve Card</option>
                         </select>
                         <div class="invalid-feedback">Please select a payment method.</div>
@@ -712,6 +718,9 @@
 <script src="{% static 'js/main.js' %}"></script>
 <script src="{% static 'js/order_detail.js' %}"></script>
 <script src="{% static 'js/order2_chat.js' %}"></script>
+<script>
+    window.codAllowed = {{ cod_allowed|yesno:"true,false" }};
+</script>
 
 <script>
 // Enhanced chat functionality
@@ -768,6 +777,22 @@ document.getElementById('paymentMethod')?.addEventListener('change', function() 
             break;
     }
 });
+
+function showPaymentModalError(message, code) {
+    const errorBox = document.getElementById('paymentModalError');
+    const errorMsg = document.getElementById('paymentModalErrorMsg');
+
+    errorMsg.textContent = message;
+    errorBox.classList.remove('d-none');
+
+    // If it's a COD limit issue, scroll to payment method
+    if (code === 'cod_limit') {
+        const methodField = document.getElementById('paymentMethod');
+        methodField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        methodField.classList.add('is-invalid');
+    }
+}
+
 </script>
 
 {% endblock %}

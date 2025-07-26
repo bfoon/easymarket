@@ -335,6 +335,33 @@ class Product(models.Model):
             return self.original_price - self.price
         return Decimal('0.00')
 
+    def get_image_for_color(self, color=None):
+        """Get the primary image for a specific color, fallback to main image"""
+        if color:
+            color_image = ProductImage.get_primary_image_for_color(self, color)
+            if color_image:
+                return color_image.image
+
+            # Fallback to any image with that color
+            color_images = ProductImage.get_images_by_color(self, color)
+            if color_images.exists():
+                return color_images.first().image
+
+        # Fallback to main product image
+        return self.image
+
+    def get_images_by_color(self, color=None):
+        """Get all images for a specific color"""
+        return ProductImage.get_images_by_color(self, color)
+
+    def get_available_image_colors(self):
+        """Get all colors that have images"""
+        return ProductImage.get_available_colors(self)
+
+    def has_color_images(self):
+        """Check if product has color-specific images"""
+        return self.images.filter(color__isnull=False).exists()
+
     def save(self, *args, **kwargs):
         is_update = self.pk is not None
         changed_fields = []
@@ -360,13 +387,82 @@ class Product(models.Model):
             self._changed_fields = ['__created__']
 
 
-
 class ProductImage(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='images')
     image = models.ImageField(upload_to='product_images/')
+    color = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text="Color variant this image represents (e.g., 'Red', 'Ocean Blue', 'Forest Green')"
+    )
+    is_primary = models.BooleanField(
+        default=False,
+        help_text="Set as primary image for this color variant"
+    )
+    alt_text = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="Alternative text for accessibility"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-is_primary', 'created_at']
+        indexes = [
+            models.Index(fields=['product', 'color']),
+            models.Index(fields=['product', 'is_primary']),
+        ]
 
     def __str__(self):
-        return f"Image for {self.product.name}"
+        color_info = f" ({self.color})" if self.color else ""
+        primary_info = " [Primary]" if self.is_primary else ""
+        return f"Image for {self.product.name}{color_info}{primary_info}"
+
+    def save(self, *args, **kwargs):
+        # Auto-generate alt text if not provided
+        if not self.alt_text:
+            color_part = f" in {self.color}" if self.color else ""
+            self.alt_text = f"{self.product.name}{color_part}"
+
+        # Ensure only one primary image per color variant
+        if self.is_primary:
+            ProductImage.objects.filter(
+                product=self.product,
+                color=self.color,
+                is_primary=True
+            ).exclude(pk=self.pk).update(is_primary=False)
+
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_images_by_color(cls, product, color=None):
+        """Get images filtered by color variant"""
+        queryset = cls.objects.filter(product=product)
+        if color:
+            return queryset.filter(color__iexact=color)
+        return queryset.filter(color__isnull=True)
+
+    @classmethod
+    def get_primary_image_for_color(cls, product, color=None):
+        """Get the primary image for a specific color variant"""
+        try:
+            return cls.objects.filter(
+                product=product,
+                color__iexact=color if color else None,
+                is_primary=True
+            ).first()
+        except cls.DoesNotExist:
+            return None
+
+    @classmethod
+    def get_available_colors(cls, product):
+        """Get all available colors for a product based on images"""
+        return cls.objects.filter(
+            product=product,
+            color__isnull=False
+        ).values_list('color', flat=True).distinct()
 
 
 class ProductView(models.Model):

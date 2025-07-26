@@ -91,55 +91,138 @@
     padding: 1rem;
     border-radius: 0.375rem;
 }
+
+/* Loading and success states */
+.btn.loading {
+    position: relative;
+    color: transparent !important;
+}
+
+.btn.loading::after {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    top: 50%;
+    left: 50%;
+    margin-left: -8px;
+    margin-top: -8px;
+    border: 2px solid #ffffff;
+    border-radius: 50%;
+    border-top-color: transparent;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.form-errors {
+    background: #f8d7da;
+    border: 1px solid #f5c6cb;
+    color: #721c24;
+    padding: 0.75rem;
+    border-radius: 0.375rem;
+    margin-bottom: 1rem;
+}
+
+.success-message {
+    background: #d4edda;
+    border: 1px solid #c3e6cb;
+    color: #155724;
+    padding: 0.75rem;
+    border-radius: 0.375rem;
+    margin-bottom: 1rem;
+}
+
+.unsaved-changes {
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    color: #856404;
+    padding: 0.5rem 1rem;
+    border-radius: 0.375rem;
+    margin-bottom: 1rem;
+    display: none;
+}
 </style>
 
-
 <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+
 <div class="container-fluid py-4">
     <div class="row">
         <div class="col-12">
             <!-- Header -->
-            <div class="d-flex justify-content-between align-items-center mb-4">
+            <header class="d-flex justify-content-between align-items-center mb-4">
                 <div>
                     <h1 class="h3 mb-0">Store Settings</h1>
                     <p class="text-muted">Manage your store configuration and preferences</p>
                 </div>
-                <a href="{% url 'stores:store_dashboard' store.id %}" class="btn btn-outline-primary">
-                    <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
-                </a>
+                <nav aria-label="Store settings navigation">
+                    <a href="{% url 'stores:store_dashboard' store.id %}" class="btn btn-outline-primary">
+                        <i class="fas fa-arrow-left me-2" aria-hidden="true"></i>Back to Dashboard
+                    </a>
+                </nav>
+            </header>
+
+            <!-- Success/Error Messages -->
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert" aria-live="assertive">
+                        <strong>
+                            {% if message.tags == 'success' %}
+                                <i class="fas fa-check-circle me-2" aria-hidden="true"></i>Success!
+                            {% elif message.tags == 'error' %}
+                                <i class="fas fa-exclamation-triangle me-2" aria-hidden="true"></i>Error!
+                            {% endif %}
+                        </strong>
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+
+            <!-- Unsaved Changes Warning -->
+            <div class="unsaved-changes" id="unsaved-warning" role="alert">
+                <i class="fas fa-exclamation-triangle me-2" aria-hidden="true"></i>
+                You have unsaved changes. Don't forget to save your work!
             </div>
 
             <!-- Settings Navigation -->
-            <nav class="settings-nav">
-                <ul class="nav nav-pills" id="settingsTabs" role="tablist">
-                    <li class="nav-item">
-                        <button class="nav-link {% if active_tab == 'basic' %}active{% endif %}" 
-                                type="button" data-bs-toggle="pill" data-bs-target="#basic-tab">
-                            <i class="fas fa-store me-2"></i>Basic Info
+            <nav class="settings-nav" role="tablist" aria-label="Settings sections">
+                <ul class="nav nav-pills" id="settingsTabs">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link {% if active_tab == 'basic' %}active{% endif %}"
+                                type="button" role="tab" data-bs-toggle="pill" data-bs-target="#basic-tab"
+                                aria-controls="basic-tab" aria-selected="{% if active_tab == 'basic' %}true{% else %}false{% endif %}">
+                            <i class="fas fa-store me-2" aria-hidden="true"></i>Basic Info
                         </button>
                     </li>
-                    <li class="nav-item">
-                        <button class="nav-link {% if active_tab == 'hours' %}active{% endif %}" 
-                                type="button" data-bs-toggle="pill" data-bs-target="#hours-tab">
-                            <i class="fas fa-clock me-2"></i>Store Hours
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link {% if active_tab == 'hours' %}active{% endif %}"
+                                type="button" role="tab" data-bs-toggle="pill" data-bs-target="#hours-tab"
+                                aria-controls="hours-tab" aria-selected="{% if active_tab == 'hours' %}true{% else %}false{% endif %}">
+                            <i class="fas fa-clock me-2" aria-hidden="true"></i>Store Hours
                         </button>
                     </li>
-                    <li class="nav-item">
-                        <button class="nav-link {% if active_tab == 'shipping' %}active{% endif %}" 
-                                type="button" data-bs-toggle="pill" data-bs-target="#shipping-tab">
-                            <i class="fas fa-truck me-2"></i>Shipping
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link {% if active_tab == 'shipping' %}active{% endif %}"
+                                type="button" role="tab" data-bs-toggle="pill" data-bs-target="#shipping-tab"
+                                aria-controls="shipping-tab" aria-selected="{% if active_tab == 'shipping' %}true{% else %}false{% endif %}">
+                            <i class="fas fa-truck me-2" aria-hidden="true"></i>Shipping
                         </button>
                     </li>
-                    <li class="nav-item">
-                        <button class="nav-link {% if active_tab == 'returns' %}active{% endif %}" 
-                                type="button" data-bs-toggle="pill" data-bs-target="#returns-tab">
-                            <i class="fas fa-undo me-2"></i>Returns
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link {% if active_tab == 'returns' %}active{% endif %}"
+                                type="button" role="tab" data-bs-toggle="pill" data-bs-target="#returns-tab"
+                                aria-controls="returns-tab" aria-selected="{% if active_tab == 'returns' %}true{% else %}false{% endif %}">
+                            <i class="fas fa-undo me-2" aria-hidden="true"></i>Returns
                         </button>
                     </li>
-                    <li class="nav-item">
-                        <button class="nav-link {% if active_tab == 'financial' %}active{% endif %}" 
-                                type="button" data-bs-toggle="pill" data-bs-target="#financial-tab">
-                            <i class="fas fa-money-bill me-2"></i>Financial
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link {% if active_tab == 'financial' %}active{% endif %}"
+                                type="button" role="tab" data-bs-toggle="pill" data-bs-target="#financial-tab"
+                                aria-controls="financial-tab" aria-selected="{% if active_tab == 'financial' %}true{% else %}false{% endif %}">
+                            <i class="fas fa-money-bill me-2" aria-hidden="true"></i>Financial
                         </button>
                     </li>
                 </ul>
@@ -147,43 +230,46 @@
 
             <!-- Tab Content -->
             <div class="tab-content" id="settingsTabContent">
-                
+
                 <!-- Basic Info Tab -->
-                <div class="tab-pane fade {% if active_tab == 'basic' %}show active{% endif %}" id="basic-tab">
+                <div class="tab-pane fade {% if active_tab == 'basic' %}show active{% endif %}"
+                     id="basic-tab" role="tabpanel" aria-labelledby="basic-tab-button">
                     <div class="card settings-card">
                         <div class="card-header">
-                            <h5 class="mb-0"><i class="fas fa-store me-2"></i>Basic Store Information</h5>
+                            <h2 class="h5 mb-0"><i class="fas fa-store me-2" aria-hidden="true"></i>Basic Store Information</h2>
                         </div>
                         <div class="card-body">
-                            <form method="post" enctype="multipart/form-data">
+                            <form method="post" enctype="multipart/form-data" class="needs-validation" novalidate data-tab="basic">
                                 {% csrf_token %}
                                 <input type="hidden" name="tab" value="basic">
-                                
+
                                 <div class="row">
                                     <div class="col-md-6">
-                                        <div class="form-section">
-                                            <h4>Store Identity</h4>
-                                            
+                                        <section class="form-section">
+                                            <h3 class="h4">Store Identity</h3>
+
                                             <div class="mb-3">
                                                 <label for="{{ basic_form.name.id_for_label }}" class="form-label">
-                                                    Store Name <span class="text-danger">*</span>
+                                                    Store Name <span class="text-danger" aria-label="required">*</span>
                                                 </label>
-                                                {{ basic_form.name }}
+                                                {{ basic_form.name|add_class:"form-control"|attr:"required"|attr:"aria-describedby:name-help" }}
+                                                <div id="name-help" class="form-text">This will be displayed as your store's public name</div>
                                                 {% if basic_form.name.errors %}
-                                                    <div class="text-danger small">{{ basic_form.name.errors.0 }}</div>
+                                                    <div class="invalid-feedback d-block" role="alert">{{ basic_form.name.errors.0 }}</div>
                                                 {% endif %}
                                             </div>
 
                                             <div class="mb-3">
                                                 <label for="{{ basic_form.slug.id_for_label }}" class="form-label">
-                                                    Store URL Slug <span class="text-danger">*</span>
+                                                    Store URL Slug <span class="text-danger" aria-label="required">*</span>
                                                 </label>
-                                                {{ basic_form.slug }}
-                                                <div class="form-text">
-                                                    Your store will be accessible at: yoursite.com/stores/{{ basic_form.slug.value|default:"your-slug" }}
+                                                {{ basic_form.slug|add_class:"form-control"|attr:"required"|attr:"pattern:[a-z0-9-]+"|attr:"aria-describedby:slug-help" }}
+                                                <div id="slug-help" class="form-text">
+                                                    Your store will be accessible at: <strong>yoursite.com/stores/{{ basic_form.slug.value|default:"your-slug" }}</strong>
+                                                    <br>Only lowercase letters, numbers, and hyphens allowed.
                                                 </div>
                                                 {% if basic_form.slug.errors %}
-                                                    <div class="text-danger small">{{ basic_form.slug.errors.0 }}</div>
+                                                    <div class="invalid-feedback d-block" role="alert">{{ basic_form.slug.errors.0 }}</div>
                                                 {% endif %}
                                             </div>
 
@@ -191,17 +277,21 @@
                                                 <label for="{{ basic_form.short_description.id_for_label }}" class="form-label">
                                                     Short Description
                                                 </label>
-                                                {{ basic_form.short_description }}
-                                                <div class="form-text">Brief tagline for your store (max 500 characters)</div>
+                                                {{ basic_form.short_description|add_class:"form-control"|attr:"maxlength:500"|attr:"aria-describedby:short-desc-help" }}
+                                                <div id="short-desc-help" class="form-text">
+                                                    Brief tagline for your store (max 500 characters)
+                                                    <span class="char-counter">0/500</span>
+                                                </div>
                                             </div>
 
                                             <div class="mb-3">
                                                 <label for="{{ basic_form.description.id_for_label }}" class="form-label">
-                                                    Full Description <span class="text-danger">*</span>
+                                                    Full Description <span class="text-danger" aria-label="required">*</span>
                                                 </label>
-                                                {{ basic_form.description }}
+                                                {{ basic_form.description|add_class:"form-control"|attr:"required"|attr:"rows:4"|attr:"aria-describedby:desc-help" }}
+                                                <div id="desc-help" class="form-text">Detailed description of your store and what you offer</div>
                                                 {% if basic_form.description.errors %}
-                                                    <div class="text-danger small">{{ basic_form.description.errors.0 }}</div>
+                                                    <div class="invalid-feedback d-block" role="alert">{{ basic_form.description.errors.0 }}</div>
                                                 {% endif %}
                                             </div>
 
@@ -211,7 +301,7 @@
                                                         <label for="{{ basic_form.store_type.id_for_label }}" class="form-label">
                                                             Store Type
                                                         </label>
-                                                        {{ basic_form.store_type }}
+                                                        {{ basic_form.store_type|add_class:"form-select" }}
                                                     </div>
                                                 </div>
                                                 <div class="col-md-6">
@@ -219,22 +309,23 @@
                                                         <label for="{{ basic_form.category.id_for_label }}" class="form-label">
                                                             Primary Category
                                                         </label>
-                                                        {{ basic_form.category }}
+                                                        {{ basic_form.category|add_class:"form-select" }}
                                                     </div>
                                                 </div>
                                             </div>
-                                        </div>
+                                        </section>
 
-                                        <div class="form-section">
-                                            <h4>Contact Information</h4>
-                                            
+                                        <section class="form-section">
+                                            <h3 class="h4">Contact Information</h3>
+
                                             <div class="mb-3">
                                                 <label for="{{ basic_form.email.id_for_label }}" class="form-label">
-                                                    Email <span class="text-danger">*</span>
+                                                    Email <span class="text-danger" aria-label="required">*</span>
                                                 </label>
-                                                {{ basic_form.email }}
+                                                {{ basic_form.email|add_class:"form-control"|attr:"type:email"|attr:"required"|attr:"aria-describedby:email-help" }}
+                                                <div id="email-help" class="form-text">Primary contact email for customer inquiries</div>
                                                 {% if basic_form.email.errors %}
-                                                    <div class="text-danger small">{{ basic_form.email.errors.0 }}</div>
+                                                    <div class="invalid-feedback d-block" role="alert">{{ basic_form.email.errors.0 }}</div>
                                                 {% endif %}
                                             </div>
 
@@ -242,34 +333,38 @@
                                                 <label for="{{ basic_form.phone.id_for_label }}" class="form-label">
                                                     Phone Number
                                                 </label>
-                                                {{ basic_form.phone }}
+                                                {{ basic_form.phone|add_class:"form-control"|attr:"type:tel"|attr:"aria-describedby:phone-help" }}
+                                                <div id="phone-help" class="form-text">Include country code if applicable</div>
                                             </div>
 
                                             <div class="mb-3">
                                                 <label for="{{ basic_form.website.id_for_label }}" class="form-label">
                                                     Website
                                                 </label>
-                                                {{ basic_form.website }}
+                                                {{ basic_form.website|add_class:"form-control"|attr:"type:url"|attr:"placeholder:https://"|attr:"aria-describedby:website-help" }}
+                                                <div id="website-help" class="form-text">Your external website or social media page</div>
                                             </div>
-                                        </div>
+                                        </section>
                                     </div>
 
                                     <div class="col-md-6">
-                                        <div class="form-section">
-                                            <h4>Address</h4>
-                                            
+                                        <section class="form-section">
+                                            <h3 class="h4">Address</h3>
+
                                             <div class="mb-3">
                                                 <label for="{{ basic_form.address_line_1.id_for_label }}" class="form-label">
                                                     Address Line 1
                                                 </label>
-                                                {{ basic_form.address_line_1 }}
+                                                {{ basic_form.address_line_1|add_class:"form-control"|attr:"aria-describedby:address1-help" }}
+                                                <div id="address1-help" class="form-text">Street address, building number</div>
                                             </div>
 
                                             <div class="mb-3">
                                                 <label for="{{ basic_form.address_line_2.id_for_label }}" class="form-label">
                                                     Address Line 2
                                                 </label>
-                                                {{ basic_form.address_line_2 }}
+                                                {{ basic_form.address_line_2|add_class:"form-control"|attr:"aria-describedby:address2-help" }}
+                                                <div id="address2-help" class="form-text">Apartment, suite, floor (optional)</div>
                                             </div>
 
                                             <div class="row">
@@ -278,7 +373,7 @@
                                                         <label for="{{ basic_form.city.id_for_label }}" class="form-label">
                                                             City
                                                         </label>
-                                                        {{ basic_form.city }}
+                                                        {{ basic_form.city|add_class:"form-control" }}
                                                     </div>
                                                 </div>
                                                 <div class="col-md-6">
@@ -286,7 +381,7 @@
                                                         <label for="{{ basic_form.region.id_for_label }}" class="form-label">
                                                             Region
                                                         </label>
-                                                        {{ basic_form.region }}
+                                                        {{ basic_form.region|add_class:"form-control" }}
                                                     </div>
                                                 </div>
                                             </div>
@@ -297,7 +392,7 @@
                                                         <label for="{{ basic_form.postal_code.id_for_label }}" class="form-label">
                                                             Postal Code
                                                         </label>
-                                                        {{ basic_form.postal_code }}
+                                                        {{ basic_form.postal_code|add_class:"form-control" }}
                                                     </div>
                                                 </div>
                                                 <div class="col-md-6">
@@ -305,23 +400,23 @@
                                                         <label for="{{ basic_form.country.id_for_label }}" class="form-label">
                                                             Country
                                                         </label>
-                                                        {{ basic_form.country }}
+                                                        {{ basic_form.country|add_class:"form-select" }}
                                                     </div>
                                                 </div>
                                             </div>
-                                        </div>
+                                        </section>
 
-                                        <div class="form-section">
-                                            <h4>Branding</h4>
-                                            
+                                        <section class="form-section">
+                                            <h3 class="h4">Branding</h3>
+
                                             <div class="mb-3">
                                                 <label for="{{ basic_form.logo.id_for_label }}" class="form-label">
                                                     Store Logo
                                                 </label>
-                                                {{ basic_form.logo }}
-                                                <div class="form-text">Upload a square logo (recommended: 300x300px)</div>
+                                                {{ basic_form.logo|add_class:"form-control"|attr:"accept:image/*"|attr:"aria-describedby:logo-help" }}
+                                                <div id="logo-help" class="form-text">Upload a square logo (recommended: 300x300px, max 2MB)</div>
                                                 {% if store.logo %}
-                                                    <img src="{{ store.logo.url }}" alt="Current logo" class="file-upload-preview mt-2">
+                                                    <img src="{{ store.logo.url }}" alt="Current store logo" class="file-upload-preview mt-2">
                                                 {% endif %}
                                             </div>
 
@@ -329,44 +424,59 @@
                                                 <label for="{{ basic_form.banner.id_for_label }}" class="form-label">
                                                     Store Banner
                                                 </label>
-                                                {{ basic_form.banner }}
-                                                <div class="form-text">Upload a banner image (recommended: 1200x400px)</div>
+                                                {{ basic_form.banner|add_class:"form-control"|attr:"accept:image/*"|attr:"aria-describedby:banner-help" }}
+                                                <div id="banner-help" class="form-text">Upload a banner image (recommended: 1200x400px, max 5MB)</div>
                                                 {% if store.banner %}
-                                                    <img src="{{ store.banner.url }}" alt="Current banner" class="file-upload-preview mt-2">
+                                                    <img src="{{ store.banner.url }}" alt="Current store banner" class="file-upload-preview mt-2">
                                                 {% endif %}
                                             </div>
-                                        </div>
+                                        </section>
 
-                                        <div class="form-section">
-                                            <h4>Social Media</h4>
-                                            
+                                        <section class="form-section">
+                                            <h3 class="h4">Social Media</h3>
+
                                             <div class="mb-3">
                                                 <label for="{{ basic_form.facebook_url.id_for_label }}" class="form-label">
-                                                    Facebook URL
+                                                    <i class="fab fa-facebook me-2" aria-hidden="true"></i>Facebook URL
                                                 </label>
-                                                {{ basic_form.facebook_url }}
+                                                {{ basic_form.facebook_url|add_class:"form-control"|attr:"type:url"|attr:"placeholder:https://facebook.com/yourpage" }}
                                             </div>
 
                                             <div class="mb-3">
                                                 <label for="{{ basic_form.twitter_url.id_for_label }}" class="form-label">
-                                                    Twitter URL
+                                                    <i class="fab fa-twitter me-2" aria-hidden="true"></i>Twitter URL
                                                 </label>
-                                                {{ basic_form.twitter_url }}
+                                                {{ basic_form.twitter_url|add_class:"form-control"|attr:"type:url"|attr:"placeholder:https://twitter.com/yourhandle" }}
                                             </div>
 
                                             <div class="mb-3">
                                                 <label for="{{ basic_form.instagram_url.id_for_label }}" class="form-label">
-                                                    Instagram URL
+                                                    <i class="fab fa-instagram me-2" aria-hidden="true"></i>Instagram URL
                                                 </label>
-                                                {{ basic_form.instagram_url }}
+                                                {{ basic_form.instagram_url|add_class:"form-control"|attr:"type:url"|attr:"placeholder:https://instagram.com/yourhandle" }}
                                             </div>
-                                        </div>
+                                        </section>
                                     </div>
                                 </div>
 
+                                <section class="form-section">
+                                    <h3 class="h4">Order Preferences</h3>
+
+                                    <div class="form-check mb-3">
+                                        {{ basic_form.accept_cash_risk|add_class:"form-check-input" }}
+                                        <label for="{{ basic_form.accept_cash_risk.id_for_label }}" class="form-check-label">
+                                            Accept Cash on Delivery (Risk-based)
+                                        </label>
+                                        <div class="form-text text-muted">
+                                            Enable this if your store is willing to accept COD orders above D500.
+                                            <strong>Note:</strong> This may increase order volume but also payment risks.
+                                        </div>
+                                    </div>
+                                </section>
+
                                 <div class="text-end">
-                                    <button type="submit" class="btn btn-primary">
-                                        <i class="fas fa-save me-2"></i>Save Basic Information
+                                    <button type="submit" class="btn btn-primary" data-loading-text="Saving...">
+                                        <i class="fas fa-save me-2" aria-hidden="true"></i>Save Basic Information
                                     </button>
                                 </div>
                             </form>
@@ -375,52 +485,73 @@
                 </div>
 
                 <!-- Store Hours Tab -->
-                <div class="tab-pane fade {% if active_tab == 'hours' %}show active{% endif %}" id="hours-tab">
+                <div class="tab-pane fade {% if active_tab == 'hours' %}show active{% endif %}"
+                     id="hours-tab" role="tabpanel" aria-labelledby="hours-tab-button">
                     <div class="card settings-card">
                         <div class="card-header">
-                            <h5 class="mb-0"><i class="fas fa-clock me-2"></i>Store Operating Hours</h5>
+                            <h2 class="h5 mb-0"><i class="fas fa-clock me-2" aria-hidden="true"></i>Store Operating Hours</h2>
                         </div>
                         <div class="card-body">
-                            <form method="post">
+                            <form method="post" class="needs-validation" novalidate data-tab="hours">
                                 {% csrf_token %}
                                 <input type="hidden" name="tab" value="hours">
                                 {{ hours_formset.management_form }}
-                                
+
                                 <div class="mb-3">
-                                    <p class="text-muted">Set your store's operating hours for each day of the week.</p>
+                                    <p class="text-muted">Set your store's operating hours for each day of the week. Leave times blank or check "Closed" for days when your store is not open.</p>
+                                    <div class="alert alert-info">
+                                        <i class="fas fa-info-circle me-2" aria-hidden="true"></i>
+                                        <strong>Tip:</strong> Consistent operating hours help build customer trust and improve search visibility.
+                                    </div>
                                 </div>
 
-                                {% for form in hours_formset %}
-                                    <div class="hours-grid">
-                                        <div>
-                                            <strong>{{ form.instance.get_day_of_week_display }}</strong>
-                                            {{ form.day_of_week.as_hidden }}
-                                            {% for hidden in form.hidden_fields %}
-                                                {{ hidden }}
-                                            {% endfor %}
-                                        </div>
-                                        <div>
-                                            <label for="{{ form.opening_time.id_for_label }}" class="form-label">Opening Time</label>
-                                            {{ form.opening_time }}
-                                        </div>
-                                        <div>
-                                            <label for="{{ form.closing_time.id_for_label }}" class="form-label">Closing Time</label>
-                                            {{ form.closing_time }}
-                                        </div>
-                                        <div>
-                                            <div class="form-check">
-                                                {{ form.is_closed }}
-                                                <label for="{{ form.is_closed.id_for_label }}" class="form-check-label">
-                                                    Closed
+                                <div role="table" aria-label="Store operating hours">
+                                    <div class="hours-grid" style="font-weight: 600; background: #f8f9fa;" role="row">
+                                        <div role="columnheader">Day</div>
+                                        <div role="columnheader">Opening Time</div>
+                                        <div role="columnheader">Closing Time</div>
+                                        <div role="columnheader">Status</div>
+                                    </div>
+
+                                    {% for form in hours_formset %}
+                                        <div class="hours-grid" role="row" data-day="{{ form.instance.day_of_week }}">
+                                            <div role="cell">
+                                                <strong>{{ form.instance.get_day_of_week_display }}</strong>
+                                                {{ form.day_of_week.as_hidden }}
+                                                {% for hidden in form.hidden_fields %}
+                                                    {{ hidden }}
+                                                {% endfor %}
+                                            </div>
+                                            <div role="cell">
+                                                <label for="{{ form.opening_time.id_for_label }}" class="form-label visually-hidden">
+                                                    {{ form.instance.get_day_of_week_display }} Opening Time
                                                 </label>
+                                                {{ form.opening_time|add_class:"form-control" }}
+                                            </div>
+                                            <div role="cell">
+                                                <label for="{{ form.closing_time.id_for_label }}" class="form-label visually-hidden">
+                                                    {{ form.instance.get_day_of_week_display }} Closing Time
+                                                </label>
+                                                {{ form.closing_time|add_class:"form-control" }}
+                                            </div>
+                                            <div role="cell">
+                                                <div class="form-check">
+                                                    {{ form.is_closed|add_class:"form-check-input" }}
+                                                    <label for="{{ form.is_closed.id_for_label }}" class="form-check-label">
+                                                        Closed
+                                                    </label>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                {% endfor %}
+                                    {% endfor %}
+                                </div>
 
                                 <div class="text-end mt-4">
-                                    <button type="submit" class="btn btn-primary">
-                                        <i class="fas fa-save me-2"></i>Save Store Hours
+                                    <button type="button" class="btn btn-outline-secondary me-2" id="copy-hours-btn">
+                                        <i class="fas fa-copy me-2" aria-hidden="true"></i>Copy Hours to All Days
+                                    </button>
+                                    <button type="submit" class="btn btn-primary" data-loading-text="Saving...">
+                                        <i class="fas fa-save me-2" aria-hidden="true"></i>Save Store Hours
                                     </button>
                                 </div>
                             </form>
@@ -429,97 +560,154 @@
                 </div>
 
                 <!-- Shipping Tab -->
-                <div class="tab-pane fade {% if active_tab == 'shipping' %}show active{% endif %}" id="shipping-tab">
+                <div class="tab-pane fade {% if active_tab == 'shipping' %}show active{% endif %}"
+                     id="shipping-tab" role="tabpanel" aria-labelledby="shipping-tab-button">
                     <div class="card settings-card">
-                        <div class="card-header">
-                            <h5 class="mb-0"><i class="fas fa-truck me-2"></i>Shipping Zones</h5>
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h2 class="h5 mb-0"><i class="fas fa-truck me-2" aria-hidden="true"></i>Shipping Zones</h2>
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="add-shipping-zone">
+                                <i class="fas fa-plus me-2" aria-hidden="true"></i>Add Zone
+                            </button>
                         </div>
                         <div class="card-body">
-                            <form method="post" id="shipping-form">
+                            <form method="post" id="shipping-form" class="needs-validation" novalidate data-tab="shipping">
                                 {% csrf_token %}
                                 <input type="hidden" name="tab" value="shipping">
                                 {{ shipping_formset.management_form }}
-                                
+
                                 <div class="mb-3">
-                                    <p class="text-muted">Configure shipping zones and costs for different regions.</p>
+                                    <p class="text-muted">Configure shipping zones and costs for different regions. Each zone can cover multiple areas with specific pricing and delivery times.</p>
+                                    {% if not shipping_formset.forms %}
+                                        <div class="alert alert-warning">
+                                            <i class="fas fa-exclamation-triangle me-2" aria-hidden="true"></i>
+                                            No shipping zones configured. Add at least one shipping zone to enable order delivery.
+                                        </div>
+                                    {% endif %}
                                 </div>
 
-                                <div id="shipping-zones">
+                                <div id="shipping-zones" role="group" aria-label="Shipping zones">
                                     {% for form in shipping_formset %}
-                                        <div class="shipping-zone" data-form-index="{{ forloop.counter0 }}">
-                                            {% if form.instance.pk %}
-                                                <div class="d-flex justify-content-between align-items-start mb-3">
-                                                    <h6>Shipping Zone {{ forloop.counter }}</h6>
-                                                    <button type="button" class="btn btn-sm btn-outline-danger delete-zone">
-                                                        <i class="fas fa-trash me-1"></i>Delete
+                                        <div class="shipping-zone" data-form-index="{{ forloop.counter0 }}" role="group"
+                                             aria-labelledby="zone-title-{{ forloop.counter0 }}">
+                                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                                {% if form.instance.pk %}
+                                                    <h3 class="h6 mb-0" id="zone-title-{{ forloop.counter0 }}">
+                                                        Shipping Zone {{ forloop.counter }}
+                                                        {% if form.instance.name %}
+                                                            - {{ form.instance.name }}
+                                                        {% endif %}
+                                                    </h3>
+                                                    <button type="button" class="btn btn-sm btn-outline-danger delete-zone"
+                                                            aria-label="Delete shipping zone {{ forloop.counter }}">
+                                                        <i class="fas fa-trash me-1" aria-hidden="true"></i>Delete
                                                     </button>
-                                                </div>
-                                            {% else %}
-                                                <h6>New Shipping Zone</h6>
-                                            {% endif %}
-                                            
+                                                {% else %}
+                                                    <h3 class="h6 mb-0" id="zone-title-{{ forloop.counter0 }}">New Shipping Zone</h3>
+                                                    <button type="button" class="btn btn-sm btn-outline-danger delete-zone"
+                                                            aria-label="Remove new shipping zone">
+                                                        <i class="fas fa-times me-1" aria-hidden="true"></i>Remove
+                                                    </button>
+                                                {% endif %}
+                                            </div>
+
                                             {% for hidden in form.hidden_fields %}
                                                 {{ hidden }}
                                             {% endfor %}
-                                            
+
                                             <div class="row">
-                                                <div class="col-md-6">
+                                                <div class="col-md-8">
                                                     <div class="mb-3">
-                                                        <label for="{{ form.name.id_for_label }}" class="form-label">Zone Name</label>
-                                                        {{ form.name }}
+                                                        <label for="{{ form.name.id_for_label }}" class="form-label">
+                                                            Zone Name <span class="text-danger" aria-label="required">*</span>
+                                                        </label>
+                                                        {{ form.name|add_class:"form-control"|attr:"required"|attr:"placeholder:e.g., Local Area, Nationwide" }}
+                                                        {% if form.name.errors %}
+                                                            <div class="invalid-feedback d-block" role="alert">{{ form.name.errors.0 }}</div>
+                                                        {% endif %}
                                                     </div>
                                                 </div>
-                                                <div class="col-md-6">
+                                                <div class="col-md-4">
                                                     <div class="mb-3">
-                                                        <label for="{{ form.estimated_delivery_days.id_for_label }}" class="form-label">Delivery Days</label>
-                                                        {{ form.estimated_delivery_days }}
+                                                        <label for="{{ form.estimated_delivery_days.id_for_label }}" class="form-label">
+                                                            Delivery Days
+                                                        </label>
+                                                        {{ form.estimated_delivery_days|add_class:"form-control"|attr:"min:1"|attr:"max:365"|attr:"placeholder:e.g., 3" }}
+                                                        {% if form.estimated_delivery_days.errors %}
+                                                            <div class="invalid-feedback d-block" role="alert">{{ form.estimated_delivery_days.errors.0 }}</div>
+                                                        {% endif %}
                                                     </div>
                                                 </div>
                                             </div>
 
                                             <div class="mb-3">
-                                                <label for="{{ form.regions.id_for_label }}" class="form-label">Regions Covered</label>
-                                                {{ form.regions }}
-                                                <div class="form-text">Enter regions separated by commas</div>
+                                                <label for="{{ form.regions.id_for_label }}" class="form-label">
+                                                    Regions Covered <span class="text-danger" aria-label="required">*</span>
+                                                </label>
+                                                {{ form.regions|add_class:"form-control"|attr:"required"|attr:"placeholder:e.g., Banjul, Serrekunda, Bakau"|attr:"aria-describedby:regions-help-"}}{{ forloop.counter0 }}
+                                                <div id="regions-help-{{ forloop.counter0 }}" class="form-text">
+                                                    Enter regions separated by commas. Be specific to avoid confusion.
+                                                </div>
+                                                {% if form.regions.errors %}
+                                                    <div class="invalid-feedback d-block" role="alert">{{ form.regions.errors.0 }}</div>
+                                                {% endif %}
                                             </div>
 
                                             <div class="row">
                                                 <div class="col-md-4">
                                                     <div class="mb-3">
-                                                        <label for="{{ form.base_cost.id_for_label }}" class="form-label">Base Cost (D)</label>
-                                                        {{ form.base_cost }}
+                                                        <label for="{{ form.base_cost.id_for_label }}" class="form-label">
+                                                            Base Cost (D) <span class="text-danger" aria-label="required">*</span>
+                                                        </label>
+                                                        {{ form.base_cost|add_class:"form-control"|attr:"required"|attr:"min:0"|attr:"step:0.01"|attr:"placeholder:0.00" }}
+                                                        {% if form.base_cost.errors %}
+                                                            <div class="invalid-feedback d-block" role="alert">{{ form.base_cost.errors.0 }}</div>
+                                                        {% endif %}
                                                     </div>
                                                 </div>
                                                 <div class="col-md-4">
                                                     <div class="mb-3">
-                                                        <label for="{{ form.per_kg_cost.id_for_label }}" class="form-label">Per KG Cost (D)</label>
-                                                        {{ form.per_kg_cost }}
+                                                        <label for="{{ form.per_kg_cost.id_for_label }}" class="form-label">
+                                                            Per KG Cost (D)
+                                                        </label>
+                                                        {{ form.per_kg_cost|add_class:"form-control"|attr:"min:0"|attr:"step:0.01"|attr:"placeholder:0.00" }}
+                                                        {% if form.per_kg_cost.errors %}
+                                                            <div class="invalid-feedback d-block" role="alert">{{ form.per_kg_cost.errors.0 }}</div>
+                                                        {% endif %}
                                                     </div>
                                                 </div>
                                                 <div class="col-md-4">
                                                     <div class="mb-3">
-                                                        <label for="{{ form.free_shipping_threshold.id_for_label }}" class="form-label">Free Shipping Threshold (D)</label>
-                                                        {{ form.free_shipping_threshold }}
+                                                        <label for="{{ form.free_shipping_threshold.id_for_label }}" class="form-label">
+                                                            Free Shipping Threshold (D)
+                                                        </label>
+                                                        {{ form.free_shipping_threshold|add_class:"form-control"|attr:"min:0"|attr:"step:0.01"|attr:"placeholder:0.00" }}
+                                                        <div class="form-text">Leave blank for no free shipping</div>
+                                                        {% if form.free_shipping_threshold.errors %}
+                                                            <div class="invalid-feedback d-block" role="alert">{{ form.free_shipping_threshold.errors.0 }}</div>
+                                                        {% endif %}
                                                     </div>
                                                 </div>
                                             </div>
 
                                             <div class="form-check">
-                                                {{ form.is_active }}
+                                                {{ form.is_active|add_class:"form-check-input" }}
                                                 <label for="{{ form.is_active.id_for_label }}" class="form-check-label">
                                                     Active Zone
                                                 </label>
+                                                <div class="form-text">Only active zones will be available for customers</div>
                                             </div>
+                                        </div>
+                                    {% empty %}
+                                        <div class="text-center py-4">
+                                            <i class="fas fa-truck fa-3x text-muted mb-3" aria-hidden="true"></i>
+                                            <p class="text-muted">No shipping zones configured yet. Click "Add Zone" to get started.</p>
                                         </div>
                                     {% endfor %}
                                 </div>
 
                                 <div class="text-end mt-4">
-                                    <button type="button" class="btn btn-outline-primary me-2" id="add-shipping-zone">
-                                        <i class="fas fa-plus me-2"></i>Add Zone
-                                    </button>
-                                    <button type="submit" class="btn btn-primary">
-                                        <i class="fas fa-save me-2"></i>Save Shipping Settings
+                                    <button type="submit" class="btn btn-primary" data-loading-text="Saving...">
+                                        <i class="fas fa-save me-2" aria-hidden="true"></i>Save Shipping Settings
                                     </button>
                                 </div>
                             </form>
@@ -528,147 +716,174 @@
                 </div>
 
                 <!-- Returns Tab -->
-                <div class="tab-pane fade {% if active_tab == 'returns' %}show active{% endif %}" id="returns-tab">
+                <div class="tab-pane fade {% if active_tab == 'returns' %}show active{% endif %}"
+                     id="returns-tab" role="tabpanel" aria-labelledby="returns-tab-button">
                     <div class="card settings-card">
                         <div class="card-header">
-                            <h5 class="mb-0"><i class="fas fa-undo me-2"></i>Return Policy Settings</h5>
+                            <h2 class="h5 mb-0"><i class="fas fa-undo me-2" aria-hidden="true"></i>Return Policy Settings</h2>
                         </div>
                         <div class="card-body">
-                            <form method="post">
+                            <form method="post" class="needs-validation" novalidate data-tab="returns">
                                 {% csrf_token %}
                                 <input type="hidden" name="tab" value="returns">
-                                
+
+                                <div class="mb-3">
+                                    <p class="text-muted">Configure your return policy to set clear expectations for customers and streamline your return process.</p>
+                                </div>
+
                                 <div class="return-policy-grid">
-                                    <div class="policy-section">
-                                        <h6>General Settings</h6>
-                                        
+                                    <section class="policy-section">
+                                        <h3 class="h6">General Settings</h3>
+
                                         <div class="mb-3">
                                             <label for="{{ returns_form.return_window_days.id_for_label }}" class="form-label">
-                                                Return Window (Days)
+                                                Return Window (Days) <span class="text-danger" aria-label="required">*</span>
                                             </label>
-                                            {{ returns_form.return_window_days }}
-                                            <div class="form-text">Number of days customers can return items</div>
+                                            {{ returns_form.return_window_days|add_class:"form-control"|attr:"required"|attr:"min:1"|attr:"max:365" }}
+                                            <div class="form-text">Number of days customers can return items (typically 7-30 days)</div>
+                                            {% if returns_form.return_window_days.errors %}
+                                                <div class="invalid-feedback d-block" role="alert">{{ returns_form.return_window_days.errors.0 }}</div>
+                                            {% endif %}
                                         </div>
 
                                         <div class="mb-3">
                                             <label for="{{ returns_form.restocking_fee_percentage.id_for_label }}" class="form-label">
                                                 Restocking Fee (%)
                                             </label>
-                                            {{ returns_form.restocking_fee_percentage }}
+                                            {{ returns_form.restocking_fee_percentage|add_class:"form-control"|attr:"min:0"|attr:"max:50"|attr:"step:0.5" }}
+                                            <div class="form-text">Fee charged for processing returns (0-50%)</div>
+                                            {% if returns_form.restocking_fee_percentage.errors %}
+                                                <div class="invalid-feedback d-block" role="alert">{{ returns_form.restocking_fee_percentage.errors.0 }}</div>
+                                            {% endif %}
                                         </div>
 
-                                        <div class="form-check">
-                                            {{ returns_form.auto_approve_returns }}
+                                        <div class="form-check mb-3">
+                                            {{ returns_form.auto_approve_returns|add_class:"form-check-input" }}
                                             <label for="{{ returns_form.auto_approve_returns.id_for_label }}" class="form-check-label">
                                                 Auto-approve returns
                                             </label>
+                                            <div class="form-text">Automatically approve return requests without manual review</div>
                                         </div>
 
                                         <div class="form-check">
-                                            {{ returns_form.refund_shipping_cost }}
+                                            {{ returns_form.refund_shipping_cost|add_class:"form-check-input" }}
                                             <label for="{{ returns_form.refund_shipping_cost.id_for_label }}" class="form-check-label">
                                                 Refund shipping costs
                                             </label>
+                                            <div class="form-text">Include original shipping costs in refunds</div>
                                         </div>
-                                    </div>
+                                    </section>
 
-                                    <div class="policy-section">
-                                        <h6>Accepted Return Reasons</h6>
-                                        
-                                        <div class="form-check">
-                                            {{ returns_form.accept_defective }}
+                                    <section class="policy-section">
+                                        <h3 class="h6">Accepted Return Reasons</h3>
+                                        <div class="form-text mb-3">Select which reasons you accept for returns:</div>
+
+                                        <div class="form-check mb-2">
+                                            {{ returns_form.accept_defective|add_class:"form-check-input" }}
                                             <label for="{{ returns_form.accept_defective.id_for_label }}" class="form-check-label">
-                                                Defective products
+                                                <strong>Defective products</strong>
                                             </label>
+                                            <div class="form-text">Items that don't work or are broken</div>
                                         </div>
 
-                                        <div class="form-check">
-                                            {{ returns_form.accept_wrong_item }}
+                                        <div class="form-check mb-2">
+                                            {{ returns_form.accept_wrong_item|add_class:"form-check-input" }}
                                             <label for="{{ returns_form.accept_wrong_item.id_for_label }}" class="form-check-label">
-                                                Wrong item sent
+                                                <strong>Wrong item sent</strong>
                                             </label>
+                                            <div class="form-text">Customer received different item than ordered</div>
                                         </div>
 
-                                        <div class="form-check">
-                                            {{ returns_form.accept_wrong_size }}
+                                        <div class="form-check mb-2">
+                                            {{ returns_form.accept_wrong_size|add_class:"form-check-input" }}
                                             <label for="{{ returns_form.accept_wrong_size.id_for_label }}" class="form-check-label">
-                                                Wrong size/fit
+                                                <strong>Wrong size/fit</strong>
                                             </label>
+                                            <div class="form-text">Size or fit issues</div>
                                         </div>
 
-                                        <div class="form-check">
-                                            {{ returns_form.accept_damaged_shipping }}
+                                        <div class="form-check mb-2">
+                                            {{ returns_form.accept_damaged_shipping|add_class:"form-check-input" }}
                                             <label for="{{ returns_form.accept_damaged_shipping.id_for_label }}" class="form-check-label">
-                                                Damaged in shipping
+                                                <strong>Damaged in shipping</strong>
                                             </label>
+                                            <div class="form-text">Items damaged during delivery</div>
                                         </div>
 
-                                        <div class="form-check">
-                                            {{ returns_form.accept_not_as_described }}
+                                        <div class="form-check mb-2">
+                                            {{ returns_form.accept_not_as_described|add_class:"form-check-input" }}
                                             <label for="{{ returns_form.accept_not_as_described.id_for_label }}" class="form-check-label">
-                                                Not as described
+                                                <strong>Not as described</strong>
                                             </label>
+                                            <div class="form-text">Item differs significantly from description</div>
                                         </div>
 
-                                        <div class="form-check">
-                                            {{ returns_form.accept_quality_issues }}
+                                        <div class="form-check mb-2">
+                                            {{ returns_form.accept_quality_issues|add_class:"form-check-input" }}
                                             <label for="{{ returns_form.accept_quality_issues.id_for_label }}" class="form-check-label">
-                                                Quality issues
+                                                <strong>Quality issues</strong>
                                             </label>
+                                            <div class="form-text">Poor craftsmanship or materials</div>
                                         </div>
 
                                         <div class="form-check">
-                                            {{ returns_form.accept_changed_mind }}
+                                            {{ returns_form.accept_changed_mind|add_class:"form-check-input" }}
                                             <label for="{{ returns_form.accept_changed_mind.id_for_label }}" class="form-check-label">
-                                                Changed mind
+                                                <strong>Changed mind</strong>
                                             </label>
+                                            <div class="form-text">Customer no longer wants the item</div>
                                         </div>
-                                    </div>
+                                    </section>
 
-                                    <div class="policy-section">
-                                        <h6>Requirements & Services</h6>
-                                        
-                                        <div class="form-check">
-                                            {{ returns_form.require_original_packaging }}
+                                    <section class="policy-section">
+                                        <h3 class="h6">Requirements & Services</h3>
+                                        <div class="form-text mb-3">Additional requirements and services:</div>
+
+                                        <div class="form-check mb-3">
+                                            {{ returns_form.require_original_packaging|add_class:"form-check-input" }}
                                             <label for="{{ returns_form.require_original_packaging.id_for_label }}" class="form-check-label">
-                                                Require original packaging
+                                                <strong>Require original packaging</strong>
                                             </label>
+                                            <div class="form-text">Items must be returned in original packaging</div>
                                         </div>
 
-                                        <div class="form-check">
-                                            {{ returns_form.require_photos }}
+                                        <div class="form-check mb-3">
+                                            {{ returns_form.require_photos|add_class:"form-check-input" }}
                                             <label for="{{ returns_form.require_photos.id_for_label }}" class="form-check-label">
-                                                Require photos
+                                                <strong>Require photos</strong>
                                             </label>
+                                            <div class="form-text">Customers must provide photos for return requests</div>
                                         </div>
 
-                                        <div class="form-check">
-                                            {{ returns_form.provide_return_label }}
+                                        <div class="form-check mb-3">
+                                            {{ returns_form.provide_return_label|add_class:"form-check-input" }}
                                             <label for="{{ returns_form.provide_return_label.id_for_label }}" class="form-check-label">
-                                                Provide return shipping label
+                                                <strong>Provide return shipping label</strong>
                                             </label>
+                                            <div class="form-text">You'll provide prepaid return labels</div>
                                         </div>
 
                                         <div class="form-check">
-                                            {{ returns_form.pickup_service_available }}
+                                            {{ returns_form.pickup_service_available|add_class:"form-check-input" }}
                                             <label for="{{ returns_form.pickup_service_available.id_for_label }}" class="form-check-label">
-                                                Pickup service available
+                                                <strong>Pickup service available</strong>
                                             </label>
+                                            <div class="form-text">Offer pickup service for returned items</div>
                                         </div>
-                                    </div>
+                                    </section>
                                 </div>
 
                                 <div class="mt-4">
                                     <label for="{{ returns_form.custom_return_policy.id_for_label }}" class="form-label">
                                         Custom Return Policy Text
                                     </label>
-                                    {{ returns_form.custom_return_policy }}
-                                    <div class="form-text">Additional terms and conditions for returns</div>
+                                    {{ returns_form.custom_return_policy|add_class:"form-control"|attr:"rows:4"|attr:"placeholder:Additional terms and conditions..." }}
+                                    <div class="form-text">Additional terms and conditions for returns (displayed to customers)</div>
                                 </div>
 
                                 <div class="text-end mt-4">
-                                    <button type="submit" class="btn btn-primary">
-                                        <i class="fas fa-save me-2"></i>Save Return Policy
+                                    <button type="submit" class="btn btn-primary" data-loading-text="Saving...">
+                                        <i class="fas fa-save me-2" aria-hidden="true"></i>Save Return Policy
                                     </button>
                                 </div>
                             </form>
@@ -677,174 +892,640 @@
                 </div>
 
                 <!-- Financial Tab -->
-                <div class="tab-pane fade {% if active_tab == 'financial' %}show active{% endif %}" id="financial-tab">
+                <div class="tab-pane fade {% if active_tab == 'financial' %}show active{% endif %}"
+                     id="financial-tab" role="tabpanel" aria-labelledby="financial-tab-button">
                     <div class="card settings-card">
                         <div class="card-header">
-                            <h5 class="mb-0"><i class="fas fa-money-bill me-2"></i>Financial Settings</h5>
+                            <h2 class="h5 mb-0"><i class="fas fa-money-bill me-2" aria-hidden="true"></i>Financial Settings</h2>
                         </div>
                         <div class="card-body">
-                            <form method="post">
+                            <form method="post" class="needs-validation" novalidate data-tab="financial">
                                 {% csrf_token %}
                                 <input type="hidden" name="tab" value="financial">
-                                
+
+                                <div class="alert alert-warning mb-4">
+                                    <i class="fas fa-shield-alt me-2" aria-hidden="true"></i>
+                                    <strong>Security Notice:</strong> All financial information is encrypted and securely stored. Only you and authorized platform administrators can access this data.
+                                </div>
+
                                 <div class="row">
                                     <div class="col-md-6">
-                                        <div class="form-section">
-                                            <h4>Banking Information</h4>
-                                            
+                                        <section class="form-section">
+                                            <h3 class="h4">Banking Information</h3>
+
                                             <div class="mb-3">
                                                 <label for="{{ financial_form.bank_name.id_for_label }}" class="form-label">
                                                     Bank Name
                                                 </label>
-                                                {{ financial_form.bank_name }}
+                                                {{ financial_form.bank_name|add_class:"form-control"|attr:"placeholder:e.g., Standard Chartered Bank" }}
+                                                {% if financial_form.bank_name.errors %}
+                                                    <div class="invalid-feedback d-block" role="alert">{{ financial_form.bank_name.errors.0 }}</div>
+                                                {% endif %}
                                             </div>
 
                                             <div class="mb-3">
                                                 <label for="{{ financial_form.bank_account_number.id_for_label }}" class="form-label">
                                                     Account Number
                                                 </label>
-                                                {{ financial_form.bank_account_number }}
-                                                <div class="form-text">This information is encrypted and secure</div>
+                                                {{ financial_form.bank_account_number|add_class:"form-control"|attr:"placeholder:Enter your account number"|attr:"autocomplete:off" }}
+                                                <div class="form-text">
+                                                    <i class="fas fa-lock me-1" aria-hidden="true"></i>
+                                                    This information is encrypted and secure
+                                                </div>
+                                                {% if financial_form.bank_account_number.errors %}
+                                                    <div class="invalid-feedback d-block" role="alert">{{ financial_form.bank_account_number.errors.0 }}</div>
+                                                {% endif %}
                                             </div>
-                                        </div>
+                                        </section>
 
-                                        <div class="form-section">
-                                            <h4>Business Registration</h4>
-                                            
+                                        <section class="form-section">
+                                            <h3 class="h4">Business Registration</h3>
+
                                             <div class="mb-3">
                                                 <label for="{{ financial_form.business_registration_number.id_for_label }}" class="form-label">
                                                     Business Registration Number
                                                 </label>
-                                                {{ financial_form.business_registration_number }}
+                                                {{ financial_form.business_registration_number|add_class:"form-control"|attr:"placeholder:e.g., BRN123456789" }}
+                                                <div class="form-text">Official business registration number (if applicable)</div>
+                                                {% if financial_form.business_registration_number.errors %}
+                                                    <div class="invalid-feedback d-block" role="alert">{{ financial_form.business_registration_number.errors.0 }}</div>
+                                                {% endif %}
                                             </div>
 
                                             <div class="mb-3">
                                                 <label for="{{ financial_form.tax_identification_number.id_for_label }}" class="form-label">
                                                     Tax Identification Number
                                                 </label>
-                                                {{ financial_form.tax_identification_number }}
+                                                {{ financial_form.tax_identification_number|add_class:"form-control"|attr:"placeholder:e.g., TIN123456789" }}
+                                                <div class="form-text">Tax ID for business reporting purposes</div>
+                                                {% if financial_form.tax_identification_number.errors %}
+                                                    <div class="invalid-feedback d-block" role="alert">{{ financial_form.tax_identification_number.errors.0 }}</div>
+                                                {% endif %}
                                             </div>
-                                        </div>
+                                        </section>
                                     </div>
 
                                     <div class="col-md-6">
-                                        <div class="form-section">
-                                            <h4>Commission & Pricing</h4>
-                                            
+                                        <section class="form-section">
+                                            <h3 class="h4">Commission & Pricing</h3>
+
                                             <div class="mb-3">
                                                 <label for="{{ financial_form.commission_rate.id_for_label }}" class="form-label">
                                                     Commission Rate (%)
                                                 </label>
-                                                {{ financial_form.commission_rate }}
+                                                {{ financial_form.commission_rate|add_class:"form-control"|attr:"min:0"|attr:"max:50"|attr:"step:0.1"|attr:"readonly" }}
                                                 <div class="form-text">
-                                                    Current rate: {{ store.commission_rate }}%
-                                                    <br>Your commission rate may be subject to platform policies
+                                                    <strong>Current rate: {{ store.commission_rate|default:"Not set" }}%</strong>
+                                                    <br>Your commission rate is determined by platform policies and your store performance.
+                                                    <br><em>Contact support to discuss rate changes.</em>
                                                 </div>
+                                                {% if financial_form.commission_rate.errors %}
+                                                    <div class="invalid-feedback d-block" role="alert">{{ financial_form.commission_rate.errors.0 }}</div>
+                                                {% endif %}
                                             </div>
 
                                             <div class="mb-3">
                                                 <label for="{{ financial_form.minimum_order_amount.id_for_label }}" class="form-label">
                                                     Minimum Order Amount (D)
                                                 </label>
-                                                {{ financial_form.minimum_order_amount }}
-                                                <div class="form-text">Minimum amount required for orders from your store</div>
+                                                {{ financial_form.minimum_order_amount|add_class:"form-control"|attr:"min:0"|attr:"step:0.01"|attr:"placeholder:0.00" }}
+                                                <div class="form-text">
+                                                    Minimum amount required for orders from your store.
+                                                    <br><strong>Tip:</strong> Lower minimums can increase order volume.
+                                                </div>
+                                                {% if financial_form.minimum_order_amount.errors %}
+                                                    <div class="invalid-feedback d-block" role="alert">{{ financial_form.minimum_order_amount.errors.0 }}</div>
+                                                {% endif %}
                                             </div>
-                                        </div>
+                                        </section>
 
                                         <div class="alert alert-info">
-                                            <i class="fas fa-info-circle me-2"></i>
+                                            <i class="fas fa-info-circle me-2" aria-hidden="true"></i>
                                             <strong>Payment Schedule:</strong><br>
-                                            Payments are processed weekly on Fridays for orders delivered in the previous week.
-                                            Commission fees are automatically deducted.
+                                            • Payments are processed weekly on Fridays<br>
+                                            • Includes orders delivered in the previous week<br>
+                                            • Commission fees are automatically deducted<br>
+                                            • Minimum payout threshold: D100
+                                        </div>
+
+                                        <div class="alert alert-light border">
+                                            <h4 class="h6 mb-2">
+                                                <i class="fas fa-calculator me-2" aria-hidden="true"></i>Commission Example
+                                            </h4>
+                                            <div class="small">
+                                                <strong>Current commission rate:</strong> {{ store.commission_rate|default:"5" }}%<br>
+                                                <strong>Example:</strong> On D1,000 in sales, you keep D{{ 1000|floatformat:0 }} minus {{ store.commission_rate|default:"5" }}% commission.<br>
+                                                <em>Exact earnings calculated automatically for each transaction.</em>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
 
                                 <div class="text-end mt-4">
-                                    <button type="submit" class="btn btn-primary">
-                                        <i class="fas fa-save me-2"></i>Save Financial Settings
+                                    <button type="submit" class="btn btn-primary" data-loading-text="Saving...">
+                                        <i class="fas fa-save me-2" aria-hidden="true"></i>Save Financial Settings
                                     </button>
                                 </div>
                             </form>
                         </div>
                     </div>
                 </div>
-
             </div>
         </div>
     </div>
 </div>
 
 <script>
-// Handle dynamic shipping zone forms
-document.addEventListener('DOMContentLoaded', function() {
-    let formCount = {{ shipping_formset.total_form_count }};
-    
-    // Add new shipping zone
-    document.getElementById('add-shipping-zone').addEventListener('click', function() {
-        const container = document.getElementById('shipping-zones');
-        const emptyForm = container.querySelector('.shipping-zone:last-child').cloneNode(true);
-        
-        // Update form indices
-        const inputs = emptyForm.querySelectorAll('input, select, textarea');
-        inputs.forEach(input => {
-            const name = input.getAttribute('name');
-            if (name) {
-                input.setAttribute('name', name.replace(/-\d+-/, `-${formCount}-`));
-                input.setAttribute('id', input.getAttribute('id').replace(/-\d+-/, `-${formCount}-`));
+// Enhanced Store Settings JavaScript
+(function() {
+    'use strict';
+
+    // Configuration
+    const CONFIG = {
+        formCount: {{ shipping_formset.total_form_count }},
+        confirmUnsavedLeave: true,
+        autoSave: false, // Could be enabled for better UX
+        debounceDelay: 300
+    };
+
+    // State management
+    const state = {
+        hasUnsavedChanges: false,
+        isSubmitting: false,
+        activeTab: '{{ active_tab|default:"basic" }}'
+    };
+
+    // DOM elements
+    const elements = {
+        forms: document.querySelectorAll('form[data-tab]'),
+        unsavedWarning: document.getElementById('unsaved-warning'),
+        shippingZones: document.getElementById('shipping-zones'),
+        addShippingZone: document.getElementById('add-shipping-zone'),
+        copyHoursBtn: document.getElementById('copy-hours-btn'),
+        totalFormsInput: document.querySelector('#id_form-TOTAL_FORMS'),
+        tabButtons: document.querySelectorAll('[data-bs-toggle="pill"]'),
+        charCounters: document.querySelectorAll('.char-counter')
+    };
+
+    // Utility functions
+    const utils = {
+        debounce: function(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        },
+
+        showNotification: function(message, type = 'info') {
+            // Create notification element
+            const notification = document.createElement('div');
+            notification.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+            notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; max-width: 300px;';
+            notification.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+
+            document.body.appendChild(notification);
+
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.remove();
+                }
+            }, 5000);
+        },
+
+        validateForm: function(form) {
+            if (!form.checkValidity()) {
+                form.classList.add('was-validated');
+
+                // Focus on first invalid field
+                const firstInvalid = form.querySelector(':invalid');
+                if (firstInvalid) {
+                    firstInvalid.focus();
+                    firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+                return false;
             }
-            if (input.type !== 'hidden') {
-                input.value = '';
-            }
-        });
-        
-        const labels = emptyForm.querySelectorAll('label');
-        labels.forEach(label => {
-            const forAttr = label.getAttribute('for');
-            if (forAttr) {
-                label.setAttribute('for', forAttr.replace(/-\d+-/, `-${formCount}-`));
-            }
-        });
-        
-        emptyForm.querySelector('h6').textContent = 'New Shipping Zone';
-        container.appendChild(emptyForm);
-        
-        formCount++;
-        document.querySelector('#id_form-TOTAL_FORMS').value = formCount;
-    });
-    
-    // Handle deletion
-    document.addEventListener('click', function(e) {
-        if (e.target.closest('.delete-zone')) {
-            const zone = e.target.closest('.shipping-zone');
-            const deleteInput = zone.querySelector('input[name$="-DELETE"]');
-            if (deleteInput) {
-                deleteInput.checked = true;
-                zone.classList.add('marked-for-deletion');
-            } else {
-                zone.remove();
-                formCount--;
-                document.querySelector('#id_form-TOTAL_FORMS').value = formCount;
+            return true;
+        },
+
+        updateCharCounter: function(textarea) {
+            const maxLength = textarea.getAttribute('maxlength');
+            const currentLength = textarea.value.length;
+            const counter = textarea.parentNode.querySelector('.char-counter');
+
+            if (counter && maxLength) {
+                counter.textContent = `${currentLength}/${maxLength}`;
+                counter.style.color = currentLength > maxLength * 0.9 ? '#dc3545' : '#6c757d';
             }
         }
-    });
-    
-    // Handle store hours closed checkbox
-    document.querySelectorAll('input[name$="-is_closed"]').forEach(checkbox => {
-        checkbox.addEventListener('change', function() {
-            const row = this.closest('.hours-grid');
+    };
+
+    // Form handling
+    const formHandler = {
+        init: function() {
+            // Form change detection
+            elements.forms.forEach(form => {
+                const inputs = form.querySelectorAll('input, select, textarea');
+                inputs.forEach(input => {
+                    if (input.type !== 'hidden' && input.type !== 'submit') {
+                        input.addEventListener('input', utils.debounce(() => {
+                            this.markAsChanged();
+                            if (input.tagName === 'TEXTAREA') {
+                                utils.updateCharCounter(input);
+                            }
+                        }, CONFIG.debounceDelay));
+
+                        input.addEventListener('change', () => this.markAsChanged());
+                    }
+                });
+
+                // Form submission
+                form.addEventListener('submit', (e) => this.handleSubmit(e, form));
+            });
+
+            // Initialize character counters
+            document.querySelectorAll('textarea[maxlength]').forEach(textarea => {
+                utils.updateCharCounter(textarea);
+            });
+
+            // Prevent accidental navigation
+            if (CONFIG.confirmUnsavedLeave) {
+                window.addEventListener('beforeunload', (e) => {
+                    if (state.hasUnsavedChanges && !state.isSubmitting) {
+                        e.preventDefault();
+                        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+                        return e.returnValue;
+                    }
+                });
+            }
+        },
+
+        markAsChanged: function() {
+            if (!state.hasUnsavedChanges) {
+                state.hasUnsavedChanges = true;
+                if (elements.unsavedWarning) {
+                    elements.unsavedWarning.style.display = 'block';
+                }
+            }
+        },
+
+        markAsSaved: function() {
+            state.hasUnsavedChanges = false;
+            if (elements.unsavedWarning) {
+                elements.unsavedWarning.style.display = 'none';
+            }
+        },
+
+        handleSubmit: function(e, form) {
+            e.preventDefault();
+
+            if (state.isSubmitting) return;
+
+            if (!utils.validateForm(form)) {
+                utils.showNotification('Please correct the errors before submitting.', 'danger');
+                return;
+            }
+
+            state.isSubmitting = true;
+            const submitBtn = form.querySelector('button[type="submit"]');
+            const originalText = submitBtn.innerHTML;
+            const loadingText = submitBtn.getAttribute('data-loading-text') || 'Saving...';
+
+            // Show loading state
+            submitBtn.classList.add('loading');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = `<i class="fas fa-spinner fa-spin me-2"></i>${loadingText}`;
+
+            // Submit form
+            fetch(form.action || window.location.href, {
+                method: 'POST',
+                body: new FormData(form),
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => {
+                if (response.ok) {
+                    this.markAsSaved();
+                    utils.showNotification('Settings saved successfully!', 'success');
+
+                    // If it's a redirect response, follow it
+                    if (response.redirected) {
+                        window.location.href = response.url;
+                    } else {
+                        return response.text();
+                    }
+                } else {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+            })
+            .then(html => {
+                if (html) {
+                    // Update page content if needed
+                    // This would require more sophisticated handling
+                    utils.showNotification('Settings saved successfully!', 'success');
+                }
+            })
+            .catch(error => {
+                console.error('Save error:', error);
+                utils.showNotification('Error saving settings. Please try again.', 'danger');
+            })
+            .finally(() => {
+                // Reset button state
+                state.isSubmitting = false;
+                submitBtn.classList.remove('loading');
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalText;
+            });
+        }
+    };
+
+    // Store hours functionality
+    const storeHours = {
+        init: function() {
+            // Handle closed checkbox state
+            document.querySelectorAll('input[name$="-is_closed"]').forEach(checkbox => {
+                checkbox.addEventListener('change', (e) => this.toggleTimeInputs(e.target));
+                // Initialize state
+                this.toggleTimeInputs(checkbox);
+            });
+
+            // Copy hours functionality
+            if (elements.copyHoursBtn) {
+                elements.copyHoursBtn.addEventListener('click', () => this.copyHours());
+            }
+        },
+
+        toggleTimeInputs: function(checkbox) {
+            const row = checkbox.closest('.hours-grid');
             const timeInputs = row.querySelectorAll('input[type="time"]');
+
             timeInputs.forEach(input => {
-                input.disabled = this.checked;
-                if (this.checked) {
+                input.disabled = checkbox.checked;
+                input.required = !checkbox.checked;
+                if (checkbox.checked) {
                     input.value = '';
                 }
             });
-        });
-        
-        // Initialize state
-        checkbox.dispatchEvent(new Event('change'));
+        },
+
+        copyHours: function() {
+            const firstRow = document.querySelector('.hours-grid[data-day="0"]') ||
+                           document.querySelector('.hours-grid:has(input[type="time"])');
+
+            if (!firstRow) {
+                utils.showNotification('No hours to copy found', 'warning');
+                return;
+            }
+
+            const openingTime = firstRow.querySelector('input[type="time"]:first-of-type')?.value;
+            const closingTime = firstRow.querySelector('input[type="time"]:last-of-type')?.value;
+            const isClosed = firstRow.querySelector('input[type="checkbox"]')?.checked;
+
+            if (confirm('Copy the first day\'s hours to all other days?')) {
+                document.querySelectorAll('.hours-grid').forEach((row, index) => {
+                    if (index === 0) return; // Skip first row
+
+                    const openInput = row.querySelector('input[type="time"]:first-of-type');
+                    const closeInput = row.querySelector('input[type="time"]:last-of-type');
+                    const closedCheckbox = row.querySelector('input[type="checkbox"]');
+
+                    if (openInput) openInput.value = openingTime || '';
+                    if (closeInput) closeInput.value = closingTime || '';
+                    if (closedCheckbox) {
+                        closedCheckbox.checked = isClosed || false;
+                        this.toggleTimeInputs(closedCheckbox);
+                    }
+                });
+
+                formHandler.markAsChanged();
+                utils.showNotification('Hours copied to all days', 'success');
+            }
+        }
+    };
+
+    // Shipping zones functionality
+    const shippingZones = {
+        init: function() {
+            if (elements.addShippingZone) {
+                elements.addShippingZone.addEventListener('click', () => this.addZone());
+            }
+
+            // Handle deletion
+            document.addEventListener('click', (e) => {
+                if (e.target.closest('.delete-zone')) {
+                    this.handleDelete(e.target.closest('.delete-zone'));
+                }
+            });
+        },
+
+        addZone: function() {
+            if (!elements.shippingZones) return;
+
+            const lastZone = elements.shippingZones.querySelector('.shipping-zone:last-child');
+            if (!lastZone) {
+                console.error('No existing shipping zone template found');
+                return;
+            }
+
+            const newZone = lastZone.cloneNode(true);
+            const formIndex = CONFIG.formCount;
+
+            // Clear values and update form indices
+            this.updateFormIndices(newZone, formIndex);
+            this.clearFormValues(newZone);
+
+            // Update title
+            const title = newZone.querySelector('h3');
+            if (title) {
+                title.textContent = 'New Shipping Zone';
+                title.id = `zone-title-${formIndex}`;
+            }
+
+            // Update delete button
+            const deleteBtn = newZone.querySelector('.delete-zone');
+            if (deleteBtn) {
+                deleteBtn.setAttribute('aria-label', 'Remove new shipping zone');
+                deleteBtn.innerHTML = '<i class="fas fa-times me-1" aria-hidden="true"></i>Remove';
+            }
+
+            // Remove marked-for-deletion class if present
+            newZone.classList.remove('marked-for-deletion');
+            newZone.setAttribute('data-form-index', formIndex);
+
+            elements.shippingZones.appendChild(newZone);
+
+            CONFIG.formCount++;
+            if (elements.totalFormsInput) {
+                elements.totalFormsInput.value = CONFIG.formCount;
+            }
+
+            formHandler.markAsChanged();
+
+            // Focus on the name field of the new zone
+            const nameInput = newZone.querySelector('input[name$="-name"]');
+            if (nameInput) {
+                nameInput.focus();
+            }
+
+            utils.showNotification('New shipping zone added', 'success');
+        },
+
+        updateFormIndices: function(element, newIndex) {
+            const inputs = element.querySelectorAll('input, select, textarea');
+            inputs.forEach(input => {
+                ['name', 'id'].forEach(attr => {
+                    const value = input.getAttribute(attr);
+                    if (value && value.includes('-')) {
+                        input.setAttribute(attr, value.replace(/-\d+-/, `-${newIndex}-`));
+                    }
+                });
+            });
+
+            const labels = element.querySelectorAll('label');
+            labels.forEach(label => {
+                const forAttr = label.getAttribute('for');
+                if (forAttr && forAttr.includes('-')) {
+                    label.setAttribute('for', forAttr.replace(/-\d+-/, `-${newIndex}-`));
+                }
+
+                // Update aria-describedby references
+                const describedBy = label.getAttribute('aria-describedby');
+                if (describedBy && describedBy.includes('-')) {
+                    label.setAttribute('aria-describedby', describedBy.replace(/-\d+$/, `-${newIndex}`));
+                }
+            });
+
+            const helpTexts = element.querySelectorAll('[id*="-help-"]');
+            helpTexts.forEach(helpText => {
+                const id = helpText.getAttribute('id');
+                if (id) {
+                    helpText.setAttribute('id', id.replace(/-\d+$/, `-${newIndex}`));
+                }
+            });
+        },
+
+        clearFormValues: function(element) {
+            const inputs = element.querySelectorAll('input:not([type="hidden"]), select, textarea');
+            inputs.forEach(input => {
+                if (input.type === 'checkbox') {
+                    input.checked = input.hasAttribute('checked');
+                } else if (input.tagName === 'SELECT') {
+                    input.selectedIndex = 0;
+                } else {
+                    input.value = '';
+                }
+            });
+        },
+
+        handleDelete: function(deleteBtn) {
+            const zone = deleteBtn.closest('.shipping-zone');
+            const deleteInput = zone.querySelector('input[name$="-DELETE"]');
+            const title = zone.querySelector('h3')?.textContent || 'this zone';
+
+            if (confirm(`Are you sure you want to delete ${title}?`)) {
+                if (deleteInput) {
+                    // Mark for deletion (existing zone)
+                    deleteInput.checked = true;
+                    zone.classList.add('marked-for-deletion');
+                    deleteBtn.innerHTML = '<i class="fas fa-undo me-1" aria-hidden="true"></i>Restore';
+                    deleteBtn.classList.remove('btn-outline-danger');
+                    deleteBtn.classList.add('btn-outline-success');
+                    deleteBtn.setAttribute('aria-label', 'Restore shipping zone');
+                } else {
+                    // Remove completely (new zone)
+                    zone.remove();
+                    CONFIG.formCount--;
+                    if (elements.totalFormsInput) {
+                        elements.totalFormsInput.value = CONFIG.formCount;
+                    }
+                }
+
+                formHandler.markAsChanged();
+                utils.showNotification('Shipping zone will be deleted when you save', 'warning');
+            }
+        }
+    };
+
+    // Tab management
+    const tabManager = {
+        init: function() {
+            elements.tabButtons.forEach(button => {
+                button.addEventListener('shown.bs.tab', (e) => {
+                    state.activeTab = e.target.getAttribute('data-bs-target')?.replace('#', '').replace('-tab', '');
+
+                    // Update URL without refreshing
+                    if (history.replaceState) {
+                        const url = new URL(window.location);
+                        url.searchParams.set('tab', state.activeTab);
+                        history.replaceState({}, '', url);
+                    }
+                });
+            });
+        }
+    };
+
+    // File upload preview
+    const fileUpload = {
+        init: function() {
+            document.querySelectorAll('input[type="file"][accept*="image"]').forEach(input => {
+                input.addEventListener('change', (e) => this.previewImage(e.target));
+            });
+        },
+
+        previewImage: function(input) {
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+
+                // Validate file size (max 5MB)
+                if (file.size > 5 * 1024 * 1024) {
+                    utils.showNotification('File size must be less than 5MB', 'danger');
+                    input.value = '';
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    let preview = input.parentNode.querySelector('.file-upload-preview');
+                    if (!preview) {
+                        preview = document.createElement('img');
+                        preview.className = 'file-upload-preview mt-2';
+                        preview.alt = 'Image preview';
+                        input.parentNode.appendChild(preview);
+                    }
+                    preview.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+    };
+
+    // Initialize everything when DOM is ready
+    document.addEventListener('DOMContentLoaded', function() {
+        try {
+            formHandler.init();
+            storeHours.init();
+            shippingZones.init();
+            tabManager.init();
+            fileUpload.init();
+
+            console.log('Store settings enhanced JavaScript initialized successfully');
+        } catch (error) {
+            console.error('Error initializing store settings:', error);
+            utils.showNotification('Some features may not work properly. Please refresh the page.', 'warning');
+        }
     });
-});
+
+    // Expose utils for debugging
+    window.storeSettingsUtils = utils;
+})();
 </script>
 {% endblock %}
