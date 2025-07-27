@@ -23,7 +23,7 @@ from django.forms import modelformset_factory
 from chat.models import ChatThread, ChatMessage
 from django.contrib.auth import get_user_model
 from marketplace.models import Product, ProductImage, ProductVariant, ProductView
-from .forms import ProductForm, ProductImageForm, ProductVariantForm
+from .forms import ProductForm, ProductImageForm, ProductVariantForm, ProductFeatureOption
 from django.db import transaction
 from accounts.models import AdminLog
 import re
@@ -745,13 +745,14 @@ def edit_product(request, store_id, product_id):
     stock, _ = Stock.objects.get_or_create(product=product)
 
     ImageFormSet = modelformset_factory(ProductImage, form=ProductImageForm, extra=5, can_delete=False)
-    VariantFormSet = modelformset_factory(ProductVariant, form=ProductVariantForm, extra=10, can_delete=False)
 
     if request.method == 'POST':
         product_form = ProductForm(request.POST, request.FILES, instance=product)
         image_formset = ImageFormSet(request.POST, request.FILES, queryset=ProductImage.objects.none())
-        variant_formset = VariantFormSet(request.POST, queryset=ProductVariant.objects.filter(product=product))
         stock_quantity = request.POST.get('stock_quantity')
+
+        # Get selected variants from the dual listbox
+        selected_variant_ids = request.POST.getlist('selected_variants[]')
 
         original = Product.objects.get(pk=product.pk)
         changed_fields = []
@@ -768,7 +769,7 @@ def edit_product(request, store_id, product_id):
                 new = field in request.POST
             elif isinstance(old, Decimal):
                 try:
-                    new = Decimal(new)
+                    new = Decimal(new) if new else None
                 except:
                     continue
 
@@ -811,21 +812,24 @@ def edit_product(request, store_id, product_id):
         new_code = request.POST.get('promo_code')
         new_discount = request.POST.get('promo_discount')
         if new_code and new_discount:
-            promo = PromoCode.objects.create(
-                code=new_code.strip(),
-                discount_percentage=int(new_discount),
-                is_active=True
-            )
-            promo.products.add(product)
-            AdminLog.objects.create(
-                action_type='promo_create',
-                related_model='PromoCode',
-                related_object_id=str(promo.id),
-                message=f"New promo '{promo.code}' created and linked to '{product.name}'",
-                created_by=request.user
-            )
+            try:
+                promo = PromoCode.objects.create(
+                    code=new_code.strip(),
+                    discount_percentage=int(new_discount),
+                    is_active=True
+                )
+                promo.products.add(product)
+                AdminLog.objects.create(
+                    action_type='promo_create',
+                    related_model='PromoCode',
+                    related_object_id=str(promo.id),
+                    message=f"New promo '{promo.code}' created and linked to '{product.name}'",
+                    created_by=request.user
+                )
+            except (ValueError, TypeError):
+                messages.error(request, 'Invalid discount percentage')
 
-        if product_form.is_valid() and image_formset.is_valid() and variant_formset.is_valid():
+        if product_form.is_valid() and image_formset.is_valid():
             with transaction.atomic():
                 product = product_form.save(commit=False)
                 product._log_user = request.user
@@ -844,16 +848,18 @@ def edit_product(request, store_id, product_id):
 
                 # Stock update
                 if stock_quantity and stock_quantity.isdigit():
-                    if stock.quantity != int(stock_quantity):
+                    old_quantity = stock.quantity
+                    new_quantity = int(stock_quantity)
+                    if old_quantity != new_quantity:
                         AdminLog.objects.create(
                             action_type='stock_update',
                             related_model='Stock',
                             related_object_id=str(stock.id),
-                            message=f"Stock for '{product.name}' updated: {stock.quantity} → {int(stock_quantity)}",
+                            message=f"Stock for '{product.name}' updated: {old_quantity} → {new_quantity}",
                             created_by=request.user
                         )
-                    stock.quantity = int(stock_quantity)
-                    stock.save()
+                        stock.quantity = new_quantity
+                        stock.save()
 
                 # Save product images
                 for form in image_formset:
@@ -864,70 +870,100 @@ def edit_product(request, store_id, product_id):
                             image.product = product
                             image.save()
 
-                # Track variant changes
-                old_variants = set(ProductVariant.objects.filter(product=product).values_list('feature_option__value', flat=True))
+                # Handle variant updates with dual listbox data
+                # Track current variants before changes
+                old_variants = set(
+                    ProductVariant.objects.filter(product=product)
+                    .select_related('feature_option__feature')
+                    .values_list('feature_option__value', flat=True)
+                )
+
+                # Clear existing variants
                 ProductVariant.objects.filter(product=product).delete()
 
+                # Create new variants from selected IDs
                 new_variants = set()
-                for form in variant_formset:
-                    if form.cleaned_data and form.cleaned_data.get('feature_option'):
-                        variant = form.save(commit=False)
-                        variant.product = product
-                        variant.save()
-                        new_variants.add(variant.feature_option.value)
+                variant_names = []
 
+                for variant_id in selected_variant_ids:
+                    try:
+                        feature_option = ProductFeatureOption.objects.get(id=variant_id)
+                        ProductVariant.objects.get_or_create(
+                            product=product,
+                            feature_option=feature_option
+                        )
+                        new_variants.add(feature_option.value)
+                        variant_names.append(f"{feature_option.feature.name}: {feature_option.value}")
+                    except ProductFeatureOption.DoesNotExist:
+                        continue
+
+                # Log variant changes if there are any
                 if old_variants != new_variants:
                     added = new_variants - old_variants
                     removed = old_variants - new_variants
-                    msg = []
-                    if added:
-                        msg.append(f"Added: {', '.join(added)}")
-                    if removed:
-                        msg.append(f"Removed: {', '.join(removed)}")
-                    AdminLog.objects.create(
-                        action_type='variant_update',
-                        related_model='ProductVariant',
-                        related_object_id=str(product.id),
-                        message=f"Variants updated for product '{product.name}'. " + " ".join(msg),
-                        created_by=request.user
-                    )
+                    msg_parts = []
 
-                messages.success(request, 'Product and stock updated successfully!')
+                    if added:
+                        msg_parts.append(f"Added: {', '.join(sorted(added))}")
+                    if removed:
+                        msg_parts.append(f"Removed: {', '.join(sorted(removed))}")
+
+                    if msg_parts:
+                        AdminLog.objects.create(
+                            action_type='variant_update',
+                            related_model='ProductVariant',
+                            related_object_id=str(product.id),
+                            message=f"Variants updated for product '{product.name}'. {' | '.join(msg_parts)}",
+                            created_by=request.user
+                        )
+
+                messages.success(request, f'Product updated successfully! {len(variant_names)} variants selected.')
                 return redirect('stores:manage_store_products', store_id=store.id)
 
         else:
+            # Handle form errors
+            error_messages = []
             if not product_form.is_valid():
-                messages.error(request, f'Product form errors: {product_form.errors}')
+                error_messages.append(f'Product form errors: {dict(product_form.errors)}')
             if not image_formset.is_valid():
-                messages.error(request, f'Image formset errors: {image_formset.errors}')
-            if not variant_formset.is_valid():
-                messages.error(request, f'Variant formset errors: {variant_formset.errors}')
-            messages.error(request, 'Please correct the errors below.')
+                error_messages.append(f'Image formset errors: {image_formset.errors}')
+
+            for error in error_messages:
+                messages.error(request, error)
 
     else:
+        # GET request - initialize forms
         product_form = ProductForm(instance=product)
         image_formset = ImageFormSet(queryset=ProductImage.objects.none())
-        variant_formset = VariantFormSet(queryset=ProductVariant.objects.filter(product=product))
 
+    # Prepare boolean fields for template
     boolean_fields = [
         {"field": product_form['is_featured'], "icon": "fa-star", "text": "Featured Product", "color": "warning"},
         {"field": product_form['is_trending'], "icon": "fa-fire", "text": "Trending Product", "color": "danger"},
         {"field": product_form['has_30_day_return'], "icon": "fa-undo", "text": "30-Day Return", "color": "info"},
-        {"field": product_form['free_shipping'], "icon": "fa-shipping-fast", "text": "Free Shipping", "color": "success"},
+        {"field": product_form['free_shipping'], "icon": "fa-shipping-fast", "text": "Free Shipping",
+         "color": "success"},
     ]
 
+    # Get all available feature options for the dual listbox
+    all_feature_options = ProductFeatureOption.objects.select_related('feature').all().order_by('feature__name',
+                                                                                                'value')
+
+    # Get all active promo codes
     all_promos = PromoCode.objects.filter(is_active=True)
 
-    return render(request, 'stores/edit_product.html', {
+    context = {
         'store': store,
         'product': product,
         'product_form': product_form,
         'image_formset': image_formset,
-        'variant_formset': variant_formset,
         'boolean_fields': boolean_fields,
         'all_promos': all_promos,
+        'all_feature_options': all_feature_options,  # For dual listbox
         'stock_quantity': stock.quantity,
-    })
+    }
+
+    return render(request, 'stores/edit_product.html', context)
 
 @login_required
 @require_POST

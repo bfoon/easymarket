@@ -6,6 +6,129 @@
 <link rel="stylesheet" type="text/css" href="{% static 'css/edit_product.css' %}">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
+<style>
+/* Dual Listbox Styles */
+.dual-listbox-container {
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    padding: 1rem;
+    background-color: #f8f9fa;
+}
+
+.listbox {
+    height: 200px;
+    border: 1px solid #ced4da;
+    border-radius: 0.375rem;
+    padding: 0.5rem;
+    background-color: white;
+    overflow-y: auto;
+}
+
+.listbox-item {
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.25rem;
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 0.25rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.listbox-item:hover {
+    background-color: #e9ecef;
+    border-color: #ced4da;
+}
+
+.listbox-item.selected {
+    background-color: #0d6efd;
+    color: white;
+    border-color: #0d6efd;
+}
+
+.listbox-item.selected:hover {
+    background-color: #0b5ed7;
+}
+
+.arrow-controls {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0 1rem;
+}
+
+.arrow-btn {
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: 50%;
+    background-color: #6c757d;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.arrow-btn:hover:not(:disabled) {
+    background-color: #495057;
+    transform: scale(1.05);
+}
+
+.arrow-btn:disabled {
+    background-color: #e9ecef;
+    color: #6c757d;
+    cursor: not-allowed;
+}
+
+.arrow-btn.move-right {
+    background-color: #28a745;
+}
+
+.arrow-btn.move-right:hover:not(:disabled) {
+    background-color: #218838;
+}
+
+.arrow-btn.move-left {
+    background-color: #dc3545;
+}
+
+.arrow-btn.move-left:hover:not(:disabled) {
+    background-color: #c82333;
+}
+
+.listbox-header {
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    background-color: #e9ecef;
+    border-radius: 0.25rem;
+    text-align: center;
+}
+
+.selection-count {
+    font-size: 0.875rem;
+    color: #6c757d;
+    text-align: center;
+    margin-top: 0.5rem;
+}
+
+@media (max-width: 768px) {
+    .dual-listbox-row {
+        flex-direction: column;
+    }
+
+    .arrow-controls {
+        flex-direction: row;
+        justify-content: center;
+        padding: 1rem 0;
+    }
+}
+</style>
+
 <div class="container-fluid py-4">
   <!-- Header -->
   <div class="row mb-4">
@@ -309,7 +432,7 @@
           </div>
         </div>
 
-        <!-- Product Variants -->
+        <!-- Product Variants - NEW DUAL LISTBOX INTERFACE -->
         <div class="card mb-4">
           <div class="card-header bg-light">
             <h2 class="h5 card-title mb-0">
@@ -317,31 +440,60 @@
             </h2>
           </div>
           <div class="card-body">
-            {{ variant_formset.management_form }}
-            <div class="row" id="variantContainer">
-              {% for form in variant_formset %}
-              <div class="col-md-6 mb-3 variant-form">
-                <div class="border rounded p-3">
-                  <div class="mb-2">
-                    <label class="form-label">{{ form.feature_option.label }}</label>
-                    {{ form.feature_option }}
-                    {% if form.feature_option.errors %}
-                    <div class="text-danger small">{{ form.feature_option.errors.0 }}</div>
-                    {% endif %}
+            <div class="dual-listbox-container">
+              <div class="row dual-listbox-row align-items-center">
+                <!-- Available Variants (Left Box) -->
+                <div class="col-md-5">
+                  <div class="listbox-header">
+                    <i class="fas fa-list me-1"></i>Available Variants
                   </div>
-                  <div class="form-check">
-                    {{ form.DELETE }}
-                    <label class="form-check-label text-danger">
-                      <i class="fas fa-trash me-1" aria-hidden="true"></i>Delete this variant
-                    </label>
+                  <div class="listbox" id="availableVariants">
+                    <!-- Available variants will be populated here -->
+                  </div>
+                  <div class="selection-count">
+                    <span id="availableCount">0</span> available
+                  </div>
+                </div>
+
+                <!-- Arrow Controls (Middle) -->
+                <div class="col-md-2">
+                  <div class="arrow-controls">
+                    <button type="button" class="arrow-btn move-right" id="moveRightBtn" title="Add selected variants">
+                      <i class="fas fa-chevron-right"></i>
+                    </button>
+                    <button type="button" class="arrow-btn" id="moveAllRightBtn" title="Add all variants">
+                      <i class="fas fa-angle-double-right"></i>
+                    </button>
+                    <button type="button" class="arrow-btn" id="moveAllLeftBtn" title="Remove all variants">
+                      <i class="fas fa-angle-double-left"></i>
+                    </button>
+                    <button type="button" class="arrow-btn move-left" id="moveLeftBtn" title="Remove selected variants">
+                      <i class="fas fa-chevron-left"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Selected Variants (Right Box) -->
+                <div class="col-md-5">
+                  <div class="listbox-header">
+                    <i class="fas fa-check-square me-1"></i>Selected Variants
+                  </div>
+                  <div class="listbox" id="selectedVariants">
+                    <!-- Selected variants will be populated here -->
+                  </div>
+                  <div class="selection-count">
+                    <span id="selectedCount">0</span> selected
                   </div>
                 </div>
               </div>
-              {% endfor %}
             </div>
-            <div class="alert alert-info">
+
+            <!-- Hidden inputs to store selected variant IDs for form submission -->
+            <div id="hiddenInputs"></div>
+
+            <div class="alert alert-info mt-3">
               <i class="fas fa-info-circle me-2" aria-hidden="true"></i>
-              <strong>Tip:</strong> Add product variations like color, size, material, etc. to give customers more options.
+              <strong>Instructions:</strong> Click items to select them, then use the arrow buttons to move between available and selected variants. Selected variants will be applied to your product.
             </div>
           </div>
         </div>
@@ -603,9 +755,258 @@
 <script>
   window.storeId = "{{ store.id }}";
   window.productId = "{{ product.id }}";
-</script>
-<script src="{% static 'js/product_form.js' %}"></script>
 
+  // Dual Listbox JavaScript with Django Integration
+
+  // Get variant data from Django template
+  const allVariants = [
+    {% for variant in all_feature_options %}
+    {
+      id: {{ variant.id }},
+      name: "{{ variant.value|escapejs }}",
+      category: "{{ variant.feature.name|escapejs }}",
+      description: "{{ variant.feature.name|escapejs }}: {{ variant.value|escapejs }}"
+    }{% if not forloop.last %},{% endif %}
+    {% endfor %}
+  ];
+
+  // Currently selected variant IDs from Django
+  const currentlySelected = [
+    {% for variant in product.variants.all %}
+    {{ variant.feature_option.id }}{% if not forloop.last %},{% endif %}
+    {% endfor %}
+  ];
+
+  class DualListbox {
+    constructor() {
+      this.availableVariants = [...allVariants];
+      this.selectedVariants = [];
+      this.selectedItems = new Set();
+
+      this.initializeVariants();
+      this.bindEvents();
+      this.updateButtons();
+    }
+
+    initializeVariants() {
+      // Move currently selected variants to selected list
+      currentlySelected.forEach(id => {
+        const variant = this.availableVariants.find(v => v.id === id);
+        if (variant) {
+          this.selectedVariants.push(variant);
+          this.availableVariants = this.availableVariants.filter(v => v.id !== id);
+        }
+      });
+
+      this.renderVariants();
+      this.updateCounts();
+      this.updateHiddenInputs();
+    }
+
+    bindEvents() {
+      // Arrow button events
+      document.getElementById('moveRightBtn').addEventListener('click', () => this.moveSelected('right'));
+      document.getElementById('moveLeftBtn').addEventListener('click', () => this.moveSelected('left'));
+      document.getElementById('moveAllRightBtn').addEventListener('click', () => this.moveAll('right'));
+      document.getElementById('moveAllLeftBtn').addEventListener('click', () => this.moveAll('left'));
+
+      // Double-click events
+      document.getElementById('availableVariants').addEventListener('dblclick', (e) => {
+        const item = e.target.closest('.listbox-item');
+        if (item) {
+          this.moveVariant(parseInt(item.dataset.id), 'right');
+        }
+      });
+
+      document.getElementById('selectedVariants').addEventListener('dblclick', (e) => {
+        const item = e.target.closest('.listbox-item');
+        if (item) {
+          this.moveVariant(parseInt(item.dataset.id), 'left');
+        }
+      });
+
+      // Click selection events
+      document.getElementById('availableVariants').addEventListener('click', (e) => {
+        this.handleItemClick(e, 'available');
+      });
+
+      document.getElementById('selectedVariants').addEventListener('click', (e) => {
+        this.handleItemClick(e, 'selected');
+      });
+    }
+
+    handleItemClick(e, listType) {
+      const item = e.target.closest('.listbox-item');
+      if (!item) return;
+
+      const id = parseInt(item.dataset.id);
+
+      if (e.ctrlKey || e.metaKey) {
+        // Multi-select with Ctrl/Cmd
+        this.toggleSelection(id, item);
+      } else {
+        // Single select
+        this.clearSelections();
+        this.addSelection(id, item);
+      }
+
+      this.updateButtons();
+    }
+
+    toggleSelection(id, item) {
+      if (this.selectedItems.has(id)) {
+        this.selectedItems.delete(id);
+        item.classList.remove('selected');
+      } else {
+        this.selectedItems.add(id);
+        item.classList.add('selected');
+      }
+    }
+
+    addSelection(id, item) {
+      this.selectedItems.add(id);
+      item.classList.add('selected');
+    }
+
+    clearSelections() {
+      this.selectedItems.clear();
+      document.querySelectorAll('.listbox-item.selected').forEach(item => {
+        item.classList.remove('selected');
+      });
+    }
+
+    moveSelected(direction) {
+      const itemsToMove = Array.from(this.selectedItems);
+      itemsToMove.forEach(id => this.moveVariant(id, direction));
+      this.clearSelections();
+      this.updateButtons();
+    }
+
+    moveAll(direction) {
+      if (direction === 'right') {
+        const itemsToMove = [...this.availableVariants];
+        itemsToMove.forEach(variant => this.moveVariant(variant.id, 'right'));
+      } else {
+        const itemsToMove = [...this.selectedVariants];
+        itemsToMove.forEach(variant => this.moveVariant(variant.id, 'left'));
+      }
+      this.clearSelections();
+      this.updateButtons();
+    }
+
+    moveVariant(id, direction) {
+      if (direction === 'right') {
+        // Move from available to selected
+        const variant = this.availableVariants.find(v => v.id === id);
+        if (variant) {
+          this.selectedVariants.push(variant);
+          this.availableVariants = this.availableVariants.filter(v => v.id !== id);
+        }
+      } else {
+        // Move from selected to available
+        const variant = this.selectedVariants.find(v => v.id === id);
+        if (variant) {
+          this.availableVariants.push(variant);
+          this.selectedVariants = this.selectedVariants.filter(v => v.id !== id);
+        }
+      }
+
+      this.selectedItems.delete(id);
+      this.renderVariants();
+      this.updateCounts();
+      this.updateHiddenInputs();
+    }
+
+    renderVariants() {
+      this.renderList('availableVariants', this.availableVariants);
+      this.renderList('selectedVariants', this.selectedVariants);
+    }
+
+    renderList(containerId, variants) {
+      const container = document.getElementById(containerId);
+      container.innerHTML = '';
+
+      if (variants.length === 0) {
+        container.innerHTML = '<div class="text-muted text-center py-3">No variants</div>';
+        return;
+      }
+
+      variants.sort((a, b) => {
+        if (a.category !== b.category) {
+          return a.category.localeCompare(b.category);
+        }
+        return a.name.localeCompare(b.name);
+      }).forEach(variant => {
+        const item = document.createElement('div');
+        item.className = 'listbox-item';
+        item.dataset.id = variant.id;
+        item.innerHTML = `
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <strong>${variant.name}</strong>
+              <small class="text-muted d-block">${variant.category}</small>
+            </div>
+            <small class="text-muted">${variant.description}</small>
+          </div>
+        `;
+        container.appendChild(item);
+      });
+    }
+
+    updateCounts() {
+      document.getElementById('availableCount').textContent = this.availableVariants.length;
+      document.getElementById('selectedCount').textContent = this.selectedVariants.length;
+    }
+
+    updateButtons() {
+      const hasSelectedItems = this.selectedItems.size > 0;
+      const hasAvailable = this.availableVariants.length > 0;
+      const hasSelected = this.selectedVariants.length > 0;
+
+      document.getElementById('moveRightBtn').disabled = !hasSelectedItems || !this.hasSelectedInAvailable();
+      document.getElementById('moveLeftBtn').disabled = !hasSelectedItems || !this.hasSelectedInSelected();
+      document.getElementById('moveAllRightBtn').disabled = !hasAvailable;
+      document.getElementById('moveAllLeftBtn').disabled = !hasSelected;
+    }
+
+    hasSelectedInAvailable() {
+      return this.availableVariants.some(v => this.selectedItems.has(v.id));
+    }
+
+    hasSelectedInSelected() {
+      return this.selectedVariants.some(v => this.selectedItems.has(v.id));
+    }
+
+    updateHiddenInputs() {
+      const container = document.getElementById('hiddenInputs');
+      container.innerHTML = '';
+
+      this.selectedVariants.forEach(variant => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'selected_variants[]';
+        input.value = variant.id;
+        container.appendChild(input);
+      });
+    }
+
+    getSelectedVariantIds() {
+      return this.selectedVariants.map(v => v.id);
+    }
+  }
+
+  // Initialize the dual listbox when DOM is loaded
+  document.addEventListener('DOMContentLoaded', function() {
+    window.variantSelector = new DualListbox();
+  });
+
+  // Function to get selected variants for form submission
+  function getSelectedVariants() {
+    return window.variantSelector ? window.variantSelector.getSelectedVariantIds() : [];
+  }
+</script>
+
+<script src="{% static 'js/product_form.js' %}"></script>
 <script src="{% static 'js/product-page-manager.js' %}"></script>
 
 {% endblock %}
