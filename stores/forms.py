@@ -4,6 +4,7 @@ from django.core.exceptions import ValidationError
 from .models import Store, StoreHours, StoreShippingZone, StoreReturnSettings
 import re
 
+
 class ProductForm(forms.ModelForm):
     class Meta:
         model = Product
@@ -68,24 +69,102 @@ class ProductForm(forms.ModelForm):
         self.fields['category'].empty_label = "Select a category"
         self.fields['category'].required = False
 
+
 class ProductImageForm(forms.ModelForm):
+    """Updated form for uploading product images with variant assignment"""
+
     class Meta:
         model = ProductImage
-        fields = ['image']
+        fields = ['image', 'alt_text', 'is_primary']
         widgets = {
-            'image': forms.FileInput(attrs={
+            'image': forms.ClearableFileInput(attrs={
                 'class': 'form-control',
                 'accept': 'image/*'
+            }),
+            'alt_text': forms.TextInput(attrs={
+                'class': 'form-control form-control-sm',
+                'placeholder': 'Alternative text for accessibility'
+            }),
+            'is_primary': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
             })
         }
 
     def __init__(self, *args, **kwargs):
+        product = kwargs.pop('product', None)
         super().__init__(*args, **kwargs)
-        # Ensure the image field is not required (to allow blank extra forms)
+
+        # Make all fields optional for formset usage
         self.fields['image'].required = False
+        self.fields['alt_text'].required = False
+        self.fields['is_primary'].required = False
+
+    def clean(self):
+        cleaned_data = super().clean()
+        image = cleaned_data.get('image')
+        is_primary = cleaned_data.get('is_primary')
+
+        # If no image is provided, skip validation (allows empty forms in formset)
+        if not image:
+            return cleaned_data
+
+        return cleaned_data
+
+
+class ProductImageWithVariantsForm(forms.ModelForm):
+    """Extended form for existing images with variant assignment"""
+
+    class Meta:
+        model = ProductImage
+        fields = ['image', 'variants', 'alt_text', 'is_primary']
+        widgets = {
+            'image': forms.ClearableFileInput(attrs={
+                'class': 'form-control',
+                'accept': 'image/*'
+            }),
+            'variants': forms.CheckboxSelectMultiple(attrs={
+                'class': 'form-check-input'
+            }),
+            'alt_text': forms.TextInput(attrs={
+                'class': 'form-control form-control-sm',
+                'placeholder': 'Alternative text for accessibility'
+            }),
+            'is_primary': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
+            })
+        }
+
+    def __init__(self, *args, **kwargs):
+        product = kwargs.pop('product', None)
+        super().__init__(*args, **kwargs)
+
+        if product:
+            # Only show variants that are actually assigned to this product
+            self.fields['variants'].queryset = ProductFeatureOption.objects.filter(
+                variants__product=product
+            ).distinct().select_related('feature').order_by('feature__name', 'value')
+        else:
+            self.fields['variants'].queryset = ProductFeatureOption.objects.select_related('feature').order_by(
+                'feature__name', 'value')
+
+        # Customize the variant choices display
+        self.fields['variants'].label_from_instance = lambda obj: f"{obj.feature.name}: {obj.value}"
+
+    def clean(self):
+        cleaned_data = super().clean()
+        variants = cleaned_data.get('variants')
+        is_primary = cleaned_data.get('is_primary')
+
+        # If marked as primary, should have at least one variant
+        if is_primary and variants and not variants.exists():
+            self.add_error('is_primary', 'Primary images should have at least one variant assigned.')
+
+        return cleaned_data
 
 
 class ProductVariantForm(forms.ModelForm):
+    """This form is no longer used with the dual-listbox interface but kept for compatibility"""
+
     class Meta:
         model = ProductVariant
         fields = ['feature_option']
@@ -117,7 +196,53 @@ class ProductWithStockForm(forms.ModelForm):
             'has_30_day_return', 'free_shipping', 'is_active'
         ]
         widgets = {
-            # keep your existing widgets here...
+            'name': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Enter product name'
+            }),
+            'category': forms.Select(attrs={
+                'class': 'form-control'
+            }),
+            'price': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'step': '0.01',
+                'placeholder': '0.00'
+            }),
+            'original_price': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'step': '0.01',
+                'placeholder': '0.00 (optional)'
+            }),
+            'description': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 4,
+                'placeholder': 'Enter product description'
+            }),
+            'specifications': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 3,
+                'placeholder': 'Enter product specifications'
+            }),
+            'image': forms.FileInput(attrs={
+                'class': 'form-control',
+                'accept': 'image/*'
+            }),
+            'video': forms.FileInput(attrs={
+                'class': 'form-control',
+                'accept': 'video/*'
+            }),
+            'is_featured': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
+            }),
+            'is_trending': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
+            }),
+            'has_30_day_return': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
+            }),
+            'free_shipping': forms.CheckboxInput(attrs={
+                'class': 'form-check-input'
+            }),
         }
 
     def __init__(self, *args, **kwargs):
@@ -149,7 +274,7 @@ class StoreSettingsForm(forms.ModelForm):
             'business_registration_number', 'tax_identification_number',
             'commission_rate', 'minimum_order_amount', 'processing_time',
             'return_policy_days', 'facebook_url', 'twitter_url', 'instagram_url',
-            'accept_cash_risk','allow_referrals'
+            'accept_cash_risk', 'allow_referrals'
         ]
 
         widgets = {
@@ -466,6 +591,7 @@ StoreShippingZoneFormSet = forms.modelformset_factory(
     extra=1,
     can_delete=True
 )
+
 
 class StoreReferralForm(forms.Form):
     referred_email = forms.EmailField(label="Friend's Email", widget=forms.EmailInput(attrs={

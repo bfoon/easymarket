@@ -497,6 +497,114 @@
             </div>
           </div>
         </div>
+
+        <!-- Inventory & Promo Codes - Side by Side -->
+        <div class="card mb-4">
+          <div class="card-body">
+            <div class="row">
+              <!-- Stock Management - Left Side -->
+              <div class="col-md-6">
+                <h5 class="mb-3">
+                  <i class="fas fa-boxes me-2 text-primary" aria-hidden="true"></i>Inventory Management
+                </h5>
+                {% if product.stock %}
+                <div class="mb-3">
+                  <label for="stock_quantity" class="form-label">Stock Quantity</label>
+                  <input type="number"
+                         name="stock_quantity"
+                         id="stock_quantity"
+                         value="{{ stock_quantity }}"
+                         class="form-control"
+                         min="0"
+                         aria-describedby="stockHelp">
+                  <div id="stockHelp" class="form-text">
+                    <small>Current stock level for this product</small>
+                  </div>
+                </div>
+                <div class="alert alert-info">
+                  <i class="fas fa-lightbulb me-2 text-info" aria-hidden="true"></i>
+                  <small>
+                    <strong>Pro Tip:</strong> Use our
+                    <a href="{% url 'stores:stock_management' store.id %}" class="alert-link">
+                      advanced inventory system
+                    </a> for variant-specific stock tracking.
+                  </small>
+                </div>
+                {% else %}
+                <div class="alert alert-warning">
+                  <i class="fas fa-exclamation-triangle me-2" aria-hidden="true"></i>
+                  <strong>No stock record found</strong><br>
+                  <small>
+                    Set up inventory tracking using our
+                    <a href="{% url 'stores:stock_management' store.id %}" class="alert-link">
+                      inventory management system
+                    </a>.
+                  </small>
+                </div>
+                {% endif %}
+              </div>
+
+              <!-- Promo Codes - Right Side -->
+              <div class="col-md-6">
+                <h5 class="mb-3">
+                  <i class="fas fa-tags me-2 text-primary" aria-hidden="true"></i>Promotional Codes
+                </h5>
+
+                <!-- Assign Existing Promo Code -->
+                <div class="mb-3">
+                  <label for="existing_promo" class="form-label">Assign Existing Promo Code</label>
+                  <select name="existing_promo" id="existing_promo" class="form-select">
+                    <option value="">-- Select a promo code --</option>
+                    {% for promo in all_promos %}
+                      <option value="{{ promo.id }}" data-discount="{{ promo.discount_percentage }}">
+                        {{ promo.code }} ({{ promo.discount_percentage }}% off)
+                      </option>
+                    {% endfor %}
+                  </select>
+                </div>
+
+                <div class="text-center my-2">
+                  <small class="text-muted">— OR —</small>
+                </div>
+
+                <!-- Create New Promo Code -->
+                <div class="mb-3">
+                  <label for="promo_code" class="form-label">Create New Promo Code</label>
+                  <input type="text"
+                         name="promo_code"
+                         id="promo_code"
+                         class="form-control"
+                         placeholder="e.g., SUMMER20"
+                         maxlength="20"
+                         pattern="[A-Z0-9]+"
+                         aria-describedby="promoHelp">
+                  <div id="promoHelp" class="form-text">
+                    <small>Use uppercase letters and numbers only</small>
+                  </div>
+                </div>
+
+                <div class="mb-3">
+                  <label for="promo_discount" class="form-label">Discount Percentage</label>
+                  <div class="input-group">
+                    <input type="number"
+                           name="promo_discount"
+                           id="promo_discount"
+                           class="form-control"
+                           placeholder="20"
+                           min="1"
+                           max="99">
+                    <span class="input-group-text">%</span>
+                  </div>
+                </div>
+
+                <div class="alert alert-success">
+                  <i class="fas fa-percent me-2 text-success" aria-hidden="true"></i>
+                  <small><strong>Boost Sales:</strong> Promo codes attract customers and increase conversions.</small>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Sidebar -->
@@ -514,18 +622,71 @@
               <h6 class="text-muted">Current Images</h6>
               <div class="row g-2" id="currentImages">
                 {% for image in product.images.all %}
-                <div class="col-6" id="image-{{ image.id }}">
-                  <div class="position-relative">
-                    <img src="{{ image.image.url }}"
-                         alt="Product Image {{ forloop.counter }}"
-                         class="img-thumbnail w-100"
-                         style="aspect-ratio: 1; object-fit: cover;">
-                    <button type="button"
-                            class="btn btn-danger btn-sm position-absolute top-0 end-0 m-1"
-                            onclick="deleteImage({{ image.id }})"
-                            aria-label="Delete image {{ forloop.counter }}">
-                      <i class="fas fa-times" aria-hidden="true"></i>
-                    </button>
+                <div class="col-12 mb-3" id="image-{{ image.id }}">
+                  <div class="border rounded p-3">
+                    <div class="row">
+                      <div class="col-4">
+                        <div class="position-relative">
+                          <img src="{{ image.image.url }}"
+                               alt="{{ image.alt_text }}"
+                               class="img-thumbnail w-100"
+                               style="aspect-ratio: 1; object-fit: cover;">
+                          {% if image.is_primary %}
+                          <span class="badge bg-success position-absolute top-0 start-0 m-1">Primary</span>
+                          {% endif %}
+                        </div>
+                      </div>
+                      <div class="col-8">
+                        <div class="mb-2">
+                          <small class="text-muted">Assigned Variants:</small>
+                          <div class="d-flex flex-wrap gap-1 mt-1">
+                            {% for variant in image.variants.all %}
+                            <span class="badge bg-light text-dark">{{ variant.feature.name }}: {{ variant.value }}</span>
+                            {% empty %}
+                            <span class="text-muted">No variants assigned</span>
+                            {% endfor %}
+                          </div>
+                        </div>
+
+                        <!-- Variant Selection for Existing Images -->
+                        <div class="mb-2">
+                          <label class="form-label small">Update Variants:</label>
+                          <div class="border rounded p-2" style="max-height: 120px; overflow-y: auto;">
+                            {% for variant in product.variants.all %}
+                            <div class="form-check form-check-sm">
+                              <input class="form-check-input"
+                                     type="checkbox"
+                                     name="image_{{ image.id }}_variants"
+                                     value="{{ variant.feature_option.id }}"
+                                     id="img{{ image.id }}_var{{ variant.feature_option.id }}"
+                                     {% if variant.feature_option in image.variants.all %}checked{% endif %}>
+                              <label class="form-check-label small" for="img{{ image.id }}_var{{ variant.feature_option.id }}">
+                                {{ variant.feature_option.feature.name }}: {{ variant.feature_option.value }}
+                              </label>
+                            </div>
+                            {% endfor %}
+                          </div>
+                        </div>
+
+                        <div class="form-check mb-2">
+                          <input class="form-check-input"
+                                 type="checkbox"
+                                 name="image_{{ image.id }}_primary"
+                                 id="img{{ image.id }}_primary"
+                                 {% if image.is_primary %}checked{% endif %}>
+                          <label class="form-check-label small" for="img{{ image.id }}_primary">
+                            Set as primary image
+                          </label>
+                        </div>
+
+                        <button type="button"
+                                class="btn btn-danger btn-sm"
+                                onclick="deleteImage({{ image.id }})"
+                                aria-label="Delete image">
+                          <i class="fas fa-trash me-1" aria-hidden="true"></i>Delete
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
                 {% empty %}
@@ -543,110 +704,65 @@
             <div class="mb-3">
               <h6 class="text-muted">Add New Images</h6>
               {{ image_formset.management_form }}
-              {% for form in image_formset %}
-              {% if not form.instance.pk %}
-              <div class="mb-2">
-                {{ form.image }}
-                {% if form.image.errors %}
-                <div class="text-danger small">{{ form.image.errors.0 }}</div>
+              <div id="newImageContainer">
+                {% for form in image_formset %}
+                {% if not form.instance.pk %}
+                <div class="border rounded p-3 mb-3 new-image-form" data-form-index="{{ forloop.counter0 }}">
+                  <div class="row">
+                    <div class="col-md-6">
+                      <div class="mb-2">
+                        <label class="form-label small">Image File:</label>
+                        {{ form.image }}
+                        {% if form.image.errors %}
+                        <div class="text-danger small">{{ form.image.errors.0 }}</div>
+                        {% endif %}
+                      </div>
+
+                      <div class="mb-2">
+                        <label class="form-label small">Alt Text:</label>
+                        <input type="text"
+                               name="{{ form.alt_text.html_name }}"
+                               class="form-control form-control-sm"
+                               placeholder="Alternative text for accessibility">
+                      </div>
+
+                      <div class="form-check">
+                        <input class="form-check-input"
+                               type="checkbox"
+                               name="{{ form.is_primary.html_name }}"
+                               id="{{ form.is_primary.id_for_label }}">
+                        <label class="form-check-label small" for="{{ form.is_primary.id_for_label }}">
+                          Set as primary image
+                        </label>
+                      </div>
+                    </div>
+
+                    <div class="col-md-6">
+                      <label class="form-label small">Assign to Variants:</label>
+                      <div class="border rounded p-2" style="max-height: 150px; overflow-y: auto;">
+                        <div id="newImageVariants{{ forloop.counter0 }}">
+                          <!-- Will be populated by JavaScript when variants are selected -->
+                          <p class="text-muted small m-0">Select product variants first to assign them to images</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Image preview -->
+                  <div class="mt-2">
+                    <div class="image-preview d-none">
+                      <img class="img-thumbnail" style="max-width: 100px; max-height: 100px;">
+                    </div>
+                  </div>
+                </div>
                 {% endif %}
+                {% endfor %}
               </div>
-              {% endif %}
-              {% endfor %}
             </div>
 
             <div class="alert alert-info">
               <i class="fas fa-info-circle me-2" aria-hidden="true"></i>
-              <small><strong>Guidelines:</strong> Upload up to 3 additional images. Recommended size: 800x800px</small>
-            </div>
-          </div>
-        </div>
-
-        <!-- Stock Management -->
-        <div class="card mb-4">
-          <div class="card-header bg-light">
-            <h2 class="h5 card-title mb-0">
-              <i class="fas fa-boxes me-2 text-primary" aria-hidden="true"></i>Inventory
-            </h2>
-          </div>
-          <div class="card-body">
-            {% if product.stock %}
-            <div class="mb-3">
-              <label for="stock_quantity" class="form-label">Stock Quantity</label>
-              <input type="number"
-                     name="stock_quantity"
-                     id="stock_quantity"
-                     value="{{ stock_quantity }}"
-                     class="form-control"
-                     min="0"
-                     aria-describedby="stockHelp">
-              <div id="stockHelp" class="form-text">
-                <small>Current stock level</small>
-              </div>
-            </div>
-            {% else %}
-            <div class="alert alert-warning">
-              <i class="fas fa-exclamation-triangle me-2" aria-hidden="true"></i>
-              <strong>No stock record found</strong><br>
-              <small>Contact support to set up inventory tracking for this product.</small>
-            </div>
-            {% endif %}
-          </div>
-        </div>
-
-        <!-- Promo Codes -->
-        <div class="card mb-4">
-          <div class="card-header bg-light">
-            <h2 class="h5 card-title mb-0">
-              <i class="fas fa-tags me-2 text-primary" aria-hidden="true"></i>Promo Codes
-            </h2>
-          </div>
-          <div class="card-body">
-            <!-- Assign Existing Promo Code -->
-            <div class="mb-3">
-              <label for="existing_promo" class="form-label">Assign Existing Promo Code</label>
-              <select name="existing_promo" id="existing_promo" class="form-select">
-                <option value="">-- Select a promo code --</option>
-                {% for promo in all_promos %}
-                  <option value="{{ promo.id }}" data-discount="{{ promo.discount_percentage }}">
-                    {{ promo.code }} ({{ promo.discount_percentage }}% off)
-                  </option>
-                {% endfor %}
-              </select>
-            </div>
-
-            <div class="text-center my-3">
-              <span class="text-muted">— OR —</span>
-            </div>
-
-            <!-- Create New Promo Code -->
-            <div class="mb-3">
-              <label for="promo_code" class="form-label">Create New Promo Code</label>
-              <input type="text"
-                     name="promo_code"
-                     id="promo_code"
-                     class="form-control"
-                     placeholder="e.g., SUMMER20"
-                     maxlength="20"
-                     pattern="[A-Z0-9]+"
-                     aria-describedby="promoHelp">
-              <div id="promoHelp" class="form-text">
-                <small>Use uppercase letters and numbers only</small>
-              </div>
-            </div>
-
-            <div class="mb-3">
-              <label for="promo_discount" class="form-label">Discount Percentage</label>
-              <div class="input-group">
-                <input type="number"
-                       name="promo_discount"
-                       id="promo_discount"
-                       class="form-control"
-                       placeholder="20"
-                       min="1"
-                       max="99">
-                <span class="input-group-text">%</span>
-              </div>
+              <small><strong>Guidelines:</strong> Upload up to 3 new images at a time. Assign variants to existing images after upload. Recommended size: 800x800px</small>
             </div>
           </div>
         </div>
@@ -988,6 +1104,42 @@
         input.value = variant.id;
         container.appendChild(input);
       });
+
+      // Update new image variant options when variants change
+      this.updateNewImageVariantOptions();
+    }
+
+    updateNewImageVariantOptions() {
+      // Update variant options for new image uploads
+      const newImageForms = document.querySelectorAll('.new-image-form');
+
+      newImageForms.forEach((form, index) => {
+        const variantContainer = document.getElementById(`newImageVariants${index}`);
+        if (!variantContainer) return;
+
+        if (this.selectedVariants.length === 0) {
+          variantContainer.innerHTML = '<p class="text-muted small m-0">Select product variants first to assign them to images</p>';
+          return;
+        }
+
+        let html = '';
+        this.selectedVariants.forEach(variant => {
+          html += `
+            <div class="form-check form-check-sm">
+              <input class="form-check-input"
+                     type="checkbox"
+                     name="new_image_${index}_variants"
+                     value="${variant.id}"
+                     id="newImg${index}_var${variant.id}">
+              <label class="form-check-label small" for="newImg${index}_var${variant.id}">
+                ${variant.category}: ${variant.name}
+              </label>
+            </div>
+          `;
+        });
+
+        variantContainer.innerHTML = html;
+      });
     }
 
     getSelectedVariantIds() {
@@ -998,12 +1150,104 @@
   // Initialize the dual listbox when DOM is loaded
   document.addEventListener('DOMContentLoaded', function() {
     window.variantSelector = new DualListbox();
+
+    // Initialize image preview functionality
+    initializeImagePreview();
   });
 
   // Function to get selected variants for form submission
   function getSelectedVariants() {
     return window.variantSelector ? window.variantSelector.getSelectedVariantIds() : [];
   }
+
+  // Image preview functionality
+  function initializeImagePreview() {
+    const imageInputs = document.querySelectorAll('input[type="file"][accept="image/*"]');
+
+    imageInputs.forEach(input => {
+      input.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        const form = e.target.closest('.new-image-form');
+
+        if (file && form) {
+          const previewContainer = form.querySelector('.image-preview');
+          const previewImg = previewContainer.querySelector('img');
+
+          const reader = new FileReader();
+          reader.onload = function(event) {
+            previewImg.src = event.target.result;
+            previewContainer.classList.remove('d-none');
+          };
+          reader.readAsDataURL(file);
+        }
+      });
+    });
+  }
+
+  // Delete image function
+  function deleteImage(imageId) {
+    if (confirm('Are you sure you want to delete this image?')) {
+      fetch(`/stores/manage/${window.storeId}/products/${window.productId}/images/${imageId}/delete/`, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+          'Content-Type': 'application/json',
+        },
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          document.getElementById(`image-${imageId}`).remove();
+        } else {
+          alert('Error deleting image: ' + data.error);
+        }
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('Error deleting image');
+      });
+    }
+  }
+
+  // Form submission handler
+  document.getElementById('productForm').addEventListener('submit', function(e) {
+    // Show loading overlay
+    document.getElementById('loadingOverlay').classList.remove('d-none');
+
+    // Collect all image variant assignments
+    const imageVariantData = {};
+
+    // Existing images
+    document.querySelectorAll('[name^="image_"][name$="_variants"]:checked').forEach(checkbox => {
+      const matches = checkbox.name.match(/image_(\d+)_variants/);
+      if (matches) {
+        const imageId = matches[1];
+        if (!imageVariantData[`existing_${imageId}`]) {
+          imageVariantData[`existing_${imageId}`] = [];
+        }
+        imageVariantData[`existing_${imageId}`].push(checkbox.value);
+      }
+    });
+
+    // New images
+    document.querySelectorAll('[name^="new_image_"][name$="_variants"]:checked').forEach(checkbox => {
+      const matches = checkbox.name.match(/new_image_(\d+)_variants/);
+      if (matches) {
+        const formIndex = matches[1];
+        if (!imageVariantData[`new_${formIndex}`]) {
+          imageVariantData[`new_${formIndex}`] = [];
+        }
+        imageVariantData[`new_${formIndex}`].push(checkbox.value);
+      }
+    });
+
+    // Add hidden input with image variant data
+    const hiddenInput = document.createElement('input');
+    hiddenInput.type = 'hidden';
+    hiddenInput.name = 'image_variant_data';
+    hiddenInput.value = JSON.stringify(imageVariantData);
+    this.appendChild(hiddenInput);
+  });
 </script>
 
 <script src="{% static 'js/product_form.js' %}"></script>

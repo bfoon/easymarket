@@ -736,15 +736,13 @@ def store_products(request, slug):
 #         'products': products,
 #     }
 #     return render(request, 'stores/manage_products.html', context)
-
-
 @login_required
 def edit_product(request, store_id, product_id):
     store = get_object_or_404(Store, id=store_id, owner=request.user)
     product = get_object_or_404(Product, id=product_id, seller=request.user)
     stock, _ = Stock.objects.get_or_create(product=product)
 
-    ImageFormSet = modelformset_factory(ProductImage, form=ProductImageForm, extra=5, can_delete=False)
+    ImageFormSet = modelformset_factory(ProductImage, form=ProductImageForm, extra=3, can_delete=False)
 
     if request.method == 'POST':
         product_form = ProductForm(request.POST, request.FILES, instance=product)
@@ -870,6 +868,9 @@ def edit_product(request, store_id, product_id):
                             image.product = product
                             image.save()
 
+                # Handle image variant assignments and updates
+                handle_image_variant_assignments(request, product)
+
                 # Handle variant updates with dual listbox data
                 # Track current variants before changes
                 old_variants = set(
@@ -964,6 +965,62 @@ def edit_product(request, store_id, product_id):
     }
 
     return render(request, 'stores/edit_product.html', context)
+
+
+def handle_image_variant_assignments(request, product):
+    """Handle variant assignments for existing images only"""
+    import json
+
+    # Handle existing image variant updates
+    for image in product.images.all():
+        # Get variant assignments for this image
+        variant_field_name = f'image_{image.id}_variants'
+        selected_variants = request.POST.getlist(variant_field_name)
+
+        # Update variants for this image
+        if selected_variants:
+            variant_objects = ProductFeatureOption.objects.filter(id__in=selected_variants)
+            image.variants.set(variant_objects)
+        else:
+            image.variants.clear()
+
+        # Handle primary image setting
+        is_primary_field = f'image_{image.id}_primary'
+        image.is_primary = is_primary_field in request.POST
+
+        if image.is_primary:
+            # Ensure only one primary image per variant combination
+            image.set_as_primary_for_variants()
+
+        image.save()
+
+    # Note: New images will need to have variants assigned manually after upload
+    # since we simplified the interface to only show 3 upload slots without variant assignment
+
+
+@login_required
+@require_http_methods(["POST"])
+def delete_product_image(request, store_id, product_id, image_id):
+    """View to delete a product image"""
+    try:
+        store = get_object_or_404(Store, id=store_id, owner=request.user)
+        product = get_object_or_404(Product, id=product_id, seller=request.user)
+        image = get_object_or_404(ProductImage, id=image_id, product=product)
+
+        image_name = str(image)
+        image.delete()
+
+        AdminLog.objects.create(
+            action_type='image_delete',
+            related_model='ProductImage',
+            related_object_id=str(image_id),
+            message=f"Deleted image: {image_name}",
+            created_by=request.user
+        )
+
+        return JsonResponse({'success': True})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
 
 @login_required
 @require_POST

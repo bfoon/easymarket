@@ -387,84 +387,6 @@ class Product(models.Model):
             self._changed_fields = ['__created__']
 
 
-class ProductImage(models.Model):
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='images')
-    image = models.ImageField(upload_to='product_images/')
-    color = models.CharField(
-        max_length=50,
-        blank=True,
-        null=True,
-        help_text="Color variant this image represents (e.g., 'Red', 'Ocean Blue', 'Forest Green')"
-    )
-    is_primary = models.BooleanField(
-        default=False,
-        help_text="Set as primary image for this color variant"
-    )
-    alt_text = models.CharField(
-        max_length=200,
-        blank=True,
-        help_text="Alternative text for accessibility"
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ['-is_primary', 'created_at']
-        indexes = [
-            models.Index(fields=['product', 'color']),
-            models.Index(fields=['product', 'is_primary']),
-        ]
-
-    def __str__(self):
-        color_info = f" ({self.color})" if self.color else ""
-        primary_info = " [Primary]" if self.is_primary else ""
-        return f"Image for {self.product.name}{color_info}{primary_info}"
-
-    def save(self, *args, **kwargs):
-        # Auto-generate alt text if not provided
-        if not self.alt_text:
-            color_part = f" in {self.color}" if self.color else ""
-            self.alt_text = f"{self.product.name}{color_part}"
-
-        # Ensure only one primary image per color variant
-        if self.is_primary:
-            ProductImage.objects.filter(
-                product=self.product,
-                color=self.color,
-                is_primary=True
-            ).exclude(pk=self.pk).update(is_primary=False)
-
-        super().save(*args, **kwargs)
-
-    @classmethod
-    def get_images_by_color(cls, product, color=None):
-        """Get images filtered by color variant"""
-        queryset = cls.objects.filter(product=product)
-        if color:
-            return queryset.filter(color__iexact=color)
-        return queryset.filter(color__isnull=True)
-
-    @classmethod
-    def get_primary_image_for_color(cls, product, color=None):
-        """Get the primary image for a specific color variant"""
-        try:
-            return cls.objects.filter(
-                product=product,
-                color__iexact=color if color else None,
-                is_primary=True
-            ).first()
-        except cls.DoesNotExist:
-            return None
-
-    @classmethod
-    def get_available_colors(cls, product):
-        """Get all available colors for a product based on images"""
-        return cls.objects.filter(
-            product=product,
-            color__isnull=False
-        ).values_list('color', flat=True).distinct()
-
-
 class ProductView(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
@@ -498,6 +420,140 @@ class ProductVariant(models.Model):
 
     def __str__(self):
         return f"{self.product.name} - {self.feature_option}"
+
+
+
+class ProductImage(models.Model):
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='images')
+    image = models.ImageField(upload_to='product_images/')
+    variants = models.ManyToManyField(
+        ProductFeatureOption,
+        blank=True,
+        related_name='images',
+        help_text="Variants this image represents (e.g., 'Red', 'Large', 'Cotton')"
+    )
+    is_primary = models.BooleanField(
+        default=False,
+        help_text="Set as primary image for these variants"
+    )
+    alt_text = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="Alternative text for accessibility"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-is_primary', 'created_at']
+        indexes = [
+            models.Index(fields=['product', 'is_primary']),
+        ]
+
+    def __str__(self):
+        variant_info = ""
+        if self.variants.exists():
+            variant_names = list(self.variants.values_list('value', flat=True))
+            variant_info = f" ({', '.join(variant_names)})"
+        primary_info = " [Primary]" if self.is_primary else ""
+        return f"Image for {self.product.name}{variant_info}{primary_info}"
+
+    def save(self, *args, **kwargs):
+        # Auto-generate alt text if not provided
+        if not self.alt_text:
+            self.alt_text = f"{self.product.name}"
+
+        super().save(*args, **kwargs)
+
+        # Update alt text with variants after save (since M2M relations need the instance to exist)
+        if self.variants.exists() and not self.alt_text.endswith(')'):
+            variant_names = list(self.variants.values_list('value', flat=True))
+            variant_part = f" ({', '.join(variant_names)})"
+            self.alt_text = f"{self.product.name}{variant_part}"
+            super().save(update_fields=['alt_text'])
+
+    def get_variant_display(self):
+        """Get a display string of all variants for this image"""
+        if not self.variants.exists():
+            return "No variants"
+
+        # Group variants by feature
+        variants_by_feature = {}
+        for variant in self.variants.select_related('feature'):
+            feature_name = variant.feature.name
+            if feature_name not in variants_by_feature:
+                variants_by_feature[feature_name] = []
+            variants_by_feature[feature_name].append(variant.value)
+
+        # Create display string
+        display_parts = []
+        for feature, values in variants_by_feature.items():
+            display_parts.append(f"{feature}: {', '.join(values)}")
+
+        return " | ".join(display_parts)
+
+    def get_color_variants(self):
+        """Get color variants specifically"""
+        return self.variants.filter(feature__name__iexact='color')
+
+    def get_size_variants(self):
+        """Get size variants specifically"""
+        return self.variants.filter(feature__name__iexact='size')
+
+    @classmethod
+    def get_images_by_variants(cls, product, variant_ids=None):
+        """Get images that contain any of the specified variants"""
+        queryset = cls.objects.filter(product=product)
+        if variant_ids:
+            return queryset.filter(variants__in=variant_ids).distinct()
+        return queryset
+
+    @classmethod
+    def get_images_by_feature_value(cls, product, feature_name, value):
+        """Get images for a specific feature value (e.g., color='Red')"""
+        return cls.objects.filter(
+            product=product,
+            variants__feature__name__iexact=feature_name,
+            variants__value__iexact=value
+        ).distinct()
+
+    @classmethod
+    def get_primary_image_for_variants(cls, product, variant_ids=None):
+        """Get the primary image for specific variants"""
+        queryset = cls.objects.filter(product=product, is_primary=True)
+        if variant_ids:
+            return queryset.filter(variants__in=variant_ids).first()
+        return queryset.first()
+
+    @classmethod
+    def get_available_variants(cls, product):
+        """Get all variants that have images"""
+        return ProductFeatureOption.objects.filter(
+            images__product=product
+        ).distinct().select_related('feature')
+
+    @classmethod
+    def get_images_without_variants(cls, product):
+        """Get images that don't have any variants assigned"""
+        return cls.objects.filter(
+            product=product,
+            variants__isnull=True
+        )
+
+    def set_as_primary_for_variants(self):
+        """Set this image as primary and unset others with same variants"""
+        if self.is_primary and self.variants.exists():
+            variant_ids = list(self.variants.values_list('id', flat=True))
+
+            # Find other images with overlapping variants
+            overlapping_images = ProductImage.objects.filter(
+                product=self.product,
+                is_primary=True,
+                variants__in=variant_ids
+            ).exclude(pk=self.pk).distinct()
+
+            # Unset them as primary
+            overlapping_images.update(is_primary=False)
 
 class Cart(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='cart')
