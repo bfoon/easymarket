@@ -29,7 +29,7 @@ from accounts.models import AdminLog
 import re
 from decimal import Decimal
 from accounts.utils import log_admin_action
-from .models import Store
+from .models import Store, StoreFollow, StoreNotification
 from reviews.models import Review
 from marketplace.models import Product, Category, ProductImage
 from orders.models import ChatMessage
@@ -631,6 +631,214 @@ def product_detail(request, product_id):
     return render(request, 'marketplace/product_detail.html', context)
 
 
+@login_required
+@require_http_methods(["POST"])
+def toggle_store_follow(request, store_id):
+    """Toggle follow/unfollow for a store"""
+    try:
+        store = get_object_or_404(Store, id=store_id)
+
+        follow, created = StoreFollow.objects.get_or_create(
+            user=request.user,
+            store=store,
+            defaults={'is_active': True}
+        )
+
+        if not created:
+            # Toggle the existing follow status
+            follow.is_active = not follow.is_active
+            follow.save()
+
+        followers_count = store.get_followers_count()
+
+        return JsonResponse({
+            'success': True,
+            'is_following': follow.is_active,
+            'followers_count': followers_count,
+            'message': f'You are now {"following" if follow.is_active else "no longer following"} {store.name}'
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': 'An error occurred while updating your follow status.'
+        }, status=500)
+
+
+@login_required
+def get_user_notifications(request):
+    """Get user's store notifications"""
+    notifications = StoreNotification.objects.filter(
+        user=request.user
+    ).select_related('store', 'product').order_by('-created_at')
+
+    # Pagination
+    page_number = request.GET.get('page', 1)
+    paginator = Paginator(notifications, 20)
+    page_obj = paginator.get_page(page_number)
+
+    notifications_data = []
+    for notification in page_obj:
+        notifications_data.append({
+            'id': notification.id,
+            'type': notification.notification_type,
+            'title': notification.title,
+            'message': notification.message,
+            'store_name': notification.store.name,
+            'store_id': notification.store.id,
+            'product_name': notification.product.name if notification.product else None,
+            'product_id': notification.product.id if notification.product else None,
+            'old_price': str(notification.old_price) if notification.old_price else None,
+            'new_price': str(notification.new_price) if notification.new_price else None,
+            'created_at': notification.created_at.isoformat(),
+            'is_read': notification.is_read,
+            'time_ago': notification.created_at
+        })
+
+    return JsonResponse({
+        'success': True,
+        'notifications': notifications_data,
+        'has_next': page_obj.has_next(),
+        'has_previous': page_obj.has_previous(),
+        'total_count': paginator.count,
+        'unread_count': notifications.filter(is_read=False).count()
+    })
+
+
+@login_required
+@require_http_methods(["POST"])
+def mark_notification_read(request, notification_id):
+    """Mark a notification as read"""
+    try:
+        notification = get_object_or_404(
+            StoreNotification,
+            id=notification_id,
+            user=request.user
+        )
+        notification.is_read = True
+        notification.save()
+
+        unread_count = StoreNotification.objects.filter(
+            user=request.user,
+            is_read=False
+        ).count()
+
+        return JsonResponse({
+            'success': True,
+            'unread_count': unread_count
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': 'Failed to mark notification as read.'
+        }, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def mark_all_notifications_read(request):
+    """Mark all notifications as read"""
+    try:
+        StoreNotification.objects.filter(
+            user=request.user,
+            is_read=False
+        ).update(is_read=True)
+
+        return JsonResponse({
+            'success': True,
+            'message': 'All notifications marked as read.'
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': 'Failed to mark notifications as read.'
+        }, status=500)
+
+
+@login_required
+def get_followed_stores(request):
+    """Get stores followed by the user"""
+    follows = StoreFollow.objects.filter(
+        user=request.user,
+        is_active=True
+    ).select_related('store').order_by('-followed_at')
+
+    stores_data = []
+    for follow in follows:
+        store = follow.store
+        stores_data.append({
+            'id': store.id,
+            'name': store.name,
+            'slug': store.slug,
+            'logo': store.logo.url if store.logo else None,
+            'city': store.city,
+            'country': store.country,
+            'followers_count': store.get_followers_count(),
+            'products_count': store.products.filter(is_active=True).count(),
+            'followed_at': follow.followed_at.isoformat()
+        })
+
+    return JsonResponse({
+        'success': True,
+        'stores': stores_data
+    })
+
+
+@login_required
+@require_http_methods(["POST"])
+def update_notification_preferences(request, store_id):
+    """Update notification preferences for a followed store"""
+    try:
+        data = json.loads(request.body)
+        store = get_object_or_404(Store, id=store_id)
+
+        follow = get_object_or_404(
+            StoreFollow,
+            user=request.user,
+            store=store,
+            is_active=True
+        )
+
+        # Update preferences
+        follow.notify_new_products = data.get('notify_new_products', True)
+        follow.notify_price_changes = data.get('notify_price_changes', True)
+        follow.notify_discounts = data.get('notify_discounts', True)
+        follow.save()
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Notification preferences updated successfully.'
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'message': 'Invalid JSON data.'
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': 'Failed to update preferences.'
+        }, status=500)
+
+
+def get_store_follow_status(request, store_id):
+    """Get follow status for a store (for authenticated users)"""
+    store = get_object_or_404(Store, id=store_id)
+
+    data = {
+        'store_id': store.id,
+        'followers_count': store.get_followers_count(),
+        'is_following': False
+    }
+
+    if request.user.is_authenticated:
+        data['is_following'] = store.is_followed_by(request.user)
+
+    return JsonResponse(data)
+
 
 def store_detail(request, slug):
     """Public store detail page."""
@@ -684,6 +892,11 @@ def store_detail(request, slug):
         .distinct()
     )
 
+    # Add follow status to context
+    is_following = False
+    if request.user.is_authenticated:
+        is_following = store.is_followed_by(request.user)
+
     context = {
         'store': store,
         'products': products,
@@ -693,6 +906,8 @@ def store_detail(request, slug):
         'rating_order': [5, 4, 3, 2, 1],
         'recent_reviews': recent_reviews,
         'categories': categories,
+        'is_following': is_following,
+        'followers_count': store.get_followers_count(),
     }
     return render(request, 'stores/store_detail.html', context)
 
@@ -829,6 +1044,9 @@ def edit_product(request, store_id, product_id):
 
         if product_form.is_valid() and image_formset.is_valid():
             with transaction.atomic():
+                # Save the old price before updating
+                old_price = product.price
+
                 product = product_form.save(commit=False)
                 product._log_user = request.user
                 product.is_active = 'is_active' in request.POST
@@ -918,9 +1136,11 @@ def edit_product(request, store_id, product_id):
                             created_by=request.user
                         )
 
+                # Note: Price change notification is now handled automatically in the Product.save() method
+                # No need to manually call notify_followers here
+
                 messages.success(request, f'Product updated successfully! {len(variant_names)} variants selected.')
                 return redirect('stores:manage_store_products', store_id=store.id)
-
         else:
             # Handle form errors
             error_messages = []

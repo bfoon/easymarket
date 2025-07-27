@@ -169,40 +169,26 @@ class Product(models.Model):
     name = models.CharField(max_length=200)
     category = models.ForeignKey('Category', on_delete=models.SET_NULL, null=True)
     price = models.DecimalField(max_digits=10, decimal_places=2)
+    original_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
     description = models.TextField()
     specifications = models.TextField()
     image = models.ImageField(upload_to='products/')
+    video = models.FileField(upload_to='product_videos/', blank=True, null=True)
+
     is_featured = models.BooleanField(default=False)
     is_trending = models.BooleanField(default=False)
     has_30_day_return = models.BooleanField(default=False,
                                             help_text="Enable if product is eligible for 30-day return policy.")
     free_shipping = models.BooleanField(default=False)
-    used = models.BooleanField(default=False) #is for used products
-
-    original_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
-    video = models.FileField(upload_to='product_videos/', blank=True, null=True)
+    used = models.BooleanField(default=False)
     sold_count = models.PositiveIntegerField(default=0)
-    store = models.ForeignKey('stores.Store', on_delete=models.CASCADE, related_name='products' , blank=True, null=True)
+
+    store = models.ForeignKey('stores.Store', on_delete=models.CASCADE, related_name='products', blank=True, null=True)
     is_active = models.BooleanField(default=True)
 
     available_for_auction = models.BooleanField(default=True)
-    auction_reserve_price = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        null=True,
-        blank=True,
-        help_text="Suggested reserve price for auctions"
-    )
-    auction_starting_bid = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        null=True,
-        blank=True,
-        help_text="Suggested starting bid for auctions"
-    )
-
-    # Remove this line:
-    # stock = models.PositiveIntegerField(default=0)
+    auction_reserve_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    auction_starting_bid = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -211,9 +197,7 @@ class Product(models.Model):
         return self.name
 
     def create_auction(self, seller, starting_bid, end_date, **kwargs):
-        """Helper method to create an auction from this product"""
         from auction.models import Auction
-
         auction_data = {
             'title': self.name,
             'description': self.description,
@@ -222,71 +206,45 @@ class Product(models.Model):
             'seller': seller,
             'marketplace_product': self,
             'image': self.image,
-            'shipping_cost': 0.00,  # You can calculate this based on your logic
+            'shipping_cost': 0.00,
             **kwargs
         }
-
         return Auction.objects.create(**auction_data)
 
     @property
     def stock(self):
-        """
-        Get the latest stock record for this product.
-        Returns the Stock instance or None if not found.
-        """
         return self.stock_records.first()
 
     @property
     def stock_quantity(self):
-        """
-        Get the current stock quantity for this product.
-        Returns the quantity as an integer.
-        """
         stock_record = self.stock
         return stock_record.quantity if stock_record else 0
 
     @property
     def is_in_stock(self):
-        """
-        Check if the product is currently in stock.
-        """
         return self.stock_quantity > 0
 
     @property
     def discount_percentage(self):
-        """
-        Calculates the discount percentage if original price exists and is greater than price.
-        """
         if self.original_price and self.original_price > self.price:
             return int(((self.original_price - self.price) / self.original_price) * 100)
         return None
 
     @property
     def is_new(self):
-        """
-        Determines if product is considered 'new' (added within last 2 days).
-        """
         from django.utils import timezone
         two_days_ago = timezone.now() - timezone.timedelta(days=2)
         return self.created_at >= two_days_ago
 
     def get_stock_status(self):
-        """
-        Get a human-readable stock status.
-        """
         quantity = self.stock_quantity
         if quantity == 0:
             return "Out of Stock"
         elif quantity <= 5:
             return f"Low Stock ({quantity} remaining)"
-        else:
-            return f"In Stock ({quantity} available)"
+        return f"In Stock ({quantity} available)"
 
     def reduce_stock(self, quantity):
-        """
-        Reduce stock quantity by the specified amount.
-        Returns True if successful, False if insufficient stock.
-        """
         stock_record = self.stock
         if stock_record and stock_record.quantity >= quantity:
             stock_record.quantity -= quantity
@@ -295,22 +253,15 @@ class Product(models.Model):
         return False
 
     def increase_stock(self, quantity):
-        """
-        Increase stock quantity by the specified amount.
-        """
         stock_record = self.stock
         if stock_record:
             stock_record.quantity += quantity
             stock_record.save()
         else:
-            # Create new stock record if it doesn't exist
             from stock.models import Stock
             Stock.objects.create(product=self, quantity=quantity)
 
     def get_or_create_stock(self):
-        """
-        Get existing stock record or create a new one with 0 quantity.
-        """
         stock_record = self.stock
         if not stock_record:
             from stock.models import Stock
@@ -336,55 +287,83 @@ class Product(models.Model):
         return Decimal('0.00')
 
     def get_image_for_color(self, color=None):
-        """Get the primary image for a specific color, fallback to main image"""
         if color:
             color_image = ProductImage.get_primary_image_for_color(self, color)
             if color_image:
                 return color_image.image
-
-            # Fallback to any image with that color
             color_images = ProductImage.get_images_by_color(self, color)
             if color_images.exists():
                 return color_images.first().image
-
-        # Fallback to main product image
         return self.image
 
     def get_images_by_color(self, color=None):
-        """Get all images for a specific color"""
         return ProductImage.get_images_by_color(self, color)
 
     def get_available_image_colors(self):
-        """Get all colors that have images"""
         return ProductImage.get_available_colors(self)
 
     def has_color_images(self):
-        """Check if product has color-specific images"""
         return self.images.filter(color__isnull=False).exists()
 
     def save(self, *args, **kwargs):
-        is_update = self.pk is not None
+        is_new = self.pk is None
         changed_fields = []
+        old_price = None
 
-        if is_update:
-            # Fetch old state from the DB
-            old = Product.objects.get(pk=self.pk)
-            for field in self._meta.fields:
-                field_name = field.name
-                if field_name in ['updated_at', 'created_at']:
-                    continue
-                old_value = getattr(old, field_name)
-                new_value = getattr(self, field_name)
-                if old_value != new_value:
-                    changed_fields.append(field_name)
+        if not is_new:
+            try:
+                old_instance = self.__class__.objects.get(pk=self.pk)
+                old_price = old_instance.price
+                for field in self._meta.fields:
+                    name = field.name
+                    if name in ['updated_at', 'created_at']:
+                        continue
+                    old_val = getattr(old_instance, name)
+                    new_val = getattr(self, name)
+                    if old_val != new_val:
+                        changed_fields.append(name)
+            except self.__class__.DoesNotExist:
+                pass
 
         super().save(*args, **kwargs)
 
-        # Save changed fields to a temporary attribute for signal use
-        if is_update:
-            self._changed_fields = changed_fields
-        else:
-            self._changed_fields = ['__created__']
+        self._changed_fields = changed_fields or ['__created__']
+
+        # Notifications
+        if is_new and self.store:
+            self.store.notify_followers(
+                notification_type='new_product',
+                title=f'New Product: {self.name}',
+                message=f'Check out our latest product "{self.name}" now available for ${self.price}!',
+                product=self
+            )
+        elif old_price and old_price != self.price and self.store:
+            from stores.models import ProductPriceHistory
+            ProductPriceHistory.objects.create(
+                product=self,
+                old_price=old_price,
+                new_price=self.price
+            )
+            if self.price < old_price:
+                discount_percent = round(((old_price - self.price) / old_price) * 100, 1)
+                self.store.notify_followers(
+                    notification_type='price_decrease',
+                    title=f'Price Drop: {self.name}',
+                    message=f'Price dropped by {discount_percent}% from ${old_price} to ${self.price}!',
+                    product=self,
+                    old_price=old_price,
+                    new_price=self.price
+                )
+            else:
+                self.store.notify_followers(
+                    notification_type='price_increase',
+                    title=f'Price Update: {self.name}',
+                    message=f'Price updated from ${old_price} to ${self.price}.',
+                    product=self,
+                    old_price=old_price,
+                    new_price=self.price
+                )
+
 
 
 class ProductView(models.Model):

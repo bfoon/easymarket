@@ -11,6 +11,9 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from PIL import Image
 from django.contrib.auth import get_user_model
+from marketplace.models import Product
+import threading
+from django.core.mail import send_mail
 
 User = get_user_model()
 
@@ -35,6 +38,84 @@ class StoreCategory(models.Model):
 
     def get_absolute_url(self):
         return reverse('store:category_detail', kwargs={'slug': self.slug})
+
+
+class StoreFollow(models.Model):
+    """Track which users follow which stores"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='store_follows')
+    store = models.ForeignKey('Store', on_delete=models.CASCADE, related_name='followers')
+    followed_at = models.DateTimeField(auto_now_add=True)
+    is_active = models.BooleanField(default=True)
+
+    # Notification preferences
+    notify_new_products = models.BooleanField(default=True)
+    notify_price_changes = models.BooleanField(default=True)
+    notify_discounts = models.BooleanField(default=True)
+
+    class Meta:
+        unique_together = ['user', 'store']
+        indexes = [
+            models.Index(fields=['user', 'is_active']),
+            models.Index(fields=['store', 'is_active']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} follows {self.store.name}"
+
+
+class StoreNotification(models.Model):
+    """Store notifications for followers"""
+    NOTIFICATION_TYPES = [
+        ('new_product', 'New Product'),
+        ('price_increase', 'Price Increase'),
+        ('price_decrease', 'Price Decrease'),
+        ('discount', 'Discount Available'),
+        ('back_in_stock', 'Back in Stock'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='store_notifications')
+    store = models.ForeignKey('Store', on_delete=models.CASCADE, related_name='notifications')
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, null=True, blank=True)
+
+    notification_type = models.CharField(max_length=20, choices=NOTIFICATION_TYPES)
+    title = models.CharField(max_length=200)
+    message = models.TextField()
+
+    # Metadata
+    old_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    new_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_read = models.BooleanField(default=False)
+    is_sent = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'is_read']),
+            models.Index(fields=['store', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.notification_type}: {self.title}"
+
+
+class ProductPriceHistory(models.Model):
+    """Track price changes for notifications"""
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='price_history')
+    old_price = models.DecimalField(max_digits=10, decimal_places=2)
+    new_price = models.DecimalField(max_digits=10, decimal_places=2)
+    changed_at = models.DateTimeField(auto_now_add=True)
+    changed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+
+    class Meta:
+        ordering = ['-changed_at']
+        indexes = [
+            models.Index(fields=['product', 'changed_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.product.name}: ${self.old_price} → ${self.new_price}"
 
 
 class Store(models.Model):
@@ -187,6 +268,168 @@ class Store(models.Model):
         ).aggregate(
             total=Sum('current_bid')
         )['total'] or Decimal('0.00')
+
+    def is_followed_by(self, user):
+        """
+        Checks if this store is followed by the given user.
+        """
+        if not user or not user.is_authenticated:
+            return False
+
+        return StoreFollow.objects.filter(user=user, store=self).exists()
+
+    def get_followers_count(self):
+        from .models import StoreFollow  # or adjust the import if StoreFollow is elsewhere
+        return StoreFollow.objects.filter(store=self).count()
+
+    def send_bulk_emails_threaded(emails_data, store_name):
+        for email_data in emails_data:
+            try:
+                send_mail(
+                    subject=f"{store_name}: {email_data['title']}",
+                    message=f"Hi {email_data['name']},\n\n{email_data['message']}\n\nBest regards,\n{store_name}",
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[email_data['email']],
+                    fail_silently=True,
+                )
+            except Exception as e:
+                print(f"Failed to send email to {email_data['email']}: {e}")
+
+    def notify_followers(self, notification_type, title, message, product=None, **kwargs):
+        """
+        Notify all users who follow this store (DB + Email in background thread).
+        """
+        from .models import StoreFollow, StoreNotification
+
+        followers = StoreFollow.objects.filter(
+            store=self,
+            is_active=True
+        ).select_related('user')
+
+        notifications_to_create = []
+        emails_to_send = []
+
+        for follow in followers:
+            should_notify = False
+            if notification_type == 'new_product' and follow.notify_new_products:
+                should_notify = True
+            elif notification_type in ['price_decrease', 'price_increase'] and follow.notify_price_changes:
+                should_notify = True
+            elif notification_type == 'discount' and follow.notify_discounts:
+                should_notify = True
+
+            if should_notify:
+                # Notification DB entry
+                notifications_to_create.append(
+                    StoreNotification(
+                        user=follow.user,
+                        store=self,
+                        product=product,
+                        notification_type=notification_type,
+                        title=title,
+                        message=message,
+                        old_price=kwargs.get('old_price'),
+                        new_price=kwargs.get('new_price')
+                    )
+                )
+
+                # Prepare email data
+                if follow.user.email:
+                    emails_to_send.append({
+                        'email': follow.user.email,
+                        'name': follow.user.get_full_name() or follow.user.username,
+                        'title': title,
+                        'message': message
+                    })
+
+        if notifications_to_create:
+            StoreNotification.objects.bulk_create(notifications_to_create)
+
+        if emails_to_send:
+            threading.Thread(
+                target=send_bulk_emails_threaded,
+                args=(emails_to_send, self.name)
+            ).start()
+
+        return len(notifications_to_create)
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            old_store = Store.objects.get(pk=self.pk)
+            if old_store.status != self.status and self.status == 'active' and not self.approved_at:
+                self.approved_at = timezone.now()
+        super().save(*args, **kwargs)
+
+    # Also fix the notify_followers method to actually send notifications:
+    def notify_followers(self, notification_type, title, message, product=None, **kwargs):
+        """
+        Notify all users who follow this store.
+        """
+        from .models import StoreFollow, StoreNotification
+        from django.core.mail import send_mail
+        from django.conf import settings
+
+        # Get followers with their notification preferences
+        followers = StoreFollow.objects.filter(
+            store=self,
+            is_active=True
+        ).select_related('user')
+
+        notifications_to_create = []
+        emails_to_send = []
+
+        for follow in followers:
+            # Check notification preferences
+            should_notify = False
+            if notification_type == 'new_product' and follow.notify_new_products:
+                should_notify = True
+            elif notification_type in ['price_decrease', 'price_increase'] and follow.notify_price_changes:
+                should_notify = True
+            elif notification_type == 'discount' and follow.notify_discounts:
+                should_notify = True
+
+            if should_notify:
+                # Create notification record
+                notifications_to_create.append(
+                    StoreNotification(
+                        user=follow.user,
+                        store=self,
+                        product=product,
+                        notification_type=notification_type,
+                        title=title,
+                        message=message,
+                        old_price=kwargs.get('old_price'),
+                        new_price=kwargs.get('new_price')
+                    )
+                )
+
+                # Prepare email
+                if follow.user.email:
+                    emails_to_send.append({
+                        'email': follow.user.email,
+                        'name': follow.user.get_full_name() or follow.user.username,
+                        'title': title,
+                        'message': message
+                    })
+
+        # Bulk create notifications
+        if notifications_to_create:
+            StoreNotification.objects.bulk_create(notifications_to_create)
+
+        # Send emails
+        for email_data in emails_to_send:
+            try:
+                send_mail(
+                    subject=f"{self.name}: {email_data['title']}",
+                    message=f"Hi {email_data['name']},\n\n{email_data['message']}\n\nBest regards,\n{self.name}",
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[email_data['email']],
+                    fail_silently=True,
+                )
+            except Exception as e:
+                print(f"Failed to send email to {email_data['email']}: {e}")
+
+        return len(notifications_to_create)
 
 
 class StoreManager(models.Model):

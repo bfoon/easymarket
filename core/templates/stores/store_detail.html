@@ -34,6 +34,10 @@
 <meta name="twitter:description" content="{{ store.description|striptags|truncatewords:30|default:'Discover amazing products' }}">
 <meta name="twitter:image" content="{{ store.banner.url|default:store.logo.url }}">
 
+<!-- Add user authentication status for JavaScript -->
+<meta name="user-authenticated" content="{% if user.is_authenticated %}true{% else %}false{% endif %}">
+<meta name="csrf-token" content="{{ csrf_token }}">
+
 <!-- Structured Data -->
 <script type="application/ld+json">
 {
@@ -67,6 +71,96 @@
   "foundingDate": "{{ store.created_at|date:'Y-m-d' }}"
 }
 </script>
+
+<!-- Store Follow Styles -->
+<style>
+.notification-item {
+  transition: background-color 0.3s ease;
+  cursor: pointer;
+}
+
+.notification-item:hover {
+  background-color: rgba(0,0,0,0.05) !important;
+}
+
+.notification-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0,0,0,0.05);
+  border-radius: 50%;
+}
+
+.followers-info {
+  opacity: 0.9;
+}
+
+.follow-status {
+  animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.btn-follow {
+  transition: all 0.3s ease;
+  min-width: 120px;
+}
+
+.btn-follow.btn-success {
+  background-color: #28a745;
+  border-color: #28a745;
+}
+
+.btn-follow.btn-success:hover {
+  background-color: #dc3545;
+  border-color: #dc3545;
+}
+
+.btn-follow.btn-success:hover .btn-text::after {
+  content: " (Unfollow)";
+  font-size: 0.8em;
+}
+
+.notification-badge {
+  font-size: 0.7em;
+  min-width: 18px;
+  height: 18px;
+}
+
+.btn-notifications {
+  position: relative;
+}
+
+/* Loading state for follow button */
+.btn-follow.loading {
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+.btn-follow .spinner {
+  display: none;
+  width: 16px;
+  height: 16px;
+  border: 2px solid transparent;
+  border-top: 2px solid currentColor;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.btn-follow.loading .spinner {
+  display: inline-block;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+</style>
 {% endblock %}
 
 {% block content %}
@@ -101,8 +195,6 @@
       </div>
     </div>
     {% endif %}
-
-
 
     <!-- Enhanced Store Information Overlay -->
     <div class="store-info-overlay">
@@ -149,11 +241,8 @@
                       {% if review_count %}
                         (<span itemprop="reviewCount">{{ review_count }}</span> review{{ review_count|pluralize }})
                       {% endif %}
-
                     </span>
-
                   </span>
-
                 </div>
               </div>
             </div>
@@ -161,13 +250,18 @@
 
           <div class="col-lg-4">
             <div class="store-actions">
+              <!-- Enhanced Follow Button with Click Handler -->
               <button class="btn btn-outline-light btn-follow"
-                      onclick="toggleFavorite({{ store.id }})"
-                      aria-label="Follow {{ store.name }} store"
-                      data-store-id="{{ store.id }}">
-                <i class="fas fa-heart" id="favoriteIcon" aria-hidden="true"></i>
-                <span class="btn-text">Follow</span>
+                      onclick="toggleStoreFollow({{ store.id }})"
+                      aria-label="{% if is_following %}Unfollow{% else %}Follow{% endif %} {{ store.name }} store"
+                      data-store-id="{{ store.id }}"
+                      data-is-following="{% if is_following %}true{% else %}false{% endif %}">
+                <span class="spinner" aria-hidden="true"></span>
+                <i class="{% if is_following %}fas fa-check{% else %}fas fa-heart{% endif %}" id="favoriteIcon" aria-hidden="true"></i>
+                <span class="btn-text">{% if is_following %}Following{% else %}Follow{% endif %}</span>
               </button>
+
+              <!-- Contact Button -->
               <button class="btn btn-primary btn-contact"
                       data-bs-toggle="modal"
                       data-bs-target="#contactModal"
@@ -175,11 +269,23 @@
                 <i class="fas fa-envelope" aria-hidden="true"></i>
                 <span class="btn-text">Contact</span>
               </button>
+
+              <!-- Notifications Button (will be added by JavaScript if user is authenticated) -->
+
               {% if store.allow_referrals %}
-               <button class="btn btn-sm btn-outline-success btn-block" data-bs-toggle="modal" data-bs-target="#storeReferralModal">
+              <button class="btn btn-sm btn-outline-success btn-block" data-bs-toggle="modal" data-bs-target="#storeReferralModal">
                 <i class="fas fa-gift me-1"></i> Refer a Friend & Earn
               </button>
               {% endif %}
+            </div>
+
+            <!-- Followers Count Display -->
+            <div class="followers-info mt-2">
+              <small class="text-light">
+                <i class="fas fa-users me-1"></i>
+                <span class="followers-count">{{ followers_count|default:0 }}</span>
+                follower{{ followers_count|pluralize }}
+              </small>
             </div>
           </div>
         </div>
@@ -544,6 +650,7 @@
               </div>
             </div>
 
+            <!-- Enhanced Store Statistics with Follow Info -->
             <div class="col-md-4">
               <div class="store-stats-card">
                 <h4>Store Statistics</h4>
@@ -551,6 +658,10 @@
                   <div class="stat-item">
                     <div class="stat-number">{{ products.count|default:0|intcomma }}</div>
                     <div class="stat-label">Product{{ products.count|pluralize }}</div>
+                  </div>
+                  <div class="stat-item">
+                    <div class="stat-number followers-count">{{ followers_count|default:0|intcomma }}</div>
+                    <div class="stat-label">Follower{{ followers_count|pluralize }}</div>
                   </div>
                   <div class="stat-item">
                     <div class="stat-number">{{ review_count|default:0|intcomma }}</div>
@@ -565,6 +676,24 @@
                     <div class="stat-label">In Business</div>
                   </div>
                 </div>
+
+                <!-- Follow Status for Authenticated Users -->
+                {% if user.is_authenticated and is_following %}
+                <div class="follow-status mt-3 p-2 bg-success bg-opacity-10 border border-success rounded">
+                  <div class="d-flex align-items-center justify-content-between">
+                    <small class="text-success">
+                      <i class="fas fa-check-circle me-1"></i>
+                      You're following this store
+                    </small>
+                    <button class="btn btn-sm btn-outline-success" onclick="storeFollowManager.showNotificationPreferences()">
+                      <i class="fas fa-cog me-1"></i>Settings
+                    </button>
+                  </div>
+                  <small class="text-muted d-block mt-1">
+                    You'll be notified about new products and price changes
+                  </small>
+                </div>
+                {% endif %}
               </div>
             </div>
           </div>
@@ -981,7 +1110,7 @@
   </div>
 </div>
 
-
+<!-- Store Referral Modal -->
 <div class="modal fade" id="storeReferralModal" tabindex="-1" aria-labelledby="storeReferralModalLabel" aria-hidden="true">
   <div class="modal-dialog">
     <form method="post" action="{% url 'stores:refer_store' store.id %}" class="modal-content">
@@ -993,7 +1122,7 @@
       <div class="modal-body">
         <p class="small text-muted">Invite a friend to shop at <strong>{{ store.name }}</strong>. You'll earn a discount if they make a purchase.</p>
         <div class="mb-3">
-          <label for="referralEmail" class="form-label">Friend’s Email</label>
+          <label for="referralEmail" class="form-label">Friend's Email</label>
           <input type="email" class="form-control" id="referralEmail" name="referred_email" placeholder="e.g. friend@example.com" required>
         </div>
       </div>
@@ -1006,24 +1135,303 @@
   </div>
 </div>
 
-
-<!-- Enhanced JavaScript -->
+<!-- JavaScript -->
 <script src="{% static 'js/main.js' %}"></script>
 <script src="{% static 'js/store-page-manager.js' %}" defer></script>
-<!-- Performance monitoring -->
-<script>
-// Performance monitoring
-window.addEventListener('load', function() {
-  // Log page load time
-  const loadTime = performance.timing.loadEventEnd - performance.timing.navigationStart;
-  console.log('Page load time:', loadTime, 'ms');
 
-  // Monitor Core Web Vitals
-  if ('web-vitals' in window) {
-    getCLS(console.log);
-    getFID(console.log);
-    getLCP(console.log);
-  }
+<script>
+// Replace the JavaScript section in your template with this corrected version:
+
+// Set user authentication status for JavaScript
+document.body.dataset.userAuthenticated = "{% if user.is_authenticated %}true{% else %}false{% endif %}";
+
+// Store Follow Manager Object
+class StoreFollowManager {
+    constructor() {
+        this.storeId = null;
+        this.isFollowing = false;
+        this.init();
+    }
+
+    init() {
+        // Get store ID from the follow button
+        const followBtn = document.querySelector('.btn-follow');
+        if (followBtn) {
+            this.storeId = followBtn.dataset.storeId;
+            this.isFollowing = followBtn.dataset.isFollowing === 'true';
+        }
+
+        console.log('Store follow manager initialized for store:', this.storeId);
+
+        // Load follow status on page load
+        if (this.storeId && this.isUserAuthenticated()) {
+            this.loadFollowStatus();
+        }
+    }
+
+    isUserAuthenticated() {
+        return document.body.dataset.userAuthenticated === 'true';
+    }
+
+    async loadFollowStatus() {
+        try {
+            const response = await fetch(`/stores/api/follow-status/${this.storeId}/`);
+            const data = await response.json();
+
+            if (data.success) {
+                this.isFollowing = data.is_following;
+                this.updateFollowButton();
+                this.updateFollowersCount(data.followers_count);
+            }
+        } catch (error) {
+            console.error('Error loading follow status:', error);
+        }
+    }
+
+    toggleFollow() {
+        return toggleStoreFollow(this.storeId);
+    }
+
+    updateFollowButton() {
+        const followBtn = document.querySelector('.btn-follow');
+        const icon = followBtn.querySelector('i');
+        const text = followBtn.querySelector('.btn-text');
+
+        followBtn.dataset.isFollowing = this.isFollowing.toString();
+
+        if (this.isFollowing) {
+            followBtn.classList.remove('btn-outline-light');
+            followBtn.classList.add('btn-success');
+            icon.className = 'fas fa-check';
+            text.textContent = 'Following';
+            followBtn.setAttribute('aria-label', 'Unfollow {{ store.name }} store');
+        } else {
+            followBtn.classList.remove('btn-success');
+            followBtn.classList.add('btn-outline-light');
+            icon.className = 'fas fa-heart';
+            text.textContent = 'Follow';
+            followBtn.setAttribute('aria-label', 'Follow {{ store.name }} store');
+        }
+    }
+
+    updateFollowersCount(count) {
+        const followersCountElements = document.querySelectorAll('.followers-count');
+        followersCountElements.forEach(element => {
+            if (element) element.textContent = count;
+        });
+    }
+
+    showNotificationPreferences() {
+        const modal = this.createNotificationPreferencesModal();
+        document.body.appendChild(modal);
+        const bsModal = new bootstrap.Modal(modal);
+        bsModal.show();
+
+        // Remove modal when hidden
+        modal.addEventListener('hidden.bs.modal', () => {
+            modal.remove();
+        });
+    }
+
+    createNotificationPreferencesModal() {
+        const modal = document.createElement('div');
+        modal.className = 'modal fade';
+        modal.innerHTML = `
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Notification Preferences</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="mb-3">Choose what notifications you'd like to receive from this store:</p>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="notifyNewProducts" checked>
+                            <label class="form-check-label" for="notifyNewProducts">
+                                <i class="fas fa-box text-primary me-2"></i>New Products
+                            </label>
+                        </div>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="notifyPriceChanges" checked>
+                            <label class="form-check-label" for="notifyPriceChanges">
+                                <i class="fas fa-tag text-success me-2"></i>Price Changes
+                            </label>
+                        </div>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="notifyDiscounts" checked>
+                            <label class="form-check-label" for="notifyDiscounts">
+                                <i class="fas fa-percent text-danger me-2"></i>Special Discounts
+                            </label>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="button" class="btn btn-primary" onclick="storeFollowManager.saveNotificationPreferences(this)">
+                            Save Preferences
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        return modal;
+    }
+
+    async saveNotificationPreferences(button) {
+        const modal = button.closest('.modal');
+        const preferences = {
+            notify_new_products: modal.querySelector('#notifyNewProducts').checked,
+            notify_price_changes: modal.querySelector('#notifyPriceChanges').checked,
+            notify_discounts: modal.querySelector('#notifyDiscounts').checked
+        };
+
+        // Show loading state
+        const originalText = button.innerHTML;
+        button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Saving...';
+        button.disabled = true;
+
+        try {
+            const response = await fetch(`/stores/api/notifications/preferences/${this.storeId}/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCSRFToken()
+                },
+                body: JSON.stringify(preferences)
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showToast('success', 'Notification preferences updated successfully!');
+                bootstrap.Modal.getInstance(modal).hide();
+            } else {
+                showToast('error', data.message || 'Failed to save preferences.');
+            }
+
+        } catch (error) {
+            console.error('Error saving preferences:', error);
+            showToast('error', 'An error occurred while saving preferences.');
+        } finally {
+            button.innerHTML = originalText;
+            button.disabled = false;
+        }
+    }
+}
+
+// Simple Store Follow Function
+function toggleStoreFollow(storeId) {
+    const button = document.querySelector('.btn-follow');
+    const icon = button.querySelector('#favoriteIcon');
+    const text = button.querySelector('.btn-text');
+
+    // Check if user is authenticated
+    if (document.body.dataset.userAuthenticated !== 'true') {
+        showLoginRequired();
+        return;
+    }
+
+    // Show loading state
+    button.classList.add('loading');
+    button.disabled = true;
+
+    // Make API call
+    fetch(`/stores/api/follow/${storeId}/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCSRFToken()
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Update storeFollowManager state
+            if (window.storeFollowManager) {
+                window.storeFollowManager.isFollowing = data.is_following;
+                window.storeFollowManager.updateFollowButton();
+                window.storeFollowManager.updateFollowersCount(data.followers_count);
+            }
+
+            showToast('success', data.message);
+
+            // Show notification preferences if just followed
+            if (data.is_following && window.storeFollowManager) {
+                setTimeout(() => {
+                    window.storeFollowManager.showNotificationPreferences();
+                }, 1000);
+            }
+        } else {
+            showToast('error', data.message || 'Failed to update follow status');
+        }
+    })
+    .catch(error => {
+        console.error('Follow error:', error);
+        showToast('error', 'An error occurred. Please try again.');
+    })
+    .finally(() => {
+        // Remove loading state
+        button.classList.remove('loading');
+        button.disabled = false;
+    });
+}
+
+// Helper Functions
+function showLoginRequired() {
+    const modal = document.createElement('div');
+    modal.className = 'modal fade';
+    modal.innerHTML = `
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Login Required</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Please log in to follow stores and receive notifications about new products and price changes.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <a href="/accounts/login/?next={{ request.get_full_path }}" class="btn btn-primary">Login</a>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+
+    modal.addEventListener('hidden.bs.modal', () => {
+        modal.remove();
+    });
+}
+
+function showToast(type, message) {
+    const toastId = type === 'success' ? 'successToast' : 'errorToast';
+    const toast = document.getElementById(toastId);
+
+    if (toast) {
+        toast.querySelector('.toast-body').textContent = message;
+        const bsToast = new bootstrap.Toast(toast);
+        bsToast.show();
+    }
+}
+
+function getCSRFToken() {
+    return document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
+           document.querySelector('meta[name="csrf-token"]')?.content ||
+           '';
+}
+
+// Backward compatibility
+function toggleFavorite(storeId) {
+    toggleStoreFollow(storeId);
+}
+
+// Initialize the store follow manager
+document.addEventListener('DOMContentLoaded', function() {
+    window.storeFollowManager = new StoreFollowManager();
+    console.log('Store follow system initialized');
 });
 </script>
 

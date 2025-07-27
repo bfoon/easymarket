@@ -66,4 +66,16 @@ urlpatterns = [
     path('<slug:slug>/', views.store_detail, name='store_detail'),
     path('<slug:slug>/products/', views.store_products, name='store_products'),
     path('refer/store/<uuid:store_id>/', views.create_store_referral, name='refer_store'),
+
+    # Store following URLs
+    path('api/follow/<uuid:store_id>/', views.toggle_store_follow, name='toggle_store_follow'),
+    path('api/follow-status/<uuid:store_id>/', views.get_store_follow_status, name='get_store_follow_status'),
+    path('api/followed-stores/', views.get_followed_stores, name='get_followed_stores'),
+
+    # Notification URLs
+    path('api/notifications/', views.get_user_notifications, name='get_user_notifications'),
+    path('api/notifications/<int:notification_id>/read/', views.mark_notification_read, name='mark_notification_read'),
+    path('api/notifications/mark-all-read/', views.mark_all_notifications_read, name='mark_all_notifications_read'),
+    path('api/notifications/preferences/<uuid:store_id>/', views.update_notification_preferences,
+         name='update_notification_preferences'),
 ]
