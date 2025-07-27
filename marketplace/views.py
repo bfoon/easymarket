@@ -783,17 +783,61 @@ def serialize_products(products):
 
 def product_detail(request, product_id):
     product = get_object_or_404(Product, id=product_id, is_active=True)
-    product_images = product.images.all()
+    product_images = product.images.all().prefetch_related('variants__feature')
     variants = product.variants.select_related('feature_option__feature')
 
-    # Build feature_data
+    # Build feature_data with enhanced structure for image sync
     feature_map = {}
     for variant in variants:
         feature_name = variant.feature_option.feature.name
-        feature_map.setdefault(feature_name, set()).add(variant.feature_option)
-    feature_data = {
-        k: sorted(list(v), key=lambda x: x.value) for k, v in feature_map.items()
-    }
+        feature_option = variant.feature_option
+
+        if feature_name not in feature_map:
+            feature_map[feature_name] = {}
+
+        feature_map[feature_name][feature_option.value] = {
+            'id': feature_option.id,
+            'value': feature_option.value,
+            'feature_name': feature_name
+        }
+
+    # Convert to sorted lists for template
+    feature_data = {}
+    for feature_name, options in feature_map.items():
+        feature_data[feature_name] = sorted(list(options.values()), key=lambda x: x['value'])
+
+    # Build image-feature mapping for JavaScript
+    image_data = []
+
+    # Add main product image with default features if any
+    main_image_features = {}
+
+    image_data.append({
+        'url': product.image.url,
+        'features': main_image_features,
+        'is_main': True,
+        'alt_text': f"{product.name}"
+    })
+
+    # Add variant images with their features
+    for img in product_images:
+        if img.variants.exists():
+            image_features = {}
+            feature_display = []
+
+            for variant in img.variants.all():
+                feature_name = variant.feature.name
+                feature_value = variant.value
+                image_features[feature_name] = feature_value
+                feature_display.append(f"{feature_name}: {feature_value}")
+
+            image_data.append({
+                'url': img.image.url,
+                'features': image_features,
+                'is_main': False,
+                'alt_text': img.alt_text or f"{product.name} - {', '.join(feature_display)}",
+                'feature_display': ', '.join(feature_display)
+            })
 
     # Store
     seller_store = Store.objects.filter(owner=product.seller, status='active').first()
@@ -816,11 +860,12 @@ def product_detail(request, product_id):
                 recently_viewed = recently_viewed[:10]
             request.session['recently_viewed'] = recently_viewed
 
-    # Recommended
+    # Recommended products
     recommended_items = Product.objects.filter(
         category=product.category, is_active=True
     ).exclude(id=product.id)[:4]
 
+    # Featured celebrities
     featured_celebrities = CelebrityFeature.objects.filter(products=product)[:8]
 
     # Clean specifications
@@ -832,6 +877,7 @@ def product_detail(request, product_id):
                 clean_key = re.sub(r'^[^a-zA-Z0-9]*(.*?)[^a-zA-Z0-9]*$', r'\1', raw_key).strip()
                 cleaned_specs.append((clean_key, value.strip()))
 
+    # Description handling
     description_text = product.description or ""
     short_description = description_text[:800]
     description_truncated = len(description_text) > 800
@@ -842,13 +888,14 @@ def product_detail(request, product_id):
 
     # Reviews
     reviews = Review.objects.filter(product=product)
-    user_review = Review.objects.filter(product=product, user=request.user).first() if request.user.is_authenticated else None
+    user_review = Review.objects.filter(product=product,
+                                        user=request.user).first() if request.user.is_authenticated else None
     form = ReviewForm(instance=user_review)
     avg_rating = reviews.aggregate(avg=Avg('rating'))['avg'] or 0
     review_count = reviews.count()
     user_rating = user_review.rating if user_review else 0
 
-    # Address
+    # Address handling
     address_display = ""
     address = None
     if request.user.is_authenticated:
@@ -857,9 +904,8 @@ def product_detail(request, product_id):
             parts = [address.address1, address.address2, address.country]
             address_display = ', '.join(part for part in parts if part)
 
-    # Chat thread messages
+    # Chat messages
     messages = []
-
     if request.user.is_authenticated and request.user != product.seller:
         thread = ChatThread.objects.filter(
             participants=request.user
@@ -869,37 +915,12 @@ def product_detail(request, product_id):
         if thread:
             messages = ChatMessage.objects.filter(thread=thread).select_related('sender').order_by('timestamp')
 
-    # Image-color matching
-    images_by_color = {}
-    default_images = []
-
-    for img in product_images:
-        if img.color:
-            images_by_color.setdefault(img.color, []).append({
-                'url': img.image.url,
-                'alt_text': img.alt_text or f"{product.name} in {img.color}",
-                'is_primary': img.is_primary
-            })
-        else:
-            default_images.append({
-                'url': img.image.url,
-                'alt_text': img.alt_text or product.name,
-                'is_primary': img.is_primary
-            })
-
-    feature_colors = [opt.value for opt in feature_data.get('Color', [])]
-    image_colors = list(product.get_available_image_colors()) if hasattr(product, 'get_available_image_colors') else []
-    all_colors = list(set(feature_colors + image_colors))
-
-    color_image_mapping = {}
-    for color in all_colors:
-        if color in images_by_color:
-            color_image_mapping[color] = images_by_color[color]
-        else:
-            for img_color, imgs in images_by_color.items():
-                if color.lower() in img_color.lower() or img_color.lower() in color.lower():
-                    color_image_mapping[color] = imgs
-                    break
+    # Get user's wishlist product IDs
+    user_wishlist_product_ids = []
+    if request.user.is_authenticated:
+        user_wishlist_product_ids = list(
+            Wishlist.objects.filter(user=request.user).values_list('product_id', flat=True)
+        )
 
     return render(request, 'marketplace/product_detail.html', {
         'product': product,
@@ -921,13 +942,10 @@ def product_detail(request, product_id):
         'rating_range': range(1, 6),
         'seller_store': seller_store,
         'feature_data': feature_data,
-        'product_images_by_color': images_by_color,
-        'default_images': default_images,
-        'color_image_mapping': color_image_mapping,
-        'all_colors': all_colors,
-        'has_color_specific_images': bool(images_by_color),
+        'image_data': image_data,  # New: structured image data with features
+        'user_wishlist_product_ids': user_wishlist_product_ids,
+        'store': seller_store,  # Add this for the template references
     })
-
 
 def product_quick_view(request, product_id):
     product = get_object_or_404(Product, id=product_id, is_active=True)
