@@ -638,16 +638,15 @@ def toggle_store_follow(request, store_id):
     try:
         store = get_object_or_404(Store, id=store_id)
 
-        follow, created = StoreFollow.objects.get_or_create(
-            user=request.user,
-            store=store,
-            defaults={'is_active': True}
-        )
+        follow = StoreFollow.objects.filter(user=request.user, store=store).first()
 
-        if not created:
-            # Toggle the existing follow status
+        if follow:
             follow.is_active = not follow.is_active
             follow.save()
+            created = False
+        else:
+            follow = StoreFollow.objects.create(user=request.user, store=store, is_active=True)
+            created = True
 
         followers_count = store.get_followers_count()
 
@@ -663,7 +662,6 @@ def toggle_store_follow(request, store_id):
             'success': False,
             'message': 'An error occurred while updating your follow status.'
         }, status=500)
-
 
 @login_required
 def get_user_notifications(request):

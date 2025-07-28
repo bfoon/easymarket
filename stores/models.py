@@ -59,6 +59,9 @@ class StoreFollow(models.Model):
             models.Index(fields=['store', 'is_active']),
         ]
 
+    def get_followers_count(self):
+        return self.storefollow_set.filter(is_active=True).count()
+
     def __str__(self):
         return f"{self.user.username} follows {self.store.name}"
 
@@ -276,11 +279,11 @@ class Store(models.Model):
         if not user or not user.is_authenticated:
             return False
 
-        return StoreFollow.objects.filter(user=user, store=self).exists()
+        return StoreFollow.objects.filter(user=user, store=self, is_active=True).exists()
 
     def get_followers_count(self):
         from .models import StoreFollow  # or adjust the import if StoreFollow is elsewhere
-        return StoreFollow.objects.filter(store=self).count()
+        return StoreFollow.objects.filter(store=self, is_active=True).count()
 
     def send_bulk_emails_threaded(emails_data, store_name):
         for email_data in emails_data:
