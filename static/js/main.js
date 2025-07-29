@@ -285,9 +285,24 @@ function quickView(productId) {
             if (!response.ok) throw new Error("Failed to fetch product details");
             return response.text();
         })
-        .then(html => {
-            document.getElementById('quickViewContent').innerHTML = html;
-        })
+            .then(html => {
+                document.getElementById('quickViewContent').innerHTML = html;
+
+                // Attach thumbnail click handlers
+                document.querySelectorAll('#quickViewContent .quickview-thumb').forEach(thumb => {
+                    thumb.addEventListener('click', () => {
+                        const newSrc = thumb.dataset.full;
+                        const preview = document.getElementById('mainPreviewImage');
+                        if (preview) preview.src = newSrc;
+
+                        // Optionally add active border
+                        document.querySelectorAll('.quickview-thumb').forEach(img => {
+                            img.classList.remove('border-primary');
+                        });
+                        thumb.classList.add('border-primary');
+                    });
+                });
+            })
         .catch(error => {
             document.getElementById('quickViewContent').innerHTML = `
                 <div class="text-center p-4">
