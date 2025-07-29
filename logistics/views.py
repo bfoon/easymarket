@@ -718,9 +718,6 @@ def mark_order_as_delivered(request, shipment_pk):
         order.save()
         run_notify_buyer_shipment_delivered(order)
 
-        # Update shipment status (you might want to add a 'delivered' status to Shipment model)
-        # For now, we'll keep it as 'shipped' since the shipment itself is complete
-
         # Create order status history
         from orders.models import OrderStatusHistory
         OrderStatusHistory.objects.create(
