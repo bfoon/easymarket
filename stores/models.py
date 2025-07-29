@@ -348,11 +348,6 @@ class Store(models.Model):
         if notifications_to_create:
             StoreNotification.objects.bulk_create(notifications_to_create)
 
-        if emails_to_send:
-            threading.Thread(
-                target=send_bulk_emails_threaded,
-                args=(emails_to_send, self.name)
-            ).start()
 
         return len(notifications_to_create)
 
@@ -434,6 +429,26 @@ class Store(models.Model):
 
         return len(notifications_to_create)
 
+
+class StoreFavorite(models.Model):
+    """
+    Model representing a user's favorite store
+    """
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    store = models.ForeignKey(Store, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'store')
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user']),
+            models.Index(fields=['store']),
+            models.Index(fields=['created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} favorites {self.store.name}"
 
 class StoreManager(models.Model):
     """Through model for store managers"""

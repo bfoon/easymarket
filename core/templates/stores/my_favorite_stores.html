@@ -1,0 +1,647 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}My Favorite Stores - EasyMarket{% endblock %}
+
+{% block content %}
+{% csrf_token %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+<style>
+.easymarket-user-favorites-page-header-v2 {
+    background: linear-gradient(135deg, #dc3545 0%, #e74c3c 100%);
+    color: white;
+    padding: 3rem 0;
+    margin-bottom: 2rem;
+    border-radius: 0 0 2rem 2rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.easymarket-user-favorites-page-header-v2::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -10%;
+    width: 200px;
+    height: 200px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    animation: easymarket-float-animation-unique 6s ease-in-out infinite;
+}
+
+.easymarket-user-favorites-page-header-v2::after {
+    content: '';
+    position: absolute;
+    bottom: -30%;
+    left: -5%;
+    width: 150px;
+    height: 150px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 50%;
+    animation: easymarket-float-animation-unique 8s ease-in-out infinite reverse;
+}
+
+@keyframes easymarket-float-animation-unique {
+    0%, 100% { transform: translateY(0px) rotate(0deg); }
+    50% { transform: translateY(-20px) rotate(180deg); }
+}
+
+.easymarket-user-favorites-statistics-container-v2 {
+    background: white;
+    border-radius: 1rem;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+}
+
+.easymarket-user-favorites-stat-item-display-v2 {
+    text-align: center;
+    padding: 1rem;
+}
+
+.easymarket-user-favorites-stat-number-display-v2 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #dc3545;
+    display: block;
+}
+
+.easymarket-user-favorites-stat-label-display-v2 {
+    color: #6c757d;
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+}
+
+.easymarket-user-favorites-search-wrapper-v2 {
+    background: white;
+    border-radius: 50px;
+    padding: 0.5rem;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    margin-bottom: 2rem;
+}
+
+.easymarket-user-favorites-search-input-field-v2 {
+    border: none;
+    padding: 1rem 1.5rem;
+    font-size: 1.1rem;
+    border-radius: 45px;
+    width: 100%;
+    outline: none;
+}
+
+.easymarket-user-favorites-search-submit-btn-v2 {
+    background: linear-gradient(45deg, #dc3545, #e74c3c);
+    border: none;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    color: white;
+    font-size: 1.2rem;
+    transition: all 0.3s ease;
+}
+
+.easymarket-user-favorites-search-submit-btn-v2:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 15px rgba(220, 53, 69, 0.4);
+}
+
+.easymarket-user-favorites-store-card-unique-v2 {
+    background: white;
+    border-radius: 1rem;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+    height: 100%;
+    position: relative;
+    border: 2px solid transparent;
+}
+
+.easymarket-user-favorites-store-card-unique-v2:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    border-color: #dc3545;
+}
+
+.easymarket-user-favorites-badge-indicator-v2 {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: linear-gradient(45deg, #dc3545, #e74c3c);
+    color: white;
+    padding: 0.5rem;
+    border-radius: 50%;
+    font-size: 1rem;
+    z-index: 2;
+    animation: easymarket-heartbeat-animation-unique 2s infinite;
+}
+
+@keyframes easymarket-heartbeat-animation-unique {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+
+.easymarket-user-favorites-store-logo-image-v2 {
+    width: 100%;
+    height: 200px;
+    object-fit: cover;
+    border-bottom: 3px solid #f8f9fa;
+}
+
+.easymarket-user-favorites-store-logo-placeholder-v2 {
+    width: 100%;
+    height: 200px;
+    background: linear-gradient(45deg, #f8f9fa, #e9ecef);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 3rem;
+    color: #6c757d;
+    border-bottom: 3px solid #f8f9fa;
+}
+
+.easymarket-user-favorites-store-content-wrapper-v2 {
+    padding: 1.5rem;
+    padding-top: 2rem;
+}
+
+.easymarket-user-favorites-store-name-link-v2 {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: #232f3e;
+    margin-bottom: 0.5rem;
+    text-decoration: none;
+}
+
+.easymarket-user-favorites-store-name-link-v2:hover {
+    color: #dc3545;
+}
+
+.easymarket-user-favorites-store-category-tag-v2 {
+    background: linear-gradient(45deg, #17a2b8, #20c997);
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 15px;
+    font-size: 0.8rem;
+    display: inline-block;
+    margin-bottom: 1rem;
+}
+
+.easymarket-user-favorites-added-date-tag-v2 {
+    background: linear-gradient(45deg, #ffc107, #ffeb3b);
+    color: #212529;
+    padding: 0.25rem 0.75rem;
+    border-radius: 15px;
+    font-size: 0.75rem;
+    display: inline-block;
+    margin-left: 0.5rem;
+    font-weight: 600;
+}
+
+.easymarket-user-favorites-store-statistics-v2 {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+    color: #6c757d;
+}
+
+.easymarket-user-favorites-store-rating-display-v2 {
+    color: #ffc107;
+}
+
+.easymarket-user-favorites-store-actions-container-v2 {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.easymarket-user-favorites-unfavorite-button-v2 {
+    background: linear-gradient(45deg, #dc3545, #e74c3c);
+    border: none;
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 25px;
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.easymarket-user-favorites-unfavorite-button-v2:hover {
+    background: linear-gradient(45deg, #c82333, #dc3545);
+    transform: scale(1.05);
+}
+
+.easymarket-user-favorites-visit-store-button-v2 {
+    background: linear-gradient(45deg, #28a745, #34ce57);
+    border: none;
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 25px;
+    font-size: 0.9rem;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.easymarket-user-favorites-visit-store-button-v2:hover {
+    background: linear-gradient(45deg, #218838, #28a745);
+    color: white;
+    transform: scale(1.05);
+}
+
+.easymarket-user-favorites-empty-state-container-v2 {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: #6c757d;
+}
+
+.easymarket-user-favorites-empty-state-container-v2 i {
+    font-size: 5rem;
+    margin-bottom: 1rem;
+    color: #dee2e6;
+}
+
+.easymarket-user-favorites-browse-stores-button-v2 {
+    background: linear-gradient(45deg, #ff9900, #ffb84d);
+    border: none;
+    color: white;
+    padding: 1rem 2rem;
+    border-radius: 50px;
+    font-size: 1.1rem;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+.easymarket-user-favorites-browse-stores-button-v2:hover {
+    background: linear-gradient(45deg, #e68900, #ff9900);
+    color: white;
+    transform: scale(1.05);
+}
+
+@media (max-width: 768px) {
+    .easymarket-user-favorites-page-header-v2 {
+        padding: 2rem 0;
+    }
+
+    .easymarket-user-favorites-stat-item-display-v2 {
+        padding: 0.5rem;
+    }
+
+    .easymarket-user-favorites-stat-number-display-v2 {
+        font-size: 1.5rem;
+    }
+}
+</style>
+
+<div class="easymarket-user-favorites-main-container-v2">
+    <!-- Header Section -->
+    <div class="easymarket-user-favorites-page-header-v2">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-lg-8">
+                    <h1 class="display-4 fw-bold mb-3">
+                        <i class="fas fa-heart me-3"></i>My Favorite Stores
+                    </h1>
+                    <p class="lead mb-4">Your personal collection of amazing stores</p>
+                </div>
+                <div class="col-lg-4 text-lg-end">
+                    <div class="d-inline-flex align-items-center bg-white bg-opacity-20 rounded-pill px-4 py-3">
+                        <i class="fas fa-star me-2 text-warning fs-4"></i>
+                        <div>
+                            <div class="fs-4 fw-bold">{{ total_favorites }}</div>
+                            <small>Favorite{{ total_favorites|pluralize }}</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        {% if total_favorites > 0 %}
+            <!-- Stats Row -->
+            <div class="easymarket-user-favorites-statistics-container-v2">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="easymarket-user-favorites-stat-item-display-v2">
+                            <span class="easymarket-user-favorites-stat-number-display-v2">{{ total_favorites }}</span>
+                            <div class="easymarket-user-favorites-stat-label-display-v2">
+                                <i class="fas fa-heart me-1"></i>
+                                Favorite Store{{ total_favorites|pluralize }}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="easymarket-user-favorites-stat-item-display-v2">
+                            <span class="easymarket-user-favorites-stat-number-display-v2">
+                                {{ stores|length }}
+                            </span>
+                            <div class="easymarket-user-favorites-stat-label-display-v2">
+                                <i class="fas fa-eye me-1"></i>
+                                Currently Showing
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="easymarket-user-favorites-stat-item-display-v2">
+                            <span class="easymarket-user-favorites-stat-number-display-v2">
+                                {% widthratio stores|length total_favorites 100 %}%
+                            </span>
+                            <div class="easymarket-user-favorites-stat-label-display-v2">
+                                <i class="fas fa-chart-pie me-1"></i>
+                                Of Collection
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Search Section -->
+            <div class="row justify-content-center">
+                <div class="col-lg-8">
+                    <form method="GET" class="easymarket-user-favorites-search-wrapper-v2">
+                        <div class="d-flex align-items-center">
+                            <input type="text"
+                                   name="q"
+                                   class="easymarket-user-favorites-search-input-field-v2"
+                                   placeholder="Search your favorite stores..."
+                                   value="{{ search_query }}"
+                                   autocomplete="off">
+                            <button type="submit" class="easymarket-user-favorites-search-submit-btn-v2">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Results Header -->
+            {% if search_query %}
+            <div class="mb-4">
+                <h4>Search results for "<strong>{{ search_query }}</strong>"</h4>
+                <p class="text-muted">Found {{ stores|length }} of your favorite stores</p>
+                {% if stores|length != total_favorites %}
+                    <a href="{% url 'stores:my_favorite_stores' %}" class="btn btn-outline-secondary btn-sm">
+                        <i class="fas fa-times me-1"></i>Clear Search
+                    </a>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <!-- Favorite Stores Grid -->
+            {% if stores %}
+            <div class="row">
+                {% for store in stores %}
+                <div class="col-lg-4 col-md-6 col-sm-12 mb-4">
+                    <div class="easymarket-user-favorites-store-card-unique-v2">
+                        <!-- Favorite Badge -->
+                        <div class="easymarket-user-favorites-badge-indicator-v2">
+                            <i class="fas fa-heart"></i>
+                        </div>
+
+                        <!-- Store Logo -->
+                        {% if store.logo %}
+                            <img src="{{ store.logo.url }}" alt="{{ store.name }}" class="easymarket-user-favorites-store-logo-image-v2">
+                        {% else %}
+                            <div class="easymarket-user-favorites-store-logo-placeholder-v2">
+                                <i class="fas fa-store"></i>
+                            </div>
+                        {% endif %}
+
+                        <div class="easymarket-user-favorites-store-content-wrapper-v2">
+                            <!-- Store Name -->
+                            <a href="{% url 'stores:store_detail' store.id %}" class="easymarket-user-favorites-store-name-link-v2">
+                                {{ store.name }}
+                            </a>
+
+                            <!-- Category and Favorite Date -->
+                            <div class="mb-3">
+                                {% if store.category %}
+                                <span class="easymarket-user-favorites-store-category-tag-v2">{{ store.category }}</span>
+                                {% endif %}
+                                <span class="easymarket-user-favorites-added-date-tag-v2">
+                                    <i class="fas fa-calendar-plus me-1"></i>
+                                    Added {{ store.storefavorite_set.first.created_at|date:"M d" }}
+                                </span>
+                            </div>
+
+                            <!-- Description -->
+                            {% if store.description %}
+                            <p class="text-muted small mb-3">{{ store.description|truncatewords:12 }}</p>
+                            {% endif %}
+
+                            <!-- Stats -->
+                            <div class="easymarket-user-favorites-store-statistics-v2">
+                                <div>
+                                    <i class="fas fa-box me-1"></i>
+                                    {{ store.products_count }} Products
+                                </div>
+                                {% if store.avg_rating %}
+                                <div class="easymarket-user-favorites-store-rating-display-v2">
+                                    <i class="fas fa-star me-1"></i>
+                                    {{ store.avg_rating|floatformat:1 }}
+                                </div>
+                                {% endif %}
+                            </div>
+
+                            <!-- Owner -->
+                            <div class="mb-3">
+                                <small class="text-muted">
+                                    <i class="fas fa-user me-1"></i>
+                                    by {{ store.owner.get_full_name|default:store.owner.username }}
+                                </small>
+                            </div>
+
+                            <!-- Actions -->
+                            <div class="easymarket-user-favorites-store-actions-container-v2">
+                                <button class="easymarket-user-favorites-unfavorite-button-v2"
+                                        data-store-id="{{ store.id }}"
+                                        onclick="unfavoriteStoreUnique({{ store.id }}, this)">
+                                    <i class="fas fa-heart-broken me-1"></i>
+                                    Remove
+                                </button>
+                                <a href="{% url 'stores:store_detail' store.slug %}" class="easymarket-user-favorites-visit-store-button-v2">
+                                    <i class="fas fa-external-link-alt"></i>
+                                    Visit Store
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Pagination -->
+            {% if stores.has_other_pages %}
+            <nav aria-label="Favorite stores pagination" class="mt-4">
+                <ul class="pagination justify-content-center">
+                    {% if stores.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?{% if search_query %}q={{ search_query }}&{% endif %}page={{ stores.previous_page_number }}">
+                                <i class="fas fa-chevron-left"></i>
+                            </a>
+                        </li>
+                    {% endif %}
+
+                    {% for num in stores.paginator.page_range %}
+                        {% if stores.number == num %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ num }}</span>
+                            </li>
+                        {% elif num > stores.number|add:'-3' and num < stores.number|add:'3' %}
+                            <li class="page-item">
+                                <a class="page-link" href="?{% if search_query %}q={{ search_query }}&{% endif %}page={{ num }}">{{ num }}</a>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if stores.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?{% if search_query %}q={{ search_query }}&{% endif %}page={{ stores.next_page_number }}">
+                                <i class="fas fa-chevron-right"></i>
+                            </a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+
+            {% else %}
+            <!-- No Search Results -->
+            <div class="easymarket-user-favorites-empty-state-container-v2">
+                <i class="fas fa-search"></i>
+                <h3>No stores found</h3>
+                <p>No favorite stores match your search "<strong>{{ search_query }}</strong>".</p>
+                <a href="{% url 'stores:my_favorite_stores' %}" class="btn btn-outline-secondary">
+                    <i class="fas fa-times me-1"></i>Clear Search
+                </a>
+            </div>
+            {% endif %}
+
+        {% else %}
+        <!-- Empty State -->
+        <div class="easymarket-user-favorites-empty-state-container-v2">
+            <i class="fas fa-heart-broken"></i>
+            <h3>No Favorite Stores Yet</h3>
+            <p>You haven't added any stores to your favorites yet. Start exploring and bookmark stores you love!</p>
+            <a href="{% url 'stores:store_list' %}" class="easymarket-user-favorites-browse-stores-button-v2">
+                <i class="fas fa-store"></i>
+                Browse All Stores
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function unfavoriteStoreUnique(storeId, button) {
+    const card = button.closest('.easymarket-user-favorites-store-card-unique-v2');
+    const storeName = card.querySelector('.easymarket-user-favorites-store-name-link-v2').textContent.trim();
+
+    if (!confirm(`Remove "${storeName}" from your favorites?`)) {
+        return;
+    }
+
+    const originalText = button.innerHTML;
+
+    // Disable button and show loading
+    button.disabled = true;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Removing...';
+
+    fetch('{% url "stores:toggle_favorite" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+        },
+        body: JSON.stringify({
+            'store_id': storeId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success && !data.is_favorited) {
+            // Animate card removal
+            card.style.transition = 'all 0.5s ease';
+            card.style.transform = 'translateX(-100%)';
+            card.style.opacity = '0';
+
+            setTimeout(() => {
+                card.remove();
+
+                // Check if page is now empty
+                const remainingCards = document.querySelectorAll('.easymarket-user-favorites-store-card-unique-v2');
+                if (remainingCards.length === 0) {
+                    location.reload(); // Reload to show empty state
+                }
+            }, 500);
+
+            // Update navbar count
+            const navbarCount = document.getElementById('user-favorites-count');
+            if (navbarCount) {
+                navbarCount.textContent = data.favorite_count;
+            }
+
+            // Show success message
+            showToastUnique(data.message, 'success');
+        } else {
+            showToastUnique(data.error || 'Something went wrong', 'error');
+            button.disabled = false;
+            button.innerHTML = originalText;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showToastUnique('Network error occurred', 'error');
+        button.disabled = false;
+        button.innerHTML = originalText;
+    });
+}
+
+function showToastUnique(message, type = 'info') {
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.className = `alert alert-${type === 'success' ? 'success' : 'danger'} position-fixed`;
+    toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    toast.innerHTML = `
+        <div class="d-flex align-items-center">
+            <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'} me-2"></i>
+            ${message}
+        </div>
+    `;
+
+    document.body.appendChild(toast);
+
+    // Auto remove after 3 seconds
+    setTimeout(() => {
+        toast.remove();
+    }, 3000);
+}
+
+// Add some entrance animation for cards
+document.addEventListener('DOMContentLoaded', function() {
+    const cards = document.querySelectorAll('.easymarket-user-favorites-store-card-unique-v2');
+    cards.forEach((card, index) => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(20px)';
+
+        setTimeout(() => {
+            card.style.transition = 'all 0.5s ease';
+            card.style.opacity = '1';
+            card.style.transform = 'translateY(0)';
+        }, index * 100);
+    });
+});
+</script>
+
+<!-- CSRF Token for AJAX requests -->
+{% csrf_token %}
+{% endblock %}

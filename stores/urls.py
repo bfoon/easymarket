@@ -5,6 +5,8 @@ app_name = 'stores'
 
 urlpatterns = [
     # Store management URLs - Store creation and general management
+    path('', views.store_list, name='store_list'),
+    path('favorites/', views.my_favorite_stores, name='my_favorite_stores'),
     path('create/', views.create_store, name='create_store'),
     path('manage/', views.manage_stores, name='manage_stores'),
 
@@ -54,6 +56,9 @@ urlpatterns = [
     path('ajax/chat/<int:recipient_id>/messages/', views.fetch_store_chat_messages, name='fetch_store_chat_messages'),
     path('ajax/chat/order/send/', views.send_chat_message, name='send_chat_message'),
     path('ajax/chat/order/<int:order_id>/messages/', views.fetch_chat_messages, name='fetch_chat_messages'),
+    path('api/toggle-favorite/', views.toggle_store_favorite, name='toggle_favorite'),
+    path('api/search-suggestions/', views.store_search_suggestions, name='search_suggestions'),
+    path('api/user-counts/', views.get_user_store_counts, name='user_counts'),
 
     # API endpoints
     path('api/stores/<uuid:store_id>/metrics/', views.store_metrics_api, name='store_metrics_api'),

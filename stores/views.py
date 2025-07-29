@@ -29,7 +29,7 @@ from accounts.models import AdminLog
 import re
 from decimal import Decimal
 from accounts.utils import log_admin_action
-from .models import Store, StoreFollow, StoreNotification
+from .models import Store, StoreFollow, StoreNotification, StoreFavorite
 from reviews.models import Review
 from marketplace.models import Product, Category, ProductImage
 from orders.models import ChatMessage
@@ -181,6 +181,211 @@ def validate_store_data(data, files=None):
 
     return errors
 
+
+def store_list(request):
+    """
+    Display all stores with search and filtering functionality
+    """
+    search_query = request.GET.get('q', '').strip()
+    category_filter = request.GET.get('category', '')
+    sort_by = request.GET.get('sort', 'name')  # name, rating, products_count
+
+    # Base queryset with annotations
+    stores = Store.objects.select_related('owner').annotate(
+        products_count=Count('products', distinct=True),
+        avg_rating=Avg('reviews__rating')
+    ).filter(status='active')
+
+    # Search functionality
+    if search_query:
+        stores = stores.filter(
+            Q(name__icontains=search_query) |
+            Q(owner__username__icontains=search_query) |
+            Q(owner__email__icontains=search_query)
+        )
+
+    # Category filtering
+    if category_filter:
+        stores = stores.filter(category=category_filter)
+
+    # Sorting
+    sort_options = {
+        'name': 'name',
+        '-name': '-name',
+        'rating': '-avg_rating',
+        'products': '-products_count',
+        'newest': '-created_at',
+        'oldest': 'created_at'
+    }
+
+    if sort_by in sort_options:
+        stores = stores.order_by(sort_options[sort_by])
+    else:
+        stores = stores.order_by('name')
+
+    # Get categories for filter dropdown
+    categories = Store.objects.filter(status='active').values_list('category__name', flat=True).distinct()
+
+    # Get user's favorite stores if authenticated
+    user_favorites = []
+    if request.user.is_authenticated:
+        user_favorites = list(
+            StoreFavorite.objects.filter(user=request.user)
+            .values_list('store_id', flat=True)
+        )
+
+    # Pagination
+    paginator = Paginator(stores, 12)  # 12 stores per page
+    page_number = request.GET.get('page')
+    stores_page = paginator.get_page(page_number)
+
+    context = {
+        'stores': stores_page,
+        'search_query': search_query,
+        'category_filter': category_filter,
+        'sort_by': sort_by,
+        'categories': sorted([cat for cat in categories if cat]),
+        'user_favorites': user_favorites,
+        'total_stores': paginator.count,
+    }
+
+    return render(request, 'stores/store_list.html', context)
+
+
+@login_required
+def my_favorite_stores(request):
+    """
+    Display user's favorite stores
+    """
+    search_query = request.GET.get('q', '').strip()
+
+    # Get user's favorite stores
+    favorite_stores = Store.objects.select_related('owner').annotate(
+        products_count=Count('products', distinct=True),
+        avg_rating=Avg('reviews__rating')
+    ).filter(
+        storefavorite__user=request.user,
+        status='active'
+    ).order_by('-storefavorite__created_at')
+
+    # Search within favorites
+    if search_query:
+        favorite_stores = favorite_stores.filter(
+            Q(name__icontains=search_query) |
+            Q(description__icontains=search_query) |
+            Q(category__icontains=search_query)
+        )
+
+    # Pagination
+    paginator = Paginator(favorite_stores, 12)
+    page_number = request.GET.get('page')
+    stores_page = paginator.get_page(page_number)
+
+    context = {
+        'stores': stores_page,
+        'search_query': search_query,
+        'total_favorites': paginator.count,
+        'is_favorites_page': True,
+    }
+
+    return render(request, 'stores/my_favorite_stores.html', context)
+
+
+@login_required
+@require_POST
+def toggle_store_favorite(request):
+    """
+    AJAX endpoint to add/remove store from favorites
+    """
+    try:
+        data = json.loads(request.body)
+        store_id = data.get('store_id')
+
+        if not store_id:
+            return JsonResponse({'success': False, 'error': 'Store ID required'})
+
+        store = get_object_or_404(Store, id=store_id, status='active')
+
+        favorite, created = StoreFavorite.objects.get_or_create(
+            user=request.user,
+            store=store
+        )
+
+        if not created:
+            # Remove from favorites
+            favorite.delete()
+            is_favorited = False
+            message = f"Removed {store.name} from your favorites"
+        else:
+            # Added to favorites
+            is_favorited = True
+            message = f"Added {store.name} to your favorites"
+
+        # Get updated favorite count for user
+        favorite_count = StoreFavorite.objects.filter(user=request.user).count()
+
+        return JsonResponse({
+            'success': True,
+            'is_favorited': is_favorited,
+            'message': message,
+            'favorite_count': favorite_count
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        })
+
+
+def store_search_suggestions(request):
+    """
+    AJAX endpoint for store search suggestions
+    """
+    query = request.GET.get('q', '').strip()
+
+    if len(query) < 2:
+        return JsonResponse({'suggestions': []})
+
+    stores = Store.objects.filter(
+        Q(name__icontains=query) |
+        Q(category__icontains=query),
+        status='active'
+    ).annotate(
+        products_count=Count('product')
+    )[:8]
+
+    suggestions = []
+    for store in stores:
+        suggestions.append({
+            'id': store.id,
+            'name': store.name,
+            'category': store.category or 'General',
+            'products_count': store.products_count,
+            'image': store.logo.url if store.logo else None,
+            'url': f'/stores/{store.id}/',
+        })
+
+    return JsonResponse({'suggestions': suggestions})
+
+
+@login_required
+def get_user_store_counts(request):
+    """
+    API endpoint to get user's store-related counts for navbar updates
+    """
+    try:
+        favorite_stores_count = StoreFavorite.objects.filter(user=request.user).count()
+
+        return JsonResponse({
+            'success': True,
+            'favorite_stores_count': favorite_stores_count,
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        })
 
 @login_required
 def create_store(request):

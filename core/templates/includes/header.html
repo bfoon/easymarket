@@ -29,7 +29,7 @@
                     </a>
                 </li>
                 <li class="nav-item dropdown">
-                    <a class="easymarket-nav-link easymarket-dropdown-toggle nav-link dropdown-toggle {% if 'deals' in request.resolver_match.url_name or 'hot_picks' in request.resolver_match.url_name or 'used_products' in request.resolver_match.url_name %}active{% endif %}" href="#" id="dealsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <a class="easymarket-nav-link easymarket-dropdown-toggle nav-link dropdown-toggle {% if 'deals' in request.resolver_match.url_name or 'hot_picks' in request.resolver_match.url_name or 'used_products' in request.resolver_match.url_name or 'stores' in request.resolver_match.url_name %}active{% endif %}" href="#" id="dealsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="fas fa-tags me-1"></i>Deals
                     </a>
                     <ul class="easymarket-dropdown-menu dropdown-menu shadow-sm" aria-labelledby="dealsDropdown">
@@ -41,6 +41,14 @@
                         <li>
                             <a class="easymarket-dropdown-item dropdown-item" href="{% url 'marketplace:used_products' %}">
                                 <i class="fas fa-box-open me-2 text-secondary"></i>Used Products
+                            </a>
+                        </li>
+                        <li>
+                            <a class="easymarket-dropdown-item dropdown-item" href="{% url 'stores:store_list' %}">
+                                <i class="fas fa-store me-2 text-primary"></i>Stores
+                                <span class="easymarket-store-badge badge bg-info ms-2" style="font-size: 0.65rem;">
+                                    Browse & Favorite
+                                </span>
                             </a>
                         </li>
                          <li><hr class="dropdown-divider"></li>
@@ -85,7 +93,7 @@
                                 {% if user.is_superuser or user.is_seller or user.store_set.exists %}
                                     <li>
                                         <a class="easymarket-dropdown-item dropdown-item" href="{% url 'stores:manage_stores' %}">
-                                            <i class="fas fa-store me-2 text-primary"></i>Stores
+                                            <i class="fas fa-store me-2 text-primary"></i>My Store
                                         </a>
                                     </li>
                                 <li>
@@ -189,6 +197,16 @@
                     <li>
                         <a class="easymarket-dropdown-item dropdown-item" href="{% url 'marketplace:my_wishlist' %}">
                             <i class="fas fa-heart me-2 text-danger"></i>Wishlist
+                        </a>
+                    </li>
+                    <li>
+                        <a class="easymarket-dropdown-item dropdown-item" href="{% url 'stores:my_favorite_stores' %}">
+                            <i class="fas fa-star me-2 text-warning"></i>Favorite Stores
+                            {% if user_favorite_stores_count %}
+                                <span class="badge bg-warning ms-2" style="font-size: 0.65rem;">
+                                    {{ user_favorite_stores_count }}
+                                </span>
+                            {% endif %}
                         </a>
                     </li>
                     <li><hr class="dropdown-divider"></li>
@@ -374,6 +392,27 @@
     animation: easymarket-pulse-auction 2s infinite;
 }
 
+/* Enhanced store badge styling */
+.easymarket-navbar .easymarket-store-badge {
+    background: linear-gradient(45deg, #17a2b8, #20c997) !important;
+    border: none;
+    font-size: 0.6rem !important;
+    padding: 0.2em 0.5em;
+    border-radius: 12px;
+    animation: easymarket-gentle-pulse 3s infinite;
+}
+
+@keyframes easymarket-gentle-pulse {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    50% {
+        transform: scale(1.05);
+        opacity: 0.9;
+    }
+}
+
 @keyframes easymarket-pulse-auction {
     0%, 100% {
         transform: scale(1);
@@ -390,6 +429,12 @@
     transform: scale(1.2);
 }
 
+.easymarket-navbar .easymarket-dropdown-item:hover .easymarket-store-badge {
+    animation-play-state: paused;
+    transform: scale(1.1);
+    background: linear-gradient(45deg, #138496, #1e7e34) !important;
+}
+
 /* Highlight auction links in EasyMarket navbar */
 .easymarket-navbar .easymarket-dropdown-item[href*="auction"] {
     background: linear-gradient(45deg, transparent 0%, rgba(255, 153, 0, 0.05) 100%);
@@ -403,10 +448,30 @@
     transform: translateX(5px);
 }
 
+/* Highlight store links in EasyMarket navbar */
+.easymarket-navbar .easymarket-dropdown-item[href*="store"] {
+    background: linear-gradient(45deg, transparent 0%, rgba(23, 162, 184, 0.05) 100%);
+    border-left: 3px solid transparent;
+    transition: all 0.3s ease;
+}
+
+.easymarket-navbar .easymarket-dropdown-item[href*="store"]:hover {
+    background: linear-gradient(45deg, rgba(23, 162, 184, 0.1) 0%, rgba(23, 162, 184, 0.2) 100%);
+    border-left: 3px solid #17a2b8;
+    transform: translateX(5px);
+}
+
 /* Active auction page indicator in EasyMarket navbar */
 .easymarket-navbar .easymarket-nav-link.active[href*="auction"] {
     background: linear-gradient(45deg, rgba(255, 153, 0, 0.1) 0%, rgba(255, 153, 0, 0.2) 100%);
     color: #ff9900 !important;
+    border-radius: 0.25rem;
+}
+
+/* Active store page indicator in EasyMarket navbar */
+.easymarket-navbar .easymarket-nav-link.active[href*="store"] {
+    background: linear-gradient(45deg, rgba(23, 162, 184, 0.1) 0%, rgba(23, 162, 184, 0.2) 100%);
+    color: #17a2b8 !important;
     border-radius: 0.25rem;
 }
 
@@ -864,6 +929,13 @@ document.addEventListener('DOMContentLoaded', function() {
             if (sellerAuctionsElement && data.seller_auctions_count) {
                 sellerAuctionsElement.textContent = data.seller_auctions_count;
                 sellerAuctionsElement.style.display = data.seller_auctions_count > 0 ? 'inline' : 'none';
+            }
+
+            // Update favorite stores count in EasyMarket navbar
+            const favoriteStoresElement = document.querySelector('.easymarket-navbar [href*="favorite_stores"] .badge');
+            if (favoriteStoresElement && data.favorite_stores_count) {
+                favoriteStoresElement.textContent = data.favorite_stores_count;
+                favoriteStoresElement.style.display = data.favorite_stores_count > 0 ? 'inline' : 'none';
             }
         })
         .catch(error => {

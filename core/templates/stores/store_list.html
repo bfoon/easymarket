@@ -1,0 +1,564 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Browse Stores - EasyMarket{% endblock %}
+{% block content %}
+{% csrf_token %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+<style>
+.easymarket-store-header {
+    background: linear-gradient(135deg, #232f3e 0%, #37474f 100%);
+    color: white;
+    padding: 3rem 0;
+    margin-bottom: 2rem;
+    border-radius: 0 0 2rem 2rem;
+}
+
+.easymarket-store-search-container {
+    background: white;
+    border-radius: 50px;
+    padding: 0.5rem;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    margin-bottom: 2rem;
+}
+
+.easymarket-store-search-input {
+    border: none;
+    padding: 1rem 1.5rem;
+    font-size: 1.1rem;
+    border-radius: 45px;
+    width: 100%;
+    outline: none;
+}
+
+.easymarket-store-search-btn {
+    background: linear-gradient(45deg, #ff9900, #ffb84d);
+    border: none;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    color: white;
+    font-size: 1.2rem;
+    transition: all 0.3s ease;
+}
+
+.easymarket-store-search-btn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 15px rgba(255, 153, 0, 0.4);
+}
+
+.easymarket-store-filters {
+    background: white;
+    border-radius: 1rem;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+}
+
+.easymarket-store-card {
+    background: white;
+    border-radius: 1rem;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+    height: 100%;
+    position: relative;
+}
+
+.easymarket-store-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+}
+
+.easymarket-store-logo {
+    width: 100%;
+    height: 200px;
+    object-fit: cover;
+    border-bottom: 3px solid #f8f9fa;
+}
+
+.easymarket-store-logo-placeholder {
+    width: 100%;
+    height: 200px;
+    background: linear-gradient(45deg, #f8f9fa, #e9ecef);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 3rem;
+    color: #6c757d;
+    border-bottom: 3px solid #f8f9fa;
+}
+
+.easymarket-store-content {
+    padding: 1.5rem;
+}
+
+.easymarket-store-name {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: #232f3e;
+    margin-bottom: 0.5rem;
+    text-decoration: none;
+}
+
+.easymarket-store-name:hover {
+    color: #ff9900;
+}
+
+.easymarket-store-category {
+    background: linear-gradient(45deg, #17a2b8, #20c997);
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 15px;
+    font-size: 0.8rem;
+    display: inline-block;
+    margin-bottom: 1rem;
+}
+
+.easymarket-store-stats {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+    color: #6c757d;
+}
+
+.easymarket-store-rating {
+    color: #ffc107;
+}
+
+.easymarket-store-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.easymarket-favorite-btn {
+    background: none;
+    border: 2px solid #dc3545;
+    color: #dc3545;
+    padding: 0.5rem 1rem;
+    border-radius: 25px;
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.easymarket-favorite-btn:hover,
+.easymarket-favorite-btn.favorited {
+    background: #dc3545;
+    color: white;
+    transform: scale(1.05);
+}
+
+.easymarket-visit-btn {
+    background: linear-gradient(45deg, #ff9900, #ffb84d);
+    border: none;
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 25px;
+    font-size: 0.9rem;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.easymarket-visit-btn:hover {
+    background: linear-gradient(45deg, #e68900, #ff9900);
+    color: white;
+    transform: scale(1.05);
+}
+
+.easymarket-pagination {
+    display: flex;
+    justify-content: center;
+    margin-top: 3rem;
+}
+
+.easymarket-pagination .page-link {
+    border: none;
+    background: white;
+    color: #232f3e;
+    padding: 0.75rem 1rem;
+    margin: 0 0.25rem;
+    border-radius: 50px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+}
+
+.easymarket-pagination .page-link:hover,
+.easymarket-pagination .page-item.active .page-link {
+    background: linear-gradient(45deg, #ff9900, #ffb84d);
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(255, 153, 0, 0.4);
+}
+
+.easymarket-no-results {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: #6c757d;
+}
+
+.easymarket-no-results i {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+    color: #dee2e6;
+}
+
+@media (max-width: 768px) {
+    .easymarket-store-header {
+        padding: 2rem 0;
+    }
+
+    .easymarket-store-filters {
+        margin-bottom: 1rem;
+    }
+
+    .easymarket-store-filters .row {
+        gap: 1rem;
+    }
+}
+</style>
+
+
+
+<div class="easymarket-store-page">
+    <!-- Header Section -->
+    <div class="easymarket-store-header">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-lg-6">
+                    <h1 class="display-4 fw-bold mb-3">
+                        <i class="fas fa-store me-3"></i>Explore Stores
+                    </h1>
+                    <p class="lead mb-4">Discover amazing stores and bookmark your favorites</p>
+                    <div class="d-flex align-items-center gap-4">
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-store me-2 text-warning"></i>
+                            <span>{{ total_stores }} Active Stores</span>
+                        </div>
+                        {% if user.is_authenticated %}
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-heart me-2 text-danger"></i>
+                            <span id="user-favorites-count">{{ user_favorites|length }}</span> Favorites
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <!-- Enhanced Search -->
+                    <form method="GET" class="easymarket-store-search-container">
+                        <div class="d-flex align-items-center">
+                            <input type="text"
+                                   name="q"
+                                   class="easymarket-store-search-input"
+                                   placeholder="Search stores by name, category, or owner..."
+                                   value="{{ search_query }}"
+                                   autocomplete="off">
+                            <button type="submit" class="easymarket-store-search-btn">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </div>
+                        {% if category_filter %}
+                            <input type="hidden" name="category" value="{{ category_filter }}">
+                        {% endif %}
+                        {% if sort_by %}
+                            <input type="hidden" name="sort" value="{{ sort_by }}">
+                        {% endif %}
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Filters and Sorting -->
+        <div class="easymarket-store-filters">
+            <form method="GET" id="filter-form">
+                <div class="row align-items-end">
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label fw-bold">
+                            <i class="fas fa-tag me-2"></i>Category
+                        </label>
+                        <select name="category" class="form-select" onchange="document.getElementById('filter-form').submit();">
+                            <option value="">All Categories</option>
+                            {% for category in categories %}
+                                <option value="{{ category }}" {% if category == category_filter %}selected{% endif %}>
+                                    {{ category }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label fw-bold">
+                            <i class="fas fa-sort me-2"></i>Sort By
+                        </label>
+                        <select name="sort" class="form-select" onchange="document.getElementById('filter-form').submit();">
+                            <option value="name" {% if sort_by == 'name' %}selected{% endif %}>Name (A-Z)</option>
+                            <option value="-name" {% if sort_by == '-name' %}selected{% endif %}>Name (Z-A)</option>
+                            <option value="rating" {% if sort_by == 'rating' %}selected{% endif %}>Highest Rated</option>
+                            <option value="products" {% if sort_by == 'products' %}selected{% endif %}>Most Products</option>
+                            <option value="newest" {% if sort_by == 'newest' %}selected{% endif %}>Newest First</option>
+                            <option value="oldest" {% if sort_by == 'oldest' %}selected{% endif %}>Oldest First</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        {% if search_query or category_filter %}
+                            <a href="{% url 'stores:store_list' %}" class="btn btn-outline-secondary">
+                                <i class="fas fa-times me-2"></i>Clear Filters
+                            </a>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-2 mb-3 text-end">
+                        <small class="text-muted">{{ stores|length }} of {{ total_stores }} stores</small>
+                    </div>
+                </div>
+                {% if search_query %}
+                    <input type="hidden" name="q" value="{{ search_query }}">
+                {% endif %}
+            </form>
+            {% if user.is_authenticated %}
+            <div class="d-flex align-items-center">
+                <i class="fas fa-heart me-2 text-danger"></i>
+                <a href="{% url 'stores:my_favorite_stores' %}" class="text-danger text-decoration-none">
+                    My Favorites ({{ user_favorites|length }})
+                </a>
+            </div>
+            {% endif %}
+
+        </div>
+
+
+
+
+        <!-- Results Header -->
+        {% if search_query %}
+        <div class="mb-4">
+            <h4>Search results for "<strong>{{ search_query }}</strong>"</h4>
+            <p class="text-muted">Found {{ stores|length }} stores</p>
+        </div>
+        {% endif %}
+
+
+
+        <!-- Store Grid -->
+        {% if stores %}
+        <div class="row">
+            {% for store in stores %}
+            <div class="col-lg-4 col-md-6 col-sm-12 mb-4">
+                <div class="easymarket-store-card">
+                    <!-- Store Logo -->
+                    {% if store.logo %}
+                        <img src="{{ store.logo.url }}" alt="{{ store.name }}" class="easymarket-store-logo">
+                    {% else %}
+                        <div class="easymarket-store-logo-placeholder">
+                            <i class="fas fa-store"></i>
+                        </div>
+                    {% endif %}
+
+                    <div class="easymarket-store-content">
+                        <!-- Store Name -->
+                        <a href="{% url 'stores:store_detail' store.slug %}" class="easymarket-store-name">
+                            {{ store.name }}
+                        </a>
+
+                        <!-- Category -->
+                        {% if store.category %}
+                        <span class="easymarket-store-category">{{ store.category }}</span>
+                        {% endif %}
+
+                        <!-- Description -->
+                        {% if store.description %}
+                        <p class="text-muted small mb-3">{{ store.description|truncatewords:15 }}</p>
+                        {% endif %}
+
+                        <!-- Stats -->
+                        <div class="easymarket-store-stats">
+                            <div>
+                                <i class="fas fa-box me-1"></i>
+                                {{ store.products_count }} Products
+                            </div>
+                            {% if store.avg_rating %}
+                            <div class="easymarket-store-rating">
+                                <i class="fas fa-star me-1"></i>
+                                {{ store.avg_rating|floatformat:1 }}
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Owner -->
+                        <div class="mb-3">
+                            <small class="text-muted">
+                                <i class="fas fa-user me-1"></i>
+                                by {{ store.owner.get_full_name|default:store.owner.username }}
+                            </small>
+                        </div>
+
+                        <!-- Actions -->
+                        <div class="easymarket-store-actions">
+                            {% if user.is_authenticated %}
+                            <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+
+                            <button class="easymarket-favorite-btn toggle-favorite-btn {% if store.id in user_favorites %}favorited{% endif %}"
+                                    data-store-id="{{ store.id }}">
+                                <i class="fas fa-heart me-1"></i>
+                                <span class="favorite-text">
+                                    {% if store.slug in user_favorites %}Favorited{% else %}Favorite{% endif %}
+                                </span>
+                            </button>
+                            {% endif %}
+                            <a href="{% url 'stores:store_detail' store.slug %}" class="easymarket-visit-btn">
+                                <i class="fas fa-external-link-alt"></i>
+                                Visit Store
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Pagination -->
+        {% if stores.has_other_pages %}
+        <nav aria-label="Store pagination" class="easymarket-pagination">
+            <ul class="pagination">
+                {% if stores.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?{% if search_query %}q={{ search_query }}&{% endif %}{% if category_filter %}category={{ category_filter }}&{% endif %}{% if sort_by %}sort={{ sort_by }}&{% endif %}page={{ stores.previous_page_number }}">
+                            <i class="fas fa-chevron-left"></i>
+                        </a>
+                    </li>
+                {% endif %}
+
+                {% for num in stores.paginator.page_range %}
+                    {% if stores.number == num %}
+                        <li class="page-item active">
+                            <span class="page-link">{{ num }}</span>
+                        </li>
+                    {% elif num > stores.number|add:'-3' and num < stores.number|add:'3' %}
+                        <li class="page-item">
+                            <a class="page-link" href="?{% if search_query %}q={{ search_query }}&{% endif %}{% if category_filter %}category={{ category_filter }}&{% endif %}{% if sort_by %}sort={{ sort_by }}&{% endif %}page={{ num }}">{{ num }}</a>
+                        </li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if stores.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?{% if search_query %}q={{ search_query }}&{% endif %}{% if category_filter %}category={{ category_filter }}&{% endif %}{% if sort_by %}sort={{ sort_by }}&{% endif %}page={{ stores.next_page_number }}">
+                            <i class="fas fa-chevron-right"></i>
+                        </a>
+                    </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+
+        {% else %}
+        <!-- No Results -->
+        <div class="easymarket-no-results">
+            <i class="fas fa-store-slash"></i>
+            <h3>No stores found</h3>
+            {% if search_query or category_filter %}
+                <p>Try adjusting your search criteria or <a href="{% url 'stores:store_list' %}">browse all stores</a>.</p>
+            {% else %}
+                <p>No stores are currently available.</p>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // Attach click event to all favorite buttons
+    document.querySelectorAll('.toggle-favorite-btn').forEach(button => {
+        button.addEventListener('click', function () {
+            const storeId = this.dataset.storeId;
+            toggleStoreFavorite(storeId, this);
+        });
+    });
+});
+
+function toggleStoreFavorite(storeId, button) {
+    {% if not user.is_authenticated %}
+        window.location.href = '{% url "accounts:sign_in" %}';
+        return;
+    {% endif %}
+
+    const originalText = button.querySelector('.favorite-text').textContent;
+    const icon = button.querySelector('i');
+
+    // Disable button temporarily
+    button.disabled = true;
+    icon.className = 'fas fa-spinner fa-spin me-1';
+
+    fetch('{% url "stores:toggle_favorite" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+        },
+        body: JSON.stringify({
+            'store_id': storeId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Update button state
+            if (data.is_favorited) {
+                button.classList.add('favorited');
+                button.querySelector('.favorite-text').textContent = 'Favorited';
+            } else {
+                button.classList.remove('favorited');
+                button.querySelector('.favorite-text').textContent = 'Favorite';
+            }
+
+            // Update navbar count
+            const navbarCount = document.getElementById('user-favorites-count');
+            if (navbarCount) {
+                navbarCount.textContent = data.favorite_count;
+            }
+
+            // Show success message
+            showToast(data.message, 'success');
+        } else {
+            showToast(data.error || 'Something went wrong', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showToast('Network error occurred', 'error');
+    })
+    .finally(() => {
+        // Re-enable button
+        button.disabled = false;
+        icon.className = 'fas fa-heart me-1';
+    });
+}
+
+function showToast(message, type = 'info') {
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.className = `alert alert-${type === 'success' ? 'success' : 'danger'} position-fixed`;
+    toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    toast.innerHTML = `
+        <div class="d-flex align-items-center">
+            <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'} me-2"></i>
+            ${message}
+        </div>
+    `;
+
+    document.body.appendChild(toast);
+
+    // Auto remove after 3 seconds
+    setTimeout(() => {
+        toast.remove();
+    }, 3000);
+}
+</script>
+{% csrf_token %}
+{% endblock %}
