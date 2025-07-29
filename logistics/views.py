@@ -65,6 +65,19 @@ def notify_buyer_shipment_delivered(order):
     send_email("Your Order Has Been Delivered", msg, [buyer.email])
     send_whatsapp(buyer.telephone, msg)
 
+def notify_buyer_shipment_in_transit(order):
+    buyer = order.buyer
+
+    msg = (
+        f"📦 Your order #{order.id} is on its way to you!\n\n"
+        f"Please stay alert and be ready to receive your package.\n"
+        f"Thank you for shopping with EasyMarket!"
+    )
+
+    send_email("Your Order is In Transit", msg, [buyer.email])
+    send_whatsapp(buyer.telephone, msg)
+
+
 
 
 # --- Background wrappers using threads ---
@@ -74,6 +87,9 @@ def run_notify_driver_delivery_assigned(driver, shipment):
 
 def run_notify_buyer_order_shipped(order):
     threading.Thread(target=notify_buyer_order_shipped, args=(order,), daemon=True).start()
+
+def run_notify_buyer_shipment_in_transit(order):
+    threading.Thread(target=notify_buyer_shipment_in_transit, args=(order,), daemon=True).start()
 
 def run_notify_buyer_shipment_delivered(order):
     threading.Thread(target=notify_buyer_shipment_delivered, args=(order,), daemon=True).start()
@@ -1795,6 +1811,8 @@ def start_delivery(request, shipment_id):
         shipment.status = 'in_transit'
         shipment.save()
 
+        run_notify_buyer_shipment_in_transit(shipment.order)
+
         # Update related order
         if shipment.order and shipment.order.status != 'shipped':
             shipment.order.status = 'shipped'
@@ -1833,6 +1851,8 @@ def mark_delivered(request, shipment_id):
         shipment.verification_photo = verification_photo
         shipment.status = 'delivered'
         shipment.save()
+
+        run_notify_buyer_shipment_delivered(shipment.order)
 
         # Update order if all shipments are delivered
         if shipment.order:
