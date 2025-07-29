@@ -42,7 +42,8 @@ import csv
 import threading
 from django.conf import settings
 from django.core.mail import send_mail
-
+from itertools import groupby
+from operator import attrgetter
 
 from .models import (
     Store, StoreHours, StoreShippingZone, StoreReturnSettings,
@@ -90,7 +91,34 @@ def notify_logistics_shipment_to_warehouse(order, store, items):
     send_email("New Shipment to Warehouse", msg, [logistics_team_email])
     send_whatsapp(logistics_whatsapp, msg)
 
+def group_store_hours(hours):
+    grouped = []
+    # Prepare hours with display names
+    days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+    day_abbr = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+    structured = []
 
+    for i, h in enumerate(hours):
+        structured.append({
+            'day': day_abbr[i],
+            'full': days[i],
+            'from': h.opening_time.strftime("%H:%M") if not h.is_closed else 'Closed',
+            'to': h.closing_time.strftime("%H:%M") if not h.is_closed else 'Closed',
+        })
+
+    # Group by opening and closing times
+    for k, g in groupby(structured, key=lambda x: (x['from'], x['to'])):
+        group = list(g)
+        if len(group) == 1:
+            label = group[0]['day']
+        else:
+            label = f"{group[0]['day']} - {group[-1]['day']}"
+        grouped.append({
+            'days': label,
+            'from': k[0],
+            'to': k[1]
+        })
+    return grouped
 
 def store_owner_required(view_func):
     @wraps(view_func)
@@ -785,21 +813,25 @@ def get_followed_stores(request):
 
 
 @login_required
-@require_http_methods(["POST"])
-def update_notification_preferences(request, store_id):
-    """Update notification preferences for a followed store"""
+@require_http_methods(["GET", "POST"])
+def notification_preferences(request, store_id):
+    """Get or update notification preferences for a followed store"""
     try:
-        data = json.loads(request.body)
         store = get_object_or_404(Store, id=store_id)
+        follow = get_object_or_404(StoreFollow, user=request.user, store=store, is_active=True)
 
-        follow = get_object_or_404(
-            StoreFollow,
-            user=request.user,
-            store=store,
-            is_active=True
-        )
+        if request.method == "GET":
+            return JsonResponse({
+                'success': True,
+                'preferences': {
+                    'notify_new_products': follow.notify_new_products,
+                    'notify_price_changes': follow.notify_price_changes,
+                    'notify_discounts': follow.notify_discounts,
+                }
+            })
 
-        # Update preferences
+        # POST: update preferences
+        data = json.loads(request.body)
         follow.notify_new_products = data.get('notify_new_products', True)
         follow.notify_price_changes = data.get('notify_price_changes', True)
         follow.notify_discounts = data.get('notify_discounts', True)
@@ -810,16 +842,22 @@ def update_notification_preferences(request, store_id):
             'message': 'Notification preferences updated successfully.'
         })
 
+    except StoreFollow.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'message': 'Follow relationship not found.'
+        }, status=404)
     except json.JSONDecodeError:
         return JsonResponse({
             'success': False,
-            'message': 'Invalid JSON data.'
+            'message': 'Invalid JSON.'
         }, status=400)
     except Exception as e:
         return JsonResponse({
             'success': False,
-            'message': 'Failed to update preferences.'
+            'message': 'Failed to process preferences.'
         }, status=500)
+
 
 
 def get_store_follow_status(request, store_id):
@@ -845,11 +883,9 @@ def store_detail(request, slug):
     # ✅ Capture referral code from URL
     ref_code = request.GET.get('ref')
     if ref_code and store.allow_referrals:
-        # Save referral info in session
         request.session['store_referral_code'] = ref_code
         request.session['store_referral_store_id'] = str(store.id)
 
-        # ✅ Immediately mark referral as used if valid
         try:
             referral = StoreReferral.objects.get(
                 referral_code=ref_code,
@@ -858,31 +894,25 @@ def store_detail(request, slug):
             )
             referral.is_used = True
             referral.save()
-
-            # ✅ Send referral usage email in thread
             notify_referrer_referral_used_async(referral)
-
         except StoreReferral.DoesNotExist:
-            pass  # Invalid or already used code
+            pass
 
-    # 🛍️ Get products by this store owner
+    # 🛍️ Store products
     products = Product.objects.filter(seller=store.owner).order_by('-created_at')[:8]
     product_ids = products.values_list('id', flat=True)
 
-    # ⭐ Recent reviews
+    # ⭐ Reviews
     recent_reviews = Review.objects.filter(
         product_id__in=product_ids
     ).select_related('user').order_by('-created_at')[:5]
 
-    # 🔢 All reviews for this store's products
     reviews = Review.objects.filter(product_id__in=product_ids)
     review_count = reviews.count()
     average_rating = reviews.aggregate(avg=Avg('rating'))['avg'] or 0
-
-    # 📊 Rating breakdown
     rating_breakdown = {i: reviews.filter(rating=i).count() for i in range(1, 6)}
 
-    # 🏷️ Product categories for the store
+    # 🏷️ Categories
     categories = (
         Category.objects
         .filter(product__seller=store.owner)
@@ -890,10 +920,14 @@ def store_detail(request, slug):
         .distinct()
     )
 
-    # Add follow status to context
+    # ❤️ Follow status
     is_following = False
     if request.user.is_authenticated:
         is_following = store.is_followed_by(request.user)
+
+    # 🕒 Grouped opening hours
+    store_hours = store.hours.order_by('day_of_week')
+    grouped_hours = group_store_hours(store_hours)
 
     context = {
         'store': store,
@@ -906,7 +940,9 @@ def store_detail(request, slug):
         'categories': categories,
         'is_following': is_following,
         'followers_count': store.get_followers_count(),
+        'grouped_hours': grouped_hours,
     }
+
     return render(request, 'stores/store_detail.html', context)
 
 
