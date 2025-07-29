@@ -56,14 +56,14 @@ def notify_buyer_shipment_delivered(order):
     buyer = order.buyer
     delivery_time = timezone.now().strftime("%Y-%m-%d %H:%M")
 
-    message = (
+    msg = (
         f"📦 Your order #{order.id} has been delivered!\n\n"
         f"Delivery Time: {delivery_time}\n"
         f"Thank you for shopping with EasyMarket."
     )
 
-    send_email("Your Order Has Been Delivered", message, [buyer.email])
-    send_whatsapp(buyer.telephone, message)
+    send_email("Your Order Has Been Delivered", msg, [buyer.email])
+    send_whatsapp(buyer.telephone, msg)
 
 
 
@@ -715,8 +715,8 @@ def mark_order_as_delivered(request, shipment_pk):
         if not order.delivered_date:
             order.delivered_date = timezone.now()
 
-        order.save()
         run_notify_buyer_shipment_delivered(order)
+        order.save()
 
         # Create order status history
         from orders.models import OrderStatusHistory
