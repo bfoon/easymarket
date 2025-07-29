@@ -3,6 +3,7 @@
 {% load humanize %}
 
 {% block title %}{{ store.name }} - {{ store.short_description|default:"Premium Store" }}{% endblock %}
+{% load dictionary_get %}
 
 {% block extra_head %}
 <!-- Optimized Font Loading -->
@@ -705,126 +706,147 @@
          aria-labelledby="reviews-heading"
          role="tabpanel"
          aria-describedby="reviews-tab">
-  <h2 id="reviews-heading" class="section-title mb-4">
-    <i class="fas fa-star text-primary me-2"></i>Customer Reviews
-  </h2>
+          <h2 id="reviews-heading" class="section-title mb-4">
+            <i class="fas fa-star text-primary me-2"></i>Customer Product Reviews
+          </h2>
 
-  <!-- Overall Summary -->
-  <div class="reviews-overview row g-4 mb-4">
-    <div class="col-md-4">
-      <div class="rating-summary text-center bg-light p-4 rounded shadow-sm h-100">
-        <div class="overall-rating display-5 fw-bold text-primary">
-          {{ average_rating|floatformat:1|default:"0.0" }}
-        </div>
-        <div class="rating-stars mb-2" role="img" aria-label="{{ average_rating|floatformat:1 }} out of 5 stars">
-          {% for i in "12345" %}
-            {% if forloop.counter <= average_rating|floatformat:0 %}
-              <i class="fas fa-star text-warning"></i>
-            {% elif average_rating|floatformat:1 > forloop.counter0 and average_rating|floatformat:1 < forloop.counter %}
-              <i class="fas fa-star-half-alt text-warning"></i>
-            {% else %}
-              <i class="far fa-star text-warning"></i>
-            {% endif %}
-          {% endfor %}
-        </div>
-        <p class="text-muted mb-0">
-          Based on {{ review_count|default:0|intcomma }} review{{ review_count|pluralize }}
-        </p>
-      </div>
-    </div>
-
-    <div class="col-md-8">
-      <div class="rating-breakdown">
-        {% for star in "54321" %}
-          {% with count=rating_breakdown.star|default:0 %}
-            {% widthratio count review_count|default_if_none:1 100 as percent %}
-            <div class="rating-bar d-flex align-items-center mb-2" aria-label="{{ star }} star: {{ count }} reviews">
-              <span class="star-label me-2" style="width: 40px;">{{ star }} <i class="fas fa-star text-warning"></i></span>
-              <div class="progress flex-grow-1 me-2" style="height: 8px;">
-                <div class="progress-bar bg-warning" role="progressbar"
-                     style="width: {{ percent }}%;" aria-valuenow="{{ percent }}"
-                     aria-valuemin="0" aria-valuemax="100"></div>
+          <!-- Overall Summary -->
+          <div class="reviews-overview row g-4 mb-4">
+          <!-- Summary -->
+          <div class="col-md-4">
+            <div class="rating-summary text-center bg-light p-4 rounded shadow-sm h-100">
+              <div class="overall-rating display-5 fw-bold text-primary">
+                {{ average_rating|floatformat:1|default:"0.0" }}
               </div>
-              <span class="count-label text-muted small" style="width: 30px;">{{ count }}</span>
+              <div class="rating-stars mb-2" role="img" aria-label="{{ average_rating|floatformat:1 }} out of 5 stars">
+              {% with avg=average_rating|default:0 %}
+                {% for i in "12345"|make_list %}
+                  {% widthratio avg 1 10 as avg10 %} {# Convert to integer-like scale, e.g., 4.5 → 45 #}
+                  {% widthratio forloop.counter 1 10 as index10 %}
+
+                  {% if avg10 >= index10 %}
+                    <i class="fas fa-star text-warning"></i>
+                  {% elif avg10 >= index10|add:"-5" %}
+                    <i class="fas fa-star-half-alt text-warning"></i>
+                  {% else %}
+                    <i class="far fa-star text-warning"></i>
+                  {% endif %}
+                {% endfor %}
+              {% endwith %}
+              </div>
+              <p class="text-muted mb-0">
+                Based on {{ review_count|default:0|intcomma }} review{{ review_count|pluralize }}
+              </p>
             </div>
-          {% endwith %}
+          </div>
+
+          <!-- Breakdown -->
+          <div class="col-md-8">
+            <div class="rating-breakdown">
+              {% for star in "54321"|make_list %}
+                {% with count=rating_breakdown|dict_get:star %}
+                  {% widthratio count review_count|default_if_none:1 100 as percent %}
+                  <div class="rating-bar d-flex align-items-center mb-2" aria-label="{{ star }} star: {{ count }} reviews">
+                    <span class="star-label me-2" style="width: 40px;">{{ star }} <i class="fas fa-star text-warning"></i></span>
+                    <div class="progress flex-grow-1 me-2" style="height: 8px;">
+                      <div class="progress-bar bg-warning" role="progressbar"
+                           style="width: {{ percent }}%;" aria-valuenow="{{ percent }}"
+                           aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
+                    <span class="count-label text-muted small" style="width: 30px;">{{ count }}</span>
+                  </div>
+                {% endwith %}
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+
+      <div class="reviews-list">
+        {% for review in recent_reviews %}
+        <article class="review-card border rounded p-3 mb-3 shadow-sm bg-white" itemscope itemtype="https://schema.org/Review">
+          <header class="review-header d-flex justify-content-between align-items-start mb-2">
+            <div class="reviewer-info d-flex">
+              <div class="reviewer-avatar rounded-circle bg-primary text-white fw-bold d-flex align-items-center justify-content-center me-3"
+                   style="width: 40px; height: 40px;">
+                <span>{{ review.user.first_name|default:"C"|slice:":1" }}</span>
+              </div>
+              <div class="reviewer-details d-flex flex-column">
+                <h4 class="reviewer-name text-truncate mb-0 fs-6" itemprop="author" style="max-width: 200px;">
+                  {{ review.user.get_full_name|default:"Anonymous Customer" }}
+                </h4>
+                <div class="d-inline-flex align-items-center text-muted small text-truncate" style="max-width: 200px;">
+                  <i class="fas fa-check-circle text-success me-1"></i>
+                  <a href="{% url 'marketplace:product_detail' review.product.id %}" class="text-decoration-none text-muted" title="{{ review.product.name }}">
+                    {{ review.product.name|truncatechars:40 }}
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            <div class="review-meta text-end small">
+              <div class="review-rating mb-1" aria-label="{{ review.rating }} out of 5 stars"
+                   itemprop="reviewRating" itemscope itemtype="https://schema.org/Rating">
+                {% for i in "12345" %}
+                  {% if forloop.counter <= review.rating %}
+                    <i class="fas fa-star text-warning"></i>
+                  {% else %}
+                    <i class="far fa-star text-muted"></i>
+                  {% endif %}
+                {% endfor %}
+                <meta itemprop="ratingValue" content="{{ review.rating }}">
+                <meta itemprop="bestRating" content="5">
+                <meta itemprop="worstRating" content="1">
+              </div>
+              <time class="text-muted d-block"
+                    datetime="{{ review.created_at|date:'c' }}"
+                    itemprop="datePublished">
+                {{ review.created_at|date:"M d, Y" }} ({{ review.created_at|timesince }} ago)
+              </time>
+            </div>
+          </header>
+
+          <div class="review-product d-flex align-items-center mb-3">
+            <a href="{% url 'marketplace:product_detail' review.product.id %}" class="me-3">
+              <img src="{{ review.product.image.url|default:'/static/images/default-product.png' }}"
+                   alt="{{ review.product.name }}"
+                   class="img-thumbnail rounded"
+                   style="width: 60px; height: 60px; object-fit: cover;">
+            </a>
+            <div class="text-muted small">
+              <a href="{% url 'marketplace:product_detail' review.product.id %}" class="text-decoration-none fw-semibold">
+                {{ review.product.name|truncatechars:60 }}
+              </a>
+            </div>
+          </div>
+
+          <div class="review-body" itemprop="reviewBody">
+            <p class="mb-0 text-dark">
+              {{ review.comment|linebreaksbr|default:"No comment provided." }}
+            </p>
+          </div>
+        </article>
+        {% empty %}
+        <div class="empty-state text-center py-5" role="status">
+          <i class="fas fa-star fa-2x text-muted mb-3" aria-hidden="true"></i>
+          <h4>No reviews yet</h4>
+          <p class="text-muted">Be the first to review this store!</p>
+          <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#reviewModal">
+            Write a Review
+          </button>
+        </div>
         {% endfor %}
       </div>
-    </div>
-  </div>
 
-  <!-- Reviews List -->
-  <div class="reviews-list">
-    {% for review in recent_reviews %}
-    <article class="review-card border rounded p-3 mb-3 shadow-sm bg-white" itemscope itemtype="https://schema.org/Review">
-      <header class="review-header d-flex justify-content-between align-items-start mb-2">
-        <div class="reviewer-info d-flex">
-          <div class="reviewer-avatar rounded-circle bg-primary text-white fw-bold d-flex align-items-center justify-content-center me-3"
-               style="width: 40px; height: 40px;">
-            <span>{{ review.user.first_name|default:"C"|slice:":1" }}</span>
-          </div>
-          <div class="reviewer-details d-flex flex-column">
-            <h4 class="reviewer-name text-truncate mb-0 fs-6" itemprop="author" style="max-width: 200px;">
-              {{ review.user.get_full_name|default:"Anonymous Customer" }}
-            </h4>
-            <div class="d-inline-flex align-items-center text-muted small text-truncate" style="max-width: 200px;">
-              <i class="fas fa-check-circle text-success me-1"></i>
-              <span title="{{ review.product.name }}">
-                {{ review.product.name|truncatechars:40 }}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div class="review-meta text-end small">
-          <div class="review-rating mb-1" aria-label="{{ review.rating }} out of 5 stars"
-               itemprop="reviewRating" itemscope itemtype="https://schema.org/Rating">
-            {% for i in "12345" %}
-              {% if forloop.counter <= review.rating %}
-                <i class="fas fa-star text-warning"></i>
-              {% else %}
-                <i class="far fa-star text-muted"></i>
-              {% endif %}
-            {% endfor %}
-            <meta itemprop="ratingValue" content="{{ review.rating }}">
-            <meta itemprop="bestRating" content="5">
-            <meta itemprop="worstRating" content="1">
-          </div>
-          <time class="text-muted d-block"
-                datetime="{{ review.created_at|date:'c' }}"
-                itemprop="datePublished">
-            {{ review.created_at|date:"M d, Y" }} ({{ review.created_at|timesince }} ago)
-          </time>
-        </div>
-      </header>
-
-      <div class="review-body" itemprop="reviewBody">
-        <p class="mb-0 text-dark">
-          {{ review.comment|linebreaksbr|default:"No comment provided." }}
-        </p>
+      {% if recent_reviews %}
+      <div class="text-center mt-4">
+        <a href="#" class="btn btn-outline-primary">
+          View All Reviews
+        </a>
       </div>
-    </article>
-    {% empty %}
-    <div class="empty-state text-center py-5" role="status">
-      <i class="fas fa-star fa-2x text-muted mb-3" aria-hidden="true"></i>
-      <h4>No reviews yet</h4>
-      <p class="text-muted">Be the first to review this store!</p>
-      <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#reviewModal">
-        Write a Review
-      </button>
-    </div>
-    {% endfor %}
-  </div>
-
-  {% if recent_reviews %}
-  <div class="text-center mt-4">
-    <a href="#" class="btn btn-outline-primary">
-      View All Reviews
-    </a>
-  </div>
-  {% endif %}
-  </section>
+      {% endif %}
+       </section>
       </div>
+
 
 
       <!-- Enhanced Sidebar -->
