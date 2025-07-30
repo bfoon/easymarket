@@ -35,6 +35,7 @@ from django.http import JsonResponse
 from django.template.loader import render_to_string
 from django.conf import settings
 from django.views.decorators.csrf import ensure_csrf_cookie
+from django.views.decorators.http import require_http_methods
 
 # Get the custom User model
 User = get_user_model()
@@ -1794,22 +1795,39 @@ def remove_cart_item(request):
         "final_total": f'{full_ctx["final_total"]:.2f}',      # full final total
     })
 
+@require_http_methods(["GET", "POST"])
 @login_required
 def toggle_wishlist(request, product_id):
+    """
+    Toggle wishlist item for a product.
+    - If ?action=add_to_cart, add to cart and (optionally) remove from wishlist.
+    - When adding to wishlist, capture last_known_price/stock so threaded notifications have a baseline.
+    """
     product = get_object_or_404(Product, id=product_id)
-    wishlist_item, created = Wishlist.objects.get_or_create(user=request.user, product=product)
+    is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest'
 
     # If user clicked 'Add to Cart' from wishlist
     if request.GET.get('action') == 'add_to_cart':
-        # Logic to add to cart
         cart, _ = Cart.objects.get_or_create(user=request.user)
         CartItem.objects.get_or_create(cart=cart, product=product, defaults={'quantity': 1})
 
         # Remove from wishlist (optional)
-        wishlist_item.delete()
+        Wishlist.objects.filter(user=request.user, product=product).delete()
 
         messages.success(request, f"{product.name} added to cart.")
         return redirect('marketplace:my_wishlist')
+
+    # Try to add (if not exists) or fetch (if exists so we can remove)
+    wishlist_item, created = Wishlist.objects.get_or_create(
+        user=request.user,
+        product=product,
+        defaults={
+            # ✅ Crucial for threaded notifications:
+            # set the baseline so later product saves can compare and notify.
+            'last_known_price': product.price,
+            'last_known_stock': product.stock,
+        }
+    )
 
     if created:
         log_admin_action(
@@ -1819,37 +1837,36 @@ def toggle_wishlist(request, product_id):
             model='Product',
             object_id=product.id
         )
-    else:
-        log_admin_action(
-            request.user,
-            action_type='wishlist_remove',
-            message=f"Removed {product.name} from wishlist",
-            model='Product',
-            object_id=product.id
-        )
 
-    # AJAX or normal toggle
-    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-        if not created:
-            wishlist_item.delete()
+        if is_ajax:
             return JsonResponse({
                 'success': True,
-                'status': 'removed',
-                'message': f"{product.name} removed from your wishlist"
+                'status': 'added',
+                'message': f"{product.name} added to your wishlist"
             })
+
+        messages.success(request, f"{product.name} added to your wishlist.")
+        return redirect('marketplace:my_wishlist')
+
+    # If it already existed, this call is acting as "remove"
+    wishlist_item.delete()
+    log_admin_action(
+        request.user,
+        action_type='wishlist_remove',
+        message=f"Removed {product.name} from wishlist",
+        model='Product',
+        object_id=product.id
+    )
+
+    if is_ajax:
         return JsonResponse({
             'success': True,
-            'status': 'added',
-            'message': f"{product.name} added to your wishlist"
+            'status': 'removed',
+            'message': f"{product.name} removed from your wishlist"
         })
 
-    else:
-        if not created:
-            wishlist_item.delete()
-            messages.info(request, f"{product.name} removed from your wishlist.")
-        else:
-            messages.success(request, f"{product.name} added to your wishlist.")
-        return redirect('marketplace:my_wishlist')
+    messages.info(request, f"{product.name} removed from your wishlist.")
+    return redirect('marketplace:my_wishlist')
 
 
 @login_required

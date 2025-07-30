@@ -6,6 +6,7 @@ from django.db.models import Avg
 from decimal import Decimal
 from django.utils import timezone
 import uuid
+from django.db import transaction
 
 
 class Category(models.Model):
@@ -305,6 +306,9 @@ class Product(models.Model):
     def has_color_images(self):
         return self.images.filter(color__isnull=False).exists()
 
+    # products/models.py (your Product model)
+    from django.db import transaction
+
     def save(self, *args, **kwargs):
         is_new = self.pk is None
         changed_fields = []
@@ -329,7 +333,7 @@ class Product(models.Model):
 
         self._changed_fields = changed_fields or ['__created__']
 
-        # Notifications
+        # Existing follower notifications (keep yours as-is) ...
         if is_new and self.store:
             self.store.notify_followers(
                 notification_type='new_product',
@@ -364,6 +368,14 @@ class Product(models.Model):
                     new_price=self.price
                 )
 
+        # ✅ NEW: threaded wishlist price notifications (non-blocking)
+        if old_price is not None and old_price != self.price:
+            from marketplace.background import submit
+            from .notifications import notify_wishlist_price_change_threadsafe
+            old_p, new_p, product_id = old_price, self.price, self.pk
+            transaction.on_commit(lambda: submit(
+                notify_wishlist_price_change_threadsafe, product_id, old_p, new_p
+            ))
 
 
 class ProductView(models.Model):
@@ -567,6 +579,8 @@ class Wishlist(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='wishlist_items')
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='wishlisted_by')
     added_at = models.DateTimeField(auto_now_add=True)
+    last_known_price = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
+    last_known_stock = models.IntegerField(default=0)
 
     class Meta:
         unique_together = ('user', 'product')  # Prevent duplicates
