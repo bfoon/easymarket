@@ -338,7 +338,7 @@ class Product(models.Model):
             self.store.notify_followers(
                 notification_type='new_product',
                 title=f'New Product: {self.name}',
-                message=f'Check out our latest product "{self.name}" now available for ${self.price}!',
+                message=f'Check out our latest product "{self.name}" now available for D{self.price}!',
                 product=self
             )
         elif old_price and old_price != self.price and self.store:
@@ -353,7 +353,7 @@ class Product(models.Model):
                 self.store.notify_followers(
                     notification_type='price_decrease',
                     title=f'Price Drop: {self.name}',
-                    message=f'Price dropped by {discount_percent}% from ${old_price} to ${self.price}!',
+                    message=f'Price dropped by {discount_percent}% from D{old_price} to D{self.price}!',
                     product=self,
                     old_price=old_price,
                     new_price=self.price
@@ -362,7 +362,7 @@ class Product(models.Model):
                 self.store.notify_followers(
                     notification_type='price_increase',
                     title=f'Price Update: {self.name}',
-                    message=f'Price updated from ${old_price} to ${self.price}.',
+                    message=f'Price updated from D{old_price} to D{self.price}.',
                     product=self,
                     old_price=old_price,
                     new_price=self.price
