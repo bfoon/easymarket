@@ -19,7 +19,7 @@ from django.views.decorators.http import require_POST
 from django.contrib.auth.decorators import login_required
 from decimal import Decimal
 from django.core.cache import cache
-from .utils import log_search, get_search_suggestions_with_history
+from .utils import log_search, get_search_suggestions_with_history, build_cart_context
 from django.urls import reverse
 import json
 from datetime import timedelta
@@ -31,6 +31,10 @@ from django.contrib import messages
 from collections import Counter
 from accounts.utils import log_admin_action
 from .notifications import send_email, send_whatsapp
+from django.http import JsonResponse
+from django.template.loader import render_to_string
+from django.conf import settings
+from django.views.decorators.csrf import ensure_csrf_cookie
 
 # Get the custom User model
 User = get_user_model()
@@ -1438,81 +1442,18 @@ def add_to_cart(request, product_id):
             'message': f'Error adding item to cart: {str(e)}'
         })
 
+def cart_preview(request):
+    """
+    Returns a small HTML snippet (partial) with up to 5 items + subtotal.
+    """
+    ctx = build_cart_context(request, limit=5)
+    return render(request, 'marketplace/partials/cart_preview.html', ctx)
+
 def cart_view(request):
-    """
-    Display cart with all items and totals
-    """
-    cart_items = []
-    total_price = Decimal('0')
+    ctx = build_cart_context(request, limit=None)
+    return render(request, 'marketplace/cart_detail.html', ctx)
 
-    if request.user.is_authenticated:
-        cart = Cart.objects.filter(user=request.user).first()
-        if cart:
-            cart_item_qs = CartItem.objects.filter(cart=cart).select_related('product')
-            for item in cart_item_qs:
-                subtotal = item.product.price * item.quantity
-                cart_items.append({
-                    'id': item.id,  # Add item ID for frontend reference
-                    'product': item.product,
-                    'quantity': item.quantity,
-                    'subtotal': subtotal,
-                    # Optional: include features if stored for auth users
-                    'selected_features': item.selected_features if hasattr(item, 'selected_features') else {},
-                })
-                total_price += subtotal
-    else:
-        session_cart = request.session.get('cart', {})
-        cart_items = []
-        total_price = Decimal('0.00')
 
-        # Step 1: Map product_id to actual cart keys
-        product_key_map = {}
-        for key in session_cart.keys():
-            try:
-                pid = int(key.split("::")[0])
-                product_key_map.setdefault(pid, []).append(key)
-            except ValueError:
-                continue
-
-        # Step 2: Load Products
-        product_ids = list(product_key_map.keys())
-        products = Product.objects.filter(id__in=product_ids, is_active=True)
-
-        # Step 3: Build cart item entries
-        for product in products:
-            product_keys = product_key_map.get(product.id, [])
-            for key in product_keys:
-                cart_data = session_cart.get(key, {})
-                quantity = cart_data.get('quantity', 1)
-                selected_features = cart_data.get('selected_features', {})
-                subtotal = product.price * quantity
-
-                cart_items.append({
-                    'id': product.id,
-                    'product': product,
-                    'quantity': quantity,
-                    'subtotal': subtotal,
-                    'selected_features': selected_features,
-                })
-                total_price += subtotal
-
-    # Calculate tax and final total
-    tax_rate = Decimal('0.15')
-    tax_amount = total_price * tax_rate
-    final_total = total_price + tax_amount
-
-    # Get cart count for badge
-    cart_count = sum(item['quantity'] for item in cart_items)
-
-    return render(request, 'marketplace/cart_detail.html', {
-        'cart_items': cart_items,
-        'total_price': total_price,
-        'tax_amount': tax_amount,
-        'final_total': final_total,
-        'cart_count': cart_count,
-    })
-
-# Optional: Add this view to get current cart count for consistency
 @csrf_exempt
 def get_cart_count(request):
     """
@@ -1541,7 +1482,7 @@ def get_cart_count(request):
                     continue
 
         # Calculate tax
-        tax_rate = Decimal('0.085')
+        tax_rate = Decimal('0.00')
         tax_amount = cart_total * tax_rate
         final_total = cart_total + tax_amount
 
@@ -1762,85 +1703,96 @@ def update_cart_quantity(request):
         })
 
 
-@csrf_exempt
+CART_TAX_RATE = getattr(settings, "CART_TAX_RATE", Decimal("0.00"))
+
+@ensure_csrf_cookie
 @require_POST
 def remove_cart_item(request):
     """
     Remove an item from the cart.
-    Expects POST data: product_id
+    Expects JSON:
+      { "item_type": "db"|"session", "remove_id": "<CartItem.id or session key>" }
+
+    Backward-compatible fallback (not recommended):
+      { "product_id": <int> }  # will remove ONE matching entry, arbitrary for session carts with variants
     """
+    # --- Parse payload ---
     try:
-        product_id = request.POST.get('product_id')
+        # Works for application/json; if you're posting form-encoded, adjust accordingly
+        payload = json.loads(request.body.decode("utf-8"))
+    except Exception:
+        payload = request.POST  # fallback if you submit as form data
 
-        if not product_id or not product_id.isdigit():
-            return JsonResponse({'success': False, 'message': 'Invalid product ID'})
+    item_type = payload.get("item_type")
+    remove_id = payload.get("remove_id")
+    product_id = payload.get("product_id")  # legacy fallback
 
-        product_id = int(product_id)
-        product = get_object_or_404(Product, id=product_id)
+    # --- Preferred path: precise identifiers ---
+    if item_type in ("db", "session") and remove_id:
+        # Authenticated DB cart item removal
+        if item_type == "db":
+            if not request.user.is_authenticated:
+                return JsonResponse({"success": False, "message": "Authentication required"})
+            CartItem.objects.filter(id=remove_id, cart__user=request.user).delete()
 
-        # --- Authenticated Users ---
+        # Session cart entry removal
+        elif item_type == "session":
+            session_cart = request.session.get("cart", {})
+            if remove_id in session_cart:
+                del session_cart[remove_id]
+                request.session["cart"] = session_cart
+                request.session.modified = True
+            else:
+                return JsonResponse({"success": False, "message": "Item not found in session cart"})
+
+    # --- Legacy fallback: product_id only (NOT recommended for variants) ---
+    elif product_id:
+        try:
+            pid = int(product_id)
+        except (TypeError, ValueError):
+            return JsonResponse({"success": False, "message": "Invalid product ID"})
+
+        # Auth user: remove one CartItem for that product
         if request.user.is_authenticated:
             cart = Cart.objects.filter(user=request.user).first()
             if not cart:
-                return JsonResponse({'success': False, 'message': 'Cart not found'})
-
-            cart_item = CartItem.objects.filter(cart=cart, product=product).first()
-            if not cart_item:
-                return JsonResponse({'success': False, 'message': 'Item not found in cart'})
-
-            cart_item.delete()
-
-            # Recalculate totals
-            cart_items = CartItem.objects.filter(cart=cart)
-            total_price = sum(item.product.price * item.quantity for item in cart_items)
-            item_count = sum(item.quantity for item in cart_items)
-
-        # --- Anonymous Users ---
+                return JsonResponse({"success": False, "message": "Cart not found"})
+            CartItem.objects.filter(cart=cart, product_id=pid).first() and \
+                CartItem.objects.filter(cart=cart, product_id=pid).first().delete()
         else:
-            cart = request.session.get('cart', {})
-
-            # Handle malformed keys like "1::{}"
-            normalized_keys = {key.split("::")[0]: key for key in cart.keys()}
-            matched_key = normalized_keys.get(str(product_id))
-
-            if not matched_key or matched_key not in cart:
-                return JsonResponse({'success': False, 'message': 'Item not found in cart'})
-
-            del cart[matched_key]
-            request.session['cart'] = cart
+            # Guest: remove ONE entry whose key starts with "pid::"
+            session_cart = request.session.get("cart", {})
+            key_to_delete = None
+            for key in list(session_cart.keys()):
+                # keys look like "1::{}" or "1::{\"color\":\"Red\"}"
+                if key.split("::")[0] == str(pid):
+                    key_to_delete = key
+                    break
+            if not key_to_delete:
+                return JsonResponse({"success": False, "message": "Item not found in cart"})
+            del session_cart[key_to_delete]
+            request.session["cart"] = session_cart
             request.session.modified = True
+    else:
+        return JsonResponse({"success": False, "message": "Missing parameters"})
 
-            # Recalculate totals
-            total_price = Decimal('0.00')
-            item_count = 0
-            for pid, item in cart.items():
-                try:
-                    prod = Product.objects.get(id=int(pid.split("::")[0]))
-                    qty = item.get('quantity', 1)
-                    total_price += prod.price * qty
-                    item_count += qty
-                except (Product.DoesNotExist, ValueError):
-                    continue
+    # --- Rebuild contexts ---
+    preview_ctx = build_cart_context(request, limit=5)
+    full_ctx = build_cart_context(request, limit=None)
 
-        # Shared tax calculation
-        tax_rate = Decimal('0.085')
-        tax_amount = total_price * tax_rate
-        final_total = total_price + tax_amount
+    # Re-render the mini-cart HTML
+    preview_html = render_to_string(
+        "marketplace/partials/cart_preview.html", preview_ctx, request=request
+    )
 
-        return JsonResponse({
-            'success': True,
-            'message': 'Item removed from cart',
-            'total_price': f"{total_price:.2f}",
-            'tax_amount': f"{tax_amount:.2f}",
-            'final_total': f"{final_total:.2f}",
-            'item_count': item_count
-        })
-
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'message': f'An error occurred: {str(e)}'
-        })
+    return JsonResponse({
+        "success": True,
+        "message": "Item removed from cart",
+        "html": preview_html,
+        "badge_count": full_ctx["cart_count"],                # use full count for badge
+        "subtotal": f'{preview_ctx["total_price"]:.2f}',      # preview subtotal (visible rows)
+        "final_total": f'{full_ctx["final_total"]:.2f}',      # full final total
+    })
 
 @login_required
 def toggle_wishlist(request, product_id):

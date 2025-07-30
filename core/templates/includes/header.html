@@ -252,16 +252,35 @@
                     </a>
                 {% endif %}
 
-                <div class="easymarket-cart-container d-flex align-items-center">
-                    <a href="{% url 'marketplace:cart' %}" class="easymarket-cart-btn btn btn-primary position-relative" data-easymarket-cart="true">
-                        <i class="fas fa-shopping-cart" data-easymarket-icon="cart"></i>
-                        <span id="easymarket-cart-badge"
-                              class="easymarket-cart-count position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
-                              data-easymarket-badge="count"
-                              style="{% if not cart_count or cart_count == 0 %} display: none; {% endif %}">
-                            <span class="easymarket-cart-number" data-count="{{ cart_count|default:0 }}">{{ cart_count|default:0 }}</span>
-                        </span>
-                    </a>
+                <div class="dropdown easymarket-cart-container d-flex align-items-center">
+                  <button
+                    class="easymarket-cart-btn btn btn-primary position-relative dropdown-toggle"
+                    id="cartDropdown"
+                    data-bs-toggle="dropdown"
+                    data-bs-auto-close="outside"
+                    aria-expanded="false"
+                    type="button"
+                  >
+                    <i class="fas fa-shopping-cart" data-easymarket-icon="cart"></i>
+                    <span id="easymarket-cart-badge"
+                          class="easymarket-cart-count position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                          data-easymarket-badge="count"
+                          style="{% if not cart_count or cart_count == 0 %}display: none;{% endif %}">
+                      <span class="easymarket-cart-number" data-count="{{ cart_count|default:0 }}">{{ cart_count|default:0 }}</span>
+                    </span>
+                  </button>
+
+                  <div class="dropdown-menu dropdown-menu-end p-0 shadow cart-preview-menu" aria-labelledby="cartDropdown">
+                    <div id="cart-preview-body" class="p-3 text-center text-muted" style="min-width: 340px;">
+                      <i class="fas fa-spinner fa-spin me-2"></i> Loading cart...
+                    </div>
+                    <div class="border-top p-2 d-grid">
+                      <a href="{% url 'marketplace:cart' %}" class="btn btn-primary btn-sm">
+                        View cart & Checkout
+                      </a>
+                    </div>
+                  </div>
+                </div>
 
                     {% if user.is_authenticated %}
                     <a href="{% url 'accounts:signoff' %}" class="easymarket-mobile-logout btn btn-outline-danger ms-2 d-lg-none easymarket-mobile-logout-btn">
@@ -274,7 +293,6 @@
     </div>
 </nav>
 <!-- Bootstrap JS (with Popper) -->
-
 
 <style>
 /* ==================================================
@@ -328,6 +346,15 @@
         color: #f8f9fa !important;
     }
 }
+
+
+.cart-preview-menu {
+  min-width: 340px;
+  max-width: 420px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
 
 /* EasyMarket Profile Picture Styling */
 .easymarket-navbar .easymarket-profile-picture {
@@ -816,6 +843,86 @@
   }
 }
 </style>
+
+<script>
+function getCookie(name) {
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) return parts.pop().split(';').shift();
+}
+const csrftoken = getCookie('csrftoken');
+</script>
+
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const toggle = document.getElementById('cartDropdown');
+  const previewBody = document.getElementById('cart-preview-body');
+
+  if (!toggle || !previewBody) return;
+
+  function loadCartPreview() {
+    previewBody.innerHTML = '<div class="p-3 text-center text-muted"><i class="fas fa-spinner fa-spin me-2"></i> Loading cart...</div>';
+    fetch("{% url 'marketplace:cart_preview' %}", { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(res => res.text())
+      .then(html => { previewBody.innerHTML = html; })
+      .catch(() => { previewBody.innerHTML = '<div class="p-3 text-center text-danger"><i class="fas fa-exclamation-circle me-2"></i>Failed to load cart.</div>'; });
+  }
+
+  toggle.addEventListener('shown.bs.dropdown', loadCartPreview);
+
+  // Event delegation for remove buttons inside the preview
+  previewBody.addEventListener('click', function (e) {
+    const btn = e.target.closest('.cart-remove-btn');
+    if (!btn) return;
+
+    e.preventDefault();
+
+    const removeId = btn.dataset.removeId;
+    const itemType = btn.dataset.itemType;
+
+    // UI feedback
+    const oldHTML = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+    fetch("{% url 'marketplace:remove_cart_item' %}", {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrftoken, // <-- use cookie
+      },
+      body: JSON.stringify({ remove_id: removeId, item_type: itemType })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        // Replace preview with new HTML
+        previewBody.innerHTML = data.html;
+
+        // Update badge
+        const badge = document.getElementById('easymarket-cart-badge');
+        const numberSpan = badge?.querySelector('.easymarket-cart-number');
+        if (badge && numberSpan) {
+          const count = parseInt(data.badge_count || 0);
+          numberSpan.textContent = count;
+          numberSpan.setAttribute('data-count', count);
+          badge.style.display = count > 0 ? 'inline-block' : 'none';
+        }
+      } else {
+        alert(data.error || 'Failed to remove item.');
+        btn.disabled = false;
+        btn.innerHTML = oldHTML;
+      }
+    })
+    .catch(() => {
+      alert('Network error.');
+      btn.disabled = false;
+      btn.innerHTML = oldHTML;
+    });
+  });
+});
+</script>
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {

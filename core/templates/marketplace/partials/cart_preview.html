@@ -1,0 +1,59 @@
+<form style="display:none">{% csrf_token %}</form>
+{% if cart_items and cart_items|length > 0 %}
+  <ul class="list-group list-group-flush">
+    {% for item in cart_items %}
+      <li class="list-group-item d-flex align-items-center">
+        {% if item.product.thumbnail %}
+          <img src="{{ item.product.thumbnail.url }}" alt="{{ item.product.name }}" class="rounded me-2" width="40" height="40" style="object-fit:cover;">
+        {% elif item.product.image %}
+          <img src="{{ item.product.image.url }}" alt="{{ item.product.name }}" class="rounded me-2" width="40" height="40" style="object-fit:cover;">
+        {% else %}
+          <div class="rounded me-2 d-flex align-items-center justify-content-center" style="width:40px;height:40px;background:#f1f3f5;">
+            <i class="fas fa-image text-muted"></i>
+          </div>
+        {% endif %}
+
+        <div class="flex-fill">
+          <div class="fw-semibold small text-truncate">{{ item.product.name }}</div>
+          <div class="small text-muted">
+            x{{ item.quantity }}
+            {% if item.selected_features %}
+              •
+              {% for k,v in item.selected_features.items %}
+                {{ k }}: {{ v }}{% if not forloop.last %}, {% endif %}
+              {% endfor %}
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+          <div class="small fw-semibold">D{{ item.subtotal }}</div>
+          <button
+            class="btn btn-sm btn-outline-danger cart-remove-btn"
+            title="Remove"
+            data-item-type="{{ item.item_type }}"
+            data-remove-id="{{ item.remove_id }}"
+          >
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      </li>
+    {% endfor %}
+  </ul>
+
+  <div class="p-3 d-flex justify-content-between">
+    <span class="fw-semibold">Subtotal</span>
+    <span class="fw-bold">D{{ total_price }}</span>
+  </div>
+
+  {% if has_more %}
+    <div class="px-3 pb-2 small text-muted">
+      + {{ remaining }} more item{{ remaining|pluralize }}
+    </div>
+  {% endif %}
+{% else %}
+  <div class="p-4 text-center text-muted">
+    <i class="fas fa-shopping-basket fa-2x mb-2"></i>
+    <div>Your cart is empty</div>
+  </div>
+{% endif %}

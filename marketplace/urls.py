@@ -12,6 +12,7 @@ urlpatterns = [
     path('used/', views.used_products_view, name='used_products'),
     path('cart/', views.cart_view, name='cart'),
     path('cart/', views.cart_view, name='cart_view'),
+    path("cart/preview/", views.cart_preview, name="cart_preview"),
     path('add-to-cart/<int:product_id>/', views.add_to_cart, name='add_to_cart'),
     path('get-cart-count/', views.get_cart_count, name='get_cart_count'),
     path('wishlist/toggle/<int:product_id>/', views.toggle_wishlist, name='toggle_wishlist'),
