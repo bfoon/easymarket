@@ -5,83 +5,1190 @@
 
 {% block content %}
 <link rel="stylesheet" href="{% static 'css/main.css' %}">
-<div class="container py-5">
-  <div class="row justify-content-center">
-    <div class="col-lg-9">
 
-      <h2 class="mb-3">Returns & Exchanges Policy</h2>
-      <p class="text-muted">We want you to love your purchase. If something isn’t right, we’re here to help.</p>
-
-      <div class="card mb-4">
-        <div class="card-body">
-          <h5 class="mb-2">Return Window</h5>
-          <p>
-            Returns are accepted within <strong>{{ policy.return_window_days }}</strong> days of delivery for orders
-            with status <strong>{{ policy.eligible_statuses|join:", " }}</strong>.
-          </p>
+<div class="returns-policy-page">
+  <!-- Hero Section -->
+  <div class="rpp-hero-section">
+    <div class="container">
+      <div class="row justify-content-center">
+        <div class="col-lg-8 text-center">
+          <div class="rpp-hero-icon mb-4">
+            <i class="fas fa-shield-alt"></i>
+          </div>
+          <h1 class="rpp-hero-title mb-3">Returns & Exchanges Policy</h1>
+          <p class="rpp-hero-subtitle">We want you to love your purchase. If something isn't right, we're here to help make it right.</p>
+          <div class="rpp-hero-actions mt-4">
+            <a href="{% url 'returns:hub' %}" class="btn rpp-btn-primary btn-lg me-3">
+              <i class="fas fa-undo-alt me-2"></i>
+              Start a Return
+            </a>
+            <a href="#how-to-start" class="btn rpp-btn-outline-primary btn-lg">
+              <i class="fas fa-question-circle me-2"></i>
+              How It Works
+            </a>
+          </div>
         </div>
       </div>
+    </div>
+  </div>
 
-      <div class="card mb-4">
-        <div class="card-body">
-          <h5 class="mb-2">Eligible Reasons</h5>
-          <ul class="mb-0">
-            {% for key,label in policy.reasons %}
-              <li>{{ label }}</li>
-            {% endfor %}
-          </ul>
+  <!-- Main Content -->
+  <div class="container py-5">
+    <div class="row justify-content-center">
+      <div class="col-lg-10">
+
+        <!-- Quick Facts Section -->
+        <div class="rpp-quick-facts mb-5">
+          <div class="row">
+            <div class="col-md-3 mb-3">
+              <div class="rpp-fact-card">
+                <div class="rpp-fact-icon">
+                  <i class="fas fa-calendar-alt"></i>
+                </div>
+                <div class="rpp-fact-content">
+                  <div class="rpp-fact-number">{{ policy.return_window_days }}</div>
+                  <div class="rpp-fact-label">Days to Return</div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-3 mb-3">
+              <div class="rpp-fact-card">
+                <div class="rpp-fact-icon rpp-icon-success">
+                  <i class="fas fa-shipping-fast"></i>
+                </div>
+                <div class="rpp-fact-content">
+                  <div class="rpp-fact-number">FREE</div>
+                  <div class="rpp-fact-label">Return Shipping</div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-3 mb-3">
+              <div class="rpp-fact-card">
+                <div class="rpp-fact-icon rpp-icon-info">
+                  <i class="fas fa-clock"></i>
+                </div>
+                <div class="rpp-fact-content">
+                  <div class="rpp-fact-number">3-5</div>
+                  <div class="rpp-fact-label">Days Refund</div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-3 mb-3">
+              <div class="rpp-fact-card">
+                <div class="rpp-fact-icon rpp-icon-warning">
+                  <i class="fas fa-headset"></i>
+                </div>
+                <div class="rpp-fact-content">
+                  <div class="rpp-fact-number">24/7</div>
+                  <div class="rpp-fact-label">Support</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Policy Sections -->
+        <div class="row">
+          <div class="col-lg-8">
+
+            <!-- Return Window Section -->
+            <div class="rpp-policy-section mb-5">
+              <div class="rpp-section-header">
+                <div class="rpp-section-icon">
+                  <i class="fas fa-calendar-check"></i>
+                </div>
+                <div>
+                  <h3 class="rpp-section-title">Return Window</h3>
+                  <p class="rpp-section-subtitle">When you can return your items</p>
+                </div>
+              </div>
+              <div class="rpp-section-content">
+                <div class="rpp-highlight-box">
+                  <div class="rpp-highlight-content">
+                    <div class="rpp-highlight-main">
+                      Returns are accepted within <strong>{{ policy.return_window_days }} days</strong> of delivery
+                    </div>
+                    <div class="rpp-highlight-sub">
+                      For orders with status: {{ policy.eligible_statuses|join:", " }}
+                    </div>
+                  </div>
+                  <div class="rpp-highlight-icon">
+                    <i class="fas fa-check-circle"></i>
+                  </div>
+                </div>
+                <div class="rpp-info-note">
+                  <i class="fas fa-info-circle me-2"></i>
+                  The return window starts from your delivery date, not the purchase date.
+                </div>
+              </div>
+            </div>
+
+            <!-- Eligible Reasons Section -->
+            <div class="rpp-policy-section mb-5">
+              <div class="rpp-section-header">
+                <div class="rpp-section-icon rpp-icon-success">
+                  <i class="fas fa-clipboard-list"></i>
+                </div>
+                <div>
+                  <h3 class="rpp-section-title">Valid Return Reasons</h3>
+                  <p class="rpp-section-subtitle">Why you can return items</p>
+                </div>
+              </div>
+              <div class="rpp-section-content">
+                <div class="rpp-reasons-grid">
+                  {% for key,label in policy.reasons %}
+                    <div class="rpp-reason-item">
+                      <div class="rpp-reason-icon">
+                        {% if 'defective' in key %}
+                          <i class="fas fa-exclamation-triangle"></i>
+                        {% elif 'wrong' in key %}
+                          <i class="fas fa-exchange-alt"></i>
+                        {% elif 'damaged' in key %}
+                          <i class="fas fa-box-open"></i>
+                        {% elif 'quality' in key %}
+                          <i class="fas fa-star-half-alt"></i>
+                        {% elif 'mind' in key %}
+                          <i class="fas fa-heart-broken"></i>
+                        {% else %}
+                          <i class="fas fa-tag"></i>
+                        {% endif %}
+                      </div>
+                      <div class="rpp-reason-text">{{ label }}</div>
+                    </div>
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
+
+            <!-- Return Methods Section -->
+            <div class="rpp-policy-section mb-5">
+              <div class="rpp-section-header">
+                <div class="rpp-section-icon rpp-icon-info">
+                  <i class="fas fa-truck"></i>
+                </div>
+                <div>
+                  <h3 class="rpp-section-title">Return Methods</h3>
+                  <p class="rpp-section-subtitle">How to send items back</p>
+                </div>
+              </div>
+              <div class="rpp-section-content">
+                <div class="rpp-methods-list">
+                  {% for key,label in policy.methods %}
+                    <div class="rpp-method-item">
+                      <div class="rpp-method-check">
+                        <i class="fas fa-check"></i>
+                      </div>
+                      <div class="rpp-method-content">
+                        <div class="rpp-method-title">{{ label }}</div>
+                        <div class="rpp-method-desc">
+                          {% if 'courier' in key|lower %}
+                            We'll arrange pickup from your location
+                          {% elif 'drop' in key|lower %}
+                            Drop off at any of our partner locations
+                          {% elif 'mail' in key|lower %}
+                            Use our prepaid return labels
+                          {% else %}
+                            Convenient return option
+                          {% endif %}
+                        </div>
+                      </div>
+                    </div>
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
+
+            <!-- Non-Returnable Items Section -->
+            <div class="rpp-policy-section mb-5">
+              <div class="rpp-section-header">
+                <div class="rpp-section-icon rpp-icon-warning">
+                  <i class="fas fa-ban"></i>
+                </div>
+                <div>
+                  <h3 class="rpp-section-title">Non-Returnable Items</h3>
+                  <p class="rpp-section-subtitle">Items that cannot be returned</p>
+                </div>
+              </div>
+              <div class="rpp-section-content">
+                <div class="rpp-warning-box">
+                  <div class="rpp-warning-header">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Please note: The following items cannot be returned for hygiene and safety reasons
+                  </div>
+                  <div class="rpp-non-returnable-list">
+                    {% for item in policy.non_returnable %}
+                      <div class="rpp-non-returnable-item">
+                        <i class="fas fa-times-circle me-2"></i>
+                        {{ item }}
+                      </div>
+                    {% endfor %}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Refund Timelines Section -->
+            <div class="rpp-policy-section mb-5">
+              <div class="rpp-section-header">
+                <div class="rpp-section-icon rpp-icon-success">
+                  <i class="fas fa-money-bill-wave"></i>
+                </div>
+                <div>
+                  <h3 class="rpp-section-title">Refund Processing Times</h3>
+                  <p class="rpp-section-subtitle">When you'll receive your refund</p>
+                </div>
+              </div>
+              <div class="rpp-section-content">
+                <div class="rpp-refund-timeline">
+                  <div class="rpp-timeline-item">
+                    <div class="rpp-timeline-icon">
+                      <i class="fas fa-credit-card"></i>
+                    </div>
+                    <div class="rpp-timeline-content">
+                      <div class="rpp-timeline-title">Original Payment Method</div>
+                      <div class="rpp-timeline-time">{{ policy.refund_timelines.original_payment }}</div>
+                    </div>
+                  </div>
+                  <div class="rpp-timeline-item">
+                    <div class="rpp-timeline-icon rpp-icon-info">
+                      <i class="fas fa-gift-card"></i>
+                    </div>
+                    <div class="rpp-timeline-content">
+                      <div class="rpp-timeline-title">Store Credit</div>
+                      <div class="rpp-timeline-time">{{ policy.refund_timelines.store_credit }}</div>
+                    </div>
+                  </div>
+                  <div class="rpp-timeline-item">
+                    <div class="rpp-timeline-icon rpp-icon-warning">
+                      <i class="fas fa-university"></i>
+                    </div>
+                    <div class="rpp-timeline-content">
+                      <div class="rpp-timeline-title">Bank Transfer</div>
+                      <div class="rpp-timeline-time">{{ policy.refund_timelines.bank_transfer }}</div>
+                    </div>
+                  </div>
+                  <div class="rpp-timeline-item">
+                    <div class="rpp-timeline-icon rpp-icon-success">
+                      <i class="fas fa-money-bill-alt"></i>
+                    </div>
+                    <div class="rpp-timeline-content">
+                      <div class="rpp-timeline-title">Cash Refund</div>
+                      <div class="rpp-timeline-time">{{ policy.refund_timelines.cash }}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Sidebar -->
+          <div class="col-lg-4">
+            <div class="rpp-sidebar">
+
+              <!-- How to Start Section -->
+              <div class="rpp-how-to-card" id="how-to-start">
+                <div class="rpp-how-to-header">
+                  <div class="rpp-how-to-icon">
+                    <i class="fas fa-play-circle"></i>
+                  </div>
+                  <h4 class="rpp-how-to-title">How to Start a Return</h4>
+                </div>
+                <div class="rpp-how-to-content">
+                  <div class="rpp-step-list">
+                    <div class="rpp-step-item">
+                      <div class="rpp-step-number">1</div>
+                      <div class="rpp-step-content">
+                        <div class="rpp-step-title">Find Your Order</div>
+                        <div class="rpp-step-desc">Go to <strong>My Orders</strong> and select your delivered order</div>
+                      </div>
+                    </div>
+                    <div class="rpp-step-item">
+                      <div class="rpp-step-number">2</div>
+                      <div class="rpp-step-content">
+                        <div class="rpp-step-title">Initiate Return</div>
+                        <div class="rpp-step-desc">Click <strong>Start a Return/Exchange</strong> button</div>
+                      </div>
+                    </div>
+                    <div class="rpp-step-item">
+                      <div class="rpp-step-number">3</div>
+                      <div class="rpp-step-content">
+                        <div class="rpp-step-title">Provide Details</div>
+                        <div class="rpp-step-desc">Select reasons, quantities, and upload photos if needed</div>
+                      </div>
+                    </div>
+                    <div class="rpp-step-item">
+                      <div class="rpp-step-number">4</div>
+                      <div class="rpp-step-content">
+                        <div class="rpp-step-title">Submit & Track</div>
+                        <div class="rpp-step-desc">Submit your request and track progress via email and your account</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="rpp-how-to-action">
+                    <a href="{% url 'returns:hub' %}" class="btn rpp-btn-primary w-100">
+                      <i class="fas fa-arrow-right me-2"></i>
+                      Start My Return
+                    </a>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Contact Support Card -->
+              <div class="rpp-support-card">
+                <div class="rpp-support-header">
+                  <div class="rpp-support-icon">
+                    <i class="fas fa-headset"></i>
+                  </div>
+                  <h5 class="rpp-support-title">Need Help?</h5>
+                </div>
+                <div class="rpp-support-content">
+                  <p class="rpp-support-desc">
+                    Our customer service team is here to help with any questions about returns and exchanges.
+                  </p>
+                  <div class="rpp-support-actions">
+                    <a href="mailto:{{ policy.support_email }}" class="btn rpp-btn-outline-primary w-100 mb-2">
+                      <i class="fas fa-envelope me-2"></i>
+                      {{ policy.support_email }}
+                    </a>
+                    <a href="tel:+1-800-123-4567" class="btn rpp-btn-outline-secondary w-100">
+                      <i class="fas fa-phone me-2"></i>
+                      Call Support
+                    </a>
+                  </div>
+                </div>
+              </div>
+
+              <!-- FAQ Quick Links -->
+              <div class="rpp-faq-card">
+                <div class="rpp-faq-header">
+                  <h6 class="rpp-faq-title">
+                    <i class="fas fa-question-circle me-2"></i>
+                    Common Questions
+                  </h6>
+                </div>
+                <div class="rpp-faq-content">
+                  <div class="rpp-faq-list">
+                    <a href="#" class="rpp-faq-item">
+                      <span>Can I return sale items?</span>
+                      <i class="fas fa-chevron-right"></i>
+                    </a>
+                    <a href="#" class="rpp-faq-item">
+                      <span>What if my item is damaged?</span>
+                      <i class="fas fa-chevron-right"></i>
+                    </a>
+                    <a href="#" class="rpp-faq-item">
+                      <span>How do I track my return?</span>
+                      <i class="fas fa-chevron-right"></i>
+                    </a>
+                    <a href="#" class="rpp-faq-item">
+                      <span>International returns policy</span>
+                      <i class="fas fa-chevron-right"></i>
+                    </a>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Call to Action Section -->
+  <div class="rpp-cta-section">
+    <div class="container">
+      <div class="row justify-content-center">
+        <div class="col-lg-8 text-center">
+          <div class="rpp-cta-content">
+            <h3 class="rpp-cta-title">Ready to Start Your Return?</h3>
+            <p class="rpp-cta-subtitle">
+              Our streamlined process makes returns simple and hassle-free
+            </p>
+            <div class="rpp-cta-actions">
+              <a href="{% url 'returns:hub' %}" class="btn rpp-btn-primary btn-lg me-3">
+                <i class="fas fa-undo-alt me-2"></i>
+                Start a Return
+              </a>
+              <a href="{% url 'orders:order_history' %}" class="btn rpp-btn-outline-light btn-lg">
+                <i class="fas fa-shopping-bag me-2"></i>
+                View My Orders
+              </a>
+            </div>
+          </div>
         </div>
       </div>
-
-      <div class="card mb-4">
-        <div class="card-body">
-          <h5 class="mb-2">Logistics Methods</h5>
-          <ul class="mb-0">
-            {% for key,label in policy.methods %}
-              <li>{{ label }}</li>
-            {% endfor %}
-          </ul>
-        </div>
-      </div>
-
-      <div class="card mb-4">
-        <div class="card-body">
-          <h5 class="mb-2">Non‑returnable Items</h5>
-          <ul class="mb-0">
-            {% for item in policy.non_returnable %}
-              <li>{{ item }}</li>
-            {% endfor %}
-          </ul>
-        </div>
-      </div>
-
-      <div class="card mb-4">
-        <div class="card-body">
-          <h5 class="mb-2">Refund Timelines</h5>
-          <ul class="mb-0">
-            <li>Original payment method: {{ policy.refund_timelines.original_payment }}</li>
-            <li>Store credit: {{ policy.refund_timelines.store_credit }}</li>
-            <li>Bank transfer: {{ policy.refund_timelines.bank_transfer }}</li>
-            <li>Cash: {{ policy.refund_timelines.cash }}</li>
-          </ul>
-        </div>
-      </div>
-
-      <div class="alert alert-info">
-        <h6 class="mb-1">How to start a return</h6>
-        <ol class="mb-0">
-          <li>Go to <em>My Orders</em> &rarr; select your delivered order.</li>
-          <li>Click <strong>Start a Return / Exchange</strong>.</li>
-          <li>Select reason(s), quantities, and provide photos if applicable.</li>
-          <li>Submit. You’ll receive updates by email and on your returns page.</li>
-        </ol>
-      </div>
-
-      <p class="text-muted mt-3">
-        Questions? Contact us at <a href="mailto:{{ policy.support_email }}">{{ policy.support_email }}</a>.
-      </p>
-
     </div>
   </div>
 </div>
+
+<!-- Returns Policy Page Scoped Styles -->
+<style>
+/* Scoped to prevent conflicts - all styles prefixed with .returns-policy-page */
+.returns-policy-page {
+  /* Hero Section */
+}
+
+.returns-policy-page .rpp-hero-section {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 5rem 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.returns-policy-page .rpp-hero-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="white" opacity="0.1"/><circle cx="75" cy="75" r="1" fill="white" opacity="0.1"/><circle cx="50" cy="10" r="0.5" fill="white" opacity="0.1"/><circle cx="20" cy="80" r="0.5" fill="white" opacity="0.1"/><circle cx="90" cy="30" r="0.5" fill="white" opacity="0.1"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+  pointer-events: none;
+}
+
+.returns-policy-page .rpp-hero-icon {
+  width: 120px;
+  height: 120px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3rem;
+  backdrop-filter: blur(10px);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+.returns-policy-page .rpp-hero-title {
+  font-size: 3rem;
+  font-weight: 700;
+  margin-bottom: 1.5rem;
+}
+
+.returns-policy-page .rpp-hero-subtitle {
+  font-size: 1.25rem;
+  opacity: 0.9;
+  max-width: 600px;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
+.returns-policy-page .rpp-hero-actions {
+  margin-top: 2rem;
+}
+
+/* Quick Facts */
+.returns-policy-page .rpp-quick-facts {
+  margin-top: -3rem;
+  position: relative;
+  z-index: 10;
+}
+
+.returns-policy-page .rpp-fact-card {
+  background: white;
+  border-radius: 16px;
+  padding: 2rem;
+  text-align: center;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+  border: 1px solid #f0f0f0;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  height: 100%;
+}
+
+.returns-policy-page .rpp-fact-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+}
+
+.returns-policy-page .rpp-fact-icon {
+  width: 60px;
+  height: 60px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.returns-policy-page .rpp-icon-success {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.returns-policy-page .rpp-icon-info {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+}
+
+.returns-policy-page .rpp-icon-warning {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+}
+
+.returns-policy-page .rpp-fact-number {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #2d3748;
+  line-height: 1;
+}
+
+.returns-policy-page .rpp-fact-label {
+  color: #718096;
+  font-weight: 500;
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
+}
+
+/* Policy Sections */
+.returns-policy-page .rpp-policy-section {
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  border: 1px solid #f0f0f0;
+  overflow: hidden;
+}
+
+.returns-policy-page .rpp-section-header {
+  padding: 2rem;
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  border-bottom: 1px solid #f0f0f0;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.returns-policy-page .rpp-section-icon {
+  width: 60px;
+  height: 60px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.returns-policy-page .rpp-section-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #2d3748;
+  margin-bottom: 0.5rem;
+}
+
+.returns-policy-page .rpp-section-subtitle {
+  color: #718096;
+  margin: 0;
+  font-size: 1rem;
+}
+
+.returns-policy-page .rpp-section-content {
+  padding: 2rem;
+}
+
+/* Highlight Box */
+.returns-policy-page .rpp-highlight-box {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 2px solid #0ea5e9;
+  border-radius: 16px;
+  padding: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+.returns-policy-page .rpp-highlight-main {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #0c4a6e;
+  margin-bottom: 0.5rem;
+}
+
+.returns-policy-page .rpp-highlight-sub {
+  color: #0369a1;
+  font-size: 0.875rem;
+}
+
+.returns-policy-page .rpp-highlight-icon {
+  width: 60px;
+  height: 60px;
+  background: #0ea5e9;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.returns-policy-page .rpp-info-note {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 1rem;
+  color: #4a5568;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+}
+
+/* Reasons Grid */
+.returns-policy-page .rpp-reasons-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+}
+
+.returns-policy-page .rpp-reason-item {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  transition: all 0.2s ease;
+}
+
+.returns-policy-page .rpp-reason-item:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  transform: translateY(-1px);
+}
+
+.returns-policy-page .rpp-reason-icon {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.returns-policy-page .rpp-reason-text {
+  font-weight: 500;
+  color: #2d3748;
+}
+
+/* Methods List */
+.returns-policy-page .rpp-methods-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.returns-policy-page .rpp-method-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1.5rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+.returns-policy-page .rpp-method-item:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.returns-policy-page .rpp-method-check {
+  width: 40px;
+  height: 40px;
+  background: #10b981;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.returns-policy-page .rpp-method-title {
+  font-weight: 600;
+  color: #2d3748;
+  margin-bottom: 0.25rem;
+}
+
+.returns-policy-page .rpp-method-desc {
+  color: #718096;
+  font-size: 0.875rem;
+}
+
+/* Warning Box */
+.returns-policy-page .rpp-warning-box {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border: 2px solid #f59e0b;
+  border-radius: 16px;
+  padding: 2rem;
+}
+
+.returns-policy-page .rpp-warning-header {
+  font-weight: 600;
+  color: #92400e;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+}
+
+.returns-policy-page .rpp-non-returnable-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.75rem;
+}
+
+.returns-policy-page .rpp-non-returnable-item {
+  color: #92400e;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+}
+
+/* Refund Timeline */
+.returns-policy-page .rpp-refund-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.returns-policy-page .rpp-timeline-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.5rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+.returns-policy-page .rpp-timeline-item:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.returns-policy-page .rpp-timeline-icon {
+  width: 50px;
+  height: 50px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.returns-policy-page .rpp-timeline-title {
+  font-weight: 600;
+  color: #2d3748;
+  margin-bottom: 0.25rem;
+}
+
+.returns-policy-page .rpp-timeline-time {
+  color: #718096;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+/* Sidebar */
+.returns-policy-page .rpp-sidebar {
+  position: sticky;
+  top: 2rem;
+}
+
+/* How to Card */
+.returns-policy-page .rpp-how-to-card {
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  border: 1px solid #f0f0f0;
+  overflow: hidden;
+  margin-bottom: 2rem;
+}
+
+.returns-policy-page .rpp-how-to-header {
+  padding: 2rem;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border-bottom: 1px solid #e0f2fe;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.returns-policy-page .rpp-how-to-icon {
+  width: 50px;
+  height: 50px;
+  background: #0ea5e9;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 1.25rem;
+}
+
+.returns-policy-page .rpp-how-to-title {
+  color: #0c4a6e;
+  font-weight: 700;
+  margin: 0;
+}
+
+.returns-policy-page .rpp-how-to-content {
+  padding: 2rem;
+}
+
+.returns-policy-page .rpp-step-list {
+  margin-bottom: 2rem;
+}
+
+.returns-policy-page .rpp-step-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.returns-policy-page .rpp-step-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.returns-policy-page .rpp-step-number {
+  width: 32px;
+  height: 32px;
+  background: #667eea;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.875rem;
+  flex-shrink: 0;
+}
+
+.returns-policy-page .rpp-step-title {
+  font-weight: 600;
+  color: #2d3748;
+  margin-bottom: 0.25rem;
+  font-size: 0.875rem;
+}
+
+.returns-policy-page .rpp-step-desc {
+  color: #718096;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+/* Support Card */
+.returns-policy-page .rpp-support-card {
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  border: 1px solid #f0f0f0;
+  overflow: hidden;
+  margin-bottom: 2rem;
+}
+
+.returns-policy-page .rpp-support-header {
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+  border-bottom: 1px solid #d1fae5;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.returns-policy-page .rpp-support-icon {
+  width: 40px;
+  height: 40px;
+  background: #10b981;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 1rem;
+}
+
+.returns-policy-page .rpp-support-title {
+  color: #065f46;
+  font-weight: 600;
+  margin: 0;
+}
+
+.returns-policy-page .rpp-support-content {
+  padding: 1.5rem;
+}
+
+.returns-policy-page .rpp-support-desc {
+  color: #718096;
+  font-size: 0.875rem;
+  margin-bottom: 1.5rem;
+  line-height: 1.5;
+}
+
+.returns-policy-page .rpp-support-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* FAQ Card */
+.returns-policy-page .rpp-faq-card {
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  border: 1px solid #f0f0f0;
+  overflow: hidden;
+}
+
+.returns-policy-page .rpp-faq-header {
+  padding: 1.5rem;
+  background: #f8fafc;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.returns-policy-page .rpp-faq-title {
+  color: #374151;
+  font-weight: 600;
+  margin: 0;
+  font-size: 1rem;
+}
+
+.returns-policy-page .rpp-faq-content {
+  padding: 0;
+}
+
+.returns-policy-page .rpp-faq-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.returns-policy-page .rpp-faq-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  color: #4a5568;
+  text-decoration: none;
+  border-bottom: 1px solid #f0f0f0;
+  transition: all 0.2s ease;
+  font-size: 0.875rem;
+}
+
+.returns-policy-page .rpp-faq-item:last-child {
+  border-bottom: none;
+}
+
+.returns-policy-page .rpp-faq-item:hover {
+  background: #f8fafc;
+  color: #667eea;
+}
+
+/* CTA Section */
+.returns-policy-page .rpp-cta-section {
+  background: linear-gradient(135deg, #1f2937 0%, #374151 100%);
+  color: white;
+  padding: 5rem 0;
+  position: relative;
+}
+
+.returns-policy-page .rpp-cta-content {
+  text-align: center;
+}
+
+.returns-policy-page .rpp-cta-title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+}
+
+.returns-policy-page .rpp-cta-subtitle {
+  font-size: 1.125rem;
+  opacity: 0.9;
+  margin-bottom: 2rem;
+  max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.returns-policy-page .rpp-cta-actions {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+/* Buttons */
+.returns-policy-page .btn.rpp-btn-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  color: white;
+  border-radius: 12px;
+  font-weight: 600;
+  padding: 0.875rem 2rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+.returns-policy-page .btn.rpp-btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+  color: white;
+}
+
+.returns-policy-page .btn.rpp-btn-outline-primary {
+  border: 2px solid #667eea;
+  color: #667eea;
+  background: transparent;
+  border-radius: 12px;
+  font-weight: 600;
+  padding: 0.875rem 2rem;
+  transition: all 0.3s ease;
+}
+
+.returns-policy-page .btn.rpp-btn-outline-primary:hover {
+  background: #667eea;
+  color: white;
+  transform: translateY(-2px);
+}
+
+.returns-policy-page .btn.rpp-btn-outline-light {
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  color: white;
+  background: transparent;
+  border-radius: 12px;
+  font-weight: 600;
+  padding: 0.875rem 2rem;
+  transition: all 0.3s ease;
+}
+
+.returns-policy-page .btn.rpp-btn-outline-light:hover {
+  background: white;
+  color: #374151;
+  transform: translateY(-2px);
+}
+
+.returns-policy-page .btn.rpp-btn-outline-secondary {
+  border: 2px solid #6c757d;
+  color: #6c757d;
+  background: transparent;
+  border-radius: 12px;
+  font-weight: 600;
+  padding: 0.875rem 2rem;
+  transition: all 0.3s ease;
+}
+
+.returns-policy-page .btn.rpp-btn-outline-secondary:hover {
+  background: #6c757d;
+  color: white;
+  transform: translateY(-2px);
+}
+
+/* Responsive Design */
+@media (max-width: 992px) {
+  .returns-policy-page .rpp-sidebar {
+    position: static;
+    margin-top: 3rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .returns-policy-page .rpp-hero-title {
+    font-size: 2rem;
+  }
+
+  .returns-policy-page .rpp-hero-subtitle {
+    font-size: 1rem;
+  }
+
+  .returns-policy-page .rpp-hero-actions {
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .returns-policy-page .rpp-hero-actions .btn {
+    width: 100%;
+    max-width: 300px;
+  }
+
+  .returns-policy-page .rpp-section-header {
+    flex-direction: column;
+    text-align: center;
+    gap: 1rem;
+  }
+
+  .returns-policy-page .rpp-highlight-box {
+    flex-direction: column;
+    text-align: center;
+    gap: 1rem;
+  }
+
+  .returns-policy-page .rpp-reasons-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .returns-policy-page .rpp-non-returnable-list {
+    grid-template-columns: 1fr;
+  }
+
+  .returns-policy-page .rpp-timeline-item {
+    flex-direction: column;
+    text-align: center;
+    gap: 1rem;
+  }
+
+  .returns-policy-page .rpp-cta-title {
+    font-size: 1.75rem;
+  }
+
+  .returns-policy-page .rpp-cta-actions {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .returns-policy-page .rpp-cta-actions .btn {
+    width: 100%;
+    max-width: 300px;
+  }
+}
+
+/* Print Styles */
+@media print {
+  .returns-policy-page .rpp-hero-section,
+  .returns-policy-page .rpp-hero-actions,
+  .returns-policy-page .rpp-how-to-action,
+  .returns-policy-page .rpp-support-actions,
+  .returns-policy-page .rpp-cta-section {
+    display: none !important;
+  }
+
+  .returns-policy-page .rpp-policy-section,
+  .returns-policy-page .rpp-how-to-card,
+  .returns-policy-page .rpp-support-card {
+    border: 1px solid #dee2e6 !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+}
+</style>
+
 {% endblock %}
