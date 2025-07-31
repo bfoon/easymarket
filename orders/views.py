@@ -1,7 +1,7 @@
 from django.shortcuts import redirect, render, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponseForbidden
 from django.views.decorators.csrf import csrf_exempt
 from django.db.models import Q, Sum
 from django.core.paginator import Paginator
@@ -14,7 +14,7 @@ from .models import Order, OrderItem, PromoCode, ChatMessage
 from marketplace.models import Cart, CartItem, Product
 from utils.qr import generate_invoice_qr_code
 from django.core.exceptions import ValidationError
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from django.views.decorators.csrf import csrf_protect
 from django.db import transaction
 from django.views.decorators.http import require_POST
@@ -773,47 +773,142 @@ def order_invoice(request, order_id):
 
     return render(request, 'orders/order_invoice.html', context)
 
+def q2(x):
+    """Quantize to 2dp Decimal safely."""
+    if x is None:
+        x = Decimal('0')
+    if not isinstance(x, Decimal):
+        x = Decimal(str(x))
+    return x.quantize(Decimal('0.01'))
+
 @login_required
 def store_order_invoice(request, store_id, order_id):
-    """Generate invoice for a store owner – only their items."""
+    """Generate invoice for a store owner – only their items, with clear discount breakdown."""
     store = get_object_or_404(Store, id=store_id, owner=request.user)
     order = get_object_or_404(Order, id=order_id)
 
-    # Filter only items sold by this store
-    store_order_items = order.items.filter(product__seller=store.owner).select_related('product')
-
-    if not store_order_items.exists():
+    # Items for THIS store only
+    store_items = (
+        order.items
+        .filter(product__seller=store.owner)
+        .select_related('product')
+    )
+    if not store_items.exists():
         return render(request, 'orders/access_denied.html', {
             'message': "You do not have any products in this order."
         })
 
-    # Calculate total for just the store's items
-    subtotal = sum(item.get_total_price() for item in store_order_items)
-    tax_amount = (order.tax_rate / 100) * subtotal
-    discount = order.discount_amount or 0
-    shipping = order.shipping_cost or 0  # Optional: split proportionally if multi-store shipping
-    total = subtotal + tax_amount + shipping - discount
+    # All order items (needed to apportion order-level discount/shipping fairly)
+    all_items = order.items.select_related('product')
 
+    # --- Helpers to read prices/discounts whether or not helpers exist on the model ---
+    def unit_base_price(item: "OrderItem") -> Decimal:
+        # Prefer helper if available (from previous step)
+        if hasattr(item, 'base_unit_price'):
+            return q2(item.base_unit_price)
+        base = item.price_at_time if item.price_at_time is not None else item.product.price
+        return q2(base)
+
+    def unit_discount(item: "OrderItem") -> Decimal:
+        # Prefer helper if available (from previous step)
+        if hasattr(item, 'get_unit_discount_amount'):
+            return q2(item.get_unit_discount_amount())
+        # No per-item discount fields? assume 0
+        return Decimal('0.00')
+
+    def line_total_discounted(item: "OrderItem") -> Decimal:
+        # Prefer helper if available (from previous step)
+        if hasattr(item, 'get_total_price'):
+            return q2(item.get_total_price())
+        # Else compute: (base - per_unit_discount) * qty
+        return q2((unit_base_price(item) - unit_discount(item)) * item.quantity)
+
+    # --- Build store-level and order-level sums ---
+    base_subtotal_store = Decimal('0.00')        # BEFORE discounts
+    item_discount_total_store = Decimal('0.00')  # per-unit discount * qty
+    discounted_subtotal_store = Decimal('0.00')  # AFTER item discounts
+
+    for it in store_items:
+        up = unit_base_price(it)
+        ud = unit_discount(it)
+        qty = it.quantity
+
+        base_subtotal_store += (up * qty)
+        item_discount_total_store += (ud * qty)
+        discounted_subtotal_store += line_total_discounted(it)
+
+    base_subtotal_store = q2(base_subtotal_store)
+    item_discount_total_store = q2(item_discount_total_store)
+    discounted_subtotal_store = q2(discounted_subtotal_store)
+
+    # Totals for ALL items (to apportion order-level discount/shipping)
+    discounted_subtotal_all = Decimal('0.00')
+    for it in all_items:
+        discounted_subtotal_all += line_total_discounted(it)
+    discounted_subtotal_all = q2(discounted_subtotal_all)
+
+    # --- Order-level discount & shipping apportionment (proportional by discounted value) ---
+    order_level_discount = q2(getattr(order, 'discount_amount', 0) or 0)
+    order_shipping_cost = q2(getattr(order, 'shipping_cost', 0) or 0)
+
+    # Avoid division by zero
+    if discounted_subtotal_all > 0:
+        store_share_ratio = (discounted_subtotal_store / discounted_subtotal_all)
+    else:
+        store_share_ratio = Decimal('0.00')
+
+    # Share of order-level discount for this store:
+    store_order_discount_share = q2(order_level_discount * store_share_ratio)
+
+    # Share (optional) of shipping; set to 0 if you don't want to split
+    # To keep your previous behavior (full shipping on store invoice), comment the next line
+    store_shipping_share = q2(order_shipping_cost * store_share_ratio)
+    # Or force 0 to avoid splitting:
+    # store_shipping_share = Decimal('0.00')
+
+    # --- Tax ---
+    tax_rate = q2(getattr(order, 'tax_rate', 0) or 0)  # e.g., 15 means 15%
+    # Taxable base: discounted subtotal AFTER store's share of order-level discount
+    taxable_base = discounted_subtotal_store - store_order_discount_share
+    if taxable_base < 0:
+        taxable_base = Decimal('0.00')
+
+    tax_amount = q2(taxable_base * (tax_rate / Decimal('100')))
+
+    # --- Final totals to show on invoice (for THIS store) ---
+    # 'subtotal'   -> original sum before discounts (for clarity)
+    # 'discount'   -> item discounts + store share of order-level discount
+    # 'shipping'   -> store share (or 0 / full, per your policy)
+    # 'total'      -> (taxable_base + tax + shipping)
+    subtotal = base_subtotal_store
+    discount = q2(item_discount_total_store + store_order_discount_share)
+    shipping = store_shipping_share
+    total = q2(taxable_base + tax_amount + shipping)
+
+    # QR, company header (keep your own helpers)
     qr_code = generate_invoice_qr_code(order)
 
     context = {
         'store': store,
         'order': order,
-        'order_items': store_order_items,
+        'order_items': store_items,
+
         'invoice_qr_code': qr_code,
         'company_name': store.name or 'EasyMarket',
+        # You may want a more robust address builder; this mirrors your original line
         'company_address': store.address_line_1 and store.address_line_2 or store.address_line_1,
         'company_email': store.email,
         'company_phone': store.phone,
-        'subtotal': subtotal,
-        'tax_amount': tax_amount,
-        'discount': discount,
-        'shipping': shipping,
-        'total': total,
+
+        # Numbers used by the template
+        'subtotal': subtotal,          # before discounts
+        'discount': discount,          # items + store share of order-level discount
+        'shipping': shipping,          # allocated shipping
+        'tax_amount': tax_amount,      # tax on net
+        'total': total,                # grand total for this store
     }
 
     return render(request, 'stores/store_order_invoice.html', context)
-
 @login_required
 def update_order_status(request, order_id):
     """Update order status (for admin/seller use)"""
@@ -840,6 +935,48 @@ def update_order_status(request, order_id):
             messages.error(request, "Invalid status selected.")
 
     return redirect('orders:order_detail', order_id=order.id)
+
+
+@login_required
+@require_POST
+def update_item_discount(request, item_id):
+    item = get_object_or_404(OrderItem, pk=item_id)
+
+    # Only the seller who owns this store can modify
+    if getattr(item.product.store, "owner_id", None) != request.user.id:
+        return HttpResponseForbidden("Not allowed.")
+
+    # Prevent editing after shipment
+    if item.order.status in ("shipped", "delivered"):
+        return JsonResponse({"success": False, "message": "Cannot change discount after shipping."}, status=400)
+
+    d_type = request.POST.get("discount_type", "none")
+    d_value_raw = request.POST.get("discount_value", "0")
+
+    if d_type not in ("none", "percent", "amount"):
+        return JsonResponse({"success": False, "message": "Invalid discount type."}, status=400)
+
+    try:
+        d_value = Decimal(d_value_raw or "0")
+    except InvalidOperation:
+        return JsonResponse({"success": False, "message": "Invalid discount value."}, status=400)
+
+    if d_type == "percent":
+        if d_value < 0 or d_value > 100:
+            return JsonResponse({"success": False, "message": "Percent must be between 0 and 100."}, status=400)
+    elif d_type == "amount":
+        if d_value < 0:
+            return JsonResponse({"success": False, "message": "Amount cannot be negative."}, status=400)
+
+    item.discount_type = d_type
+    item.discount_value = d_value
+    item.save()
+
+    return JsonResponse({
+        "success": True,
+        "discounted_unit_price": f"{item.discounted_unit_price:.2f}",
+        "line_total": f"{item.get_total_price():.2f}",
+    })
 
 
 @login_required

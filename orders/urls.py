@@ -14,6 +14,11 @@ urlpatterns = [
     path('chat/fetch/<int:order_id>/', views.fetch_chat_messages, name='fetch_chat_messages'),
     path('history/', views.order_history, name='order_history'),
     path('complete/<int:order_id>/', views.complete_order, name='complete_order'),
+    path(
+        "order/item/<int:item_id>/update-discount/",
+        views.update_item_discount,
+        name="update_item_discount",
+    ),
 
     # Payment and processing
     # path('process-payment/<int:order_id>/', views.process_payment, name='process_payment'),

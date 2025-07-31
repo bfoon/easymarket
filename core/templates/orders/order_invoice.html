@@ -80,42 +80,76 @@
                                     <th>Item</th>
                                     <th class="text-center">Qty</th>
                                     <th class="text-end">Unit Price</th>
-                                    <th class="text-end">Total</th>
+                                    <th class="text-end">Discount</th>
+                                    <th class="text-end">Line Total</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for item in order.items.all %}
-                            <tr>
-                                <td>
-                                    <div class="d-flex align-items-center">
-                                        {% if item.product.image %}
-                                            <img src="{{ item.product.image.url }}"
-                                                 alt="{{ item.product.name }}"
-                                                 class="rounded me-3"
-                                                 style="width: 40px; height: 40px; object-fit: cover;">
-                                        {% endif %}
-                                        <div>
-                                            <h6 class="mb-0">{{ item.product.name }}</h6>
-                                            {% if item.product.description %}
-                                                <small class="text-muted">{{ item.product.description|truncatewords:10 }}</small>
+                                {% with base_unit=item.base_unit_price|default_if_none:item.price_at_time|default_if_none:item.product.price per_unit_discount=item.get_unit_discount_amount|default_if_none:0 %}
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            {% if item.product.image %}
+                                                <img src="{{ item.product.image.url }}"
+                                                     alt="{{ item.product.name }}"
+                                                     class="rounded me-3"
+                                                     style="width: 40px; height: 40px; object-fit: cover;">
                                             {% endif %}
+                                            <div>
+                                                <h6 class="mb-0">{{ item.product.name }}</h6>
+                                                {% if item.product.description %}
+                                                    <small class="text-muted">{{ item.product.description|truncatewords:10 }}</small>
+                                                {% endif %}
 
-                                            {% if item.selected_features %}
-                                                <ul class="list-unstyled mt-1 mb-0 small text-muted ps-3" style="font-size: 0.8rem;">
-                                                    {% for key, value in item.selected_features.items %}
-                                                        <li><strong>{{ key|title }}:</strong> {{ value }}</li>
-                                                    {% endfor %}
-                                                </ul>
-                                            {% endif %}
+                                                {% if item.selected_features %}
+                                                    <ul class="list-unstyled mt-1 mb-0 small text-muted ps-3" style="font-size: 0.8rem;">
+                                                        {% for key, value in item.selected_features.items %}
+                                                            <li><strong>{{ key|title }}:</strong> {{ value }}</li>
+                                                        {% endfor %}
+                                                    </ul>
+                                                {% endif %}
+                                            </div>
                                         </div>
-                                    </div>
-                                </td>
-                                <td class="text-center">{{ item.quantity }}</td>
-                                <td class="text-end">D{{ item.price_at_time|floatformat:2 }}</td>
-                                <td class="text-end"><strong>D{{ item.get_total_price|floatformat:2 }}</strong></td>
-                            </tr>
-                            {% endfor %}
+                                    </td>
 
+                                    <td class="text-center">{{ item.quantity }}</td>
+
+                                    <!-- Unit Price (strike-through original when discounted) -->
+                                    <td class="text-end">
+                                        {% if per_unit_discount and per_unit_discount|floatformat:2 != "0.00" %}
+                                            <span class="text-muted text-decoration-line-through">D{{ base_unit|floatformat:2 }}</span><br>
+                                            <span class="fw-semibold">
+                                                D{% if item.discounted_unit_price %}
+                                                    {{ item.discounted_unit_price|floatformat:2 }}
+                                                  {% else %}
+                                                    {{ base_unit|floatformat:2 }}
+                                                  {% endif %}
+                                            </span>
+                                        {% else %}
+                                            D{{ base_unit|floatformat:2 }}
+                                        {% endif %}
+                                    </td>
+
+                                    <!-- Discount column (per unit) -->
+                                    <td class="text-end">
+                                        {% if per_unit_discount and per_unit_discount|floatformat:2 != "0.00" %}
+                                            {% if item.discount_type == 'percent' %}
+                                                <span class="text-success">-{{ item.discount_value|floatformat:0 }}% /unit</span><br>
+                                                <small class="text-muted">(-D{{ per_unit_discount|floatformat:2 }})</small>
+                                            {% else %}
+                                                <span class="text-success">-D{{ per_unit_discount|floatformat:2 }} /unit</span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="text-muted">—</span>
+                                        {% endif %}
+                                    </td>
+
+                                    <!-- Line total (already discounted by model helper) -->
+                                    <td class="text-end"><strong>D{{ item.get_total_price|floatformat:2 }}</strong></td>
+                                </tr>
+                                {% endwith %}
+                                {% endfor %}
                             </tbody>
                         </table>
                     </div>
@@ -144,28 +178,44 @@
                                 <div class="card-body">
                                     <table class="table table-borderless mb-0">
                                         <tr>
-                                            <td>Subtotal:</td>
-                                            <td class="text-end">D{{ order.get_subtotal|floatformat:2 }}</td>
+                                            <td>Subtotal (before discounts):</td>
+                                            <td class="text-end">
+                                                D{{ subtotal|default:order.get_subtotal|floatformat:2 }}
+                                            </td>
                                         </tr>
-                                        {% if order.shipping_cost and order.shipping_cost > 0 %}
-                                            <tr>
-                                                <td>Shipping:</td>
-                                                <td class="text-end">D{{ order.shipping_cost|floatformat:2 }}</td>
-                                            </tr>
-                                        {% endif %}
-                                        {% if order.discount_amount and order.discount_amount > 0 %}
-                                            <tr class="text-success">
-                                                <td>Discount:</td>
-                                                <td class="text-end">-D{{ order.discount_amount|floatformat:2 }}</td>
-                                            </tr>
-                                        {% endif %}
+
+                                        {# Item + order-level discounts (prefer 'discount' from view, else order.discount_amount) #}
+                                        {% with discount_total=discount|default:order.discount_amount %}
+                                          {% if discount_total and discount_total|floatformat:2 != "0.00" %}
+                                          <tr class="text-success">
+                                              <td>Discounts:</td>
+                                              <td class="text-end">-D{{ discount_total|floatformat:2 }}</td>
+                                          </tr>
+                                          {% endif %}
+                                        {% endwith %}
+
+                                        {% with ship=shipping|default:order.shipping_cost %}
+                                          {% if ship and ship|floatformat:2 != "0.00" %}
+                                          <tr>
+                                              <td>Shipping:</td>
+                                              <td class="text-end">D{{ ship|floatformat:2 }}</td>
+                                          </tr>
+                                          {% endif %}
+                                        {% endwith %}
+
                                         <tr>
-                                            <td>Tax ({{ order.tax_rate|floatformat:1 }}%):</td>
-                                            <td class="text-end">D{{ order.get_tax_amount|floatformat:2 }}</td>
+                                            <td>Tax ({{ order.tax_rate|default:0|floatformat:1 }}%):</td>
+                                            <td class="text-end">
+                                                D{{ tax_amount|default:order.get_tax_amount|floatformat:2 }}
+                                            </td>
                                         </tr>
                                         <tr class="table-active">
                                             <td><strong>Total:</strong></td>
-                                            <td class="text-end"><strong class="text-primary fs-5">D{{ order.get_total|floatformat:2 }}</strong></td>
+                                            <td class="text-end">
+                                                <strong class="text-primary fs-5">
+                                                    D{{ total|default:order.get_total|floatformat:2 }}
+                                                </strong>
+                                            </td>
                                         </tr>
                                     </table>
                                 </div>
@@ -181,7 +231,7 @@
                                 <p class="mb-0">{{ order.order_notes }}</p>
                             </div>
                         {% endif %}
-                        
+
                         <div class="text-muted small">
                             <p class="mb-1"><strong>Terms & Conditions:</strong></p>
                             <p class="mb-1">• All sales are final unless otherwise specified</p>

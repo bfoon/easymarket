@@ -4,6 +4,8 @@ from django.conf import settings
 from django.utils import timezone
 from decimal import Decimal
 import uuid
+from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
+from django.core.exceptions import ValidationError
 
 class PromoCode(models.Model):
     code = models.CharField(max_length=50, unique=True)
@@ -190,32 +192,85 @@ class Order(models.Model):
 
 
 class OrderItem(models.Model):
-    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')
+    order = models.ForeignKey('orders.Order', on_delete=models.CASCADE, related_name='items')
     product = models.ForeignKey('marketplace.Product', related_name='order_items', on_delete=models.CASCADE)
     quantity = models.PositiveIntegerField()
     selected_features = models.JSONField(blank=True, null=True)
     price_at_time = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
 
-    shipped_to_warehouse = models.BooleanField(default=False)  # New field
+    # NEW: per-item discount
+    DISCOUNT_NONE = 'none'
+    DISCOUNT_PERCENT = 'percent'
+    DISCOUNT_AMOUNT = 'amount'
+    DISCOUNT_CHOICES = [
+        (DISCOUNT_NONE, 'None'),
+        (DISCOUNT_PERCENT, 'Percent'),
+        (DISCOUNT_AMOUNT, 'Amount'),
+    ]
+    discount_type = models.CharField(max_length=10, choices=DISCOUNT_CHOICES, default=DISCOUNT_NONE)
+    discount_value = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
+
+    shipped_to_warehouse = models.BooleanField(default=False)
     shipped_at = models.DateTimeField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ['order', 'product']
+        unique_together = ['order', 'product']  # NOTE: If you ever need same product twice (different features/discounts),
+                                                # remove this, or include features in uniqueness.
 
     def __str__(self):
         return f"{self.product.name} x {self.quantity}"
 
-    def get_total_price(self):
-        price = self.price_at_time if self.price_at_time else self.product.price
-        return price * self.quantity
+    # ---- Pricing helpers ----
+    @property
+    def base_unit_price(self) -> Decimal:
+        # Always work with a Decimal
+        p = self.price_at_time if self.price_at_time is not None else self.product.price
+        return (p if isinstance(p, Decimal) else Decimal(str(p))).quantize(Decimal('0.01'), ROUND_HALF_UP)
+
+    def get_unit_discount_amount(self) -> Decimal:
+        if self.discount_type == self.DISCOUNT_PERCENT:
+            pct = max(Decimal('0'), min(Decimal('100'), self.discount_value or Decimal('0')))
+            return (self.base_unit_price * pct / Decimal('100')).quantize(Decimal('0.01'), ROUND_HALF_UP)
+        elif self.discount_type == self.DISCOUNT_AMOUNT:
+            amt = max(Decimal('0.00'), self.discount_value or Decimal('0.00'))
+            # Never allow discount > base price
+            return min(amt, self.base_unit_price).quantize(Decimal('0.01'), ROUND_HALF_UP)
+        return Decimal('0.00')
+
+    @property
+    def discounted_unit_price(self) -> Decimal:
+        return (self.base_unit_price - self.get_unit_discount_amount()).quantize(Decimal('0.01'), ROUND_HALF_UP)
+
+    def get_total_price(self) -> Decimal:
+        return (self.discounted_unit_price * self.quantity).quantize(Decimal('0.01'), ROUND_HALF_UP)
+
+    # ---- Validation & defaults ----
+    def clean(self):
+        # Basic validation for discount values
+        if self.discount_type == self.DISCOUNT_PERCENT:
+            if self.discount_value is None:
+                raise ValidationError({'discount_value': 'Percent discount is required.'})
+            if self.discount_value < 0 or self.discount_value > 100:
+                raise ValidationError({'discount_value': 'Percent must be between 0 and 100.'})
+        elif self.discount_type == self.DISCOUNT_AMOUNT:
+            if self.discount_value is None:
+                raise ValidationError({'discount_value': 'Amount discount is required.'})
+            if self.discount_value < 0:
+                raise ValidationError({'discount_value': 'Amount cannot be negative.'})
+
+        # Ensure discounted price not below zero
+        if self.discounted_unit_price < 0:
+            raise ValidationError('Discounted unit price cannot be negative.')
 
     def save(self, *args, **kwargs):
-        if not self.price_at_time:
+        # lock in snapshot price if missing
+        if self.price_at_time is None:
             self.price_at_time = self.product.price
+        # run validations (optional but recommended)
+        self.full_clean()
         super().save(*args, **kwargs)
-
 
 class ShippingAddress(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='shipping_addresses')

@@ -39,6 +39,16 @@ class OrderAdmin(admin.ModelAdmin):
     inlines = [OrderItemInline]
     readonly_fields = ('created_at', 'updated_at', 'shipped_date', 'delivered_date', 'payment_date')
 
+# orders/admin.py
+@admin.register(OrderItem)
+class OrderItemAdmin(admin.ModelAdmin):
+    list_display = ("order", "product", "quantity", "base_unit_price", "discount_type", "discount_value", "discounted_unit_price")
+    list_filter = ("discount_type",)
+    fields = ("order", "product", "quantity", "selected_features", "price_at_time",
+              "discount_type", "discount_value",
+              "shipped_to_warehouse", "shipped_at")
+    readonly_fields = ()
+
 
 @admin.register(OrderStatusHistory)
 class OrderStatusHistoryAdmin(admin.ModelAdmin):

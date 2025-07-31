@@ -101,55 +101,83 @@
               </div>
             </div>
 
-            <!-- Order Items -->
-            <div class="table-responsive mb-4">
-              <table class="table table-bordered align-middle">
-                <thead class="table-light">
-                  <tr>
-                    <th>Item</th>
-                    <th class="text-center">Qty</th>
-                    <th class="text-end">Unit Price</th>
-                    <th class="text-end">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for item in order_items %}
+          <!-- Order Items -->
+          <div class="table-responsive mb-4">
+            <table class="table table-bordered align-middle">
+              <thead class="table-light">
                 <tr>
-                    <td>
-                        <div class="d-flex align-items-start">
-                            {% if item.product.image %}
-                                <img src="{{ item.product.image.url }}" alt="{{ item.product.name }}" class="me-3 rounded" style="width: 40px; height: 40px; object-fit: cover;">
-                            {% endif %}
-                            <div>
-                                <strong>{{ item.product.name }}</strong><br>
-
-                                {# Badge showing the store name (you already have the store) #}
-                                <span class="badge text-white px-2 py-1 small" style="background: linear-gradient(135deg, #007bff, #6610f2);">
-                                    From: {{ store.name }}
-                                </span>
-
-                                {% if item.product.description %}
-                                    <div class="text-muted small mt-1">{{ item.product.description|truncatewords:10 }}</div>
-                                {% endif %}
-
-                                {% if item.selected_features %}
-                                    <ul class="list-unstyled small text-muted mt-1 mb-0 ps-3">
-                                        {% for key, value in item.selected_features.items %}
-                                            <li><strong>{{ key|title }}:</strong> {{ value }}</li>
-                                        {% endfor %}
-                                    </ul>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </td>
-                    <td class="text-center">{{ item.quantity }}</td>
-                    <td class="text-end">D{{ item.price_at_time|floatformat:2 }}</td>
-                    <td class="text-end"><strong>D{{ item.get_total_price|floatformat:2 }}</strong></td>
+                  <th>Item</th>
+                  <th class="text-center">Qty</th>
+                  <th class="text-end">Unit Price</th>
+                  <th class="text-end">Discount</th>
+                  <th class="text-end">Line Total</th>
                 </tr>
+              </thead>
+              <tbody>
+                {% for item in order_items %}
+                {% with base_unit=item.base_unit_price|default_if_none:item.price_at_time|default_if_none:item.product.price per_unit_discount=item.get_unit_discount_amount|default_if_none:0 %}
+                <tr>
+                  <td>
+                    <div class="d-flex align-items-start">
+                      {% if item.product.image %}
+                        <img src="{{ item.product.image.url }}" alt="{{ item.product.name }}" class="me-3 rounded" style="width: 40px; height: 40px; object-fit: cover;">
+                      {% endif %}
+                      <div>
+                        <strong>{{ item.product.name }}</strong><br>
+                        <span class="badge text-white px-2 py-1 small" style="background: linear-gradient(135deg, #007bff, #6610f2);">
+                          From: {{ store.name }}
+                        </span>
+                        {% if item.selected_features %}
+                          <ul class="list-unstyled small text-muted mt-1 mb-0 ps-3">
+                            {% for key, value in item.selected_features.items %}
+                              <li><strong>{{ key|title }}:</strong> {{ value }}</li>
+                            {% endfor %}
+                          </ul>
+                        {% endif %}
+                      </div>
+                    </div>
+                  </td>
+
+                  <td class="text-center">{{ item.quantity }}</td>
+
+                  {# Unit price: strike-through original if a discount applies #}
+                  <td class="text-end">
+                    {% if per_unit_discount and per_unit_discount|floatformat:2 != "0.00" %}
+                      <span class="text-muted text-decoration-line-through">D{{ base_unit|floatformat:2 }}</span><br>
+                      <span class="fw-semibold">
+                        D{% if item.discounted_unit_price %}
+                           {{ item.discounted_unit_price|floatformat:2 }}
+                         {% else %}
+                           {{ base_unit|floatformat:2 }}
+                         {% endif %}
+                      </span>
+                    {% else %}
+                      D{{ base_unit|floatformat:2 }}
+                    {% endif %}
+                  </td>
+
+                  {# Discount column: show % or amount per unit #}
+                  <td class="text-end">
+                    {% if per_unit_discount and per_unit_discount|floatformat:2 != "0.00" %}
+                      {% if item.discount_type == 'percent' %}
+                        <span class="text-success">-{{ item.discount_value|floatformat:0 }}% /unit</span><br>
+                        <small class="text-muted">(-D{{ per_unit_discount|floatformat:2 }})</small>
+                      {% else %}
+                        <span class="text-success">-D{{ per_unit_discount|floatformat:2 }} /unit</span>
+                      {% endif %}
+                    {% else %}
+                      <span class="text-muted">—</span>
+                    {% endif %}
+                  </td>
+
+                  {# Line total uses discounted price from model helper #}
+                  <td class="text-end"><strong>D{{ item.get_total_price|floatformat:2 }}</strong></td>
+                </tr>
+                {% endwith %}
                 {% endfor %}
-                </tbody>
-              </table>
-            </div>
+              </tbody>
+            </table>
+          </div>
 
            <!-- Totals & Payment Summary -->
           <div class="row g-4 align-items-start mt-4">

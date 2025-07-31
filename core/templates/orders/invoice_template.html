@@ -28,7 +28,6 @@
       font-size: 0.75rem;
       border-radius: 0.25rem;
     }
-
     .badge-pending { background: #ffc107; }
     .badge-processing { background: #17a2b8; color: #fff; }
     .badge-shipped { background: #28a745; color: #fff; }
@@ -40,30 +39,20 @@
       border-collapse: collapse;
       margin-top: 2rem;
     }
-
     th, td {
       padding: 0.75rem;
       border-bottom: 1px solid #ddd;
+      vertical-align: top;
     }
-
     th {
       background: #f3f3f3;
       font-weight: 600;
       text-align: left;
     }
 
-    .invoice-section {
-      margin-bottom: 2rem;
-    }
-
-    .summary-table td {
-      padding: 0.4rem 0;
-    }
-
-    .total-row {
-      font-weight: bold;
-      font-size: 1.1rem;
-    }
+    .invoice-section { margin-bottom: 2rem; }
+    .summary-table td { padding: 0.4rem 0; }
+    .total-row { font-weight: bold; font-size: 1.1rem; }
 
     .footer-note {
       font-size: 0.85rem;
@@ -79,11 +68,7 @@
       border-radius: 4px;
     }
 
-    .qr-code-section {
-      text-align: right;
-      margin-top: 1rem;
-    }
-
+    .qr-code-section { text-align: right; margin-top: 1rem; }
     .qr-code-section img {
       border: 1px solid #ddd;
       padding: 5px;
@@ -100,27 +85,27 @@
     <h1 class="text-end">INVOICE</h1>
     <div class="text-end">
       <p class="text-muted mb-1">Invoice #INV-{{ order.id|stringformat:"05d" }}</p>
-
-      <!-- QR Code Section with debugging -->
       <div id="qrcode" style="float: right;"></div>
-
     </div>
     <p class="text-end text-muted">Order #{{ order.id }}</p>
   </div>
 
-  <!-- Rest of your template remains the same -->
   <!-- Buyer Info -->
   <div class="invoice-section">
     <div style="float: left; width: 48%;">
       <h5>Bill To:</h5>
-      <p><strong>{{ order.buyer.get_full_name|default:order.buyer.username }}</strong><br>
-      {{ order.buyer.email }}</p>
+      <p>
+        <strong>{{ order.buyer.get_full_name|default:order.buyer.username }}</strong><br>
+        {{ order.buyer.email }}
+      </p>
       {% if order.shipping_address %}
-      <p>{{ order.shipping_address.full_name }}<br>
-      {{ order.shipping_address.street }}<br>
-      {{ order.shipping_address.city }}, {{ order.shipping_address.state }} {{ order.shipping_address.zip_code }}<br>
-      {{ order.shipping_address.country }}<br>
-      {% if order.shipping_address.phone_number %}Phone: {{ order.shipping_address.phone_number }}{% endif %}</p>
+      <p>
+        {{ order.shipping_address.full_name }}<br>
+        {{ order.shipping_address.street }}<br>
+        {{ order.shipping_address.city }}, {{ order.shipping_address.state }} {{ order.shipping_address.zip_code }}<br>
+        {{ order.shipping_address.country }}<br>
+        {% if order.shipping_address.phone_number %}Phone: {{ order.shipping_address.phone_number }}{% endif %}
+      </p>
       {% endif %}
     </div>
 
@@ -129,8 +114,10 @@
         <tr><td><strong>Invoice Date:</strong></td><td>{{ order.shipped_date|date:"F d, Y" }}</td></tr>
         <tr><td><strong>Order Date:</strong></td><td>{{ order.created_at|date:"F d, Y" }}</td></tr>
         <tr><td><strong>Payment:</strong></td><td>{{ order.get_payment_method_display|default:"Not specified" }}</td></tr>
-        <tr><td><strong>Status:</strong></td>
-            <td><span class="badge badge-{{ order.status|lower }}">{{ order.get_status_display }}</span></td></tr>
+        <tr>
+          <td><strong>Status:</strong></td>
+          <td><span class="badge badge-{{ order.status|lower }}">{{ order.get_status_display }}</span></td>
+        </tr>
         {% if order.expected_delivery_date %}
         <tr><td><strong>Expected Delivery:</strong></td><td>{{ order.expected_delivery_date|date:"F d, Y" }}</td></tr>
         {% endif %}
@@ -146,11 +133,13 @@
         <th>Item</th>
         <th class="text-center">Qty</th>
         <th class="text-end">Unit Price</th>
-        <th class="text-end">Total</th>
+        <th class="text-end">Discount</th>
+        <th class="text-end">Line Total</th>
       </tr>
     </thead>
     <tbody>
       {% for item in order.items.all %}
+      {% with base_unit=item.base_unit_price|default_if_none:item.price_at_time|default_if_none:item.product.price per_unit_discount=item.get_unit_discount_amount|default_if_none:0 %}
       <tr>
         <td>
           {% if item.product.image %}
@@ -161,17 +150,50 @@
             <small>{{ item.product.description|truncatewords:10 }}</small><br>
           {% endif %}
           {% if item.selected_features %}
-            <ul style="padding-left: 1rem;">
+            <ul style="padding-left: 1rem; margin: 0.25rem 0 0;">
               {% for key, value in item.selected_features.items %}
                 <li><small>{{ key|title }}: {{ value }}</small></li>
               {% endfor %}
             </ul>
           {% endif %}
         </td>
+
         <td class="text-center">{{ item.quantity }}</td>
-        <td class="text-end">D{{ item.product.price|floatformat:2 }}</td>
-        <td class="text-end">D{{ item.get_total_price|floatformat:2 }}</td>
+
+        <!-- Unit price: strike-through original when discounted -->
+        <td class="text-end">
+          {% if per_unit_discount and per_unit_discount|floatformat:2 != "0.00" %}
+            <span class="text-muted" style="text-decoration: line-through;">D{{ base_unit|floatformat:2 }}</span><br>
+            <span class="text-primary" style="font-weight: 600;">
+              D{% if item.discounted_unit_price %}
+                 {{ item.discounted_unit_price|floatformat:2 }}
+               {% else %}
+                 {{ base_unit|floatformat:2 }}
+               {% endif %}
+            </span>
+          {% else %}
+            D{{ base_unit|floatformat:2 }}
+          {% endif %}
+        </td>
+
+        <!-- Discount column (per unit) -->
+        <td class="text-end">
+          {% if per_unit_discount and per_unit_discount|floatformat:2 != "0.00" %}
+            {% if item.discount_type == 'percent' %}
+              <span class="text-primary">-{{ item.discount_value|floatformat:0 }}% /unit</span><br>
+              <small class="text-muted">(-D{{ per_unit_discount|floatformat:2 }})</small>
+            {% else %}
+              <span class="text-primary">-D{{ per_unit_discount|floatformat:2 }} /unit</span>
+            {% endif %}
+          {% else %}
+            <span class="text-muted">—</span>
+          {% endif %}
+        </td>
+
+        <!-- Line total uses discounted price from model helper -->
+        <td class="text-end"><strong>D{{ item.get_total_price|floatformat:2 }}</strong></td>
       </tr>
+      {% endwith %}
       {% endfor %}
     </tbody>
   </table>
@@ -179,15 +201,44 @@
   <!-- Totals -->
   <table style="margin-top: 1.5rem; width: 40%; float: right;">
     <tbody>
-      <tr><td>Subtotal:</td><td class="text-end">D{{ order.get_subtotal|floatformat:2 }}</td></tr>
-      {% if order.shipping_cost and order.shipping_cost > 0 %}
-      <tr><td>Shipping:</td><td class="text-end">D{{ order.shipping_cost|floatformat:2 }}</td></tr>
-      {% endif %}
-      {% if order.discount_amount and order.discount_amount > 0 %}
-      <tr><td>Discount:</td><td class="text-end">-D{{ order.discount_amount|floatformat:2 }}</td></tr>
-      {% endif %}
-      <tr><td>Tax ({{ order.tax_rate|floatformat:1 }}%):</td><td class="text-end">D{{ order.get_tax_amount|floatformat:2 }}</td></tr>
-      <tr class="total-row"><td>Total:</td><td class="text-end">D{{ order.get_total|floatformat:2 }}</td></tr>
+      <tr>
+        <td>Subtotal (before discounts):</td>
+        <td class="text-end">
+          D{{ subtotal|default:order.get_subtotal|floatformat:2 }}
+        </td>
+      </tr>
+
+      {% with discount_total=discount|default:order.discount_amount %}
+        {% if discount_total and discount_total|floatformat:2 != "0.00" %}
+        <tr>
+          <td>Discounts:</td>
+          <td class="text-end">-D{{ discount_total|floatformat:2 }}</td>
+        </tr>
+        {% endif %}
+      {% endwith %}
+
+      {% with ship=shipping|default:order.shipping_cost %}
+        {% if ship and ship|floatformat:2 != "0.00" %}
+        <tr>
+          <td>Shipping:</td>
+          <td class="text-end">D{{ ship|floatformat:2 }}</td>
+        </tr>
+        {% endif %}
+      {% endwith %}
+
+      <tr>
+        <td>Tax ({{ order.tax_rate|default:0|floatformat:1 }}%):</td>
+        <td class="text-end">
+          D{{ tax_amount|default:order.get_tax_amount|floatformat:2 }}
+        </td>
+      </tr>
+
+      <tr class="total-row">
+        <td>Total:</td>
+        <td class="text-end">
+          D{{ total|default:order.get_total|floatformat:2 }}
+        </td>
+      </tr>
     </tbody>
   </table>
   <div style="clear: both;"></div>
@@ -210,19 +261,19 @@
     <p><strong>Thank you for your business!</strong></p>
   </div>
 
-<script>
-  document.addEventListener('DOMContentLoaded', function () {
-    const invoiceNumber = "INV-{{ order.id|stringformat:'05d' }}";  // Make sure this is safe
-    new QRCode(document.getElementById("qrcode"), {
-      text: invoiceNumber,
-      width: 100,
-      height: 100,
-      colorDark: "#000000",
-      colorLight: "#ffffff",
-      correctLevel: QRCode.CorrectLevel.H
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const invoiceNumber = "INV-{{ order.id|stringformat:'05d' }}";
+      new QRCode(document.getElementById("qrcode"), {
+        text: invoiceNumber,
+        width: 100,
+        height: 100,
+        colorDark: "#000000",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.H
+      });
     });
-  });
-</script>
+  </script>
 
 </body>
 </html>
