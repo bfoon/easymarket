@@ -585,3 +585,18 @@ def enhance_delivery_instructions(shipment):
             instructions['special_instructions'].append(landmark_text)
 
     return instructions
+
+def create_exchange_shipment(ret):
+    """
+    Create a shipment for exchange items from store warehouse to buyer.
+    """
+    # Minimal example; adapt to your Shipment model fields.
+    sh = Shipment.objects.create(
+        origin_warehouse=None,  # set properly
+        destination_address=ret.order.shipping_address,
+        shipment_type='exchange',
+        status='in_transit',
+        created_at=timezone.now(),
+        related_return=ret,  # add a FK in Shipment if useful
+    )
+    return sh

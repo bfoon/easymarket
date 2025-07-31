@@ -1,0 +1,633 @@
+{% extends "base.html" %}
+{% block content %}
+{% load static %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+
+<div id="returns-hub" class="container py-5">
+  <!-- Header Section -->
+  <div class="row mb-5">
+    <div class="col-12">
+      <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4">
+        <div class="d-flex align-items-center mb-3 mb-md-0">
+          <div class="header-icon-wrapper me-4">
+            <i class="fas fa-undo-alt"></i>
+          </div>
+          <div>
+            <h1 class="mb-2 fw-bold display-6">Returns & Exchanges</h1>
+            <p class="text-muted mb-0 lead">Manage your return requests and start new ones for delivered orders</p>
+          </div>
+        </div>
+        <div class="d-flex gap-2">
+          <a href="{% url 'returns:policy' %}" class="btn btn-outline-primary">
+            <i class="fas fa-book me-2"></i>
+            Return Policy
+          </a>
+          <a href="{% url 'orders:order_history' %}" class="btn btn-outline-secondary">
+            <i class="fas fa-shopping-bag me-2"></i>
+            View Orders
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick Stats Row -->
+  <div class="row mb-5">
+    <div class="col-md-4 mb-3">
+      <div class="stats-card">
+        <div class="stats-icon bg-primary">
+          <i class="fas fa-receipt"></i>
+        </div>
+        <div>
+          <div class="stats-number">{{ my_returns.count|default:0 }}</div>
+          <div class="stats-label">Active Returns</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4 mb-3">
+      <div class="stats-card">
+        <div class="stats-icon bg-success">
+          <i class="fas fa-box"></i>
+        </div>
+        <div>
+          <div class="stats-number">{{ orders.count|default:0 }}</div>
+          <div class="stats-label">Eligible Orders</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4 mb-3">
+      <div class="stats-card">
+        <div class="stats-icon bg-info">
+          <i class="fas fa-clock"></i>
+        </div>
+        <div>
+          <div class="stats-number">30</div>
+          <div class="stats-label">Days Return Window</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- My RMAs Section -->
+  <div class="row mb-5">
+    <div class="col-12">
+      <div class="section-card">
+        <div class="section-header">
+          <div class="d-flex align-items-center">
+            <div class="section-icon bg-primary">
+              <i class="fas fa-clipboard-list"></i>
+            </div>
+            <div>
+              <h3 class="mb-1 fw-bold">My Return Requests</h3>
+              <p class="text-muted mb-0">Track the status of your current returns</p>
+            </div>
+          </div>
+          {% if my_returns %}
+            <div class="badge bg-primary-subtle text-primary-emphasis px-3 py-2 rounded-pill">
+              {{ my_returns.count }} Active
+            </div>
+          {% endif %}
+        </div>
+
+        {% if my_returns %}
+          <div class="table-container">
+            <div class="table-responsive">
+              <table class="table table-hover align-middle mb-0">
+                <thead class="table-header">
+                  <tr>
+                    <th scope="col" class="border-0">Return Request</th>
+                    <th scope="col" class="border-0">Original Order</th>
+                    <th scope="col" class="border-0">Date Created</th>
+                    <th scope="col" class="border-0">Current Status</th>
+                    <th scope="col" class="border-0 text-end">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for r in my_returns %}
+                    <tr class="table-row">
+                      <td class="py-4">
+                        <div class="d-flex align-items-center">
+                          <div class="return-icon me-3">
+                            <i class="fas fa-undo-alt"></i>
+                          </div>
+                          <div>
+                            <div class="fw-bold">
+                              <a href="{% url 'returns:buyer_detail' rma=r.return_number %}" class="text-decoration-none">
+                                RMA #{{ r.return_number }}
+                              </a>
+                            </div>
+                            <div class="text-muted small">{{ r.get_reason_display }}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td class="py-4">
+                        <div class="fw-semibold">
+                          <a href="{% url 'orders:order_detail' r.order.id %}" class="text-decoration-none">
+                            Order #{{ r.order.id }}
+                          </a>
+                        </div>
+                        <div class="text-muted small">{{ r.order.created_at|date:"M d, Y" }}</div>
+                      </td>
+                      <td class="py-4">
+                        <div class="fw-semibold">{{ r.created_at|date:"M d, Y" }}</div>
+                        <div class="text-muted small">{{ r.created_at|time:"g:i A" }}</div>
+                      </td>
+                      <td class="py-4">
+                        <span class="status-badge status-{{ r.status|lower }}">
+                          <span class="status-dot"></span>
+                          {{ r.get_status_display }}
+                        </span>
+                      </td>
+                      <td class="py-4 text-end">
+                        <div class="action-buttons">
+                          <a href="{% url 'returns:buyer_detail' rma=r.return_number %}" class="btn btn-primary btn-sm">
+                            <i class="fas fa-eye me-1"></i>
+                            View Details
+                          </a>
+                        </div>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        {% else %}
+          <div class="empty-state py-5">
+            <div class="empty-icon mb-3">
+              <i class="fas fa-clipboard-list"></i>
+            </div>
+            <h5 class="fw-bold mb-2">No Return Requests Yet</h5>
+            <p class="text-muted mb-4">You haven't created any return requests. When you do, they'll appear here for easy tracking.</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Eligible Orders Section -->
+  {% if orders %}
+    <div class="row">
+      <div class="col-12">
+        <div class="section-card">
+          <div class="section-header">
+            <div class="d-flex align-items-center">
+              <div class="section-icon bg-success">
+                <i class="fas fa-box"></i>
+              </div>
+              <div>
+                <h3 class="mb-1 fw-bold">Start New Return</h3>
+                <p class="text-muted mb-0">Select an order to begin a return or exchange</p>
+              </div>
+            </div>
+            <div class="badge bg-success-subtle text-success-emphasis px-3 py-2 rounded-pill">
+              {{ orders.count }} Eligible
+            </div>
+          </div>
+
+          <div class="orders-container">
+            {% for o in orders %}
+              <div class="order-card">
+                <div class="row align-items-center">
+                  <div class="col-lg-8">
+                    <div class="order-header mb-3">
+                      <div class="d-flex align-items-center justify-content-between flex-wrap">
+                        <div class="d-flex align-items-center">
+                          <div class="order-icon me-3">
+                            <i class="fas fa-shopping-bag"></i>
+                          </div>
+                          <div>
+                            <h5 class="mb-1 fw-bold">
+                              <a href="{% url 'orders:order_detail' o.id %}" class="text-decoration-none">
+                                Order #{{ o.id }}
+                              </a>
+                            </h5>
+                            <div class="order-meta">
+                              <span class="me-3">
+                                <i class="fas fa-calendar-alt me-1"></i>
+                                {{ o.created_at|date:"F d, Y" }}
+                              </span>
+                              <span class="me-3">
+                                <i class="fas fa-shopping-bag me-1"></i>
+                                {{ o.items.count }} item{{ o.items.count|pluralize }}
+                              </span>
+                              <span>
+                                <i class="fas fa-money-bill-wave me-1"></i>
+                                D{{ o.get_total|floatformat:2 }}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <div class="order-status">
+                          <span class="status-badge status-delivered">
+                            <span class="status-dot"></span>
+                            {{ o.get_status_display }}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Store-specific return buttons -->
+                    <div class="store-actions">
+                      <div class="d-flex flex-wrap gap-2">
+                        {% for it in o.items.all|dictsort:"product.store.id" %}
+                          {% ifchanged it.product.store.id %}
+                            <div class="store-return-option">
+                              <div class="store-info mb-2">
+                                <i class="fas fa-store me-1 text-muted"></i>
+                                <span class="small text-muted fw-semibold">{{ it.product.store.name }}</span>
+                              </div>
+                              <a href="{% url 'returns:start' o.id it.product.store.id %}"
+                                 class="btn btn-outline-primary btn-sm store-return-btn">
+                                <i class="fas fa-exchange-alt me-1"></i>
+                                Start Return/Exchange
+                              </a>
+                            </div>
+                          {% endifchanged %}
+                        {% endfor %}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="col-lg-4">
+                    <div class="order-actions text-lg-end mt-3 mt-lg-0">
+                      {% with first_item=o.items.all.0 %}
+                        {% if first_item and first_item.product and first_item.product.store %}
+                          <a href="{% url 'returns:start' o.id first_item.product.store.id %}"
+                             class="btn btn-primary btn-lg primary-action-btn">
+                            <i class="fas fa-exchange-alt me-2"></i>
+                            Start Return
+                          </a>
+                          <div class="mt-2">
+                            <a href="{% url 'orders:order_detail' o.id %}" class="text-muted text-decoration-none small">
+                              <i class="fas fa-eye me-1"></i>
+                              View Order Details
+                            </a>
+                          </div>
+                        {% endif %}
+                      {% endwith %}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+
+          <!-- Help Footer -->
+          <div class="help-footer">
+            <div class="row align-items-center">
+              <div class="col-md-8">
+                <div class="d-flex align-items-center">
+                  <i class="fas fa-info-circle text-info me-3"></i>
+                  <div>
+                    <h6 class="mb-1 fw-semibold">Return Guidelines</h6>
+                    <p class="text-muted small mb-0">
+                      Returns accepted within 30 days of delivery. Items must be in original condition.
+                      <a href="{% url 'returns:policy' %}" class="text-decoration-none">Learn more</a>
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-4 text-md-end mt-3 mt-md-0">
+                <a href="#" class="btn btn-outline-secondary">
+                  <i class="fas fa-headset me-1"></i>
+                  Need Help?
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  {% else %}
+    <!-- Enhanced Empty State -->
+    <div class="row">
+      <div class="col-12">
+        <div class="section-card">
+          <div class="empty-state-large py-5">
+            <div class="empty-icon-large mb-4">
+              <i class="fas fa-box-open"></i>
+            </div>
+            <h3 class="fw-bold mb-3">No Eligible Orders</h3>
+            <p class="text-muted mb-4 lead">
+              You don't have any delivered orders eligible for returns or exchanges right now.
+              Orders become eligible once delivered and within our return window.
+            </p>
+            <div class="empty-actions">
+              <a href="{% url 'orders:order_history' %}" class="btn btn-primary btn-lg me-3">
+                <i class="fas fa-history me-2"></i>
+                View Order History
+              </a>
+              <a href="{% url 'marketplace:all_products' %}" class="btn btn-outline-primary btn-lg">
+                <i class="fas fa-shopping-cart me-2"></i>
+                Continue Shopping
+              </a>
+            </div>
+
+            <div class="mt-5 pt-4 border-top">
+              <div class="row text-center">
+                <div class="col-md-4 mb-3">
+                  <i class="fas fa-truck text-primary mb-2" style="font-size: 2rem;"></i>
+                  <h6 class="fw-semibold">Fast Delivery</h6>
+                  <p class="text-muted small mb-0">Orders delivered within 3-5 business days</p>
+                </div>
+                <div class="col-md-4 mb-3">
+                  <i class="fas fa-shield-alt text-success mb-2" style="font-size: 2rem;"></i>
+                  <h6 class="fw-semibold">30-Day Returns</h6>
+                  <p class="text-muted small mb-0">Easy returns within 30 days of delivery</p>
+                </div>
+                <div class="col-md-4 mb-3">
+                  <i class="fas fa-headset text-info mb-2" style="font-size: 2rem;"></i>
+                  <h6 class="fw-semibold">24/7 Support</h6>
+                  <p class="text-muted small mb-0">Always here to help with your orders</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+</div>
+
+<!-- Scoped Styles: EVERYTHING is under #returns-hub -->
+<style>
+/* Header Styles */
+#returns-hub .header-icon-wrapper {
+  width: 80px;
+  height: 80px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 2rem;
+  box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+}
+
+/* Stats Cards */
+#returns-hub .stats-card {
+  background: white;
+  border-radius: 16px;
+  padding: 2rem;
+  display: flex;
+  align-items: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  border: 1px solid #f0f0f0;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+#returns-hub .stats-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+}
+#returns-hub .stats-icon {
+  width: 60px;
+  height: 60px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 1.5rem;
+  margin-right: 1.5rem;
+}
+#returns-hub .stats-number {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #2d3748;
+  line-height: 1;
+}
+#returns-hub .stats-label {
+  color: #718096;
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+/* Section Cards */
+#returns-hub .section-card {
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  border: 1px solid #f0f0f0;
+  overflow: hidden;
+}
+#returns-hub .section-header {
+  padding: 2rem;
+  border-bottom: 1px solid #f0f0f0;
+  display: flex;
+  justify-content: between;
+  align-items: center;
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+}
+#returns-hub .section-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 1.25rem;
+  margin-right: 1rem;
+}
+
+/* Table Styles */
+#returns-hub .table-container { overflow: hidden; }
+#returns-hub .table-header th {
+  background: #f8fafc;
+  font-weight: 600;
+  color: #4a5568;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 1.5rem 1.5rem;
+}
+#returns-hub .table-row {
+  border: none;
+  transition: background-color 0.2s ease;
+}
+#returns-hub .table-row:hover { background-color: #f8fafc; }
+#returns-hub .return-icon {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 0.875rem;
+}
+
+/* Status Badges */
+#returns-hub .status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  border-radius: 50px;
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+#returns-hub .status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 0.5rem;
+}
+#returns-hub .status-pending { background: #fef3c7; color: #92400e; }
+#returns-hub .status-pending .status-dot { background: #f59e0b; }
+#returns-hub .status-approved { background: #d1fae5; color: #065f46; }
+#returns-hub .status-approved .status-dot { background: #10b981; }
+#returns-hub .status-processing { background: #dbeafe; color: #1e40af; }
+#returns-hub .status-processing .status-dot { background: #3b82f6; }
+#returns-hub .status-completed { background: #d1fae5; color: #065f46; }
+#returns-hub .status-completed .status-dot { background: #10b981; }
+#returns-hub .status-delivered { background: #d1fae5; color: #065f46; }
+#returns-hub .status-delivered .status-dot { background: #10b981; }
+#returns-hub .status-rejected { background: #fee2e2; color: #991b1b; }
+#returns-hub .status-rejected .status-dot { background: #ef4444; }
+
+/* Order Cards */
+#returns-hub .orders-container { padding: 0; }
+#returns-hub .order-card {
+  padding: 2rem;
+  border-bottom: 1px solid #f0f0f0;
+  transition: background-color 0.2s ease;
+}
+#returns-hub .order-card:hover { background-color: #f8fafc; }
+#returns-hub .order-card:last-child { border-bottom: none; }
+#returns-hub .order-icon {
+  width: 50px;
+  height: 50px;
+  background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 1.25rem;
+}
+#returns-hub .order-meta {
+  color: #718096;
+  font-size: 0.875rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+#returns-hub .store-return-option {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1rem;
+  margin-bottom: 0.5rem;
+}
+#returns-hub .store-return-btn {
+  width: 100%;
+  border-radius: 8px;
+  font-weight: 500;
+}
+#returns-hub .primary-action-btn {
+  border-radius: 12px;
+  padding: 0.75rem 2rem;
+  font-weight: 600;
+  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+  transition: all 0.2s ease;
+}
+#returns-hub .primary-action-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+}
+
+/* Empty States */
+#returns-hub .empty-state {
+  text-align: center;
+  padding: 3rem 2rem;
+}
+#returns-hub .empty-icon {
+  width: 80px;
+  height: 80px;
+  background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e0 100%);
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  color: #718096;
+}
+#returns-hub .empty-state-large {
+  text-align: center;
+  padding: 4rem 2rem;
+}
+#returns-hub .empty-icon-large {
+  width: 120px;
+  height: 120px;
+  background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e0 100%);
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3rem;
+  color: #718096;
+}
+#returns-hub .empty-actions { margin-top: 2rem; }
+
+/* Help Footer */
+#returns-hub .help-footer {
+  padding: 2rem;
+  background: #f8fafc;
+  border-top: 1px solid #f0f0f0;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  #returns-hub { padding-left: 1rem; padding-right: 1rem; }
+  #returns-hub .header-icon-wrapper { width: 60px; height: 60px; font-size: 1.5rem; }
+  #returns-hub .stats-card { padding: 1.5rem; }
+  #returns-hub .section-header { flex-direction: column; align-items: flex-start; gap: 1rem; }
+  #returns-hub .order-meta { flex-direction: column; gap: 0.25rem; }
+  #returns-hub .store-actions { margin-top: 1rem; }
+  #returns-hub .primary-action-btn { width: 100%; }
+  #returns-hub .empty-actions { display: flex; flex-direction: column; gap: 1rem; }
+  #returns-hub .empty-actions .btn { width: 100%; }
+}
+
+/* Scoped “utility” colors (only inside returns hub) */
+#returns-hub .bg-primary { background-color: #667eea !important; }
+#returns-hub .bg-success { background-color: #48bb78 !important; }
+#returns-hub .bg-info { background-color: #4299e1 !important; }
+#returns-hub .bg-primary-subtle { background-color: rgba(102, 126, 234, 0.1) !important; }
+#returns-hub .text-primary-emphasis { color: #4c51bf !important; }
+#returns-hub .bg-success-subtle { background-color: rgba(72, 187, 120, 0.1) !important; }
+#returns-hub .text-success-emphasis { color: #2f855a !important; }
+
+/* Button Enhancements — scoped */
+#returns-hub .btn {
+  border-radius: 10px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+#returns-hub .btn-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+#returns-hub .btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+#returns-hub .btn-outline-primary {
+  border-color: #667eea;
+  color: #667eea;
+}
+#returns-hub .btn-outline-primary:hover {
+  background: #667eea;
+  border-color: #667eea;
+  transform: translateY(-1px);
+}
+</style>
+
+{% endblock %}

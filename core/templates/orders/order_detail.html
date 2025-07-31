@@ -36,7 +36,7 @@
                         <h4 class="mb-1">Order #{{ order.id }}</h4>
                         <small class="text-muted">
                             <i class="fas fa-calendar me-1"></i>
-                            Placed on {{ order.created_at|date:"F d, Y \a\t g:i A" }}
+                            Placed on {{ order.created_at|date:"F d, Y \\a\\t g:i A" }}
                         </small>
                     </div>
                     <div class="text-end">
@@ -50,6 +50,26 @@
                     </div>
                 </div>
 
+                {# --- Returns & Exchanges buttons (only when delivered) --- #}
+                {% if order.status == 'delivered' %}
+                    <div class="px-3 pt-3">
+                        {% if order_stores %}
+                            <div class="d-flex flex-wrap gap-2">
+                                {% for s in order_stores %}
+                                    <a class="btn btn-outline-secondary"
+                                       href="{% url 'returns:start' order.id s.id %}">
+                                        Start a Return / Exchange ({{ s.name }})
+                                    </a>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <a class="btn btn-outline-secondary" href="{% url 'returns:hub' %}">
+                                Returns & Exchanges
+                            </a>
+                        {% endif %}
+                    </div>
+                {% endif %}
+
                 <!-- Order Progress -->
                 <div class="card-body">
                     <div class="progress-container mb-4">
@@ -58,11 +78,11 @@
                                 <i class="fas fa-shopping-cart fa-lg mb-2"></i>
                                 <div><small>Ordered</small></div>
                             </div>
-                            <div class="text-center {% if order.status in 'processing,shipped,delivered' %}text-primary{% else %}text-muted{% endif %}">
+                            <div class="text-center {% if order.status == 'processing' or order.status == 'shipped' or order.status == 'delivered' %}text-primary{% else %}text-muted{% endif %}">
                                 <i class="fas fa-cog fa-lg mb-2"></i>
                                 <div><small>Processing</small></div>
                             </div>
-                            <div class="text-center {% if order.status in 'shipped,delivered' %}text-primary{% else %}text-muted{% endif %}">
+                            <div class="text-center {% if order.status == 'shipped' or order.status == 'delivered' %}text-primary{% else %}text-muted{% endif %}">
                                 <i class="fas fa-truck fa-lg mb-2"></i>
                                 <div><small>Shipped</small></div>
                             </div>
@@ -524,7 +544,6 @@
                         <span id="paymentModalErrorMsg">Error processing payment</span>
                     </div>
 
-
                     <!-- Order Summary in Modal -->
                     <div class="alert alert-light border">
                         <div class="d-flex justify-content-between">
@@ -792,7 +811,6 @@ function showPaymentModalError(message, code) {
         methodField.classList.add('is-invalid');
     }
 }
-
 </script>
 
 {% endblock %}

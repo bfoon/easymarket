@@ -269,9 +269,18 @@ def order_detail(request, order_id):
             for item in order.items.select_related('product__store')
         ])
 
+        # Resolve stores for this order
+    store_ids = order.items.values_list('product__store_id', flat=True).distinct()
+    if not store_ids or list(store_ids) == [None]:
+        seller_ids = order.items.values_list('product__seller_id', flat=True).distinct()
+        order_stores = Store.objects.filter(owner_id__in=seller_ids)
+    else:
+        order_stores = Store.objects.filter(id__in=store_ids)
+
     context = {
         'order': order,
         'other_orders': other_orders,
+        'order_stores': order_stores,
         'chat_messages': chat_messages,
         'cod_allowed': cod_allowed,
     }

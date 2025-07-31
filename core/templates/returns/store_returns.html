@@ -1,0 +1,1283 @@
+{% extends "base.html" %}
+{% block content %}
+{% load static %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+
+<div class="container py-5 store-returns-list">
+  <!-- Header Section -->
+  <div class="row mb-5">
+    <div class="col-12">
+      <nav aria-label="breadcrumb" class="srl-breadcrumb-nav">
+        <ol class="breadcrumb srl-breadcrumb">
+          <li class="breadcrumb-item">
+            <a href="{% url 'stores:store_dashboard' store.id %}" class="text-decoration-none">
+              <i class="fas fa-store me-1"></i>
+              {{ store.name }}
+            </a>
+          </li>
+          <li class="breadcrumb-item active" aria-current="page">
+            <i class="fas fa-undo-alt me-1"></i>
+            Return Requests
+          </li>
+        </ol>
+      </nav>
+
+      <div class="srl-header-section">
+        <div class="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center mb-4">
+          <div class="d-flex align-items-center mb-3 mb-lg-0">
+            <div class="srl-header-icon me-4">
+              <i class="fas fa-clipboard-check"></i>
+            </div>
+            <div>
+              <h1 class="mb-2 fw-bold display-6">Return Requests</h1>
+              <p class="text-muted mb-0 lead">Manage customer returns for {{ store.name }}</p>
+            </div>
+          </div>
+
+          <div class="srl-header-actions">
+            <button class="btn srl-btn-outline-secondary btn-sm" onclick="window.print()">
+              <i class="fas fa-print me-1"></i>
+              Export
+            </button>
+            <a href="{% url 'stores:store_dashboard' store.id %}" class="btn srl-btn-outline-primary btn-sm">
+              <i class="fas fa-arrow-left me-1"></i>
+              Back to Dashboard
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Statistics Cards -->
+  <div class="row mb-5">
+    <div class="col-md-3 mb-3">
+      <div class="srl-stats-card">
+        <div class="srl-stats-icon srl-bg-primary">
+          <i class="fas fa-clipboard-list"></i>
+        </div>
+        <div>
+          <div class="srl-stats-number">{{ returns.count }}</div>
+          <div class="srl-stats-label">Total Requests</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3 mb-3">
+      <div class="srl-stats-card">
+        <div class="srl-stats-icon srl-bg-warning">
+          <i class="fas fa-clock"></i>
+        </div>
+        <div>
+          <div class="srl-stats-number">{{ pending_count|default:0 }}</div>
+          <div class="srl-stats-label">Pending Review</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3 mb-3">
+      <div class="srl-stats-card">
+        <div class="srl-stats-icon srl-bg-success">
+          <i class="fas fa-check-circle"></i>
+        </div>
+        <div>
+          <div class="srl-stats-number">{{ approved_count|default:0 }}</div>
+          <div class="srl-stats-label">Approved</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3 mb-3">
+      <div class="srl-stats-card">
+        <div class="srl-stats-icon srl-bg-info">
+          <i class="fas fa-money-bill-wave"></i>
+        </div>
+        <div>
+          <div class="srl-stats-number">D{{ total_refund_amount|floatformat:0|default:0 }}</div>
+          <div class="srl-stats-label">Total Refunds</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="row">
+    <div class="col-12">
+      <div class="srl-main-card">
+        <div class="srl-card-header">
+          <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center">
+            <div class="d-flex align-items-center mb-3 mb-md-0">
+              <h4 class="mb-0 fw-bold">
+                <i class="fas fa-list me-2"></i>
+                Return Requests
+              </h4>
+              {% if returns.count %}
+                <span class="srl-count-badge ms-3">{{ returns.count }} Total</span>
+              {% endif %}
+            </div>
+
+            <!-- Filters and Search -->
+            <div class="srl-filters-section">
+              <div class="d-flex gap-2 flex-wrap">
+                <div class="srl-search-container">
+                  <input type="text" class="form-control srl-search-input" placeholder="Search returns..." id="searchInput">
+                  <i class="fas fa-search srl-search-icon"></i>
+                </div>
+                <select class="form-select srl-filter-select" id="statusFilter">
+                  <option value="">All Status</option>
+                  <option value="pending">Pending</option>
+                  <option value="approved">Approved</option>
+                  <option value="received">Received</option>
+                  <option value="completed">Completed</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+                <select class="form-select srl-filter-select" id="reasonFilter">
+                  <option value="">All Reasons</option>
+                  <option value="defective">Defective</option>
+                  <option value="wrong_item">Wrong Item</option>
+                  <option value="wrong_size">Wrong Size</option>
+                  <option value="damaged_shipping">Damaged</option>
+                  <option value="not_as_described">Not as Described</option>
+                  <option value="changed_mind">Changed Mind</option>
+                  <option value="quality_issues">Quality Issues</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {% if returns %}
+          <div class="srl-table-container">
+            <div class="table-responsive">
+              <table class="table srl-returns-table mb-0" id="returnsTable">
+                <thead class="srl-table-header">
+                  <tr>
+                    <th class="srl-sortable" data-sort="rma">
+                      <div class="d-flex align-items-center">
+                        RMA Number
+                        <i class="fas fa-sort ms-1 srl-sort-icon"></i>
+                      </div>
+                    </th>
+                    <th class="srl-sortable" data-sort="customer">
+                      <div class="d-flex align-items-center">
+                        Customer
+                        <i class="fas fa-sort ms-1 srl-sort-icon"></i>
+                      </div>
+                    </th>
+                    <th class="srl-sortable" data-sort="order">
+                      <div class="d-flex align-items-center">
+                        Order
+                        <i class="fas fa-sort ms-1 srl-sort-icon"></i>
+                      </div>
+                    </th>
+                    <th>Reason</th>
+                    <th class="text-center">Status</th>
+                    <th class="srl-sortable" data-sort="date">
+                      <div class="d-flex align-items-center">
+                        Date
+                        <i class="fas fa-sort ms-1 srl-sort-icon"></i>
+                      </div>
+                    </th>
+                    <th class="text-center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody class="srl-table-body">
+                  {% for r in returns %}
+                    <tr class="srl-table-row" data-status="{{ r.status|lower }}" data-reason="{{ r.reason|lower }}">
+                      <td class="py-4">
+                        <div class="srl-rma-cell">
+                          <div class="srl-rma-icon">
+                            <i class="fas fa-hashtag"></i>
+                          </div>
+                          <div>
+                            <div class="srl-rma-number">{{ r.return_number }}</div>
+                            <div class="srl-rma-meta">{{ r.items.count }} item{{ r.items.count|pluralize }}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td class="py-4">
+                        <div class="srl-customer-cell">
+                          <div class="srl-customer-avatar">
+                            <i class="fas fa-user"></i>
+                          </div>
+                          <div>
+                            <div class="srl-customer-name">{{ r.buyer.get_full_name|default:r.buyer.username }}</div>
+                            <div class="srl-customer-email">{{ r.buyer.email }}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td class="py-4">
+                        <div class="srl-order-cell">
+                          <a href="{% url 'orders:order_detail' r.order.id %}" class="srl-order-link">
+                            <div class="srl-order-number">#{{ r.order.id }}</div>
+                            <div class="srl-order-date">{{ r.order.created_at|date:"M d, Y" }}</div>
+                          </a>
+                        </div>
+                      </td>
+                      <td class="py-4">
+                        <div class="srl-reason-badge srl-reason-{{ r.reason|lower }}">
+                          <i class="fas fa-tag me-1"></i>
+                          {{ r.get_reason_display }}
+                        </div>
+                      </td>
+                      <td class="text-center py-4">
+                        <span class="srl-status-badge srl-status-{{ r.status|lower }}">
+                          <span class="srl-status-dot"></span>
+                          {{ r.get_status_display }}
+                        </span>
+                      </td>
+                      <td class="py-4">
+                        <div class="srl-date-cell">
+                          <div class="srl-date-primary">{{ r.created_at|date:"M d, Y" }}</div>
+                          <div class="srl-date-time">{{ r.created_at|time:"g:i A" }}</div>
+                        </div>
+                      </td>
+                      <td class="text-center py-4">
+                        <div class="srl-actions-cell">
+                          <div class="dropdown">
+                            <button class="btn srl-btn-action dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                              <i class="fas fa-ellipsis-v"></i>
+                            </button>
+                            <ul class="dropdown-menu srl-dropdown-menu">
+                              <li>
+                                <a class="dropdown-item" href="{% url 'returns:store_detail' store.id r.return_number %}">
+                                  <i class="fas fa-eye me-2"></i>
+                                  View Details
+                                </a>
+                              </li>
+                              {% if r.status == 'pending' %}
+                                <li>
+                                  <button class="dropdown-item text-success" onclick="quickAction('{{ r.return_number }}', 'approve')">
+                                    <i class="fas fa-check me-2"></i>
+                                    Approve
+                                  </button>
+                                </li>
+                                <li>
+                                  <button class="dropdown-item text-danger" onclick="quickAction('{{ r.return_number }}', 'reject')">
+                                    <i class="fas fa-times me-2"></i>
+                                    Reject
+                                  </button>
+                                </li>
+                              {% elif r.status == 'approved' %}
+                                <li>
+                                  <button class="dropdown-item text-info" onclick="quickAction('{{ r.return_number }}', 'received')">
+                                    <i class="fas fa-box-open me-2"></i>
+                                    Mark Received
+                                  </button>
+                                </li>
+                              {% endif %}
+                              <li><hr class="dropdown-divider"></li>
+                              <li>
+                                <a class="dropdown-item" href="{% url 'returns:buyer_detail' rma=r.return_number %}">
+                                  <i class="fas fa-external-link-alt me-2"></i>
+                                  Customer View
+                                </a>
+                              </li>
+                            </ul>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Table Footer -->
+          <div class="srl-table-footer">
+            <div class="d-flex justify-content-between align-items-center">
+              <div class="srl-results-info">
+                Showing <span id="visibleCount">{{ returns.count }}</span> of {{ returns.count }} returns
+              </div>
+              <div class="srl-pagination-controls">
+                <!-- Add pagination if needed -->
+                <small class="text-muted">
+                  <i class="fas fa-info-circle me-1"></i>
+                  Updated {{ "now"|date:"M d, Y g:i A" }}
+                </small>
+              </div>
+            </div>
+          </div>
+
+        {% else %}
+          <!-- Enhanced Empty State -->
+          <div class="srl-empty-state">
+            <div class="srl-empty-icon">
+              <i class="fas fa-clipboard-list"></i>
+            </div>
+            <h4 class="srl-empty-title">No Return Requests Yet</h4>
+            <p class="srl-empty-description">
+              When customers submit return requests for your products, they'll appear here for your review and processing.
+            </p>
+            <div class="srl-empty-actions">
+              <a href="{% url 'stores:products_list' store.id %}" class="btn srl-btn-primary">
+                <i class="fas fa-box me-2"></i>
+                Manage Products
+              </a>
+              <a href="{% url 'stores:orders_list' store.id %}" class="btn srl-btn-outline-primary">
+                <i class="fas fa-shopping-bag me-2"></i>
+                View Orders
+              </a>
+            </div>
+
+            <div class="srl-empty-tips">
+              <h6 class="srl-tips-title">
+                <i class="fas fa-lightbulb me-2"></i>
+                Tips for Managing Returns
+              </h6>
+              <div class="row text-start">
+                <div class="col-md-4">
+                  <div class="srl-tip-item">
+                    <i class="fas fa-clock text-warning"></i>
+                    <div>
+                      <strong>Quick Response</strong>
+                      <p>Review return requests within 24 hours</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="srl-tip-item">
+                    <i class="fas fa-shield-alt text-success"></i>
+                    <div>
+                      <strong>Clear Policy</strong>
+                      <p>Maintain transparent return policies</p>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="srl-tip-item">
+                    <i class="fas fa-star text-info"></i>
+                    <div>
+                      <strong>Great Service</strong>
+                      <p>Provide excellent customer support</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast Notification Container -->
+<div id="toastContainer" class="srl-toast-container"></div>
+
+<script>
+// Search and filter functionality
+document.addEventListener('DOMContentLoaded', function() {
+  const searchInput = document.getElementById('searchInput');
+  const statusFilter = document.getElementById('statusFilter');
+  const reasonFilter = document.getElementById('reasonFilter');
+  const table = document.getElementById('returnsTable');
+
+  if (searchInput && table) {
+    // Search functionality
+    searchInput.addEventListener('input', filterTable);
+    if (statusFilter) statusFilter.addEventListener('change', filterTable);
+    if (reasonFilter) reasonFilter.addEventListener('change', filterTable);
+
+    // Sorting functionality
+    const sortableHeaders = document.querySelectorAll('.srl-sortable');
+    sortableHeaders.forEach(header => {
+      header.addEventListener('click', () => sortTable(header.dataset.sort));
+    });
+  }
+});
+
+function filterTable() {
+  const searchTerm = document.getElementById('searchInput')?.value.toLowerCase() || '';
+  const statusFilter = document.getElementById('statusFilter')?.value || '';
+  const reasonFilter = document.getElementById('reasonFilter')?.value || '';
+  const rows = document.querySelectorAll('.srl-table-row');
+  let visibleCount = 0;
+
+  rows.forEach(row => {
+    const text = row.textContent.toLowerCase();
+    const status = row.dataset.status;
+    const reason = row.dataset.reason;
+
+    const matchesSearch = text.includes(searchTerm);
+    const matchesStatus = !statusFilter || status === statusFilter;
+    const matchesReason = !reasonFilter || reason === reasonFilter;
+
+    if (matchesSearch && matchesStatus && matchesReason) {
+      row.style.display = '';
+      visibleCount++;
+    } else {
+      row.style.display = 'none';
+    }
+  });
+
+  const visibleCountElement = document.getElementById('visibleCount');
+  if (visibleCountElement) {
+    visibleCountElement.textContent = visibleCount;
+  }
+}
+
+function sortTable(column) {
+  // Simple sorting implementation
+  const table = document.getElementById('returnsTable');
+  const tbody = table.querySelector('.srl-table-body');
+  const rows = Array.from(tbody.querySelectorAll('.srl-table-row'));
+
+  rows.sort((a, b) => {
+    let aValue, bValue;
+
+    switch(column) {
+      case 'rma':
+        aValue = a.querySelector('.srl-rma-number').textContent;
+        bValue = b.querySelector('.srl-rma-number').textContent;
+        break;
+      case 'customer':
+        aValue = a.querySelector('.srl-customer-name').textContent;
+        bValue = b.querySelector('.srl-customer-name').textContent;
+        break;
+      case 'order':
+        aValue = a.querySelector('.srl-order-number').textContent;
+        bValue = b.querySelector('.srl-order-number').textContent;
+        break;
+      case 'date':
+        aValue = new Date(a.querySelector('.srl-date-primary').textContent);
+        bValue = new Date(b.querySelector('.srl-date-primary').textContent);
+        break;
+      default:
+        return 0;
+    }
+
+    return aValue > bValue ? 1 : -1;
+  });
+
+  rows.forEach(row => tbody.appendChild(row));
+}
+
+// Show toast notification
+function showToast(message, type = 'success') {
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = `srl-toast srl-toast-${type}`;
+
+  const icon = type === 'success' ? 'check-circle' : type === 'error' ? 'times-circle' : 'info-circle';
+  toast.innerHTML = `
+    <div class="srl-toast-content">
+      <i class="fas fa-${icon} me-2"></i>
+      <span>${message}</span>
+    </div>
+    <button class="srl-toast-close" onclick="this.parentElement.remove()">
+      <i class="fas fa-times"></i>
+    </button>
+  `;
+
+  container.appendChild(toast);
+
+  // Auto remove after 5 seconds
+  setTimeout(() => {
+    if (toast.parentElement) {
+      toast.remove();
+    }
+  }, 5000);
+}
+
+// Quick actions
+function quickAction(rma, action) {
+  let url = '';
+  let actionName = '';
+
+  switch(action) {
+    case 'approve':
+      url = `/stores/{{ store.id }}/returns/${rma}/approve/`;
+      actionName = 'Return approved successfully';
+      break;
+    case 'reject':
+      url = `/stores/{{ store.id }}/returns/${rma}/reject/`;
+      actionName = 'Return rejected';
+      break;
+    case 'received':
+      url = `/stores/{{ store.id }}/returns/${rma}/received/`;
+      actionName = 'Return marked as received';
+      break;
+  }
+
+  if (!url) return;
+
+  fetch(url, {
+    method: 'POST',
+    headers: {
+      'X-CSRFToken': '{{ csrf_token }}',
+      'Content-Type': 'application/json'
+    }
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      showToast(actionName);
+      setTimeout(() => location.reload(), 1500);
+    } else {
+      showToast(data.message || 'Action failed', 'error');
+    }
+  })
+  .catch(error => {
+    showToast('Network error occurred', 'error');
+    console.error('Error:', error);
+  });
+}
+</script>
+
+<!-- Store Returns List Scoped Styles -->
+<style>
+/* Scoped to prevent conflicts - all styles prefixed with .store-returns-list */
+.store-returns-list {
+  /* Breadcrumb Styles */
+}
+
+.store-returns-list .srl-breadcrumb {
+  background: transparent;
+  padding: 0;
+  margin-bottom: 1.5rem;
+}
+
+.store-returns-list .srl-breadcrumb-item a {
+  color: #6c757d;
+  transition: color 0.2s ease;
+}
+
+.store-returns-list .srl-breadcrumb-item a:hover {
+  color: #667eea;
+}
+
+/* Header Styles */
+.store-returns-list .srl-header-section {
+  margin-bottom: 2rem;
+}
+
+.store-returns-list .srl-header-icon {
+  width: 80px;
+  height: 80px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 2rem;
+  box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+}
+
+.store-returns-list .srl-header-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+/* Stats Cards */
+.store-returns-list .srl-stats-card {
+  background: white;
+  border-radius: 16px;
+  padding: 2rem;
+  display: flex;
+  align-items: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  border: 1px solid #f0f0f0;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.store-returns-list .srl-stats-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+}
+
+.store-returns-list .srl-stats-icon {
+  width: 60px;
+  height: 60px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 1.5rem;
+  margin-right: 1.5rem;
+}
+
+.store-returns-list .srl-stats-number {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #2d3748;
+  line-height: 1;
+}
+
+.store-returns-list .srl-stats-label {
+  color: #718096;
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+/* Main Card */
+.store-returns-list .srl-main-card {
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  border: 1px solid #f0f0f0;
+  overflow: hidden;
+}
+
+.store-returns-list .srl-card-header {
+  padding: 2rem;
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.store-returns-list .srl-count-badge {
+  background: #e0e7ff;
+  color: #3730a3;
+  padding: 0.375rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/* Filters */
+.store-returns-list .srl-filters-section {
+  min-width: 0;
+  flex: 1;
+  max-width: 600px;
+}
+
+.store-returns-list .srl-search-container {
+  position: relative;
+  min-width: 200px;
+}
+
+.store-returns-list .srl-search-input {
+  padding-left: 2.5rem;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  transition: border-color 0.2s ease;
+}
+
+.store-returns-list .srl-search-input:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.store-returns-list .srl-search-icon {
+  position: absolute;
+  left: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #9ca3af;
+}
+
+.store-returns-list .srl-filter-select {
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  min-width: 140px;
+  transition: border-color 0.2s ease;
+}
+
+.store-returns-list .srl-filter-select:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+/* Table Styles */
+.store-returns-list .srl-table-container {
+  overflow: hidden;
+}
+
+.store-returns-list .srl-returns-table {
+  margin: 0;
+}
+
+.store-returns-list .srl-table-header th {
+  background: #f8fafc;
+  font-weight: 600;
+  color: #4a5568;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 1.5rem 1rem;
+  border: none;
+  position: relative;
+}
+
+.store-returns-list .srl-sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.2s ease;
+}
+
+.store-returns-list .srl-sortable:hover {
+  background-color: #e2e8f0;
+}
+
+.store-returns-list .srl-sort-icon {
+  color: #9ca3af;
+  font-size: 0.75rem;
+}
+
+.store-returns-list .srl-table-row {
+  border: none;
+  transition: background-color 0.2s ease;
+}
+
+.store-returns-list .srl-table-row:hover {
+  background-color: #f8fafc;
+}
+
+/* Table Cells */
+.store-returns-list .srl-rma-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.store-returns-list .srl-rma-icon {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 0.875rem;
+}
+
+.store-returns-list .srl-rma-number {
+  font-weight: 600;
+  color: #2d3748;
+  font-size: 0.875rem;
+}
+
+.store-returns-list .srl-rma-meta {
+  color: #9ca3af;
+  font-size: 0.75rem;
+}
+
+.store-returns-list .srl-customer-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.store-returns-list .srl-customer-avatar {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 0.875rem;
+}
+
+.store-returns-list .srl-customer-name {
+  font-weight: 600;
+  color: #2d3748;
+  font-size: 0.875rem;
+}
+
+.store-returns-list .srl-customer-email {
+  color: #9ca3af;
+  font-size: 0.75rem;
+}
+
+.store-returns-list .srl-order-cell {
+  transition: transform 0.2s ease;
+}
+
+.store-returns-list .srl-order-link {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+
+.store-returns-list .srl-order-link:hover {
+  transform: translateX(2px);
+}
+
+.store-returns-list .srl-order-number {
+  font-weight: 600;
+  color: #667eea;
+  font-size: 0.875rem;
+}
+
+.store-returns-list .srl-order-date {
+  color: #9ca3af;
+  font-size: 0.75rem;
+}
+
+.store-returns-list .srl-reason-badge {
+  padding: 0.375rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+}
+
+.store-returns-list .srl-reason-defective {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.store-returns-list .srl-reason-wrong_item {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.store-returns-list .srl-reason-wrong_size {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+.store-returns-list .srl-reason-damaged_shipping {
+  background: #fed7d7;
+  color: #9b2c2c;
+}
+
+.store-returns-list .srl-reason-not_as_described {
+  background: #fecaca;
+  color: #7f1d1d;
+}
+
+.store-returns-list .srl-reason-changed_mind {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.store-returns-list .srl-reason-quality_issues {
+  background: #fde68a;
+  color: #78350f;
+}
+
+.store-returns-list .srl-reason-other {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+.store-returns-list .srl-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  border-radius: 50px;
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.store-returns-list .srl-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 0.5rem;
+}
+
+.store-returns-list .srl-status-pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.store-returns-list .srl-status-pending .srl-status-dot {
+  background: #f59e0b;
+}
+
+.store-returns-list .srl-status-approved {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.store-returns-list .srl-status-approved .srl-status-dot {
+  background: #10b981;
+}
+
+.store-returns-list .srl-status-received {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.store-returns-list .srl-status-received .srl-status-dot {
+  background: #3b82f6;
+}
+
+.store-returns-list .srl-status-completed {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.store-returns-list .srl-status-completed .srl-status-dot {
+  background: #10b981;
+}
+
+.store-returns-list .srl-status-rejected {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.store-returns-list .srl-status-rejected .srl-status-dot {
+  background: #ef4444;
+}
+
+.store-returns-list .srl-date-cell {
+  font-size: 0.875rem;
+}
+
+.store-returns-list .srl-date-primary {
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.store-returns-list .srl-date-time {
+  color: #9ca3af;
+  font-size: 0.75rem;
+}
+
+.store-returns-list .srl-actions-cell .dropdown-toggle {
+  border: none;
+  background: none;
+}
+
+.store-returns-list .srl-btn-action {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 2px solid #e2e8f0;
+  background: white;
+  color: #6c757d;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.store-returns-list .srl-btn-action:hover {
+  border-color: #667eea;
+  color: #667eea;
+  transform: translateY(-1px);
+}
+
+.store-returns-list .srl-dropdown-menu {
+  border: none;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  border-radius: 12px;
+  padding: 0.5rem 0;
+}
+
+.store-returns-list .srl-dropdown-menu .dropdown-item {
+  padding: 0.75rem 1.25rem;
+  transition: background-color 0.2s ease;
+}
+
+.store-returns-list .srl-dropdown-menu .dropdown-item:hover {
+  background-color: #f8fafc;
+}
+
+/* Table Footer */
+.store-returns-list .srl-table-footer {
+  padding: 1.5rem 2rem;
+  background: #f8fafc;
+  border-top: 1px solid #f0f0f0;
+}
+
+.store-returns-list .srl-results-info {
+  font-weight: 500;
+  color: #4a5568;
+}
+
+/* Empty State */
+.store-returns-list .srl-empty-state {
+  padding: 4rem 2rem;
+  text-align: center;
+}
+
+.store-returns-list .srl-empty-icon {
+  width: 120px;
+  height: 120px;
+  background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e0 100%);
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3rem;
+  color: #718096;
+  margin-bottom: 2rem;
+}
+
+.store-returns-list .srl-empty-title {
+  font-weight: 600;
+  color: #2d3748;
+  margin-bottom: 1rem;
+  font-size: 1.5rem;
+}
+
+.store-returns-list .srl-empty-description {
+  color: #718096;
+  margin-bottom: 2rem;
+  max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.6;
+}
+
+.store-returns-list .srl-empty-actions {
+  margin-bottom: 3rem;
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.store-returns-list .srl-empty-tips {
+  background: #f8fafc;
+  border-radius: 16px;
+  padding: 2rem;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.store-returns-list .srl-tips-title {
+  color: #4a5568;
+  margin-bottom: 1.5rem;
+  font-size: 1.125rem;
+}
+
+.store-returns-list .srl-tip-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1rem 0;
+}
+
+.store-returns-list .srl-tip-item i {
+  font-size: 1.5rem;
+  margin-top: 0.25rem;
+}
+
+.store-returns-list .srl-tip-item strong {
+  color: #2d3748;
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.store-returns-list .srl-tip-item p {
+  color: #718096;
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+/* Color Variables */
+.store-returns-list .srl-bg-primary {
+  background-color: #667eea !important;
+}
+
+.store-returns-list .srl-bg-success {
+  background-color: #48bb78 !important;
+}
+
+.store-returns-list .srl-bg-warning {
+  background-color: #f6ad55 !important;
+}
+
+.store-returns-list .srl-bg-info {
+  background-color: #4299e1 !important;
+}
+
+/* Buttons */
+.store-returns-list .btn.srl-btn-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  color: white;
+  border-radius: 10px;
+  font-weight: 600;
+  padding: 0.75rem 1.5rem;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+.store-returns-list .btn.srl-btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+  color: white;
+}
+
+.store-returns-list .btn.srl-btn-outline-primary {
+  border: 2px solid #667eea;
+  color: #667eea;
+  background: transparent;
+  border-radius: 10px;
+  font-weight: 600;
+  padding: 0.75rem 1.5rem;
+  transition: all 0.2s ease;
+}
+
+.store-returns-list .btn.srl-btn-outline-primary:hover {
+  background: #667eea;
+  color: white;
+  transform: translateY(-1px);
+}
+
+.store-returns-list .btn.srl-btn-outline-secondary {
+  border: 2px solid #6c757d;
+  color: #6c757d;
+  background: transparent;
+  border-radius: 10px;
+  font-weight: 600;
+  padding: 0.75rem 1.5rem;
+  transition: all 0.2s ease;
+}
+
+.store-returns-list .btn.srl-btn-outline-secondary:hover {
+  background: #6c757d;
+  color: white;
+  transform: translateY(-1px);
+}
+
+/* Toast Notifications */
+.store-returns-list .srl-toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+}
+
+.store-returns-list .srl-toast {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  border-left: 4px solid;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  min-width: 300px;
+  animation: srl-slideIn 0.3s ease-out;
+}
+
+@keyframes srl-slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.store-returns-list .srl-toast-success {
+  border-left-color: #10b981;
+}
+
+.store-returns-list .srl-toast-error {
+  border-left-color: #ef4444;
+}
+
+.store-returns-list .srl-toast-content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  color: #374151;
+  font-weight: 500;
+}
+
+.store-returns-list .srl-toast-close {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 0.25rem;
+  margin-left: 1rem;
+  transition: color 0.2s ease;
+}
+
+.store-returns-list .srl-toast-close:hover {
+  color: #6b7280;
+}
+
+/* Responsive Design */
+@media (max-width: 992px) {
+  .store-returns-list .srl-filters-section {
+    margin-top: 1rem;
+    width: 100%;
+  }
+
+  .store-returns-list .srl-filters-section .d-flex {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .store-returns-list .srl-search-container,
+  .store-returns-list .srl-filter-select {
+    width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .store-returns-list .srl-header-icon {
+    width: 60px;
+    height: 60px;
+    font-size: 1.5rem;
+  }
+
+  .store-returns-list .srl-header-actions {
+    flex-direction: column;
+    width: 100%;
+    gap: 0.5rem;
+  }
+
+  .store-returns-list .srl-header-actions .btn {
+    width: 100%;
+  }
+
+  .store-returns-list .srl-stats-card {
+    padding: 1.5rem;
+  }
+
+  .store-returns-list .srl-card-header {
+    padding: 1.5rem;
+  }
+
+  .store-returns-list .srl-card-header .d-flex {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .store-returns-list .srl-table-header th {
+    padding: 1rem 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  .store-returns-list .srl-table-row td {
+    padding: 1rem 0.5rem;
+  }
+
+  .store-returns-list .srl-empty-actions {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .store-returns-list .srl-empty-actions .btn {
+    width: 100%;
+    max-width: 300px;
+  }
+}
+
+@media print {
+  .store-returns-list .srl-breadcrumb-nav,
+  .store-returns-list .srl-header-actions,
+  .store-returns-list .srl-filters-section,
+  .store-returns-list .srl-actions-cell {
+    display: none !important;
+  }
+
+  .store-returns-list .srl-main-card {
+    border: 1px solid #dee2e6 !important;
+    box-shadow: none !important;
+  }
+}
+</style>
+
+{% endblock %}

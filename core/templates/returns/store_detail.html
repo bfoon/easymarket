@@ -1,0 +1,821 @@
+{% extends "base.html" %}
+{% block content %}
+{% load static %}
+<meta name="csrf-token" content="{{ csrf_token }}">
+
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+
+<div class="container py-5 admin-return-management">
+  <!-- Header Section -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <nav aria-label="breadcrumb" class="arm-breadcrumb-nav">
+        <ol class="breadcrumb arm-breadcrumb">
+          <li class="breadcrumb-item">
+            <a href="{% url 'stores:store_dashboard' store.id %}" class="text-decoration-none">
+              <i class="fas fa-tachometer-alt me-1"></i>
+              Dashboard
+            </a>
+          </li>
+          <li class="breadcrumb-item">
+            <a href="{% url 'returns:store_returns' store.id %}" class="text-decoration-none">
+              <i class="fas fa-undo-alt me-1"></i>
+              Returns
+            </a>
+          </li>
+          <li class="breadcrumb-item active" aria-current="page">
+            RMA {{ ret.return_number }}
+          </li>
+        </ol>
+      </nav>
+
+      <div class="arm-header-section">
+        <div class="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center mb-4">
+          <div class="d-flex align-items-center mb-3 mb-lg-0">
+            <div class="arm-header-icon me-4">
+              <i class="fas fa-clipboard-check"></i>
+            </div>
+            <div>
+              <h1 class="mb-2 fw-bold display-6">Return Management</h1>
+              <div class="arm-header-meta">
+                <span class="arm-rma-number">RMA #{{ ret.return_number }}</span>
+                <span class="arm-meta-separator">•</span>
+                <span class="text-muted">Order #{{ ret.order.id }}</span>
+                <span class="arm-meta-separator">•</span>
+                <span class="arm-status-badge arm-status-{{ ret.status|lower }}">
+                  {{ ret.get_status_display }}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div class="arm-header-actions">
+            <button class="btn arm-btn-outline-secondary btn-sm" onclick="window.print()">
+              <i class="fas fa-print me-1"></i>
+              Print
+            </button>
+            <a href="{% url 'returns:store_returns' store.id %}" class="btn arm-btn-outline-primary btn-sm">
+              <i class="fas fa-arrow-left me-1"></i>
+              Back to List
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <!-- Main Content -->
+    <div class="col-lg-8">
+      <!-- Customer Information Card -->
+      <div class="arm-customer-card mb-4">
+        <div class="arm-card-header">
+          <h4 class="mb-0 fw-bold">
+            <i class="fas fa-user me-2"></i>
+            Customer Information
+          </h4>
+        </div>
+        <div class="arm-card-body">
+          <div class="row">
+            <div class="col-md-6">
+              <div class="arm-info-item">
+                <div class="arm-info-label">Customer Name</div>
+                <div class="arm-info-content">
+                  <div class="d-flex align-items-center">
+                    <div class="arm-customer-avatar me-3">
+                      <i class="fas fa-user"></i>
+                    </div>
+                    <div>
+                      <div class="fw-bold">{{ ret.buyer.get_full_name|default:ret.buyer.username }}</div>
+                      <div class="arm-info-meta">{{ ret.buyer.email }}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="arm-info-item">
+                <div class="arm-info-label">Request Date</div>
+                <div class="arm-info-content">
+                  <div class="d-flex align-items-center">
+                    <div class="arm-info-icon">
+                      <i class="fas fa-calendar"></i>
+                    </div>
+                    <div>
+                      <div class="fw-bold">{{ ret.created_at|date:"F d, Y" }}</div>
+                      <div class="arm-info-meta">{{ ret.created_at|time:"g:i A" }}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row mt-3">
+            <div class="col-md-6">
+              <div class="arm-info-item">
+                <div class="arm-info-label">Return Reason</div>
+                <div class="arm-reason-badge">
+                  <i class="fas fa-clipboard-list me-2"></i>
+                  {{ ret.get_reason_display }}
+                </div>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="arm-info-item">
+                <div class="arm-info-label">Original Order</div>
+                <div class="arm-info-content">
+                  <a href="{% url 'orders:order_detail' ret.order.id %}" class="arm-link-primary fw-bold">
+                    <i class="fas fa-external-link-alt me-1"></i>
+                    View Order #{{ ret.order.id }}
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {% if ret.reason_description or ret.buyer_notes %}
+            <div class="arm-notes-section mt-4">
+              <div class="arm-info-label mb-2">Customer Notes</div>
+              <div class="arm-customer-note">
+                <div class="arm-note-header">
+                  <i class="fas fa-quote-left me-2"></i>
+                  Customer Message
+                </div>
+                <div class="arm-note-content">
+                  {{ ret.reason_description|default:ret.buyer_notes }}
+                </div>
+              </div>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Return Items Card -->
+      <div class="arm-items-card mb-4">
+        <div class="arm-card-header">
+          <div class="d-flex justify-content-between align-items-center">
+            <h4 class="mb-0 fw-bold">
+              <i class="fas fa-boxes me-2"></i>
+              Return Items ({{ ret.items.count }})
+            </h4>
+            <div class="arm-total-badge">
+              Total Value: D{{ ret.refund_amount|floatformat:2 }}
+            </div>
+          </div>
+        </div>
+        <div class="arm-items-container">
+          <div class="table-responsive">
+            <table class="table arm-items-table mb-0">
+              <thead class="arm-table-header">
+                <tr>
+                  <th>Product</th>
+                  <th class="text-center">Qty</th>
+                  <th class="text-center">Condition</th>
+                  <th class="text-end">Unit Price</th>
+                  <th class="text-end">Subtotal</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for ri in ret.items.all %}
+                  <tr class="arm-item-row">
+                    <td class="py-4">
+                      <div class="arm-product-info">
+                        <div class="arm-product-image">
+                          {% if ri.order_item.product.image %}
+                            <img src="{{ ri.order_item.product.image.url }}"
+                                 alt="{{ ri.order_item.product.name }}"
+                                 class="arm-product-img">
+                          {% else %}
+                            <div class="arm-product-placeholder">
+                              <i class="fas fa-image"></i>
+                            </div>
+                          {% endif %}
+                        </div>
+                        <div class="arm-product-details">
+                          <h6 class="arm-product-name">{{ ri.order_item.product.name }}</h6>
+                          {% if ri.order_item.selected_features %}
+                            <div class="arm-product-features">
+                              {% for k,v in ri.order_item.selected_features.items %}
+                                <span class="arm-feature-tag">{{ k|title }}: {{ v }}</span>
+                              {% endfor %}
+                            </div>
+                          {% endif %}
+                        </div>
+                      </div>
+                    </td>
+                    <td class="text-center py-4">
+                      <span class="arm-quantity-badge">{{ ri.quantity }}</span>
+                    </td>
+                    <td class="text-center py-4">
+                      <span class="arm-condition-badge arm-condition-{{ ri.condition|lower }}">
+                        {{ ri.get_condition_display }}
+                      </span>
+                    </td>
+                    <td class="text-end py-4">
+                      <span class="arm-price-text">D{{ ri.price_at_return|floatformat:2 }}</span>
+                    </td>
+                    <td class="text-end py-4">
+                      <span class="arm-price-text fw-bold">D{{ ri.get_refund_amount|floatformat:2 }}</span>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="col-lg-4">
+      <!-- Quick Actions Card -->
+      <div class="arm-actions-card mb-4">
+        <div class="arm-card-header">
+          <h5 class="mb-0 fw-bold">
+            <i class="fas fa-bolt me-2"></i>
+            Quick Actions
+          </h5>
+        </div>
+        <div class="arm-card-body">
+          <div class="arm-status-info mb-4">
+            <div class="arm-current-status">
+              <div class="arm-status-indicator arm-status-{{ ret.status|lower }}"></div>
+              <div>
+                <div class="arm-status-title">{{ ret.get_status_display }}</div>
+                <div class="arm-status-desc">
+                  {% if ret.status == 'pending' %}
+                    Awaiting your review and approval
+                  {% elif ret.status == 'approved' %}
+                    Ready for customer to return items
+                  {% elif ret.status == 'in_transit' %}
+                    Customer has shipped items back
+                  {% elif ret.status == 'received' %}
+                    Items received, ready for processing
+                  {% elif ret.status == 'completed' %}
+                    Return has been fully processed
+                  {% elif ret.status == 'rejected' %}
+                    Return was rejected
+                  {% else %}
+                    Current status of this return
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="arm-action-buttons">
+            {% if ret.status == 'pending' %}
+              <button class="btn arm-btn-success w-100 mb-2" onclick="performAction('approve')">
+                <i class="fas fa-check-circle me-2"></i>
+                Approve Return
+              </button>
+              <button class="btn arm-btn-danger w-100 mb-2" onclick="performAction('reject')">
+                <i class="fas fa-times-circle me-2"></i>
+                Reject Return
+              </button>
+            {% elif ret.status == 'approved' or ret.status == 'in_transit' %}
+              <button class="btn arm-btn-info w-100 mb-2" onclick="performAction('received')">
+                <i class="fas fa-box-open me-2"></i>
+                Mark as Received
+              </button>
+            {% elif ret.status == 'received' %}
+              <div class="alert arm-alert-info mb-3">
+                <i class="fas fa-info-circle me-2"></i>
+                Items received. Ready to process refund.
+              </div>
+            {% endif %}
+
+            <button class="btn arm-btn-outline-primary w-100" onclick="addStatusNote()">
+              <i class="fas fa-comment me-2"></i>
+              Add Status Note
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Refund Processing Card -->
+      {% if ret.status == 'received' or ret.status == 'approved' %}
+      <div class="arm-refund-card mb-4">
+        <div class="arm-card-header">
+          <h5 class="mb-0 fw-bold">
+            <i class="fas fa-credit-card me-2"></i>
+            Process Refund
+          </h5>
+        </div>
+        <div class="arm-card-body">
+          <div class="arm-refund-summary mb-4">
+            <div class="d-flex justify-content-between align-items-center">
+              <span class="arm-refund-label">Total Refund Amount:</span>
+              <span class="arm-refund-amount">D{{ ret.refund_amount|floatformat:2 }}</span>
+            </div>
+          </div>
+
+          <div class="arm-refund-form">
+            <div class="mb-3">
+              <label class="arm-form-label">Refund Method</label>
+              <select id="refund_method" class="form-select arm-form-select">
+                <option value="">Select a method</option>
+                <option value="original">Original Payment Method</option>
+                <option value="wave">Wave Money</option>
+                <option value="qmoney">Q-Money</option>
+                <option value="afrimoney">Afri-Money</option>
+                <option value="gamswitch">Gamswitch</option>
+                <option value="cash">Cash Refund</option>
+                <option value="verve">Verve Card</option>
+              </select>
+            </div>
+
+            <div class="mb-4">
+              <label class="arm-form-label">Reference / Notes</label>
+              <input id="refund_ref" class="form-control arm-form-input"
+                     placeholder="Transaction reference or additional notes">
+            </div>
+
+            <button class="btn arm-btn-primary w-100" onclick="processRefund()">
+              <i class="fas fa-money-bill-wave me-2"></i>
+              Process Refund
+            </button>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Return Timeline Card -->
+      <div class="arm-timeline-card">
+        <div class="arm-card-header">
+          <h5 class="mb-0 fw-bold">
+            <i class="fas fa-history me-2"></i>
+            Activity Log
+          </h5>
+        </div>
+        <div class="arm-timeline-container">
+          <div class="arm-timeline">
+            <div class="arm-timeline-item arm-timeline-current">
+              <div class="arm-timeline-marker">
+                <div class="arm-timeline-dot arm-dot-active"></div>
+                <div class="arm-timeline-line"></div>
+              </div>
+              <div class="arm-timeline-content">
+                <div class="arm-timeline-header">
+                  <h6 class="arm-timeline-title">Return Requested</h6>
+                  <span class="arm-timeline-date">{{ ret.created_at|date:"M d" }}</span>
+                </div>
+                <div class="arm-timeline-note">Customer submitted return request</div>
+                <div class="arm-timeline-time">{{ ret.created_at|time:"g:i A" }}</div>
+              </div>
+            </div>
+
+            {% if ret.status != 'pending' %}
+            <div class="arm-timeline-item">
+              <div class="arm-timeline-marker">
+                <div class="arm-timeline-dot"></div>
+                {% if ret.status != 'rejected' %}
+                  <div class="arm-timeline-line"></div>
+                {% endif %}
+              </div>
+              <div class="arm-timeline-content">
+                <div class="arm-timeline-header">
+                  <h6 class="arm-timeline-title">
+                    {% if ret.status == 'rejected' %}
+                      Return Rejected
+                    {% else %}
+                      Return Approved / Progressed
+                    {% endif %}
+                  </h6>
+                  <span class="arm-timeline-date">{{ ret.updated_at|date:"M d" }}</span>
+                </div>
+                <div class="arm-timeline-time">{{ ret.updated_at|time:"g:i A" }}</div>
+              </div>
+            </div>
+            {% endif %}
+
+            {% if ret.status == 'completed' %}
+            <div class="arm-timeline-item">
+              <div class="arm-timeline-marker">
+                <div class="arm-timeline-dot"></div>
+              </div>
+              <div class="arm-timeline-content">
+                <div class="arm-timeline-header">
+                  <h6 class="arm-timeline-title">Refund Processed</h6>
+                  <span class="arm-timeline-date">{{ ret.completed_at|date:"M d"|default:"Today" }}</span>
+                </div>
+                <div class="arm-timeline-note">D{{ ret.refund_amount|floatformat:2 }} refunded</div>
+                <div class="arm-timeline-time">{{ ret.completed_at|time:"g:i A"|default:"Just now" }}</div>
+              </div>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Status Note Modal -->
+<div class="modal fade" id="statusNoteModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content arm-modal-content">
+      <div class="modal-header arm-modal-header">
+        <h5 class="modal-title">
+          <i class="fas fa-comment me-2"></i>
+          Add Status Note
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="arm-form-label">Status Note</label>
+          <textarea id="statusNote" class="form-control arm-form-input" rows="4"
+                    placeholder="Add a note about this return's status..." maxlength="2000"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer arm-modal-footer">
+        <button type="button" class="btn arm-btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn arm-btn-primary" onclick="saveStatusNote()">
+          <i class="fas fa-save me-2"></i>
+          Save Note
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Loading Overlay -->
+<div id="loadingOverlay" class="arm-loading-overlay" style="display: none;">
+  <div class="arm-loading-content">
+    <div class="arm-loading-spinner"></div>
+    <div class="arm-loading-text">Processing...</div>
+  </div>
+</div>
+
+<!-- Toast Notification Container -->
+<div id="toastContainer" class="arm-toast-container"></div>
+
+<script>
+(function () {
+  /* CSRF helper */
+  function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== "") {
+      const cookies = document.cookie.split(";");
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, name.length + 1) === (name + "=")) {
+          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+          break;
+        }
+      }
+    }
+    return cookieValue;
+  }
+  const csrftoken = getCookie("csrftoken");
+
+  function showLoading(){ document.getElementById('loadingOverlay').style.display = 'flex'; }
+  function hideLoading(){ document.getElementById('loadingOverlay').style.display = 'none'; }
+  function showToast(message, type = 'success') {
+    const container = document.getElementById('toastContainer');
+    const toast = document.createElement('div');
+    toast.className = `arm-toast arm-toast-${type}`;
+    const icon = type === 'success' ? 'check-circle' : type === 'error' ? 'times-circle' : 'info-circle';
+    toast.innerHTML = `
+      <div class="arm-toast-content">
+        <i class="fas fa-${icon} me-2"></i>
+        <span>${message}</span>
+      </div>
+      <button class="arm-toast-close" onclick="this.parentElement.remove()">
+        <i class="fas fa-times"></i>
+      </button>`;
+    container.appendChild(toast);
+    setTimeout(() => toast.remove(), 5000);
+  }
+
+  // Expose these to the global scope:
+  window.performAction = function(action) {
+    showLoading();
+    let url = "";
+    let actionName = "";
+
+    if (action === 'approve') {
+      url = "{% url 'returns:approve' store.id ret.return_number %}";
+      actionName = "Return approved successfully";
+    } else if (action === 'reject') {
+      url = "{% url 'returns:reject' store.id ret.return_number %}";
+      actionName = "Return rejected";
+    } else if (action === 'received') {
+      url = "{% url 'returns:mark_received' store.id ret.return_number %}";
+      actionName = "Return marked as received";
+    }
+
+    fetch(url, { method: 'POST', headers: { 'X-CSRFToken': csrftoken }})
+      .then(res => res.json())
+      .then(data => {
+        hideLoading();
+        if (data.success) {
+          showToast(actionName);
+          setTimeout(() => location.reload(), 1500);
+        } else {
+          showToast(data.message || 'Action failed', 'error');
+        }
+      })
+      .catch(err => {
+        hideLoading();
+        showToast('Network error occurred', 'error');
+        console.error(err);
+      });
+  };
+
+  window.processRefund = function () {
+    const method = document.getElementById('refund_method').value;
+    const reference = document.getElementById('refund_ref').value.trim();
+    if (!method) { showToast('Please select a refund method', 'error'); return; }
+    showLoading();
+    fetch("{% url 'returns:finalize_refund' store.id ret.return_number %}", {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrftoken, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ method, reference })
+    })
+    .then(res => res.json())
+    .then(data => {
+      hideLoading();
+      if (data.success) {
+        showToast(`Refund processed successfully: D${data.amount}`);
+        setTimeout(() => location.reload(), 2000);
+      } else {
+        showToast(data.message || 'Refund processing failed', 'error');
+      }
+    })
+    .catch(err => {
+      hideLoading();
+      showToast('Network error occurred', 'error');
+      console.error(err);
+    });
+  };
+
+  window.addStatusNote = function () {
+    const modal = new bootstrap.Modal(document.getElementById('statusNoteModal'));
+    modal.show();
+  };
+
+  window.saveStatusNote = function () {
+    const note = document.getElementById('statusNote').value.trim();
+    if (!note) { showToast('Please enter a note', 'error'); return; }
+    showLoading();
+    fetch("{% url 'returns:add_note' store.id ret.return_number %}", {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrftoken, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ note })
+    })
+    .then(res => res.json())
+    .then(data => {
+      hideLoading();
+      if (data.success) {
+        showToast('Note added successfully');
+        bootstrap.Modal.getInstance(document.getElementById('statusNoteModal')).hide();
+        document.getElementById('statusNote').value = '';
+        setTimeout(() => location.reload(), 800);
+      } else {
+        showToast(data.message || 'Failed to add note', 'error');
+      }
+    })
+    .catch(err => {
+      hideLoading();
+      showToast('Network error occurred', 'error');
+      console.error(err);
+    });
+  };
+})();
+</script>
+
+
+<!-- Admin Return Management Scoped Styles -->
+<style>
+/* ===== Scoped to prevent conflicts: prefix everything with .admin-return-management ===== */
+.admin-return-management .arm-breadcrumb {
+  background: transparent;
+  padding: 0;
+  margin-bottom: 1.5rem;
+}
+.admin-return-management .arm-breadcrumb .breadcrumb-item a {
+  color: #6c757d;
+  transition: color 0.2s ease;
+}
+.admin-return-management .arm-breadcrumb .breadcrumb-item a:hover { color: #667eea; }
+
+/* Header Styles */
+.admin-return-management .arm-header-section { margin-bottom: 2rem; }
+.admin-return-management .arm-header-icon {
+  width: 80px; height: 80px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 20px; display: flex; align-items: center; justify-content: center;
+  color: white; font-size: 2rem; box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+}
+.admin-return-management .arm-header-meta { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.admin-return-management .arm-rma-number { font-weight: 600; color: #667eea; }
+.admin-return-management .arm-meta-separator { color: #dee2e6; font-weight: bold; }
+.admin-return-management .arm-status-badge {
+  padding: .375rem .75rem; border-radius: 20px; font-size: .75rem; font-weight: 600; text-transform: uppercase;
+}
+.admin-return-management .arm-status-pending   { background: #fef3c7; color: #92400e; }
+.admin-return-management .arm-status-approved  { background: #d1fae5; color: #065f46; }
+.admin-return-management .arm-status-in_transit{ background: #e0f2fe; color: #075985; }
+.admin-return-management .arm-status-received  { background: #dbeafe; color: #1e40af; }
+.admin-return-management .arm-status-completed { background: #d1fae5; color: #065f46; }
+.admin-return-management .arm-status-rejected  { background: #fee2e2; color: #991b1b; }
+.admin-return-management .arm-status-cancelled { background: #e5e7eb; color: #374151; }
+.admin-return-management .arm-header-actions { display: flex; gap: .75rem; }
+
+/* Cards */
+.admin-return-management .arm-customer-card,
+.admin-return-management .arm-items-card,
+.admin-return-management .arm-actions-card,
+.admin-return-management .arm-refund-card,
+.admin-return-management .arm-timeline-card {
+  background: #fff; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,.08); border: 1px solid #f0f0f0; overflow: hidden;
+}
+.admin-return-management .arm-card-header {
+  padding: 1.5rem 2rem; background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); border-bottom: 1px solid #f0f0f0;
+}
+.admin-return-management .arm-card-body { padding: 2rem; }
+
+/* Info & notes */
+.admin-return-management .arm-info-item { margin-bottom: 1.5rem; }
+.admin-return-management .arm-info-label {
+  font-size: .75rem; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; color: #9ca3af; margin-bottom: .5rem;
+}
+.admin-return-management .arm-customer-avatar {
+  width: 50px; height: 50px; background: linear-gradient(135deg,#667eea 0%,#764ba2 100%);
+  border-radius: 12px; display:flex; align-items:center; justify-content:center; color:#fff; font-size:1.25rem;
+}
+.admin-return-management .arm-info-icon {
+  width: 40px; height: 40px; background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+  border-radius: 10px; display:flex; align-items:center; justify-content:center; color:#fff; margin-right:1rem; font-size:1rem;
+}
+.admin-return-management .arm-info-meta { color:#9ca3af; font-size:.875rem; }
+.admin-return-management .arm-reason-badge {
+  background: #e0e7ff; color:#3730a3; padding:.75rem 1.25rem; border-radius:12px; font-weight:600; display:inline-flex; align-items:center;
+}
+.admin-return-management .arm-link-primary { color:#667eea; text-decoration:none; transition: color .2s ease; }
+.admin-return-management .arm-link-primary:hover { color:#5a67d8; }
+
+.admin-return-management .arm-notes-section { padding-top:1.5rem; border-top:1px solid #f0f0f0; }
+.admin-return-management .arm-customer-note { background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; overflow:hidden; }
+.admin-return-management .arm-note-header { padding:1rem 1.5rem; background:#e2e8f0; font-weight:600; font-size:.875rem; color:#4a5568; }
+.admin-return-management .arm-note-content { padding:1.5rem; color:#2d3748; line-height:1.6; }
+
+/* Items table */
+.admin-return-management .arm-total-badge { background:#667eea; color:#fff; padding:.5rem 1rem; border-radius:20px; font-weight:600; font-size:.875rem; }
+.admin-return-management .arm-items-container { overflow:hidden; }
+.admin-return-management .arm-table-header th {
+  background:#f8fafc; font-weight:600; color:#4a5568; font-size:.875rem; text-transform:uppercase; letter-spacing:.5px; padding:1.5rem 1rem; border:none;
+}
+.admin-return-management .arm-item-row { border:none; transition: background-color .2s ease; }
+.admin-return-management .arm-item-row:hover { background-color:#f8fafc; }
+
+.admin-return-management .arm-product-info { display:flex; align-items:center; gap:1rem; }
+.admin-return-management .arm-product-img {
+  width:60px; height:60px; object-fit:cover; border-radius:8px; border:2px solid #e2e8f0;
+}
+.admin-return-management .arm-product-placeholder {
+  width:60px; height:60px; background:#f8fafc; border:2px solid #e2e8f0; border-radius:8px; display:flex; align-items:center; justify-content:center; color:#9ca3af; font-size:1.25rem;
+}
+.admin-return-management .arm-product-name { font-weight:600; color:#2d3748; margin-bottom:.25rem; font-size:.9rem; }
+.admin-return-management .arm-product-features { display:flex; flex-wrap:wrap; gap:.25rem; }
+.admin-return-management .arm-feature-tag { background:#e2e8f0; color:#4a5568; padding:.125rem .5rem; border-radius:12px; font-size:.75rem; }
+
+.admin-return-management .arm-quantity-badge { background:#e2e8f0; color:#4a5568; padding:.375rem .75rem; border-radius:20px; font-weight:600; font-size:.875rem; }
+.admin-return-management .arm-condition-badge { padding:.375rem .75rem; border-radius:20px; font-size:.75rem; font-weight:600; }
+.admin-return-management .arm-condition-new { background:#d1fae5; color:#065f46; }
+.admin-return-management .arm-condition-good { background:#dbeafe; color:#1e40af; }
+.admin-return-management .arm-condition-fair { background:#fef3c7; color:#92400e; }
+.admin-return-management .arm-condition-poor { background:#fed7d7; color:#9b2c2c; }
+.admin-return-management .arm-condition-damaged { background:#fee2e2; color:#991b1b; }
+.admin-return-management .arm-price-text { font-size:.9rem; color:#2d3748; }
+
+/* Actions panel */
+.admin-return-management .arm-status-info { padding:1.5rem; background:#f8fafc; border-radius:12px; border:1px solid #e2e8f0; }
+.admin-return-management .arm-current-status { display:flex; align-items:center; gap:1rem; }
+.admin-return-management .arm-status-title { font-weight:600; color:#2d3748; margin-bottom:.25rem; }
+.admin-return-management .arm-status-desc { color:#718096; font-size:.875rem; }
+.admin-return-management .arm-action-buttons { display:flex; flex-direction:column; gap:.75rem; }
+
+/* Refund */
+.admin-return-management .arm-refund-summary { background:#f8fafc; padding:1.5rem; border-radius:12px; border:1px solid #e2e8f0; }
+.admin-return-management .arm-refund-label { font-weight:600; color:#4a5568; }
+.admin-return-management .arm-refund-amount { font-size:1.5rem; font-weight:700; color:#667eea; }
+.admin-return-management .arm-form-label { font-weight:600; color:#374151; margin-bottom:.5rem; display:block; font-size:.875rem; }
+.admin-return-management .arm-form-select,
+.admin-return-management .arm-form-input {
+  border:2px solid #e2e8f0; border-radius:8px; padding:.75rem; transition:border-color .2s ease;
+}
+.admin-return-management .arm-form-select:focus,
+.admin-return-management .arm-form-input:focus { border-color:#667eea; box-shadow:0 0 0 3px rgba(102,126,234,.1); outline:none; }
+
+/* Timeline */
+.admin-return-management .arm-timeline-container { padding:1.5rem; }
+.admin-return-management .arm-timeline-item { display:flex; align-items:flex-start; margin-bottom:1.5rem; }
+.admin-return-management .arm-timeline-item:last-child { margin-bottom:0; }
+.admin-return-management .arm-timeline-marker { position:relative; margin-right:1rem; display:flex; flex-direction:column; align-items:center; }
+.admin-return-management .arm-timeline-dot {
+  width:16px; height:16px; border-radius:50%; background:#e2e8f0; border:3px solid #fff; box-shadow:0 2px 8px rgba(0,0,0,.1); z-index:2;
+}
+.admin-return-management .arm-dot-active { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+.admin-return-management .arm-timeline-line { width:2px; height:50px; background:#e2e8f0; position:absolute; top:16px; left:50%; transform:translateX(-50%); }
+.admin-return-management .arm-timeline-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:.5rem; }
+.admin-return-management .arm-timeline-title { font-weight:600; color:#2d3748; margin:0; font-size:.875rem; }
+.admin-return-management .arm-timeline-date { background:#e2e8f0; color:#4a5568; padding:.25rem .5rem; border-radius:12px; font-size:.7rem; font-weight:600; }
+.admin-return-management .arm-timeline-note { color:#718096; margin-bottom:.25rem; font-size:.8rem; }
+.admin-return-management .arm-timeline-time { color:#9ca3af; font-size:.7rem; }
+
+/* Buttons */
+.admin-return-management .btn.arm-btn-primary{
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border:none; color:#fff; border-radius:10px; font-weight:600; padding:.75rem 1.5rem; transition:.2s; box-shadow:0 4px 15px rgba(102,126,234,.3);
+}
+.admin-return-management .btn.arm-btn-primary:hover{ transform:translateY(-1px); box-shadow:0 6px 20px rgba(102,126,234,.4); color:#fff; }
+.admin-return-management .btn.arm-btn-success{
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  border:none; color:#fff; border-radius:10px; font-weight:600; padding:.75rem 1.5rem; transition:.2s; box-shadow:0 4px 15px rgba(16,185,129,.3);
+}
+.admin-return-management .btn.arm-btn-success:hover{ transform:translateY(-1px); box-shadow:0 6px 20px rgba(16,185,129,.4); color:#fff; }
+.admin-return-management .btn.arm-btn-danger{
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  border:none; color:#fff; border-radius:10px; font-weight:600; padding:.75rem 1.5rem; transition:.2s; box-shadow:0 4px 15px rgba(239,68,68,.3);
+}
+.admin-return-management .btn.arm-btn-danger:hover{ transform:translateY(-1px); box-shadow:0 6px 20px rgba(239,68,68,.4); color:#fff; }
+.admin-return-management .btn.arm-btn-info{
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  border:none; color:#fff; border-radius:10px; font-weight:600; padding:.75rem 1.5rem; transition:.2s; box-shadow:0 4px 15px rgba(59,130,246,.3);
+}
+.admin-return-management .btn.arm-btn-info:hover{ transform:translateY(-1px); box-shadow:0 6px 20px rgba(59,130,246,.4); color:#fff; }
+.admin-return-management .btn.arm-btn-outline-primary{
+  border:2px solid #667eea; color:#667eea; background:transparent; border-radius:10px; font-weight:600; padding:.75rem 1.5rem; transition:.2s;
+}
+.admin-return-management .btn.arm-btn-outline-primary:hover{ background:#667eea; color:#fff; transform:translateY(-1px); }
+.admin-return-management .btn.arm-btn-outline-secondary{
+  border:2px solid #6c757d; color:#6c757d; background:transparent; border-radius:10px; font-weight:600; padding:.75rem 1.5rem; transition:.2s;
+}
+.admin-return-management .btn.arm-btn-outline-secondary:hover{ background:#6c757d; color:#fff; transform:translateY(-1px); }
+
+/* Alerts, modal, loading, toast */
+.admin-return-management .arm-alert-info{
+  background: rgba(59,130,246,.1); border:1px solid rgba(59,130,246,.2); color:#1e40af;
+  border-radius:10px; padding:1rem; font-size:.875rem;
+}
+.admin-return-management .arm-modal-content{ border-radius:16px; border:none; box-shadow:0 20px 40px rgba(0,0,0,.15); }
+.admin-return-management .arm-modal-header{
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); border-bottom:1px solid #e2e8f0; border-radius:16px 16px 0 0;
+}
+.admin-return-management .arm-modal-footer{ border-top:1px solid #e2e8f0; background:#f8fafc; }
+
+.admin-return-management .arm-loading-overlay{
+  position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,.7);
+  display:flex; align-items:center; justify-content:center; z-index:9999;
+}
+.admin-return-management .arm-loading-content{
+  background:#fff; padding:2rem; border-radius:16px; text-align:center; box-shadow:0 20px 40px rgba(0,0,0,.2);
+}
+.admin-return-management .arm-loading-spinner{
+  width:40px; height:40px; border:4px solid #e2e8f0; border-top:4px solid #667eea; border-radius:50%;
+  animation: arm-spin 1s linear infinite; margin:0 auto 1rem;
+}
+@keyframes arm-spin { 0%{transform:rotate(0)} 100%{transform:rotate(360deg)} }
+.admin-return-management .arm-loading-text{ font-weight:600; color:#4a5568; }
+
+.admin-return-management .arm-toast-container{ position:fixed; top:20px; right:20px; z-index:9999; }
+.admin-return-management .arm-toast{
+  background:#fff; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.15);
+  border-left:4px solid; margin-bottom:1rem; display:flex; align-items:center; padding:1rem 1.5rem; min-width:300px; animation: arm-slideIn .3s ease-out;
+}
+@keyframes arm-slideIn { from{ transform:translateX(100%); opacity:0; } to{ transform:translateX(0); opacity:1; } }
+.admin-return-management .arm-toast-success{ border-left-color:#10b981; }
+.admin-return-management .arm-toast-error{ border-left-color:#ef4444; }
+.admin-return-management .arm-toast-content{ flex:1; display:flex; align-items:center; color:#374151; font-weight:500; }
+.admin-return-management .arm-toast-close{ background:none; border:none; color:#9ca3af; cursor:pointer; padding:.25rem; margin-left:1rem; transition: color .2s; }
+.admin-return-management .arm-toast-close:hover{ color:#6b7280; }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .admin-return-management .arm-header-icon { width:60px; height:60px; font-size:1.5rem; }
+  .admin-return-management .arm-header-actions { flex-direction:column; width:100%; gap:.5rem; }
+  .admin-return-management .arm-header-actions .btn { width:100%; }
+  .admin-return-management .arm-card-header,
+  .admin-return-management .arm-card-body { padding:1.5rem; }
+  .admin-return-management .arm-product-info { flex-direction:column; align-items:center; text-align:center; }
+  .admin-return-management .arm-header-meta { flex-direction:column; align-items:flex-start; gap:.25rem; }
+  .admin-return-management .arm-current-status { flex-direction:column; text-align:center; gap:1rem; }
+  .admin-return-management .arm-timeline-header { flex-direction:column; align-items:flex-start; gap:.5rem; }
+}
+
+/* Print */
+@media print {
+  .admin-return-management .btn,
+  .admin-return-management .arm-breadcrumb-nav,
+  .admin-return-management .arm-header-actions,
+  .admin-return-management .arm-actions-card,
+  .admin-return-management .arm-refund-card { display:none !important; }
+  .admin-return-management .arm-customer-card,
+  .admin-return-management .arm-items-card { border:1px solid #dee2e6 !important; box-shadow:none !important; }
+}
+</style>
+
+{% endblock %}

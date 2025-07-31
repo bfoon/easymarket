@@ -32,6 +32,7 @@ urlpatterns = [
     path('logistics/', include('logistics.urls')),
     path('finance/', include('finance.urls')),
     path('auction/', include('auction.urls')),
+    path('', include(('orders.urls_returns', 'returns'), namespace='returns')),
 
 ]
 if settings.DEBUG:

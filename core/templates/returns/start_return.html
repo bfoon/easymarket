@@ -1,0 +1,472 @@
+{% extends "base.html" %}
+{% block content %}
+{% load static %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+
+<div class="container py-5">
+  <!-- Header Section -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+          <li class="breadcrumb-item"><a href="{% url 'orders:order_history' %}" class="text-decoration-none">Orders</a></li>
+          <li class="breadcrumb-item"><a href="{% url 'returns:hub' %}" class="text-decoration-none">Returns</a></li>
+          <li class="breadcrumb-item active" aria-current="page">New Return</li>
+        </ol>
+      </nav>
+
+      <div class="d-flex align-items-center mb-3">
+        <i class="fas fa-undo-alt text-primary me-3" style="font-size: 2rem;"></i>
+        <div>
+          <h2 class="mb-1 fw-bold">Return or Exchange Items</h2>
+          <p class="text-muted mb-0">Order #{{ order.id }} • Placed {{ order.created_at|date:"F d, Y" }}</p>
+        </div>
+      </div>
+      <hr class="border-2 opacity-25">
+    </div>
+  </div>
+
+  {% if error %}
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+      <i class="fas fa-exclamation-triangle me-2"></i>
+      {{ error }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+  {% endif %}
+
+  <form method="post" enctype="multipart/form-data" id="returnForm">
+    {% csrf_token %}
+
+    <!-- Return Details Card -->
+    <div class="card shadow-sm border-0 mb-4">
+      <div class="card-header bg-light border-0 py-3">
+        <h5 class="mb-0 fw-semibold">
+          <i class="fas fa-clipboard-list me-2 text-primary"></i>
+          Return Details
+        </h5>
+      </div>
+      <div class="card-body p-4">
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <label class="form-label fw-semibold">Primary Reason for Return *</label>
+            <select name="reason" class="form-select" required>
+              <option value="" selected disabled>Choose the main reason</option>
+              <option value="defective">Product Defective</option>
+              <option value="wrong_item">Wrong Item Received</option>
+              <option value="wrong_size">Wrong Size</option>
+              <option value="damaged_shipping">Damaged During Shipping</option>
+              <option value="not_as_described">Not as Described</option>
+              <option value="changed_mind">Changed Mind</option>
+              <option value="quality_issues">Quality Issues</option>
+              <option value="other">Other</option>
+            </select>
+            <div class="form-text">
+              <i class="fas fa-info-circle me-1"></i>
+              This will apply to all items unless you specify individual reasons below
+            </div>
+          </div>
+
+          <div class="col-md-6 mb-3">
+            <label class="form-label fw-semibold">Supporting Photos</label>
+            <input type="file" name="images" class="form-control" multiple accept="image/*" id="imageUpload">
+            <div class="form-text">
+              <i class="fas fa-camera me-1"></i>
+              Upload photos to help us process your return faster (optional)
+            </div>
+            <div id="imagePreview" class="mt-2"></div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="col-12">
+            <label class="form-label fw-semibold">Additional Details</label>
+            <textarea name="note" class="form-control" rows="3"
+                      placeholder="Please provide any additional details that will help us process your return..."></textarea>
+            <div class="form-text">
+              <i class="fas fa-comment me-1"></i>
+              The more details you provide, the faster we can process your return
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Items Selection Card -->
+    <div class="card shadow-sm border-0 mb-4">
+      <div class="card-header bg-light border-0 py-3">
+        <div class="d-flex justify-content-between align-items-center">
+          <h5 class="mb-0 fw-semibold">
+            <i class="fas fa-boxes me-2 text-primary"></i>
+            Select Items to Return
+          </h5>
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="selectAllItems()">
+              <i class="fas fa-check-double me-1"></i>
+              Select All
+            </button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="clearAllItems()">
+              <i class="fas fa-times me-1"></i>
+              Clear All
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="card-body p-0">
+        <div class="alert alert-info border-0 m-3 mb-0">
+          <i class="fas fa-lightbulb me-2"></i>
+          <strong>Tip:</strong> Set quantity to 0 for items you don't want to return. Only items with quantity > 0 will be processed.
+        </div>
+
+        {% for oi in items %}
+        <div class="border-bottom item-row" data-item-id="{{ oi.id }}">
+          <div class="p-4">
+            <div class="row align-items-center">
+              <!-- Product Info -->
+              <div class="col-lg-4 mb-3 mb-lg-0">
+                <div class="d-flex align-items-start">
+                  {% if oi.product.image %}
+                    <img src="{{ oi.product.image.url }}" alt="{{ oi.product.name }}"
+                         class="me-3 rounded border" style="width:80px;height:80px;object-fit:cover;">
+                  {% else %}
+                    <div class="me-3 rounded border d-flex align-items-center justify-content-center bg-light"
+                         style="width:80px;height:80px;">
+                      <i class="fas fa-image text-muted"></i>
+                    </div>
+                  {% endif %}
+                  <div>
+                    <h6 class="mb-1 fw-semibold">{{ oi.product.name }}</h6>
+                    <div class="text-muted small">
+                      <div>Ordered: {{ oi.quantity }} item{{ oi.quantity|pluralize }}</div>
+                      {% if oi.variant_info %}
+                        <div>{{ oi.variant_info }}</div>
+                      {% endif %}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Return Quantity -->
+              <div class="col-lg-2 col-md-6 mb-3 mb-lg-0">
+                <label class="form-label small fw-semibold">Return Quantity</label>
+                <div class="input-group">
+                  <button class="btn btn-outline-secondary btn-sm qty-btn" type="button" onclick="adjustQty('{{ oi.id }}', -1)">-</button>
+                  <input type="number" min="0" max="{{ oi.quantity }}" name="qty_{{ oi.id }}" value="0"
+                         class="form-control form-control-sm text-center qty-input" data-max="{{ oi.quantity }}"
+                         onchange="updateItemState('{{ oi.id }}')">
+                  <button class="btn btn-outline-secondary btn-sm qty-btn" type="button" onclick="adjustQty('{{ oi.id }}', 1)">+</button>
+                </div>
+                <small class="text-muted">Max: {{ oi.quantity }}</small>
+              </div>
+
+              <!-- Resolution Type -->
+              <div class="col-lg-2 col-md-6 mb-3 mb-lg-0">
+                <label class="form-label small fw-semibold">Action</label>
+                <select name="resolution_{{ oi.id }}" class="form-select form-select-sm resolution-select"
+                        onchange="toggleExchangeField('{{ oi.id }}')">
+                  <option value="refund">Refund</option>
+                  <option value="exchange">Exchange</option>
+                </select>
+              </div>
+
+              <!-- Item Condition -->
+              <div class="col-lg-2 col-md-6 mb-3 mb-lg-0">
+                <label class="form-label small fw-semibold">Condition</label>
+                <select name="condition_{{ oi.id }}" class="form-select form-select-sm">
+                  <option value="new">Like New</option>
+                  <option value="good" selected>Good</option>
+                  <option value="fair">Fair</option>
+                  <option value="poor">Poor</option>
+                  <option value="damaged">Damaged</option>
+                </select>
+              </div>
+
+              <!-- Item Reason -->
+              <div class="col-lg-2 col-md-6">
+                <label class="form-label small fw-semibold">Specific Reason</label>
+                <select name="reason_{{ oi.id }}" class="form-select form-select-sm">
+                  <option value="">Use primary reason</option>
+                  <option value="defective">Product Defective</option>
+                  <option value="wrong_item">Wrong Item Received</option>
+                  <option value="wrong_size">Wrong Size</option>
+                  <option value="damaged_shipping">Damaged During Shipping</option>
+                  <option value="not_as_described">Not as Described</option>
+                  <option value="changed_mind">Changed Mind</option>
+                  <option value="quality_issues">Quality Issues</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Exchange Variant Field (Initially Hidden) -->
+            <div class="row mt-3 exchange-field" id="exchange_{{ oi.id }}" style="display: none;">
+              <div class="col-md-6">
+                <label class="form-label small fw-semibold">Exchange For (Variant/Size/Color)</label>
+                <input type="text" name="ex_variant_{{ oi.id }}" class="form-control form-control-sm"
+                       placeholder="e.g., Size L, Blue, SKU12345">
+                <div class="form-text">Specify the exact variant you'd like to exchange for</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Summary Card -->
+    <div class="card shadow-sm border-0 mb-4">
+      <div class="card-body p-4">
+        <div class="row align-items-center">
+          <div class="col-md-8">
+            <h6 class="mb-1 fw-semibold">Return Summary</h6>
+            <div id="returnSummary" class="text-muted">
+              No items selected for return
+            </div>
+          </div>
+          <div class="col-md-4 text-md-end">
+            <button type="submit" class="btn btn-primary btn-lg px-4" id="submitBtn" disabled>
+              <i class="fas fa-paper-plane me-2"></i>
+              Submit Return Request
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Help Section -->
+    <div class="card border-0 bg-light">
+      <div class="card-body p-4">
+        <div class="row">
+          <div class="col-md-8">
+            <h6 class="fw-semibold mb-2">
+              <i class="fas fa-question-circle text-info me-2"></i>
+              Questions about returns?
+            </h6>
+            <p class="text-muted small mb-0">
+              Returns are processed within 3-5 business days. Refunds will be issued to your original payment method.
+              <a href="#" class="text-decoration-none">Read our return policy</a>
+            </p>
+          </div>
+          <div class="col-md-4 text-md-end">
+            <a href="#" class="btn btn-outline-secondary">
+              <i class="fas fa-headset me-1"></i>
+              Need Help?
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+
+<!-- Custom JavaScript -->
+<script>
+// Image preview functionality
+document.getElementById('imageUpload').addEventListener('change', function(e) {
+    const preview = document.getElementById('imagePreview');
+    preview.innerHTML = '';
+
+    if (e.target.files.length > 0) {
+        const container = document.createElement('div');
+        container.className = 'd-flex flex-wrap gap-2 mt-2';
+
+        Array.from(e.target.files).forEach((file, index) => {
+            if (file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = document.createElement('img');
+                    img.src = e.target.result;
+                    img.className = 'rounded border';
+                    img.style.width = '60px';
+                    img.style.height = '60px';
+                    img.style.objectFit = 'cover';
+                    container.appendChild(img);
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        preview.appendChild(container);
+    }
+});
+
+// Quantity adjustment functions
+function adjustQty(itemId, change) {
+    const input = document.querySelector(`input[name="qty_${itemId}"]`);
+    const currentValue = parseInt(input.value) || 0;
+    const maxValue = parseInt(input.dataset.max);
+    const newValue = Math.max(0, Math.min(maxValue, currentValue + change));
+
+    input.value = newValue;
+    updateItemState(itemId);
+}
+
+function updateItemState(itemId) {
+    const qtyInput = document.querySelector(`input[name="qty_${itemId}"]`);
+    const itemRow = document.querySelector(`[data-item-id="${itemId}"]`);
+    const qty = parseInt(qtyInput.value) || 0;
+
+    // Visual feedback for selected items
+    if (qty > 0) {
+        itemRow.classList.add('border-primary', 'bg-light');
+        itemRow.style.borderWidth = '2px';
+    } else {
+        itemRow.classList.remove('border-primary', 'bg-light');
+        itemRow.style.borderWidth = '1px';
+    }
+
+    updateSummary();
+}
+
+function toggleExchangeField(itemId) {
+    const select = document.querySelector(`select[name="resolution_${itemId}"]`);
+    const exchangeField = document.getElementById(`exchange_${itemId}`);
+
+    if (select.value === 'exchange') {
+        exchangeField.style.display = 'block';
+    } else {
+        exchangeField.style.display = 'none';
+    }
+}
+
+function selectAllItems() {
+    document.querySelectorAll('.qty-input').forEach(input => {
+        input.value = input.dataset.max;
+        updateItemState(input.getAttribute('name').replace('qty_', ''));
+    });
+}
+
+function clearAllItems() {
+    document.querySelectorAll('.qty-input').forEach(input => {
+        input.value = 0;
+        updateItemState(input.getAttribute('name').replace('qty_', ''));
+    });
+}
+
+function updateSummary() {
+    const summaryDiv = document.getElementById('returnSummary');
+    const submitBtn = document.getElementById('submitBtn');
+    let totalItems = 0;
+    let refundItems = 0;
+    let exchangeItems = 0;
+
+    document.querySelectorAll('.qty-input').forEach(input => {
+        const qty = parseInt(input.value) || 0;
+        if (qty > 0) {
+            totalItems += qty;
+            const itemId = input.getAttribute('name').replace('qty_', '');
+            const resolution = document.querySelector(`select[name="resolution_${itemId}"]`).value;
+
+            if (resolution === 'refund') {
+                refundItems += qty;
+            } else {
+                exchangeItems += qty;
+            }
+        }
+    });
+
+    if (totalItems === 0) {
+        summaryDiv.textContent = 'No items selected for return';
+        submitBtn.disabled = true;
+    } else {
+        let summary = `${totalItems} item${totalItems !== 1 ? 's' : ''} selected`;
+        if (refundItems > 0 && exchangeItems > 0) {
+            summary += ` (${refundItems} for refund, ${exchangeItems} for exchange)`;
+        } else if (refundItems > 0) {
+            summary += ` for refund`;
+        } else {
+            summary += ` for exchange`;
+        }
+        summaryDiv.textContent = summary;
+        submitBtn.disabled = false;
+    }
+}
+
+// Form validation
+document.getElementById('returnForm').addEventListener('submit', function(e) {
+    const reason = document.querySelector('select[name="reason"]').value;
+    const hasItems = Array.from(document.querySelectorAll('.qty-input')).some(input => parseInt(input.value) > 0);
+
+    if (!reason) {
+        e.preventDefault();
+        alert('Please select a reason for your return.');
+        return;
+    }
+
+    if (!hasItems) {
+        e.preventDefault();
+        alert('Please select at least one item to return.');
+        return;
+    }
+});
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+    updateSummary();
+});
+</script>
+
+<!-- Custom Styles -->
+<style>
+.item-row {
+    transition: all 0.2s ease-in-out;
+    border-left: 3px solid transparent !important;
+}
+
+.item-row.border-primary {
+    border-left-color: var(--bs-primary) !important;
+}
+
+.qty-btn {
+    width: 36px;
+}
+
+.qty-input {
+    width: 60px;
+}
+
+.card {
+    border-radius: 0.75rem;
+}
+
+.btn {
+    border-radius: 0.5rem;
+    font-weight: 500;
+}
+
+.form-select, .form-control {
+    border-radius: 0.375rem;
+}
+
+.exchange-field {
+    background-color: #f8f9fa;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    border: 1px dashed #dee2e6;
+}
+
+.alert {
+    border-radius: 0.5rem;
+}
+
+@media (max-width: 768px) {
+    .container {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+
+    .btn-lg {
+        width: 100%;
+    }
+
+    .item-row .row > div {
+        margin-bottom: 1rem;
+    }
+
+    .d-flex.gap-2 {
+        flex-direction: column;
+        gap: 0.5rem !important;
+    }
+}
+</style>
+
+{% endblock %}

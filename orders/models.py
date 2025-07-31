@@ -6,6 +6,8 @@ from decimal import Decimal
 import uuid
 from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator, MaxValueValidator
+from django.db.models import Sum
 
 class PromoCode(models.Model):
     code = models.CharField(max_length=50, unique=True)
@@ -329,6 +331,14 @@ class OrderStatusHistory(models.Model):
     def __str__(self):
         return f"Order #{self.order.id} - {self.get_status_display()} at {self.timestamp}"
 
+def q2(val) -> Decimal:
+    """Quantize to 2dp Decimal safely."""
+    if val is None:
+        val = Decimal('0')
+    if not isinstance(val, Decimal):
+        val = Decimal(str(val))
+    return val.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
 
 class Return(models.Model):
     """Main return model that handles product returns"""
@@ -363,18 +373,21 @@ class Return(models.Model):
     # Basic Information
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     return_number = models.CharField(max_length=20, unique=True, editable=False)
-    order = models.ForeignKey('Order', on_delete=models.CASCADE, related_name='returns')
+    order = models.ForeignKey('orders.Order', on_delete=models.CASCADE, related_name='returns')
     buyer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='returns')
 
     # Return Details
     status = models.CharField(max_length=20, choices=RETURN_STATUS_CHOICES, default='pending')
     reason = models.CharField(max_length=20, choices=RETURN_REASON_CHOICES)
-    reason_description = models.TextField(help_text="Detailed explanation for the return")
+    # Make description optional in case buyer just selects a reason.
+    reason_description = models.TextField(blank=True, default="", help_text="Detailed explanation for the return")
 
     # Financial Information
-    total_return_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
-    discount_applied = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
-    refund_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
+    total_return_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    # If you use this as restocking fee or manual adjustment, keep it positive; it will be subtracted.
+    discount_applied = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'),
+                                           validators=[MinValueValidator(Decimal('0'))])
+    refund_amount = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
 
     # Logistics Information
     logistics_method = models.CharField(max_length=20, choices=LOGISTICS_METHOD_CHOICES, default='easymarket_pickup')
@@ -411,15 +424,17 @@ class Return(models.Model):
     def __str__(self):
         return f"Return {self.return_number} - Order #{self.order.id}"
 
+    # ---- Lifecycle helpers ----
+
     def save(self, *args, **kwargs):
         # Generate return number if not exists
         if not self.return_number:
             self.return_number = self.generate_return_number()
 
-        # Auto-set dates based on status changes
-        if self.pk:  # Only for existing returns
-            old_return = Return.objects.get(pk=self.pk)
-            if old_return.status != self.status:
+        # Track status transitions to set timestamps
+        if self.pk:
+            old = Return.objects.filter(pk=self.pk).only('status', 'approved_at', 'completed_at', 'received_at_store_date').first()
+            if old and old.status != self.status:
                 if self.status == 'approved' and not self.approved_at:
                     self.approved_at = timezone.now()
                 elif self.status == 'completed' and not self.completed_at:
@@ -427,10 +442,15 @@ class Return(models.Model):
                 elif self.status == 'received' and not self.received_at_store_date:
                     self.received_at_store_date = timezone.now()
 
+        # Keep financials quantized
+        self.total_return_amount = q2(self.total_return_amount)
+        self.discount_applied = q2(self.discount_applied)
+        self.refund_amount = q2(self.refund_amount)
+
         super().save(*args, **kwargs)
 
     def generate_return_number(self):
-        """Generate unique return number"""
+        """Generate unique return number like RET-123456"""
         import random
         import string
         while True:
@@ -438,118 +458,139 @@ class Return(models.Model):
             if not Return.objects.filter(return_number=number).exists():
                 return number
 
-    def calculate_refund_amount(self):
-        """Calculate the total refund amount"""
-        total = sum(item.get_refund_amount() for item in self.items.all())
-        self.refund_amount = total - self.discount_applied
+    # ---- Business logic ----
+
+    def recalc_totals(self, save=True):
+        """
+        Recompute line totals and overall refund.
+        total_return_amount = sum of line totals (unit snapshot × qty)
+        refund_amount = total_return_amount - discount_applied
+        """
+        total = Decimal('0.00')
+        for it in self.items.all():
+            # Ensure each line has a proper subtotal cached
+            total += q2(it.get_refund_amount())
+        self.total_return_amount = q2(total)
+        # Never refund negative
+        self.refund_amount = q2(max(Decimal('0.00'), self.total_return_amount - q2(self.discount_applied)))
+        if save:
+            super(Return, self).save(update_fields=['total_return_amount', 'refund_amount', 'updated_at'])
         return self.refund_amount
 
+    def calculate_refund_amount(self):
+        """Kept for backward compatibility; delegates to recalc_totals()."""
+        return self.recalc_totals(save=True)
+
     def can_be_approved(self):
-        """Check if return can be approved"""
         return self.status == 'pending'
 
     def can_be_cancelled(self):
-        """Check if return can be cancelled"""
         return self.status in ['pending', 'approved']
 
     def get_store(self):
-        """Get the store associated with this return"""
-        # Get store from the first product in return items
-        return self.items.first().product.store if self.items.exists() else None
+        """
+        Get the store associated with this return.
+        Tries product.store; falls back to resolving via product.seller if needed.
+        """
+        first_item = self.items.select_related('product').first()
+        if not first_item:
+            return None
+        product = first_item.product
+        # Common schema: Product has either .store or .seller (User) -> Store
+        if hasattr(product, 'store') and product.store_id:
+            return product.store
+        if hasattr(product, 'seller') and product.seller_id:
+            from stores.models import Store
+            return Store.objects.filter(owner=product.seller).first()
+        return None
 
-    def approve_return(self, approved_by=None, estimated_pickup=None):
-        """Approve the return"""
-        if self.can_be_approved():
-            self.status = 'approved'
-            self.approved_by = approved_by
-            self.approved_at = timezone.now()
-            if estimated_pickup:
-                self.estimated_pickup_date = estimated_pickup
-            # Generate tracking number
-            self.tracking_number = f"EM-TRACK-{timezone.now().strftime('%Y%m%d')}-{self.return_number[-4:]}"
-            self.save()
+    def approve_return(self, approved_by=None, estimated_pickup=None, note=''):
+        """Approve the return and log status history."""
+        if not self.can_be_approved():
+            return
+        self.status = 'approved'
+        self.approved_by = approved_by
+        self.approved_at = timezone.now()
+        if estimated_pickup:
+            self.estimated_pickup_date = estimated_pickup
+        # Generate tracking number
+        self.tracking_number = f"EM-TRACK-{timezone.now().strftime('%Y%m%d')}-{self.return_number[-4:]}"
+        self.save()
 
-            # Create status history
-            ReturnStatusHistory.objects.create(
-                return_request=self,
-                status='approved',
-                changed_by=approved_by,
-                notes=f"Return approved. Pickup scheduled for {estimated_pickup}"
-            )
+        ReturnStatusHistory.objects.create(
+            return_request=self,
+            status='approved',
+            changed_by=approved_by,
+            notes=note or (f"Return approved. Pickup scheduled for {estimated_pickup}" if estimated_pickup else "Return approved.")
+        )
 
     def reject_return(self, rejected_by=None, reason=''):
-        """Reject the return"""
-        if self.can_be_approved():
-            self.status = 'rejected'
-            self.rejection_reason = reason
-            self.save()
+        """Reject the return and log status history."""
+        if not self.can_be_approved():
+            return
+        self.status = 'rejected'
+        self.rejection_reason = reason or ''
+        self.save()
 
-            # Create status history
-            ReturnStatusHistory.objects.create(
-                return_request=self,
-                status='rejected',
-                changed_by=rejected_by,
-                notes=reason
-            )
+        ReturnStatusHistory.objects.create(
+            return_request=self,
+            status='rejected',
+            changed_by=rejected_by,
+            notes=reason
+        )
 
-    def complete_return(self, discount_applied=0):
-        """Complete the return and process refund"""
-        if self.status == 'received':
-            self.discount_applied = discount_applied
-            self.refund_amount = self.calculate_refund_amount()
-            self.status = 'completed'
-            self.completed_at = timezone.now()
-            self.save()
+    def complete_return(self, discount_applied=0, note=''):
+        """
+        Complete the return and process refund.
+        Applies discount_applied (e.g., restocking fee or admin adjustment) and recalculates totals.
+        """
+        if self.status != 'received':
+            return
+        self.discount_applied = q2(discount_applied)
+        self.recalc_totals(save=False)
+        self.status = 'completed'
+        self.completed_at = timezone.now()
+        self.save()
 
-            # Update store inventory
-            self.update_store_inventory()
+        # Update store inventory
+        self.update_store_inventory()
 
-            # Create status history
-            ReturnStatusHistory.objects.create(
-                return_request=self,
-                status='completed',
-                notes=f"Return completed. Refund amount: ${self.refund_amount}"
-            )
+        ReturnStatusHistory.objects.create(
+            return_request=self,
+            status='completed',
+            notes=note or f"Return completed. Refund amount: D{self.refund_amount}"
+        )
 
     def update_store_inventory(self):
-        """Update store inventory when return is completed"""
-        for item in self.items.all():
-            # Create or update store inventory record
-            inventory, created = StoreInventory.objects.get_or_create(
-                store=item.product.store,
-                defaults={
-                    'store_name': item.product.store.name,
-                    'regular_stock': 0,
-                    'returned_stock': 0,
-                    'discounted_stock': 0
-                }
-            )
-
-            inventory.returned_stock += item.quantity
-            if self.discount_applied > 0:
-                inventory.discounted_stock += item.quantity
-            inventory.save()
-
-            # Create inventory tracking record using store app model
-            from stores.models import StoreInventoryTracking
-            StoreInventoryTracking.objects.create(
-                store=item.product.store,
-                product=item.product,
-                transaction_type='return_received',
-                quantity_change=item.quantity,
-                return_request=self,
-                condition=item.condition,
-                reference_id=self.return_number,
-                notes=f"Return completed: {self.reason_description}",
-                performed_by=self.approved_by
-            )
+        """Update store inventory when return is completed (simple example)."""
+        store = self.get_store()
+        if not store:
+            return
+        inventory, _ = StoreInventory.objects.get_or_create(
+            store=store,
+            defaults={
+                'store_name': getattr(store, 'name', 'Store'),
+                'regular_stock': 0,
+                'returned_stock': 0,
+                'discounted_stock': 0
+            }
+        )
+        # Sum quantities from all items
+        qty = sum(i.quantity for i in self.items.all())
+        inventory.returned_stock = (inventory.returned_stock or 0) + qty
+        if q2(self.discount_applied) > 0:
+            inventory.discounted_stock = (inventory.discounted_stock or 0) + qty
+        inventory.save(update_fields=['returned_stock', 'discounted_stock', 'last_updated'])
 
 
 class ReturnItem(models.Model):
     """Individual items within a return"""
 
     return_request = models.ForeignKey(Return, on_delete=models.CASCADE, related_name='items')
-    order_item = models.ForeignKey('OrderItem', on_delete=models.CASCADE)
+
+    # ADD related_name here ↓↓↓
+    order_item = models.ForeignKey('OrderItem', on_delete=models.CASCADE, related_name='return_items')
+
     product = models.ForeignKey('marketplace.Product', on_delete=models.CASCADE)
     quantity = models.PositiveIntegerField()
     reason = models.CharField(max_length=20, choices=Return.RETURN_REASON_CHOICES)
@@ -578,12 +619,19 @@ class ReturnItem(models.Model):
         """Calculate refund amount for this item"""
         return self.price_at_return * self.quantity
 
+    @property
+    def previously_returned_qty(self):
+        return self.return_items.aggregate(total=Sum('quantity'))['total'] or 0
+
+    @property
+    def remaining_returnable_qty(self):
+        return max(self.quantity - self.previously_returned_qty, 0)
+
     def save(self, *args, **kwargs):
         # Store the price at time of return
         if not self.price_at_return:
             self.price_at_return = self.order_item.price_at_time or self.product.price
         super().save(*args, **kwargs)
-
 
 class ReturnImage(models.Model):
     """Images uploaded for return requests"""
@@ -625,9 +673,12 @@ class ReturnStatusHistory(models.Model):
 
 
 class StoreInventory(models.Model):
-    """Track store inventory including returned items"""
-
-    store = models.ForeignKey('stores.Store', on_delete=models.CASCADE, related_name='inventory_summary')
+    """
+    Track store inventory including returned items.
+    One summary row per store.
+    """
+    # One-to-one is the cleanest way if you want a single row per store.
+    store = models.OneToOneField('stores.Store', on_delete=models.CASCADE, related_name='inventory_summary')
     store_name = models.CharField(max_length=255)  # Denormalized for performance
     regular_stock = models.PositiveIntegerField(default=0)
     returned_stock = models.PositiveIntegerField(default=0)
@@ -637,14 +688,13 @@ class StoreInventory(models.Model):
     class Meta:
         verbose_name = 'Store Inventory'
         verbose_name_plural = 'Store Inventories'
-        unique_together = ['store']
 
     def __str__(self):
         return f"{self.store_name} - Inventory"
 
     @property
     def total_stock(self):
-        return self.regular_stock + self.returned_stock + self.discounted_stock
+        return (self.regular_stock or 0) + (self.returned_stock or 0) + (self.discounted_stock or 0)
 
 
 class ReturnRefund(models.Model):
@@ -665,7 +715,7 @@ class ReturnRefund(models.Model):
     ]
 
     return_request = models.OneToOneField(Return, on_delete=models.CASCADE, related_name='refund')
-    refund_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    refund_amount = models.DecimalField(max_digits=12, decimal_places=2)
     refund_method = models.CharField(max_length=20, choices=REFUND_METHOD_CHOICES, default='original_payment')
     status = models.CharField(max_length=20, choices=REFUND_STATUS_CHOICES, default='pending')
 
@@ -694,35 +744,46 @@ class ReturnRefund(models.Model):
         verbose_name_plural = 'Return Refunds'
 
     def __str__(self):
-        return f"Refund for {self.return_request.return_number} - ${self.refund_amount}"
+        return f"Refund for {self.return_request.return_number} - D{q2(self.refund_amount)}"
 
-    def process_refund(self, processed_by=None):
-        """Process the refund"""
+    def process_refund(self, processed_by=None, transaction_id='', gateway_response=None):
+        """
+        Process the refund (record-keeping).
+        Integrate your actual PSP here; we mark as completed for now.
+        """
         self.status = 'processing'
         self.processed_by = processed_by
         self.processed_at = timezone.now()
+        self.transaction_id = transaction_id or self.transaction_id
+        if gateway_response is not None:
+            self.gateway_response = gateway_response
+        self.refund_amount = q2(self.refund_amount)
         self.save()
 
-        # Here you would integrate with your payment gateway
-        # For now, we'll mark it as completed
+        # Mark completed (simulate gateway success)
         self.status = 'completed'
-        self.save()
+        self.save(update_fields=['status', 'updated_at'])
 
 
-# Additional utility functions
+# --------------------------
+# Utility helpers
+# --------------------------
 
 def can_create_return(order):
-    """Check if a return can be created for an order"""
-    # Define your business rules here
-    if order.status not in ['delivered']:
+    """
+    Check if a return can be created for an order.
+    - Order must be delivered
+    - Within 30 days (config)
+    - No active return in progress for this order
+    """
+    if getattr(order, 'status', None) != 'delivered':
         return False, "Order must be delivered to create a return"
 
-    # Check if return window is still open (e.g., 30 days)
     from datetime import timedelta
-    if order.delivered_date and (timezone.now().date() - order.delivered_date.date()) > timedelta(days=30):
+    delivered_date = getattr(order, 'delivered_date', None) or getattr(order, 'updated_at', None)
+    if delivered_date and (timezone.now().date() - delivered_date.date()) > timedelta(days=30):
         return False, "Return window has expired (30 days)"
 
-    # Check if return already exists
     if order.returns.filter(status__in=['pending', 'approved', 'in_transit', 'received']).exists():
         return False, "A return request is already in progress for this order"
 
@@ -731,7 +792,7 @@ def can_create_return(order):
 
 def get_return_statistics():
     """Get return statistics for dashboard"""
-    from django.db.models import Count, Sum
+    from django.db.models import Sum
 
     stats = {
         'total_returns': Return.objects.count(),
@@ -740,11 +801,9 @@ def get_return_statistics():
         'completed_returns': Return.objects.filter(status='completed').count(),
         'total_refund_amount': Return.objects.filter(status='completed').aggregate(
             total=Sum('refund_amount')
-        )['total'] or 0,
+        )['total'] or Decimal('0.00'),
     }
-
     return stats
-
 
 class ChatMessage(models.Model):
     order = models.ForeignKey('Order', on_delete=models.CASCADE, related_name='chat_messages')

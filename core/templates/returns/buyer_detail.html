@@ -1,0 +1,1293 @@
+{% extends "base.html" %}
+{% block content %}
+{% load static %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+
+<div class="container py-5 return-detail-page">
+  <!-- Header Section -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <nav aria-label="breadcrumb" class="rdt-breadcrumb-nav">
+        <ol class="breadcrumb rdt-breadcrumb">
+          <li class="breadcrumb-item">
+            <a href="{% url 'orders:order_history' %}" class="text-decoration-none">
+              <i class="fas fa-shopping-bag me-1"></i>
+              Orders
+            </a>
+          </li>
+          <li class="breadcrumb-item">
+            <a href="{% url 'returns:hub' %}" class="text-decoration-none">
+              <i class="fas fa-undo-alt me-1"></i>
+              Returns
+            </a>
+          </li>
+          <li class="breadcrumb-item active" aria-current="page">RMA {{ ret.return_number }}</li>
+        </ol>
+      </nav>
+
+      <div class="rdt-header-section">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4">
+          <div class="d-flex align-items-center mb-3 mb-md-0">
+            <div class="rdt-header-icon me-4">
+              <i class="fas fa-undo-alt"></i>
+            </div>
+            <div>
+              <h1 class="mb-2 fw-bold display-6">Return Request</h1>
+              <div class="rdt-header-meta">
+                <span class="rdt-rma-number">RMA #{{ ret.return_number }}</span>
+                <span class="rdt-meta-separator">•</span>
+                <span class="text-muted">{{ ret.created_at|date:"F d, Y" }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="rdt-header-actions">
+            <button class="btn rdt-btn-outline-primary btn-sm" onclick="window.print()">
+              <i class="fas fa-print me-1"></i>
+              Print Details
+            </button>
+            <a href="{% url 'returns:hub' %}" class="btn rdt-btn-outline-secondary btn-sm">
+              <i class="fas fa-arrow-left me-1"></i>
+              Back to Returns
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <!-- Main Content -->
+    <div class="col-lg-8">
+      <!-- Status Overview Card -->
+      <div class="rdt-status-card mb-4">
+        <div class="rdt-status-header">
+          <div class="row align-items-center">
+            <div class="col-md-8">
+              <div class="d-flex align-items-center">
+                <div class="rdt-status-indicator-wrapper me-4">
+                  <div class="rdt-status-indicator rdt-status-{{ ret.status|lower }}">
+                    <div class="rdt-status-pulse"></div>
+                  </div>
+                </div>
+                <div>
+                  <h3 class="mb-1 fw-bold rdt-status-title">{{ ret.get_status_display }}</h3>
+                  <p class="rdt-status-description mb-0">
+                    {% if ret.status == 'pending' %}
+                      Your return request is being carefully reviewed by our team
+                    {% elif ret.status == 'approved' %}
+                      Great news! Your return has been approved and is ready for processing
+                    {% elif ret.status == 'in_transit' %}
+                      Your package is safely on its way back to our facility
+                    {% elif ret.status == 'received' %}
+                      We've received your return and our quality team is inspecting it
+                    {% elif ret.status == 'completed' %}
+                      Excellent! Your return is complete and refund has been processed
+                    {% elif ret.status == 'rejected' %}
+                      Your return request requires additional review - see details below
+                    {% elif ret.status == 'cancelled' %}
+                      This return request has been cancelled per your request
+                    {% else %}
+                      Current status: {{ ret.get_status_display }}
+                    {% endif %}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4 text-md-end mt-3 mt-md-0">
+              {% if ret.status == 'approved' %}
+                <div class="rdt-status-badge rdt-badge-success">
+                  <i class="fas fa-check-circle me-2"></i>
+                  Ready for Return
+                </div>
+              {% elif ret.status == 'completed' %}
+                <div class="rdt-status-badge rdt-badge-info">
+                  <i class="fas fa-money-bill-wave me-2"></i>
+                  Refund Processed
+                </div>
+              {% elif ret.status == 'pending' %}
+                <div class="rdt-status-badge rdt-badge-warning">
+                  <i class="fas fa-clock me-2"></i>
+                  Under Review
+                </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Return Details Card -->
+      <div class="rdt-details-card mb-4">
+        <div class="rdt-card-header">
+          <h4 class="mb-0 fw-bold">
+            <i class="fas fa-info-circle me-2"></i>
+            Return Information
+          </h4>
+        </div>
+        <div class="rdt-card-body">
+          <div class="row">
+            <div class="col-md-6 mb-4">
+              <div class="rdt-info-item">
+                <div class="rdt-info-label">Original Order</div>
+                <div class="rdt-info-content">
+                  <div class="d-flex align-items-center">
+                    <div class="rdt-info-icon">
+                      <i class="fas fa-shopping-bag"></i>
+                    </div>
+                    <div>
+                      <a href="{% url 'orders:order_detail' ret.order.id %}" class="rdt-link-primary fw-bold">
+                        Order #{{ ret.order.id }}
+                      </a>
+                      <div class="rdt-info-meta">{{ ret.order.created_at|date:"F d, Y" }}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {% with fi=ret.items.all.0 %}
+              <div class="col-md-6 mb-4">
+                <div class="rdt-info-item">
+                  <div class="rdt-info-label">Store Location</div>
+                  <div class="rdt-info-content">
+                    <div class="d-flex align-items-center">
+                      <div class="rdt-info-icon">
+                        <i class="fas fa-store"></i>
+                      </div>
+                      <div>
+                        <div class="fw-bold">
+                          {% if fi and fi.product and fi.product.store %}
+                            {{ fi.product.store.name }}
+                          {% else %}
+                            Not specified
+                          {% endif %}
+                        </div>
+                        {% if fi and fi.product and fi.product.store and fi.product.store.address %}
+                          <div class="rdt-info-meta">{{ fi.product.store.address }}</div>
+                        {% endif %}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            {% endwith %}
+
+            <div class="col-md-6 mb-4">
+              <div class="rdt-info-item">
+                <div class="rdt-info-label">Return Reason</div>
+                <div class="rdt-info-content">
+                  <div class="d-flex align-items-center">
+                    <div class="rdt-info-icon">
+                      <i class="fas fa-clipboard-list"></i>
+                    </div>
+                    <div>
+                      <div class="fw-bold">{{ ret.get_reason_display }}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-md-6 mb-4">
+              <div class="rdt-info-item">
+                <div class="rdt-info-label">Request Date</div>
+                <div class="rdt-info-content">
+                  <div class="d-flex align-items-center">
+                    <div class="rdt-info-icon">
+                      <i class="fas fa-calendar"></i>
+                    </div>
+                    <div>
+                      <div class="fw-bold">{{ ret.created_at|date:"F d, Y" }}</div>
+                      <div class="rdt-info-meta">{{ ret.created_at|time:"g:i A" }}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {% if ret.reason_description or ret.buyer_notes %}
+            <div class="rdt-notes-section">
+              <div class="rdt-info-label mb-3">Additional Notes</div>
+              {% if ret.reason_description %}
+                <div class="rdt-note-card mb-3">
+                  <div class="rdt-note-header">
+                    <i class="fas fa-comment-alt me-2"></i>
+                    Return Description
+                  </div>
+                  <div class="rdt-note-content">{{ ret.reason_description }}</div>
+                </div>
+              {% endif %}
+              {% if ret.buyer_notes %}
+                <div class="rdt-note-card">
+                  <div class="rdt-note-header">
+                    <i class="fas fa-user me-2"></i>
+                    Customer Notes
+                  </div>
+                  <div class="rdt-note-content">{{ ret.buyer_notes }}</div>
+                </div>
+              {% endif %}
+            </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Returned Items Card -->
+      {% if ret.items.all %}
+      <div class="rdt-items-card mb-4">
+        <div class="rdt-card-header">
+          <h4 class="mb-0 fw-bold">
+            <i class="fas fa-boxes me-2"></i>
+            Returned Items ({{ ret.items.count }})
+          </h4>
+        </div>
+        <div class="rdt-items-container">
+          {% for item in ret.items.all %}
+            <div class="rdt-item-row {% if not forloop.last %}rdt-item-border{% endif %}">
+              <div class="row align-items-center">
+                <div class="col-md-6">
+                  <div class="rdt-product-info">
+                    <div class="rdt-product-image">
+                      {% if item.order_item.product.image %}
+                        <img src="{{ item.order_item.product.image.url }}"
+                             alt="{{ item.order_item.product.name }}"
+                             class="rdt-product-img">
+                      {% else %}
+                        <div class="rdt-product-placeholder">
+                          <i class="fas fa-image"></i>
+                        </div>
+                      {% endif %}
+                    </div>
+                    <div class="rdt-product-details">
+                      <h6 class="rdt-product-name">{{ item.order_item.product.name }}</h6>
+                      <div class="rdt-product-meta">
+                        <span class="rdt-quantity-badge">
+                          <i class="fas fa-times me-1"></i>
+                          {{ item.quantity }}
+                        </span>
+                        {% if item.order_item.selected_features %}
+                          <span class="rdt-meta-separator">•</span>
+                          <span class="rdt-product-features">
+                            {% for k,v in item.order_item.selected_features.items %}
+                              {{ k|title }}: {{ v }}{% if not forloop.last %}, {% endif %}
+                            {% endfor %}
+                          </span>
+                        {% endif %}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="col-md-3 mt-3 mt-md-0">
+                  <div class="rdt-item-attribute">
+                    <div class="rdt-attribute-label">Reason</div>
+                    <div class="rdt-attribute-value">
+                      <span class="rdt-reason-badge">
+                        {{ item.get_reason_display }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="col-md-3 mt-3 mt-md-0">
+                  <div class="rdt-item-attribute">
+                    <div class="rdt-attribute-label">Condition</div>
+                    <div class="rdt-attribute-value">
+                      <span class="rdt-condition-badge rdt-condition-{{ item.condition|lower }}">
+                        {{ item.get_condition_display }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Sidebar -->
+    <div class="col-lg-4">
+      <!-- Status Timeline Card -->
+      <div class="rdt-timeline-card mb-4">
+        <div class="rdt-card-header">
+          <h5 class="mb-0 fw-bold">
+            <i class="fas fa-history me-2"></i>
+            Status Timeline
+          </h5>
+        </div>
+        <div class="rdt-timeline-container">
+          {% if ret.status_history.all %}
+            <div class="rdt-timeline">
+              {% for s in ret.status_history.all %}
+                <div class="rdt-timeline-item {% if forloop.first %}rdt-timeline-current{% endif %}">
+                  <div class="rdt-timeline-marker">
+                    <div class="rdt-timeline-dot {% if forloop.first %}rdt-dot-active{% endif %}"></div>
+                    {% if not forloop.last %}
+                      <div class="rdt-timeline-line"></div>
+                    {% endif %}
+                  </div>
+                  <div class="rdt-timeline-content">
+                    <div class="rdt-timeline-header">
+                      <h6 class="rdt-timeline-title">{{ s.get_status_display }}</h6>
+                      <span class="rdt-timeline-date">{{ s.timestamp|date:"M d" }}</span>
+                    </div>
+                    {% if s.notes %}
+                      <p class="rdt-timeline-note">{{ s.notes }}</p>
+                    {% endif %}
+                    <div class="rdt-timeline-time">{{ s.timestamp|time:"g:i A" }}</div>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="rdt-empty-timeline">
+              <div class="rdt-empty-icon">
+                <i class="fas fa-clock"></i>
+              </div>
+              <p class="rdt-empty-text">No status updates yet</p>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Next Steps Card -->
+      <div class="rdt-nextsteps-card mb-4">
+        <div class="rdt-card-body">
+          <h5 class="rdt-nextsteps-title">
+            <i class="fas fa-route me-2"></i>
+            What's Next?
+          </h5>
+
+          <div class="rdt-nextsteps-content">
+            {% if ret.status == 'pending' %}
+              <div class="rdt-step-item rdt-step-warning">
+                <div class="rdt-step-icon">
+                  <i class="fas fa-clock"></i>
+                </div>
+                <div class="rdt-step-content">
+                  <div class="rdt-step-title">Under Review</div>
+                  <div class="rdt-step-desc">We're reviewing your return request. You'll receive an update within 1–2 business days.</div>
+                </div>
+              </div>
+            {% elif ret.status == 'approved' %}
+              <div class="rdt-step-item rdt-step-success">
+                <div class="rdt-step-icon">
+                  <i class="fas fa-shipping-fast"></i>
+                </div>
+                <div class="rdt-step-content">
+                  <div class="rdt-step-title">Return Your Items</div>
+                  <div class="rdt-step-desc">Package your items securely and use the provided return label.</div>
+                </div>
+              </div>
+              <div class="rdt-action-buttons">
+                <a href="#" class="btn rdt-btn-primary">
+                  <i class="fas fa-download me-2"></i>
+                  Download Return Label
+                </a>
+              </div>
+            {% elif ret.status == 'in_transit' %}
+              <div class="rdt-step-item rdt-step-info">
+                <div class="rdt-step-icon">
+                  <i class="fas fa-route"></i>
+                </div>
+                <div class="rdt-step-content">
+                  <div class="rdt-step-title">Package In Transit</div>
+                  <div class="rdt-step-desc">Your package is safely on its way to our facility.</div>
+                </div>
+              </div>
+            {% elif ret.status == 'received' %}
+              <div class="rdt-step-item rdt-step-info">
+                <div class="rdt-step-icon">
+                  <i class="fas fa-clipboard-check"></i>
+                </div>
+                <div class="rdt-step-content">
+                  <div class="rdt-step-title">Quality Inspection</div>
+                  <div class="rdt-step-desc">We've received your items and are performing quality checks.</div>
+                </div>
+              </div>
+            {% elif ret.status == 'completed' %}
+              <div class="rdt-step-item rdt-step-success">
+                <div class="rdt-step-icon">
+                  <i class="fas fa-check-circle"></i>
+                </div>
+                <div class="rdt-step-content">
+                  <div class="rdt-step-title">Return Complete</div>
+                  <div class="rdt-step-desc">Your return has been processed successfully. Refund will appear in 3–5 business days.</div>
+                </div>
+              </div>
+            {% elif ret.status == 'rejected' %}
+              <div class="rdt-step-item rdt-step-danger">
+                <div class="rdt-step-icon">
+                  <i class="fas fa-times-circle"></i>
+                </div>
+                <div class="rdt-step-content">
+                  <div class="rdt-step-title">Return Rejected</div>
+                  <div class="rdt-step-desc">Please review the notes above and contact support if you have questions.</div>
+                </div>
+              </div>
+            {% elif ret.status == 'cancelled' %}
+              <div class="rdt-step-item rdt-step-muted">
+                <div class="rdt-step-icon">
+                  <i class="fas fa-ban"></i>
+                </div>
+                <div class="rdt-step-content">
+                  <div class="rdt-step-title">Return Cancelled</div>
+                  <div class="rdt-step-desc">This return request has been cancelled.</div>
+                </div>
+              </div>
+            {% endif %}
+          </div>
+
+          <div class="rdt-support-actions">
+            <a href="#" class="btn rdt-btn-outline-primary">
+              <i class="fas fa-headset me-2"></i>
+              Contact Support
+            </a>
+            <a href="{% url 'returns:policy' %}" class="btn rdt-btn-outline-secondary">
+              <i class="fas fa-book me-2"></i>
+              Return Policy
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Help Card -->
+      <div class="rdt-help-card">
+        <div class="rdt-help-content">
+          <div class="rdt-help-icon">
+            <i class="fas fa-question-circle"></i>
+          </div>
+          <h6 class="rdt-help-title">Need Assistance?</h6>
+          <p class="rdt-help-desc">
+            Our dedicated customer service team is ready to help with any questions about your return.
+          </p>
+          <div class="rdt-help-actions">
+            <a href="tel:1-800-123-4567" class="btn rdt-btn-primary">
+              <i class="fas fa-phone me-2"></i>
+              Call Support
+            </a>
+            <a href="mailto:returns@company.com" class="btn rdt-btn-outline-primary">
+              <i class="fas fa-envelope me-2"></i>
+              Email Us
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Return Detail Page Scoped Styles -->
+<style>
+/* Scoped to prevent conflicts - all styles prefixed with .return-detail-page */
+.return-detail-page {
+  /* Header Styles */
+}
+
+.return-detail-page .rdt-breadcrumb {
+  background: transparent;
+  padding: 0;
+  margin-bottom: 1.5rem;
+}
+
+.return-detail-page .rdt-breadcrumb-item a {
+  color: #6c757d;
+  transition: color 0.2s ease;
+}
+
+.return-detail-page .rdt-breadcrumb-item a:hover {
+  color: #667eea;
+}
+
+.return-detail-page .rdt-header-section {
+  margin-bottom: 2rem;
+}
+
+.return-detail-page .rdt-header-icon {
+  width: 80px;
+  height: 80px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 2rem;
+  box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+}
+
+.return-detail-page .rdt-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.1rem;
+}
+
+.return-detail-page .rdt-rma-number {
+  font-weight: 600;
+  color: #667eea;
+}
+
+.return-detail-page .rdt-meta-separator {
+  color: #dee2e6;
+  font-weight: bold;
+}
+
+.return-detail-page .rdt-header-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+/* Status Card */
+.return-detail-page .rdt-status-card {
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  border: 1px solid #f0f0f0;
+  overflow: hidden;
+}
+
+.return-detail-page .rdt-status-header {
+  padding: 2rem;
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+}
+
+.return-detail-page .rdt-status-indicator-wrapper {
+  position: relative;
+}
+
+.return-detail-page .rdt-status-indicator {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.return-detail-page .rdt-status-pulse {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  animation: rdt-pulse 2s infinite;
+}
+
+@keyframes rdt-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  70% {
+    transform: scale(1.3);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.3);
+    opacity: 0;
+  }
+}
+
+.return-detail-page .rdt-status-pending {
+  background: linear-gradient(135deg, #ffc107 0%, #ff8c00 100%);
+}
+.return-detail-page .rdt-status-pending .rdt-status-pulse {
+  background: #ffc107;
+}
+
+.return-detail-page .rdt-status-approved {
+  background: linear-gradient(135deg, #198754 0%, #20c997 100%);
+}
+.return-detail-page .rdt-status-approved .rdt-status-pulse {
+  background: #198754;
+}
+
+.return-detail-page .rdt-status-in_transit {
+  background: linear-gradient(135deg, #0dcaf0 0%, #0066cc 100%);
+}
+.return-detail-page .rdt-status-in_transit .rdt-status-pulse {
+  background: #0dcaf0;
+}
+
+.return-detail-page .rdt-status-received {
+  background: linear-gradient(135deg, #6f42c1 0%, #9966ff 100%);
+}
+.return-detail-page .rdt-status-received .rdt-status-pulse {
+  background: #6f42c1;
+}
+
+.return-detail-page .rdt-status-completed {
+  background: linear-gradient(135deg, #198754 0%, #20c997 100%);
+}
+.return-detail-page .rdt-status-completed .rdt-status-pulse {
+  background: #198754;
+}
+
+.return-detail-page .rdt-status-rejected {
+  background: linear-gradient(135deg, #dc3545 0%, #ff6b6b 100%);
+}
+.return-detail-page .rdt-status-rejected .rdt-status-pulse {
+  background: #dc3545;
+}
+
+.return-detail-page .rdt-status-cancelled {
+  background: linear-gradient(135deg, #6c757d 0%, #95a5a6 100%);
+}
+.return-detail-page .rdt-status-cancelled .rdt-status-pulse {
+  background: #6c757d;
+}
+
+.return-detail-page .rdt-status-title {
+  color: #2d3748;
+  font-size: 1.5rem;
+}
+
+.return-detail-page .rdt-status-description {
+  color: #718096;
+  font-size: 1rem;
+}
+
+.return-detail-page .rdt-status-badge {
+  padding: 0.75rem 1.5rem;
+  border-radius: 50px;
+  font-weight: 600;
+  font-size: 0.875rem;
+  display: inline-flex;
+  align-items: center;
+}
+
+.return-detail-page .rdt-badge-success {
+  background: rgba(25, 135, 84, 0.1);
+  color: #0f5132;
+}
+
+.return-detail-page .rdt-badge-info {
+  background: rgba(13, 202, 240, 0.1);
+  color: #055160;
+}
+
+.return-detail-page .rdt-badge-warning {
+  background: rgba(255, 193, 7, 0.1);
+  color: #664d03;
+}
+
+/* Cards */
+.return-detail-page .rdt-details-card,
+.return-detail-page .rdt-items-card,
+.return-detail-page .rdt-timeline-card,
+.return-detail-page .rdt-nextsteps-card {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  border: 1px solid #f0f0f0;
+  overflow: hidden;
+}
+
+.return-detail-page .rdt-card-header {
+  padding: 1.5rem 2rem;
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.return-detail-page .rdt-card-body {
+  padding: 2rem;
+}
+
+/* Info Items */
+.return-detail-page .rdt-info-item {
+  margin-bottom: 1rem;
+}
+
+.return-detail-page .rdt-info-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #9ca3af;
+  margin-bottom: 0.5rem;
+}
+
+.return-detail-page .rdt-info-content {
+  font-size: 1rem;
+}
+
+.return-detail-page .rdt-info-icon {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  margin-right: 1rem;
+  font-size: 1rem;
+}
+
+.return-detail-page .rdt-info-meta {
+  color: #9ca3af;
+  font-size: 0.875rem;
+}
+
+.return-detail-page .rdt-link-primary {
+  color: #667eea;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.return-detail-page .rdt-link-primary:hover {
+  color: #5a67d8;
+}
+
+/* Notes Section */
+.return-detail-page .rdt-notes-section {
+  margin-top: 2rem;
+  padding-top: 2rem;
+  border-top: 1px solid #f0f0f0;
+}
+
+.return-detail-page .rdt-note-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.return-detail-page .rdt-note-header {
+  padding: 1rem 1.5rem;
+  background: #e2e8f0;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: #4a5568;
+}
+
+.return-detail-page .rdt-note-content {
+  padding: 1.5rem;
+  color: #2d3748;
+  line-height: 1.6;
+}
+
+/* Items */
+.return-detail-page .rdt-items-container {
+  padding: 0;
+}
+
+.return-detail-page .rdt-item-row {
+  padding: 2rem;
+  transition: background-color 0.2s ease;
+}
+
+.return-detail-page .rdt-item-row:hover {
+  background-color: #f8fafc;
+}
+
+.return-detail-page .rdt-item-border {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.return-detail-page .rdt-product-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.return-detail-page .rdt-product-image {
+  flex-shrink: 0;
+}
+
+.return-detail-page .rdt-product-img {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 2px solid #e2e8f0;
+}
+
+.return-detail-page .rdt-product-placeholder {
+  width: 80px;
+  height: 80px;
+  background: #f8fafc;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9ca3af;
+  font-size: 1.5rem;
+}
+
+.return-detail-page .rdt-product-name {
+  font-weight: 600;
+  color: #2d3748;
+  margin-bottom: 0.5rem;
+  line-height: 1.4;
+}
+
+.return-detail-page .rdt-product-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.return-detail-page .rdt-quantity-badge {
+  background: #e2e8f0;
+  color: #4a5568;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.return-detail-page .rdt-product-features {
+  color: #9ca3af;
+  font-size: 0.875rem;
+}
+
+.return-detail-page .rdt-item-attribute {
+  text-align: center;
+}
+
+.return-detail-page .rdt-attribute-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #9ca3af;
+  margin-bottom: 0.5rem;
+}
+
+.return-detail-page .rdt-reason-badge {
+  background: #dbeafe;
+  color: #1e40af;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.return-detail-page .rdt-condition-badge {
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.return-detail-page .rdt-condition-new {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.return-detail-page .rdt-condition-good {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.return-detail-page .rdt-condition-fair {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.return-detail-page .rdt-condition-poor {
+  background: #fed7d7;
+  color: #9b2c2c;
+}
+
+.return-detail-page .rdt-condition-damaged {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* Timeline */
+.return-detail-page .rdt-timeline-container {
+  padding: 0;
+}
+
+.return-detail-page .rdt-timeline {
+  padding: 1.5rem;
+}
+
+.return-detail-page .rdt-timeline-item {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 2rem;
+}
+
+.return-detail-page .rdt-timeline-item:last-child {
+  margin-bottom: 0;
+}
+
+.return-detail-page .rdt-timeline-marker {
+  position: relative;
+  margin-right: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.return-detail-page .rdt-timeline-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #e2e8f0;
+  border: 3px solid white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  z-index: 2;
+}
+
+.return-detail-page .rdt-dot-active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+.return-detail-page .rdt-timeline-line {
+  width: 2px;
+  height: 100%;
+  background: #e2e8f0;
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.return-detail-page .rdt-timeline-content {
+  flex: 1;
+  min-height: 60px;
+}
+
+.return-detail-page .rdt-timeline-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.5rem;
+}
+
+.return-detail-page .rdt-timeline-title {
+  font-weight: 600;
+  color: #2d3748;
+  margin: 0;
+  font-size: 1rem;
+}
+
+.return-detail-page .rdt-timeline-date {
+  background: #e2e8f0;
+  color: #4a5568;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.return-detail-page .rdt-timeline-note {
+  color: #718096;
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.return-detail-page .rdt-timeline-time {
+  color: #9ca3af;
+  font-size: 0.75rem;
+}
+
+.return-detail-page .rdt-empty-timeline {
+  padding: 3rem 2rem;
+  text-align: center;
+}
+
+.return-detail-page .rdt-empty-icon {
+  width: 60px;
+  height: 60px;
+  background: #f8fafc;
+  border: 2px solid #e2e8f0;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  color: #9ca3af;
+  margin-bottom: 1rem;
+}
+
+.return-detail-page .rdt-empty-text {
+  color: #9ca3af;
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+/* Next Steps */
+.return-detail-page .rdt-nextsteps-title {
+  font-weight: 600;
+  color: #2d3748;
+  margin-bottom: 1.5rem;
+  font-size: 1.25rem;
+}
+
+.return-detail-page .rdt-nextsteps-content {
+  margin-bottom: 2rem;
+}
+
+.return-detail-page .rdt-step-item {
+  display: flex;
+  align-items: flex-start;
+  padding: 1.5rem;
+  border-radius: 12px;
+  margin-bottom: 1rem;
+}
+
+.return-detail-page .rdt-step-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  margin-right: 1rem;
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.return-detail-page .rdt-step-title {
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  font-size: 1rem;
+}
+
+.return-detail-page .rdt-step-desc {
+  color: #718096;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.return-detail-page .rdt-step-success {
+  background: rgba(25, 135, 84, 0.05);
+  border: 1px solid rgba(25, 135, 84, 0.1);
+}
+
+.return-detail-page .rdt-step-success .rdt-step-icon {
+  background: linear-gradient(135deg, #198754 0%, #20c997 100%);
+}
+
+.return-detail-page .rdt-step-info {
+  background: rgba(13, 202, 240, 0.05);
+  border: 1px solid rgba(13, 202, 240, 0.1);
+}
+
+.return-detail-page .rdt-step-info .rdt-step-icon {
+  background: linear-gradient(135deg, #0dcaf0 0%, #0066cc 100%);
+}
+
+.return-detail-page .rdt-step-warning {
+  background: rgba(255, 193, 7, 0.05);
+  border: 1px solid rgba(255, 193, 7, 0.1);
+}
+
+.return-detail-page .rdt-step-warning .rdt-step-icon {
+  background: linear-gradient(135deg, #ffc107 0%, #ff8c00 100%);
+}
+
+.return-detail-page .rdt-step-danger {
+  background: rgba(220, 53, 69, 0.05);
+  border: 1px solid rgba(220, 53, 69, 0.1);
+}
+
+.return-detail-page .rdt-step-danger .rdt-step-icon {
+  background: linear-gradient(135deg, #dc3545 0%, #ff6b6b 100%);
+}
+
+.return-detail-page .rdt-step-muted {
+  background: rgba(108, 117, 125, 0.05);
+  border: 1px solid rgba(108, 117, 125, 0.1);
+}
+
+.return-detail-page .rdt-step-muted .rdt-step-icon {
+  background: linear-gradient(135deg, #6c757d 0%, #95a5a6 100%);
+}
+
+.return-detail-page .rdt-action-buttons {
+  margin-bottom: 1.5rem;
+}
+
+.return-detail-page .rdt-support-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Help Card */
+.return-detail-page .rdt-help-card {
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  border-radius: 16px;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+}
+
+.return-detail-page .rdt-help-content {
+  padding: 2rem;
+  text-align: center;
+}
+
+.return-detail-page .rdt-help-icon {
+  width: 80px;
+  height: 80px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 2rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+}
+
+.return-detail-page .rdt-help-title {
+  font-weight: 600;
+  color: #2d3748;
+  margin-bottom: 1rem;
+  font-size: 1.25rem;
+}
+
+.return-detail-page .rdt-help-desc {
+  color: #718096;
+  margin-bottom: 2rem;
+  line-height: 1.6;
+}
+
+.return-detail-page .rdt-help-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Buttons */
+.return-detail-page .btn.rdt-btn-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  color: white;
+  border-radius: 10px;
+  font-weight: 600;
+  padding: 0.75rem 1.5rem;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+.return-detail-page .btn.rdt-btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+  color: white;
+}
+
+.return-detail-page .btn.rdt-btn-outline-primary {
+  border: 2px solid #667eea;
+  color: #667eea;
+  background: transparent;
+  border-radius: 10px;
+  font-weight: 600;
+  padding: 0.75rem 1.5rem;
+  transition: all 0.2s ease;
+}
+
+.return-detail-page .btn.rdt-btn-outline-primary:hover {
+  background: #667eea;
+  color: white;
+  transform: translateY(-1px);
+}
+
+.return-detail-page .btn.rdt-btn-outline-secondary {
+  border: 2px solid #6c757d;
+  color: #6c757d;
+  background: transparent;
+  border-radius: 10px;
+  font-weight: 600;
+  padding: 0.75rem 1.5rem;
+  transition: all 0.2s ease;
+}
+
+.return-detail-page .btn.rdt-btn-outline-secondary:hover {
+  background: #6c757d;
+  color: white;
+  transform: translateY(-1px);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .return-detail-page .rdt-header-icon {
+    width: 60px;
+    height: 60px;
+    font-size: 1.5rem;
+  }
+
+  .return-detail-page .rdt-header-actions {
+    flex-direction: column;
+    width: 100%;
+    gap: 0.5rem;
+  }
+
+  .return-detail-page .rdt-header-actions .btn {
+    width: 100%;
+  }
+
+  .return-detail-page .rdt-status-indicator {
+    width: 50px;
+    height: 50px;
+  }
+
+  .return-detail-page .rdt-card-header,
+  .return-detail-page .rdt-card-body {
+    padding: 1.5rem;
+  }
+
+  .return-detail-page .rdt-item-row {
+    padding: 1.5rem;
+  }
+
+  .return-detail-page .rdt-product-info {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .return-detail-page .rdt-support-actions,
+  .return-detail-page .rdt-help-actions {
+    gap: 0.5rem;
+  }
+
+  .return-detail-page .rdt-timeline-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .return-detail-page .rdt-step-item {
+    flex-direction: column;
+    text-align: center;
+    gap: 1rem;
+  }
+
+  .return-detail-page .rdt-step-icon {
+    margin: 0;
+  }
+}
+
+@media print {
+  .return-detail-page .btn,
+  .return-detail-page .rdt-breadcrumb-nav,
+  .return-detail-page .rdt-header-actions {
+    display: none !important;
+  }
+
+  .return-detail-page .rdt-status-card,
+  .return-detail-page .rdt-details-card,
+  .return-detail-page .rdt-items-card {
+    border: 1px solid #dee2e6 !important;
+    box-shadow: none !important;
+  }
+}
+</style>
+
+{% endblock %}
