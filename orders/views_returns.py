@@ -9,6 +9,7 @@ from django.db.models import Prefetch
 from django.conf import settings
 from django.views.decorators.http import require_POST
 from django.db import transaction
+from django.db.models import Sum, Subquery
 
 from orders.models import Order, OrderItem
 from stores.models import Store
@@ -228,7 +229,6 @@ def return_detail_store(request, store_id, rma):
     }
     return render(request, 'returns/store_detail.html', context)
 
-
 @login_required
 def store_returns(request, store_id):
     """
@@ -237,6 +237,7 @@ def store_returns(request, store_id):
     """
     store = get_object_or_404(Store, pk=store_id, owner=request.user)
 
+    # --- LIST (with prefetch for the table) ---
     returns_qs = (
         Return.objects
         .filter(items__product__store=store)   # ReturnItem.product.store == this store
@@ -247,13 +248,34 @@ def store_returns(request, store_id):
                 queryset=ReturnItem.objects.select_related("product", "order_item")
             )
         )
-        .distinct()
+        .distinct()  # fine for listing
         .order_by("-created_at")
     )
+
+    # --- STATS (avoid duplicate rows from the join) ---
+    # 1) Get unique Return IDs for this store
+    base_ids = (
+        Return.objects
+        .filter(items__product__store=store)
+        .values("id")
+        .distinct()
+    )
+    # 2) Rebuild a clean queryset to aggregate on (no DISTINCT on aggregates)
+    store_returns = Return.objects.filter(id__in=Subquery(base_ids))
+
+    pending_count  = store_returns.filter(status="pending").count()
+    approved_count = store_returns.filter(status="approved").count()
+    total_refunds  = store_returns.filter(status="completed").aggregate(
+        total=Sum("refund_amount")
+    )["total"] or Decimal("0.00")
 
     context = {
         "store": store,
         "returns": returns_qs,
+        # expose stats under simple keys (or a 'stats' dict if your template expects that)
+        "pending_returns_count": pending_count,
+        "approved_returns_count": approved_count,
+        "total_refunds_amount": total_refunds,
     }
     return render(request, "returns/store_returns.html", context)
 # --- Helper ---------------------------------------------------------------
