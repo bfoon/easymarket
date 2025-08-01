@@ -7,6 +7,7 @@ from decimal import Decimal
 from django.utils import timezone
 import uuid
 from django.db import transaction
+from django.db.models.functions import Lower
 
 
 class Category(models.Model):
@@ -646,3 +647,22 @@ class SharedCart(models.Model):
         return reverse('marketplace:copy_shared_cart', kwargs={'token': self.token})
 
 
+class Subscription(models.Model):
+    email = models.EmailField()
+    subscribed_at = models.DateTimeField(default=timezone.now)
+    active = models.BooleanField(default=True)
+    source = models.CharField(max_length=100, blank=True, default="")  # e.g., 'footer', 'popup', 'checkout'
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                Lower('email'),
+                name='uniq_subscription_email_ci'
+            )
+        ]
+        indexes = [
+            models.Index(Lower('email'), name='idx_subscription_email_ci')
+        ]
+
+    def __str__(self):
+        return self.email

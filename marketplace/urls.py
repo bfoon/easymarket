@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from . import views_subscriptions
 
 app_name = 'marketplace'
 urlpatterns = [
@@ -31,5 +32,5 @@ urlpatterns = [
 
     path('share-cart/', views.share_cart, name='share_cart'),
     path('copy-shared-cart/<uuid:token>/', views.copy_shared_cart, name='copy_shared_cart'),
-
+    path("subscribe/", views_subscriptions.subscribe_email, name="subscribe"),
 ]

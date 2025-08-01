@@ -42,13 +42,54 @@
                 </div>
                 <div class="col-lg-6">
                     <div class="input-group" style="max-width: 400px; margin-left: auto;">
-                        <input type="email" class="form-control" placeholder="Enter your email address"
-                               style="border: 2px solid #ff9900; border-radius: 4px 0 0 4px; padding: 10px 12px; font-size: 0.9rem;">
-                        <button class="btn fw-bold" type="button"
-                                style="background-color: #ff9900; color: #232f3e; border: 2px solid #ff9900; border-radius: 0 4px 4px 0; padding: 10px 20px; font-size: 0.9rem; letter-spacing: 0.5px;">
-                            SUBSCRIBE NOW
-                        </button>
+                     <form id="newsletter-form" class="d-flex" onsubmit="return false;">
+                      {% csrf_token %}
+                      <input
+                        type="email"
+                        name="email"
+                        id="newsletter-email"
+                        class="form-control form-control-sm"
+                        placeholder="Enter your email address"
+                        required
+                        style="
+                          border: 2px solid #ff9900;
+                          border-radius: 4px 0 0 4px;
+                          padding: 6px 10px;          /* smaller height */
+                          font-size: 0.85rem;         /* smaller text */
+                          max-width: 240px;           /* narrower field */
+                          flex: 0 0 240px;            /* don't stretch */
+                        "
+                      >
+                      <input type="hidden" name="source" value="footer">
+                      <button
+                        class="btn btn-sm fw-bold"
+                        id="newsletter-submit"
+                        type="submit"
+                        style="
+                          background-color: #ff9900;
+                          color: #232f3e;
+                          border: 2px solid #ff9900;
+                          border-radius: 0 4px 4px 0;
+                          padding: 6px 12px;          /* smaller height */
+                          font-size: 0.85rem;         /* smaller text */
+                          letter-spacing: 0.5px;
+                        "
+                      >
+                        SUBSCRIBE NOW
+                      </button>
+                    </form>
                     </div>
+
+                    <!-- Toast for subscription feedback -->
+                    <div id="newsletter-toast" class="toast align-items-center text-bg-dark border-0" role="alert"
+                         aria-live="assertive" aria-atomic="true"
+                         style="position: fixed; right: 20px; top: 20px; z-index: 20000; display:none;">
+                      <div class="d-flex">
+                        <div class="toast-body" id="newsletter-toast-body">Message here</div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" onclick="hideNewsletterToast()"></button>
+                      </div>
+                    </div>
+
                     <div class="mt-2">
                         <small class="text-white-50" style="font-size: 0.75rem;">
                             <i class="fas fa-shield-alt me-1"></i>No spam. Unsubscribe anytime.
@@ -474,3 +515,70 @@
     transform: scale(1.1);
 }
 </style>
+
+<script>
+(function () {
+  const form = document.getElementById("newsletter-form");
+  if (!form) return;
+
+  const emailInput = document.getElementById("newsletter-email");
+  const submitBtn  = document.getElementById("newsletter-submit");
+
+  function showNewsletterToast(msg) {
+    const t = document.getElementById('newsletter-toast');
+    const b = document.getElementById('newsletter-toast-body');
+    b.textContent = msg;
+    t.style.display = 'block';
+    // If Bootstrap's Toast JS is present, use it; otherwise fall back to simple show/hide
+    try {
+      const toast = new bootstrap.Toast(t, { delay: 3500 });
+      toast.show();
+    } catch (e) {
+      setTimeout(() => { t.style.display = 'none'; }, 3500);
+    }
+  }
+  window.hideNewsletterToast = function () {
+    const t = document.getElementById('newsletter-toast');
+    t.style.display = 'none';
+  };
+
+  form.addEventListener("submit", function () {
+    const email = (emailInput.value || "").trim();
+    if (!email) {
+      showNewsletterToast("Please enter your email address.");
+      return;
+    }
+
+    // Get CSRF token from the hidden input Django added
+    const csrf = form.querySelector('input[name="csrfmiddlewaretoken"]').value;
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = "SUBSCRIBING...";
+
+    fetch("{% url 'marketplace:subscribe' %}", {
+      method: "POST",
+      headers: {
+        "X-CSRFToken": csrf,
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body: new URLSearchParams({
+        email: email,
+        source: form.querySelector('input[name="source"]')?.value || "footer"
+      })
+    })
+    .then(res => res.json())
+    .then(data => {
+      // Backend returns:
+      // { success: true,  message: "Thanks! You're subscribed..." }
+      // { success: false, message: "You're already subscribed." }
+      showNewsletterToast(data.message || "Done.");
+      if (data.success) form.reset();
+    })
+    .catch(() => showNewsletterToast("Something went wrong. Please try again."))
+    .finally(() => {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "SUBSCRIBE NOW";
+    });
+  });
+})();
+</script>

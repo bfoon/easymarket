@@ -2,11 +2,14 @@ from django.contrib import admin
 from .models import (Product, Category, ProductImage, ProductView,
                      Cart, CartItem, CelebrityFeature, Wishlist,
                      SearchHistory, PopularSearch, ProductFeature, ProductFeatureOption,
-                     ProductVariant, SharedCart)
+                     ProductVariant, SharedCart, Subscription)
 from django.utils.html import format_html
 from django.urls import path
 from django.http import JsonResponse
 from .utils import ColorUtils
+from django.http import HttpResponse
+from django.utils import timezone
+import csv
 
 class CategoryAdmin(admin.ModelAdmin):
     list_display = ('name', 'parent',)
@@ -132,3 +135,34 @@ class ProductImageAdmin(admin.ModelAdmin):
 
     class Media:
         js = ('admin/js/color_suggestions.js',)
+
+
+@admin.register(Subscription)
+class SubscriptionAdmin(admin.ModelAdmin):
+    list_display = ("email", "active", "subscribed_at", "source")
+    list_filter = ("active", "source", "subscribed_at")
+    search_fields = ("email",)
+    actions = ["export_subscriptions_csv"]
+
+    @admin.action(description="Export selected subscriptions to CSV")
+    def export_subscriptions_csv(self, request, queryset):
+        """
+        Exports the selected rows. If the user clicks 'Select all' in the admin,
+        Django passes the *entire filtered* queryset here.
+        """
+        # Prepare response
+        ts = timezone.now().strftime("%Y%m%d_%H%M%S")
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = f'attachment; filename="subscriptions_{ts}.csv"'
+
+        writer = csv.writer(response)
+        # Header
+        writer.writerow(["email", "active", "subscribed_at", "source"])
+
+        # Body (stream in chunks for large exports)
+        for s in queryset.iterator(chunk_size=2000):
+            # Localize/format datetime nicely
+            dt = timezone.localtime(s.subscribed_at).strftime("%Y-%m-%d %H:%M:%S")
+            writer.writerow([s.email, "yes" if s.active else "no", dt, s.source or ""])
+
+        return response
