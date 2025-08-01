@@ -4,22 +4,19 @@ from django.shortcuts import get_object_or_404, render, redirect
 from django.utils import timezone
 from decimal import Decimal
 from django.contrib import messages
-
-from orders.models import Order, OrderItem, Return, ReturnItem, ReturnImage
-from marketplace.models import ProductVariant
-from stores.models import Store
-from .services.returns import (
-    validate_return_request, create_return_from_post, mark_status, compute_refund,
-    adjust_stock_after_receive, process_refund,
-)
-from .services.returns import validate_return_request
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ValidationError, PermissionDenied
 from django.db.models import Prefetch
 from django.conf import settings
-from .models import Return, ReturnStatusHistory
-from django.core.exceptions import PermissionDenied
-
 from django.views.decorators.http import require_POST
+from django.db import transaction
+
+from orders.models import Order, OrderItem
+from stores.models import Store
+from .models import Return, ReturnItem, ReturnImage, ReturnStatusHistory
+from .services.returns import validate_return_request  # keep only once
+# Maybe use them later, import but don’t duplicate:
+# from .services.returns import mark_status, compute_refund, adjust_stock_after_receive, process_refund
+
 
 def return_policy(request):
     """
@@ -78,21 +75,12 @@ def returns_hub(request):
         'orders': orders,
         'my_returns': my_returns,
     })
+
 @login_required
 def start_return(request, order_id, store_id):
-    """
-    Create a return for a specific order+store.
-    Assumes your URL pattern is:
-      orders/<int:order_id>/store/<uuid:store_id>/returns/start/
-    If Store.id is INT, change <uuid:store_id> to <int:store_id>.
-    """
-
     order = get_object_or_404(Order, pk=order_id, buyer=request.user)
-
-    # Resolve store (UUID or INT depending on your model)
     store = get_object_or_404(Store, pk=store_id)
 
-    # Items limited to this store. Adjust if your Product->Store relation differs.
     items_qs = (
         order.items
         .select_related("product")
@@ -101,22 +89,22 @@ def start_return(request, order_id, store_id):
     )
 
     if request.method == "POST":
-        posted_reason = request.POST.get("reason")  # overall reason (select)
-        note = request.POST.get("note", "").strip()
+        posted_reason = request.POST.get("reason")
+        note = (request.POST.get("note") or "").strip()
 
-        # Build rows from POST
         rows = []
         for oi in items_qs:
-            qty = int(request.POST.get(f"qty_{oi.id}", "0") or 0)
-            if qty < 0:
-                qty = 0  # sanitize, server-side validation will catch if needed
+            try:
+                qty = int(request.POST.get(f"qty_{oi.id}", "0") or 0)
+            except ValueError:
+                qty = 0
+            qty = max(qty, 0)
 
             resolution = request.POST.get(f"resolution_{oi.id}", "refund")
             condition = request.POST.get(f"condition_{oi.id}", "good")
             item_reason = request.POST.get(f"reason_{oi.id}") or posted_reason or ""
             ex_variant = (request.POST.get(f"ex_variant_{oi.id}", "") or "").strip()
 
-            # Only add non-zero rows; zeroes are ignored
             if qty > 0:
                 rows.append({
                     "order_item": oi,
@@ -127,70 +115,58 @@ def start_return(request, order_id, store_id):
                     "exchange_variant": ex_variant,
                 })
 
-        # Validate request (ownership, store match, qty remaining, at least one line, etc.)
         try:
             validate_return_request(order, store, request.user, rows)
         except ValidationError as e:
-            # Show a friendly error and re-render the form (HTTP 400)
             context = {
                 "order": order,
                 "items": items_qs,
                 "error": e.messages[0] if hasattr(e, "messages") else str(e),
                 "posted": request.POST,
             }
-            return render(request, "returns/start.html", context, status=400)
+            return render(request, "returns/start_return.html", context, status=400)
 
-        # Create Return header
-        ret = Return.objects.create(
-            order=order,
-            buyer=request.user,
-            status="pending",
-            reason=posted_reason or (rows[0]["reason"] if rows else "other"),
-            reason_description=note,
-            logistics_method="easymarket_pickup",  # or use posted value if you add it
-        )
-
-        # Create ReturnItem lines
-        for r in rows:
-            oi = r["order_item"]
-            ReturnItem.objects.create(
-                return_request=ret,
-                order_item=oi,
-                product=oi.product,
-                quantity=r["qty"],
-                reason=r["reason"] or "other",
-                condition=r["condition"],
-                # snapshot (falls back to product.price)
-                price_at_return=(oi.price_at_time or oi.product.price),
+        with transaction.atomic():
+            ret = Return.objects.create(
+                order=order,
+                buyer=request.user,
+                status="pending",
+                reason=posted_reason or (rows[0]["reason"] if rows else "other"),
+                reason_description=note,
+                logistics_method="easymarket_pickup",
             )
 
-        # Save uploaded images (multi-file)
-        for f in request.FILES.getlist("images"):
-            ReturnImage.objects.create(return_request=ret, image=f)
+            for r in rows:
+                oi = r["order_item"]
+                price_snapshot = oi.price_at_time or oi.product.price
+                ReturnItem.objects.create(
+                    return_request=ret,
+                    order_item=oi,
+                    product=oi.product,
+                    quantity=r["qty"],
+                    reason=r["reason"] or "other",
+                    condition=r["condition"],
+                    price_at_return=Decimal(str(price_snapshot)),
+                )
 
-        # Recalculate refund and save
-        ret.calculate_refund_amount()
-        ret.save(update_fields=["refund_amount", "updated_at"])
+            for f in request.FILES.getlist("images"):
+                ReturnImage.objects.create(return_request=ret, image=f)
+
+            # Compute and store refund
+            ret.calculate_refund_amount()
+            ret.save(update_fields=["refund_amount", "updated_at"])
 
         messages.success(request, f"Return {ret.return_number} created successfully.")
         return redirect("returns:buyer_detail", rma=ret.return_number)
 
-    # GET — render form
     context = {
         "order": order,
         "items": items_qs,
     }
     return render(request, "returns/start_return.html", context)
 
-
 @login_required
 def return_detail_buyer(request, rma: str):
-    """
-    Buyer-facing detail page for a Return.
-    URL: /returns/<return_number>/
-    Named param 'rma' is the return number string (e.g., 'RET-584460').
-    """
-
     ret = get_object_or_404(
         Return.objects
         .select_related('order', 'buyer')
@@ -199,15 +175,12 @@ def return_detail_buyer(request, rma: str):
             'images',
             'status_history',
         ),
-        return_number=rma,               # <-- use correct field
-        buyer=request.user,              # ensure ownership
+        return_number=rma,
+        buyer=request.user,
     )
 
-    # Optional: quick derived totals for template
     items = list(ret.items.all())
-    items_refund_total = sum((ri.get_refund_amount() for ri in items), start=0)
-    # If you want to ensure accuracy, you can also call:
-    # ret.calculate_refund_amount()  # but this will save; avoid on GET unless needed
+    items_refund_total = sum((ri.get_refund_amount() for ri in items), Decimal('0.00'))
 
     context = {
         'ret': ret,
@@ -215,18 +188,45 @@ def return_detail_buyer(request, rma: str):
         'items': items,
         'images': ret.images.all(),
         'status_history': ret.status_history.all(),
-        'items_refund_total': items_refund_total,
+        'items_refund_total': items_refund_total,   # purely display; authoritative is ret.refund_amount
         'can_cancel': ret.can_be_cancelled(),
-        'can_approve': ret.can_be_approved(),  # buyers won’t approve; useful if you reuse template
+        'can_approve': ret.can_be_approved(),
     }
     return render(request, 'returns/buyer_detail.html', context)
 
+
 @login_required
 def return_detail_store(request, store_id, rma):
-    store = get_object_or_404(Store,  id=store_id, owner=request.user)
-    ret = get_object_or_404(Return, return_number=rma)
-    return render(request, 'returns/store_detail.html', {'ret': ret, 'store': store})
+    # Ensure this store is owned by the current user
+    store = get_object_or_404(Store, pk=store_id, owner=request.user)
 
+    # Pull the Return with related data for template
+    ret = get_object_or_404(
+        Return.objects
+        .select_related('order', 'buyer')            # header info
+        .select_related('refund')                    # if you created ReturnRefund as OneToOne 'refund'
+        .prefetch_related(
+            Prefetch('items', queryset=ReturnItem.objects.select_related('product', 'order_item')),
+            'images',
+            'status_history',
+        ),
+        return_number=rma
+    )
+
+    # Security: make sure this return involves this store
+    if not ret.items.filter(product__store=store).exists():
+        raise PermissionDenied("This return is not associated with your store.")
+
+    # Optional: split admin notes into lines for nicer display
+    admin_notes_lines = (ret.admin_notes or "").splitlines()
+
+    context = {
+        'ret': ret,
+        'store': store,
+        'admin_notes_lines': admin_notes_lines,  # for template convenience
+        'status_history': ret.status_history.all(),  # ordered by '-timestamp' per your model Meta
+    }
+    return render(request, 'returns/store_detail.html', context)
 
 
 @login_required
@@ -276,25 +276,13 @@ def _get_store_and_return_or_403(store_id, rma, user):
 
 
 def _append_history(ret, new_status=None, note=""):
-    """
-    Create a status history row. Adapt field names to your model.
-    """
-    if hasattr(ReturnStatusHistory, "_meta"):
-        # Field names: use 'note' or 'notes' depending on your model
-        kwargs = dict(
-            return_request=ret,
-            status=(new_status or ret.status),
-            changed_by=getattr(ret, "updated_by", None),  # optional
-        )
-        try:
-            # Most common naming
-            kwargs["note"] = note
-            ReturnStatusHistory.objects.create(**kwargs)
-        except TypeError:
-            # Fallback if your model uses 'notes'
-            kwargs.pop("note", None)
-            kwargs["notes"] = note
-            ReturnStatusHistory.objects.create(**kwargs)
+    ReturnStatusHistory.objects.create(
+        return_request=ret,
+        status=(new_status or ret.status),
+        changed_by=getattr(ret, "updated_by", None),
+        notes=note or "",
+    )
+
 
 # --- Actions --------------------------------------------------------------
 
@@ -304,16 +292,10 @@ def store_approve_return(request, store_id, rma):
     try:
         store, ret = _get_store_and_return_or_403(store_id, rma, request.user)
 
-        # Allow only certain transitions (adapt to your choices)
-        allowed_from = ("requested", "pending", "rejected")
+        allowed_from = ("pending", "rejected")  # re-approval allowed if you want
         if ret.status not in allowed_from:
-            return JsonResponse(
-                {"success": False, "message": "Invalid status transition."},
-                status=400
-            )
+            return JsonResponse({"success": False, "message": "Invalid status transition."}, status=400)
 
-        # If you have a helper that also writes history, use it:
-        # mark_status(ret, 'approved', note='Store approved return', user=request.user)
         ret.status = "approved"
         ret.updated_at = timezone.now()
         ret.save(update_fields=["status", "updated_at"])
@@ -326,30 +308,29 @@ def store_approve_return(request, store_id, rma):
         return JsonResponse({"success": False, "message": str(e)}, status=400)
 
 
+
 @login_required
 @require_POST
 def store_reject_return(request, store_id, rma):
     try:
         store, ret = _get_store_and_return_or_403(store_id, rma, request.user)
 
-        allowed_from = ("requested", "pending", "approved")  # tweak as needed
+        allowed_from = ("pending", "approved")  # decide your policy
         if ret.status not in allowed_from:
-            return JsonResponse(
-                {"success": False, "message": "Invalid status transition."},
-                status=400
-            )
+            return JsonResponse({"success": False, "message": "Invalid status transition."}, status=400)
 
         reason = (request.POST.get("reason") or "Rejected by store").strip()
 
-        # mark_status(ret, 'rejected', note=reason, user=request.user)
         ret.status = "rejected"
         if hasattr(ret, "rejection_reason"):
             ret.rejection_reason = reason[:500]
+            ret.updated_at = timezone.now()
             ret.save(update_fields=["status", "rejection_reason", "updated_at"])
         else:
+            ret.updated_at = timezone.now()
             ret.save(update_fields=["status", "updated_at"])
-        _append_history(ret, new_status="rejected", note=reason)
 
+        _append_history(ret, new_status="rejected", note=reason)
         return JsonResponse({"success": True})
     except PermissionDenied as e:
         return JsonResponse({"success": False, "message": str(e)}, status=403)
@@ -363,32 +344,21 @@ def store_mark_received(request, store_id, rma):
     try:
         store, ret = _get_store_and_return_or_403(store_id, rma, request.user)
 
-        allowed_from = ("approved", "in_transit", "awaiting_pickup")
+        allowed_from = ("approved", "in_transit")
         if ret.status not in allowed_from:
-            return JsonResponse(
-                {"success": False, "message": "Invalid status transition."},
-                status=400
-            )
+            return JsonResponse({"success": False, "message": "Invalid status transition."}, status=400)
 
-        # mark_status(ret, 'received', note='Parcel received at warehouse', user=request.user)
         ret.status = "received"
         if hasattr(ret, "received_at_store_date"):
             ret.received_at_store_date = timezone.now()
+            ret.updated_at = timezone.now()
             ret.save(update_fields=["status", "received_at_store_date", "updated_at"])
         else:
+            ret.updated_at = timezone.now()
             ret.save(update_fields=["status", "updated_at"])
+
         _append_history(ret, new_status="received", note="Parcel received at warehouse")
-
-        # Optional: move to 'inspecting' and adjust stock
-        # mark_status(ret, 'inspecting', note='Inspection in progress', user=request.user)
-        ret.status = "inspecting"
-        ret.updated_at = timezone.now()
-        ret.save(update_fields=["status", "updated_at"])
-        _append_history(ret, new_status="inspecting", note="Inspection in progress")
-
-        # If you have stock logic:
-        # adjust_stock_after_receive(ret)
-
+        # Optionally: adjust_stock_after_receive(ret)
         return JsonResponse({"success": True})
     except PermissionDenied as e:
         return JsonResponse({"success": False, "message": str(e)}, status=403)
@@ -404,19 +374,16 @@ def store_finalize_refund(request, store_id, rma):
     try:
         store, ret = _get_store_and_return_or_403(store_id, rma, request.user)
 
-        if ret.status not in ("inspecting", "approved_refund"):
+        if ret.status != "received":
             return JsonResponse({"success": False, "message": "Return not ready for refund."}, status=400)
 
-        method = (request.POST.get("method") or "original").strip()
+        method = (request.POST.get("method") or "original_payment").strip()
         reference = (request.POST.get("reference") or "").strip()
 
-        # refund = process_refund(ret, method=method, reference=reference, user=request.user)
-        # Dummy example if you don’t have process_refund wired yet:
-        class RefundLike:
-            amount = getattr(ret, "refund_amount", 0)
-        refund = RefundLike()
+        # If you wire a real PSP, call process_refund(ret, method=..., reference=..., user=request.user)
+        # Ensure refund_amount is quantized & current
+        ret.recalc_totals(save=True)
 
-        # mark_status(ret, 'completed', note=f"Refund processed via {method}", user=request.user)
         ret.status = "completed"
         ret.updated_at = timezone.now()
         if hasattr(ret, "completed_at"):
@@ -424,9 +391,11 @@ def store_finalize_refund(request, store_id, rma):
             ret.save(update_fields=["status", "updated_at", "completed_at"])
         else:
             ret.save(update_fields=["status", "updated_at"])
+
         _append_history(ret, new_status="completed", note=f"Refund processed via {method}. Ref: {reference}")
 
-        return JsonResponse({"success": True, "amount": f"{float(refund.amount):.2f}"})
+        # Return the final refund string (avoid float rounding drift)
+        return JsonResponse({"success": True, "amount": f"{ret.refund_amount:.2f}"})
     except PermissionDenied as e:
         return JsonResponse({"success": False, "message": str(e)}, status=403)
     except Exception as e:

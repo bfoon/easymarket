@@ -7,7 +7,8 @@ import uuid
 from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, MaxValueValidator
-from django.db.models import Sum
+from django.db.models import F, Sum, DecimalField, ExpressionWrapper, Q
+from django.db import IntegrityError, transaction
 
 class PromoCode(models.Model):
     code = models.CharField(max_length=50, unique=True)
@@ -391,7 +392,7 @@ class Return(models.Model):
 
     # Logistics Information
     logistics_method = models.CharField(max_length=20, choices=LOGISTICS_METHOD_CHOICES, default='easymarket_pickup')
-    tracking_number = models.CharField(max_length=100, blank=True, null=True)
+    tracking_number = models.CharField(max_length=100, unique=True, blank=True, null=True)
     estimated_pickup_date = models.DateField(blank=True, null=True)
     actual_pickup_date = models.DateTimeField(blank=True, null=True)
     received_at_store_date = models.DateTimeField(blank=True, null=True)
@@ -418,18 +419,35 @@ class Return(models.Model):
 
     class Meta:
         ordering = ['-created_at']
-        verbose_name = 'Return'
-        verbose_name_plural = 'Returns'
+        constraints = [
+            models.CheckConstraint(check=Q(total_return_amount__gte=0), name='return_total_nonneg'),
+            models.CheckConstraint(check=Q(discount_applied__gte=0), name='return_discount_nonneg'),
+            models.CheckConstraint(check=Q(refund_amount__gte=0), name='return_refund_nonneg'),
+            models.CheckConstraint(check=Q(refund_amount__lte=F('total_return_amount')), name='refund_lte_total'),
+        ]
+        indexes = [
+            models.Index(fields=['status']),
+            models.Index(fields=['buyer']),
+            models.Index(fields=['created_at']),
+        ]
 
     def __str__(self):
         return f"Return {self.return_number} - Order #{self.order.id}"
+
 
     # ---- Lifecycle helpers ----
 
     def save(self, *args, **kwargs):
         # Generate return number if not exists
         if not self.return_number:
-            self.return_number = self.generate_return_number()
+            for _ in range(5):
+                self.return_number = self.generate_return_number()
+                try:
+                    with transaction.atomic():
+                        return super().save(*args, **kwargs)
+                except IntegrityError:
+                    self.return_number = None
+            raise
 
         # Track status transitions to set timestamps
         if self.pk:
@@ -449,6 +467,30 @@ class Return(models.Model):
 
         super().save(*args, **kwargs)
 
+    def move_to(self, new_status, changed_by=None, notes=''):
+        old_status = self.status
+        if old_status == new_status:
+            return
+
+        self.status = new_status
+        now = timezone.now()
+
+        if new_status == 'approved' and not self.approved_at:
+            self.approved_at = now
+        elif new_status == 'received' and not self.received_at_store_date:
+            self.received_at_store_date = now
+        elif new_status == 'completed' and not self.completed_at:
+            self.completed_at = now
+
+        self.save()
+
+        ReturnStatusHistory.objects.create(
+            return_request=self,
+            status=new_status,
+            changed_by=changed_by,
+            notes=notes
+        )
+
     def generate_return_number(self):
         """Generate unique return number like RET-123456"""
         import random
@@ -461,17 +503,23 @@ class Return(models.Model):
     # ---- Business logic ----
 
     def recalc_totals(self, save=True):
+
         """
         Recompute line totals and overall refund.
         total_return_amount = sum of line totals (unit snapshot × qty)
         refund_amount = total_return_amount - discount_applied
-        """
-        total = Decimal('0.00')
-        for it in self.items.all():
-            # Ensure each line has a proper subtotal cached
-            total += q2(it.get_refund_amount())
+       """
+
+        line_total = ExpressionWrapper(
+            F('price_at_return') * F('quantity'),
+            output_field=DecimalField(max_digits=12, decimal_places=2)
+        )
+        total = (
+                self.items
+                .exclude(return_request__status__in=['rejected', 'cancelled'])
+                .aggregate(total=Sum(line_total))['total'] or Decimal('0.00')
+        )
         self.total_return_amount = q2(total)
-        # Never refund negative
         self.refund_amount = q2(max(Decimal('0.00'), self.total_return_amount - q2(self.discount_applied)))
         if save:
             super(Return, self).save(update_fields=['total_return_amount', 'refund_amount', 'updated_at'])
@@ -582,6 +630,14 @@ class Return(models.Model):
             inventory.discounted_stock = (inventory.discounted_stock or 0) + qty
         inventory.save(update_fields=['returned_stock', 'discounted_stock', 'last_updated'])
 
+    def clean(self):
+        if self.discount_applied and self.discount_applied < 0:
+            raise ValidationError("discount_applied cannot be negative.")
+        if self.refund_amount and self.refund_amount < 0:
+            raise ValidationError("refund_amount cannot be negative.")
+        if self.refund_amount and self.total_return_amount and self.refund_amount > self.total_return_amount:
+            raise ValidationError("refund_amount cannot exceed total_return_amount.")
+
 
 class ReturnItem(models.Model):
     """Individual items within a return"""
@@ -621,17 +677,40 @@ class ReturnItem(models.Model):
 
     @property
     def previously_returned_qty(self):
-        return self.return_items.aggregate(total=Sum('quantity'))['total'] or 0
+        """
+        Total qty already returned for this same OrderItem across all *other* return items,
+        excluding cancelled/rejected returns and this row itself.
+        """
+        return (
+                ReturnItem.objects
+                .filter(order_item=self.order_item)
+                .exclude(pk=self.pk)
+                .exclude(return_request__status__in=['rejected', 'cancelled'])
+                .aggregate(total=Sum('quantity'))['total'] or 0
+        )
 
     @property
     def remaining_returnable_qty(self):
-        return max(self.quantity - self.previously_returned_qty, 0)
+        """
+        Max additional qty that can be returned for this OrderItem = ordered - previously returned.
+        """
+        original_qty = getattr(self.order_item, 'quantity', 0) or 0
+        return max(original_qty - self.previously_returned_qty, 0)
 
     def save(self, *args, **kwargs):
-        # Store the price at time of return
         if not self.price_at_return:
-            self.price_at_return = self.order_item.price_at_time or self.product.price
+            fallback_price = getattr(self.order_item, 'price_at_time', None) or getattr(self.product, 'price',
+                                                                                        Decimal('0.00'))
+            self.price_at_return = q2(fallback_price)
         super().save(*args, **kwargs)
+
+    def clean(self):
+        super().clean()
+        if self.quantity <= 0:
+            raise ValidationError("Quantity must be greater than zero.")
+        if self.quantity > self.remaining_returnable_qty:
+            raise ValidationError(f"Quantity exceeds remaining returnable quantity ({self.remaining_returnable_qty}).")
+
 
 class ReturnImage(models.Model):
     """Images uploaded for return requests"""
@@ -747,22 +826,22 @@ class ReturnRefund(models.Model):
         return f"Refund for {self.return_request.return_number} - D{q2(self.refund_amount)}"
 
     def process_refund(self, processed_by=None, transaction_id='', gateway_response=None):
-        """
-        Process the refund (record-keeping).
-        Integrate your actual PSP here; we mark as completed for now.
-        """
-        self.status = 'processing'
-        self.processed_by = processed_by
-        self.processed_at = timezone.now()
-        self.transaction_id = transaction_id or self.transaction_id
-        if gateway_response is not None:
-            self.gateway_response = gateway_response
-        self.refund_amount = q2(self.refund_amount)
-        self.save()
+        with transaction.atomic():
+            # Optionally: assert amount
+            self.refund_amount = q2(self.refund_amount)
+            # do gateway call here...
+            self.status = 'processing'
+            self.processed_by = processed_by
+            self.processed_at = timezone.now()
+            if transaction_id:
+                self.transaction_id = transaction_id
+            if gateway_response is not None:
+                self.gateway_response = gateway_response
+            self.save()
 
-        # Mark completed (simulate gateway success)
-        self.status = 'completed'
-        self.save(update_fields=['status', 'updated_at'])
+            # simulate success
+            self.status = 'completed'
+            self.save(update_fields=['status', 'updated_at'])
 
 
 # --------------------------
