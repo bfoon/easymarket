@@ -169,6 +169,7 @@
                       </div>
                     </th>
                     <th>Reason</th>
+                    <th class="text-center">Type</th>
                     <th class="text-center">Status</th>
                     <th class="srl-sortable" data-sort="date">
                       <div class="d-flex align-items-center">
@@ -217,6 +218,15 @@
                           <i class="fas fa-tag me-1"></i>
                           {{ r.get_reason_display }}
                         </div>
+                      </td>
+                      <td class="text-center py-4">
+                        {% if r.resolution_kind == 'refund' %}
+                          <span class="badge rounded-pill text-bg-success">Refund</span>
+                        {% elif r.resolution_kind == 'exchange' %}
+                          <span class="badge rounded-pill text-bg-info">Exchange</span>
+                        {% else %}
+                          <span class="badge rounded-pill text-bg-secondary">Unknown</span>
+                        {% endif %}
                       </td>
                       <td class="text-center py-4">
                         <span class="srl-status-badge srl-status-{{ r.status|lower }}">
@@ -481,46 +491,36 @@ function showToast(message, type = 'success') {
 
 // Quick actions
 function quickAction(rma, action) {
-  let url = '';
-  let actionName = '';
+  const routes = {
+    approve: "{% url 'returns:approve' store.id 'RMA_PLACEHOLDER' %}",
+    reject: "{% url 'returns:reject' store.id 'RMA_PLACEHOLDER' %}",
+    received: "{% url 'returns:mark_received' store.id 'RMA_PLACEHOLDER' %}",
+  };
+  if (!routes[action]) return;
 
-  switch(action) {
-    case 'approve':
-      url = `/stores/{{ store.id }}/returns/${rma}/approve/`;
-      actionName = 'Return approved successfully';
-      break;
-    case 'reject':
-      url = `/stores/{{ store.id }}/returns/${rma}/reject/`;
-      actionName = 'Return rejected';
-      break;
-    case 'received':
-      url = `/stores/{{ store.id }}/returns/${rma}/received/`;
-      actionName = 'Return marked as received';
-      break;
-  }
-
-  if (!url) return;
+  const url = routes[action].replace("RMA_PLACEHOLDER", rma);
 
   fetch(url, {
     method: 'POST',
     headers: {
       'X-CSRFToken': '{{ csrf_token }}',
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/x-www-form-urlencoded'
     }
   })
-  .then(response => response.json())
+  .then(res => res.json())
   .then(data => {
     if (data.success) {
-      showToast(actionName);
+      showToast(
+        action === 'approve' ? 'Return approved successfully'
+        : action === 'reject' ? 'Return rejected'
+        : 'Return marked as received'
+      );
       setTimeout(() => location.reload(), 1500);
     } else {
       showToast(data.message || 'Action failed', 'error');
     }
   })
-  .catch(error => {
-    showToast('Network error occurred', 'error');
-    console.error('Error:', error);
-  });
+  .catch(() => showToast('Network error occurred', 'error'));
 }
 </script>
 

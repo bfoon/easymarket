@@ -5,15 +5,14 @@ from django.utils import timezone
 from decimal import Decimal
 from django.contrib import messages
 from django.core.exceptions import ValidationError, PermissionDenied
-from django.db.models import Prefetch
 from django.conf import settings
 from django.views.decorators.http import require_POST
 from django.db import transaction
-from django.db.models import Sum, Subquery
+from django.db.models import Prefetch, Subquery, Sum, Value, Case, When, CharField, Exists, OuterRef, Q
 
 from orders.models import Order, OrderItem
 from stores.models import Store
-from .models import Return, ReturnItem, ReturnImage, ReturnStatusHistory
+from .models import Return, ReturnItem, ReturnImage, ReturnStatusHistory, ReturnRefund
 from .services.returns import validate_return_request  # keep only once
 # Maybe use them later, import but don’t duplicate:
 # from .services.returns import mark_status, compute_refund, adjust_stock_after_receive, process_refund
@@ -231,53 +230,77 @@ def return_detail_store(request, store_id, rma):
 
 @login_required
 def store_returns(request, store_id):
-    """
-    Seller dashboard view: list return requests that involve this store's products.
-    Only the store owner can access it.
-    """
     store = get_object_or_404(Store, pk=store_id, owner=request.user)
 
-    # --- LIST (with prefetch for the table) ---
+    # Subqueries/Exists for inference
+    exchange_hist = ReturnStatusHistory.objects.filter(
+        return_request=OuterRef('pk'),
+        status__in=['approved_exchange', 'exchanged']
+    )
+    refund_hist = ReturnStatusHistory.objects.filter(
+        return_request=OuterRef('pk'),
+        status__in=['approved_refund', 'completed']   # tweak if you use different labels
+    )
+    refund_row = ReturnRefund.objects.filter(return_request=OuterRef('pk'))
+
+    # Base queryset for the table (distinct to avoid dup rows)
     returns_qs = (
         Return.objects
-        .filter(items__product__store=store)   # ReturnItem.product.store == this store
+        .filter(items__product__store=store)
         .select_related("order", "buyer")
         .prefetch_related(
-            Prefetch(
-                "items",
-                queryset=ReturnItem.objects.select_related("product", "order_item")
+            Prefetch("items", queryset=ReturnItem.objects.select_related("product", "order_item"))
+        )
+        .annotate(
+            resolution_kind=Case(
+                When(Exists(exchange_hist), then=Value('exchange')),
+                When(Q(status='completed') | Exists(refund_hist) | Exists(refund_row), then=Value('refund')),
+                default=Value('unknown'),
+                output_field=CharField()
             )
         )
-        .distinct()  # fine for listing
+        .distinct()
         .order_by("-created_at")
     )
 
-    # --- STATS (avoid duplicate rows from the join) ---
-    # 1) Get unique Return IDs for this store
+    # Stats (dedup before aggregations)
     base_ids = (
         Return.objects
         .filter(items__product__store=store)
         .values("id")
         .distinct()
     )
-    # 2) Rebuild a clean queryset to aggregate on (no DISTINCT on aggregates)
     store_returns = Return.objects.filter(id__in=Subquery(base_ids))
 
-    pending_count  = store_returns.filter(status="pending").count()
-    approved_count = store_returns.filter(status="approved").count()
-    total_refunds  = store_returns.filter(status="completed").aggregate(
+    pending_count   = store_returns.filter(status="pending").count()
+    approved_count  = store_returns.filter(status="approved").count()
+    total_refunds   = store_returns.filter(status="completed").aggregate(
         total=Sum("refund_amount")
     )["total"] or Decimal("0.00")
+
+    # (Optional) counts by type, using the same inference
+    store_returns_annot = store_returns.annotate(
+        resolution_kind=Case(
+            When(Exists(exchange_hist), then=Value('exchange')),
+            When(Q(status='completed') | Exists(refund_hist) | Exists(refund_row), then=Value('refund')),
+            default=Value('unknown'),
+            output_field=CharField()
+        )
+    )
+    refunds_count  = store_returns_annot.filter(resolution_kind='refund').count()
+    exchanges_count = store_returns_annot.filter(resolution_kind='exchange').count()
 
     context = {
         "store": store,
         "returns": returns_qs,
-        # expose stats under simple keys (or a 'stats' dict if your template expects that)
         "pending_returns_count": pending_count,
         "approved_returns_count": approved_count,
         "total_refunds_amount": total_refunds,
+        "refunds_count": refunds_count,          # optional: show in a new stat card
+        "exchanges_count": exchanges_count,      # optional: show in a new stat card
     }
     return render(request, "returns/store_returns.html", context)
+
 # --- Helper ---------------------------------------------------------------
 
 def _get_store_and_return_or_403(store_id, rma, user):
