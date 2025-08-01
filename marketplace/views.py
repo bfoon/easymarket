@@ -1825,7 +1825,7 @@ def toggle_wishlist(request, product_id):
             # ✅ Crucial for threaded notifications:
             # set the baseline so later product saves can compare and notify.
             'last_known_price': product.price,
-            'last_known_stock': product.stock,
+            'last_known_stock': product.stock_quantity,
         }
     )
 
