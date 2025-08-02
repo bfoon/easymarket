@@ -19,12 +19,12 @@
 {
   "@context": "https://schema.org/",
   "@type": "Product",
-  "name": "{{ product.name }}",
+  "name": "{{ product.name|escapejs }}",
   "image": "{{ product.image.url }}",
   "description": "{{ product.description|escapejs }}",
   "brand": {
     "@type": "Brand",
-    "name": "{% if product.brand %}{{ product.brand.name }}{% else %}EasyMarket{% endif %}"
+    "name": "{% if product.brand %}{{ product.brand.name|escapejs }}{% else %}EasyMarket{% endif %}"
   },
   "offers": {
     "@type": "Offer",
@@ -43,6 +43,21 @@
 
 <!-- Preload critical resources -->
 <link rel="preload" href="{{ product.image.url }}" as="image">
+
+<!-- Extra CSS needed by hover zoom & availability (safe if duplicated by JS) -->
+<style>
+  .main-image-container { position: relative; overflow: hidden; cursor: zoom-in; }
+  #mainProductImage { display:block; width:100%; height:100%; object-fit: cover; transition: transform .08s ease-out; }
+  #mainProductImage.contain-mode { object-fit: contain; }
+  .option-disabled { opacity:.45; filter: grayscale(.6); pointer-events:none; }
+  .feature-group.highlighted { outline:2px dashed var(--bs-primary,#0d6efd); outline-offset:4px; }
+  .thumbnail-gallery .thumbnail-item.active img { outline:2px solid var(--bs-primary,#0d6efd); }
+  .thumbnail-gallery .thumbnail-item img { display:block; width:64px; height:64px; object-fit:cover; border-radius:.5rem; }
+  .thumbnail-item { background:transparent; border:0; padding:0; }
+  .image-overlay { position:absolute; inset:0; display:flex; align-items:flex-end; justify-content:space-between; pointer-events:none; padding:.5rem; }
+  .image-controls button { pointer-events:auto; }
+  .image-info { pointer-events:none; }
+</style>
 {% endblock %}
 
 {% block content %}
@@ -107,7 +122,7 @@
             <!-- Product Gallery -->
             <section class="col-lg-5" aria-label="Product images">
                 <div class="product-gallery">
-                    <!-- Main Image Container with Fixed Aspect Ratio -->
+                    <!-- Main Image Container -->
                     <div class="main-image-container">
                         <div class="image-wrapper">
                             <img src="{{ product.image.url }}"
@@ -119,16 +134,17 @@
                                  height="500"
                                  onerror="this.closest('.image-wrapper').innerHTML='<div class=&quot;image-error&quot;><i class=&quot;fas fa-image&quot;></i><div>Image not available</div></div>'">
                         </div>
+                        <!-- overlay populated by JS; keep empty node for a11y -->
+                        <div class="image-overlay" aria-hidden="true"></div>
                     </div>
 
                     <!-- Thumbnail Gallery -->
-                    {% if product.images.all %}
-                    <div class="thumbnail-gallery-container">
-                        <div class="thumbnail-gallery" role="tablist" aria-label="Product image thumbnails">
+                    <div class="thumbnail-gallery-container mt-3">
+                        <div class="thumbnail-gallery d-flex gap-2 overflow-auto" role="tablist" aria-label="Product image thumbnails">
                             <!-- Main Product Image Thumbnail -->
                             <button class="thumbnail-item active"
                                     data-image="{{ product.image.url }}"
-                                    data-features='{% if image_data.0.features %}{{ image_data.0.features|safe }}{% else %}{}{% endif %}'
+                                    data-features="{}"
                                     role="tab"
                                     aria-selected="true"
                                     aria-label="Main product image"
@@ -137,21 +153,18 @@
                                      alt="Main image"
                                      loading="lazy"
                                      onerror="this.style.display='none'; this.parentElement.innerHTML='<div style=&quot;display:flex;align-items:center;justify-content:center;height:100%;background:#f8f9fa;color:#999;&quot;><i class=&quot;fas fa-image&quot;></i></div>'">
-                                <!-- Badge for main image features -->
-                                {% if image_data.0.features %}
-                                <div class="thumbnail-badge">
-                                    {% for feature, value in image_data.0.features.items %}
-                                        {{ value|first|upper }}
-                                    {% endfor %}
-                                </div>
-                                {% endif %}
                             </button>
 
                             <!-- Additional Product Images with Feature Data -->
                             {% for img in product.images.all %}
                             <button class="thumbnail-item"
                                     data-image="{{ img.image.url }}"
-                                    data-features='{% if img.variants.exists %}{"{% for variant in img.variants.all %}{{ variant.feature.name }}": "{{ variant.value }}"{% if not forloop.last %},{% endif %}{% endfor %}"}{% else %}{}{% endif %}'
+                                    data-features='{% if img.variants.exists %}{
+                                      {% for variant in img.variants.all %}
+                                        "{{ variant.feature.name|lower|slugify }}": "{{ variant.value }}"
+                                        {% if not forloop.last %},{% endif %}
+                                      {% endfor %}
+                                    }{% else %}{}{% endif %}'
                                     role="tab"
                                     aria-selected="false"
                                     aria-label="Product image {{ forloop.counter }}"
@@ -160,7 +173,6 @@
                                      alt="Product image {{ forloop.counter }}"
                                      loading="lazy"
                                      onerror="this.style.display='none'; this.parentElement.innerHTML='<div style=&quot;display:flex;align-items:center;justify-content:center;height:100%;background:#f8f9fa;color:#999;&quot;><i class=&quot;fas fa-image&quot;></i></div>'">
-                                <!-- Add thumbnail badge based on features -->
                                 {% if img.variants.exists %}
                                 <div class="thumbnail-badge">
                                     {% for variant in img.variants.all %}
@@ -172,7 +184,6 @@
                             {% endfor %}
                         </div>
                     </div>
-                    {% endif %}
 
                     <!-- Video Section (if exists) -->
                     {% if product.video %}
@@ -251,79 +262,43 @@
                         {% endif %}
                     </div>
 
-                    <!-- Key Features -->
-                    <div class="key-features">
-                        <ul class="feature-list" role="list" aria-label="Product features">
-                            <li class="feature-item">
-                                {% if product.is_in_stock %}
-                                <i class="fas fa-check-circle text-success feature-icon" aria-hidden="true"></i>
-                                <span class="text-success feature-text">{{ product.get_stock_status }}</span>
-                                {% else %}
-                                <i class="fas fa-times-circle text-danger feature-icon" aria-hidden="true"></i>
-                                <span class="text-danger feature-text">Out of Stock</span>
-                                {% endif %}
-                            </li>
-                            <li class="feature-item">
-                                <i class="fas fa-shield-alt text-success feature-icon" aria-hidden="true"></i>
-                                <span class="feature-text">Secure Payment</span>
-                            </li>
-                            <li class="feature-item">
-                                <i class="fas fa-truck text-success feature-icon" aria-hidden="true"></i>
-                                <span class="feature-text">Fast Delivery ({{ store.processing_time|default:"1" }}-3 Days)</span>
-                            </li>
-                            <li class="feature-item">
-                                {% if store.return_settings.return_window_days and product.has_30_day_return %}
-                                <i class="fas fa-undo text-success feature-icon" aria-hidden="true"></i>
-                                <span class="feature-text">{{ store.return_settings.return_window_days }}-Day Return Policy</span>
-                                {% else %}
-                                <i class="fas fa-times text-danger feature-icon" aria-hidden="true"></i>
-                                <span class="feature-text">No return policy for this item</span>
-                                {% endif %}
-                            </li>
-                        </ul>
-                    </div>
-
                     <!-- Product Features/Variants -->
                     {% for feature, options in feature_data.items %}
-                    <fieldset class="feature-group" id="{{ feature|lower|slugify }}FeatureGroup">
+                    {# IMPORTANT: radio "name" uses slugified feature key to match JSON keys below #}
+                    <fieldset class="feature-group mb-3" id="{{ feature|lower|slugify }}FeatureGroup">
                         <legend class="feature-label">
                             {{ feature }}
-                            <span class="feature-sync-indicator" id="{{ feature|lower|slugify }}SyncIndicator">
+                            <span class="feature-sync-indicator d-none" id="{{ feature|lower|slugify }}SyncIndicator">
                                 <i class="fas fa-check"></i>
                             </span>
                         </legend>
-                        <div class="feature-options" data-feature="{{ feature }}" role="radiogroup">
+                        <div class="feature-options d-flex flex-wrap gap-2" data-feature="{{ feature|lower|slugify }}" role="radiogroup">
                             {% for option in options %}
                                 {% if feature|lower == "color" %}
-                                <div class="feature-option">
+                                <label class="btn btn-outline-secondary mb-0">
                                     <input type="radio"
-                                           class="feature-input"
+                                           class="feature-input d-none"
                                            name="{{ feature|lower|slugify }}"
                                            id="{{ feature|lower|slugify }}_{{ option.value|slugify }}"
                                            value="{{ option.value }}"
                                            autocomplete="off"
                                            {% if forloop.first %}checked{% endif %}>
-                                    <label class="feature-label-option color-option" for="{{ feature|lower|slugify }}_{{ option.value|slugify }}">
-                                        <span class="color-swatch" style="background-color: {{ option.value|get_color_code }};"></span>
+                                    <span class="d-inline-flex align-items-center gap-2">
+                                        <span class="color-swatch" style="width:14px;height:14px;border-radius:50%;background-color: {{ option.value|get_color_code }};"></span>
                                         <span class="color-name">{{ option.value }}</span>
-                                    </label>
-                                </div>
+                                    </span>
+                                </label>
                                 {% else %}
-                                <div class="feature-option">
+                                <label class="btn btn-outline-secondary mb-0">
                                     <input type="radio"
-                                           class="feature-input"
+                                           class="feature-input d-none"
                                            name="{{ feature|lower|slugify }}"
                                            id="{{ feature|lower|slugify }}_{{ option.value|slugify }}"
                                            value="{{ option.value }}"
                                            autocomplete="off"
                                            {% if forloop.first %}checked{% endif %}>
-                                    <label class="feature-label-option" for="{{ feature|lower|slugify }}_{{ option.value|slugify }}">
-                                        {% if feature|lower == "material" %}
-                                            <i class="fas fa-{{ option.value|material_icon }}" aria-hidden="true"></i>
-                                        {% endif %}
-                                        <span>{{ option.value }}</span>
-                                    </label>
-                                </div>
+                                    <span>{{ option.value }}</span>
+                                </label>
                                 {% endif %}
                             {% endfor %}
                         </div>
@@ -333,9 +308,7 @@
                     <!-- Current Selection Display -->
                     <div class="selection-display-container" id="selectionDisplayContainer">
                         <h6><i class="fas fa-info-circle me-1"></i> Current Selection:</h6>
-                        <div id="selectionDisplay">
-                            <!-- Will be populated by JavaScript -->
-                        </div>
+                        <div id="selectionDisplay"> <!-- populated by JS --> </div>
                     </div>
 
                     <!-- Quantity Selector -->
@@ -352,7 +325,7 @@
                     {% endif %}
 
                     <!-- Action Buttons -->
-                    <div class="action-buttons" role="group" aria-label="Product actions">
+                    <div class="action-buttons d-flex gap-2 flex-wrap" role="group" aria-label="Product actions">
                         <!-- Add to Cart -->
                         <button class="btn-add-cart"
                                 onclick="addToCart({{ product.id }}, this)"
@@ -399,8 +372,7 @@
                         {% if address.geo_code %}
                             <div class="mb-2">
                                 <a href="https://www.google.com/maps?q={{ address.geo_code }}"
-                                   target="_blank"
-                                   rel="noopener noreferrer"
+                                   target="_blank" rel="noopener noreferrer"
                                    class="text-decoration-underline text-info small">
                                     View on Google Maps ({{ address.geo_code }})
                                 </a>
@@ -417,8 +389,7 @@
                             </div>
                         </div>
                         <button class="btn btn-outline-primary btn-change-address btn-sm"
-                                data-bs-toggle="modal"
-                                data-bs-target="#editAddressModal"
+                                data-bs-toggle="modal" data-bs-target="#editAddressModal"
                                 aria-label="Change delivery address">
                             <i class="fas fa-edit" aria-hidden="true"></i> Change Address
                         </button>
@@ -438,41 +409,21 @@
                                         <div class="modal-body">
                                             <div class="mb-3">
                                                 <label for="address1" class="form-label">Address Line 1 <span class="text-danger">*</span></label>
-                                                <textarea class="form-control"
-                                                          id="address1"
-                                                          name="address1"
-                                                          rows="2"
-                                                          required
-                                                          aria-describedby="address1Help">{{ address.address1 }}</textarea>
+                                                <textarea class="form-control" id="address1" name="address1" rows="2" required aria-describedby="address1Help">{{ address.address1 }}</textarea>
                                                 <div id="address1Help" class="form-text">Enter your street address</div>
                                             </div>
                                             <div class="mb-3">
                                                 <label for="address2" class="form-label">Address Line 2</label>
-                                                <textarea class="form-control"
-                                                          id="address2"
-                                                          name="address2"
-                                                          rows="2"
-                                                          aria-describedby="address2Help">{{ address.address2 }}</textarea>
+                                                <textarea class="form-control" id="address2" name="address2" rows="2" aria-describedby="address2Help">{{ address.address2 }}</textarea>
                                                 <div id="address2Help" class="form-text">Apartment, suite, etc. (optional)</div>
                                             </div>
                                             <div class="mb-3">
                                                 <label for="country" class="form-label">Country <span class="text-danger">*</span></label>
-                                                <input type="text"
-                                                       class="form-control"
-                                                       id="country"
-                                                       name="country"
-                                                       value="{{ address.country }}"
-                                                       required>
+                                                <input type="text" class="form-control" id="country" name="country" value="{{ address.country }}" required>
                                             </div>
                                             <div class="mb-3">
                                                 <label for="geo_code" class="form-label">Geo Code</label>
-                                                <input type="text"
-                                                       name="geo_code"
-                                                       id="geo_code"
-                                                       class="form-control"
-                                                       placeholder="e.g., GC-9A23-KL4"
-                                                       value="{{ address.geo_code }}"
-                                                       aria-describedby="geoCodeHelp">
+                                                <input type="text" name="geo_code" id="geo_code" class="form-control" placeholder="e.g., GC-9A23-KL4" value="{{ address.geo_code }}" aria-describedby="geoCodeHelp">
                                                 <div id="geoCodeHelp" class="form-text">Optional location code for precise delivery</div>
                                             </div>
                                         </div>
@@ -610,15 +561,13 @@
         <div class="d-flex gap-2 flex-wrap">
             <a class="btn btn-outline-success"
                href="https://wa.me/?text={{ request.build_absolute_uri|urlencode }}"
-               target="_blank"
-               rel="noopener noreferrer"
+               target="_blank" rel="noopener noreferrer"
                aria-label="Share on WhatsApp">
                 <i class="fab fa-whatsapp" aria-hidden="true"></i> WhatsApp
             </a>
             <a class="btn btn-outline-primary"
                href="https://www.facebook.com/sharer/sharer.php?u={{ request.build_absolute_uri|urlencode }}"
-               target="_blank"
-               rel="noopener noreferrer"
+               target="_blank" rel="noopener noreferrer"
                aria-label="Share on Facebook">
                 <i class="fab fa-facebook" aria-hidden="true"></i> Facebook
             </a>
@@ -752,9 +701,7 @@
             {% for item in recommended_items %}
             <article class="product-card" onclick="window.location.href='{% url 'marketplace:product_detail' item.id %}'">
                 {% if item.discount_percentage %}
-                <span class="discount-badge">
-                    {{ item.discount_percentage|floatformat:0 }}% OFF
-                </span>
+                <span class="discount-badge">{{ item.discount_percentage|floatformat:0 }}% OFF</span>
                 {% endif %}
 
                 <div class="product-image-container">
@@ -885,12 +832,8 @@
 
                         <div class="comment-input">
                             <label for="comment" class="form-label">Comment</label>
-                            <textarea name="comment"
-                                      id="comment"
-                                      class="form-control"
-                                      rows="4"
-                                      placeholder="Share your experience with this product..."
-                                      maxlength="1000"></textarea>
+                            <textarea name="comment" id="comment" class="form-control" rows="4"
+                                      placeholder="Share your experience with this product..." maxlength="1000"></textarea>
                             <div class="form-text">Maximum 1000 characters</div>
                         </div>
 
@@ -927,35 +870,78 @@
 
 <!-- JavaScript Configuration -->
 <script>
-// Global configuration
-window.PRODUCT_ID = {{ product.id }};
-window.CSRF_TOKEN = '{{ csrf_token }}';
+  // Global configuration
+  window.PRODUCT_ID = {{ product.id }};
+  window.CSRF_TOKEN = '{{ csrf_token }}';
 
-// Review URLs
-window.REVIEWS_SUBMIT_URL = "{% url 'reviews:submit_review' %}";
-window.REVIEWS_DELETE_URL = "{% url 'reviews:delete_review' %}";
-window.REVIEWS_COMMENT_URL = "{% url 'reviews:submit_comment' %}";
-window.REVIEWS_COMMENT_DEL = "{% url 'reviews:delete_comment' %}";
-window.REVIEWS_LIST_URL = "{% url 'reviews:load_reviews' product.id %}";
+  // Review URLs
+  window.REVIEWS_SUBMIT_URL = "{% url 'reviews:submit_review' %}";
+  window.REVIEWS_DELETE_URL = "{% url 'reviews:delete_review' %}";
+  window.REVIEWS_COMMENT_URL = "{% url 'reviews:submit_comment' %}";
+  window.REVIEWS_COMMENT_DEL = "{% url 'reviews:delete_comment' %}";
+  window.REVIEWS_LIST_URL = "{% url 'reviews:load_reviews' product.id %}";
+</script>
+{# ======= PRODUCT VARIANTS ======= #}
+<script>
+  (function () {
+    const variants = [];
 
-// Product features configuration
-window.PRODUCT_FEATURES = {
-    imageFeatures: {
-        "{{ product.image.url }}": {},
-        {% for img in product.images.all %}
-            {% if img.variants.exists %}
-            "{{ img.image.url }}": {
-                {% for variant in img.variants.all %}
-                    "{{ variant.feature.name }}": "{{ variant.value }}"{% if not forloop.last %},{% endif %}
-                {% endfor %}
+    {% if product.variants.all %}
+      {% for v in product.variants.all %}
+        variants.push({
+          id: {{ v.id }},  // <-- add id
+          features: {
+            {% for fopt in v.feature_options.all %}
+              "{{ fopt.feature.name|lower|slugify }}": "{{ fopt.value }}"{% if not forloop.last %},{% endif %}
+            {% endfor %}
+          },
+          stock: {{ v.stock|default:0 }},
+          image: {% if v.image %}"{{ v.image.url }}"{% else %}"{{ product.image.url }}"{% endif %}
+        });
+      {% endfor %}
+    {% endif %}
+
+    // Fallback from images if no explicit variants were found
+    {% if not product.variants.all or product.variants.all|length == 0 %}
+      {% for img in product.images.all %}
+        {% if img.variants.exists %}
+          variants.push({
+            id: {{ img.id }}, // fallback id (image id as stand-in)
+            features: {
+              {% for variant in img.variants.all %}
+                "{{ variant.feature.name|lower|slugify }}": "{{ variant.value }}"{% if not forloop.last %},{% endif %}
+              {% endfor %}
             },
-            {% endif %}
-        {% endfor %}
-    }
-};
+            stock: 1,
+            image: "{{ img.image.url }}"
+          });
+        {% endif %}
+      {% endfor %}
+    {% endif %}
+
+    window.PRODUCT_VARIANTS = variants;
+  })();
 </script>
 
-<!-- Load JavaScript Files -->
+<!-- (Optional) Image -> Features map (kept for compatibility; keys are image URLs) -->
+<script>
+  window.PRODUCT_FEATURES = {
+    imageFeatures: {
+      "{{ product.image.url }}": {},
+      {% for img in product.images.all %}
+        {% if img.variants.exists %}
+        "{{ img.image.url }}": {
+          {% for variant in img.variants.all %}
+            "{{ variant.feature.name|lower|slugify }}": "{{ variant.value }}"{% if not forloop.last %},{% endif %}
+          {% endfor %}
+        },
+        {% endif %}
+      {% endfor %}
+    }
+  };
+</script>
+
+<!-- Load JavaScript Files (make sure product_detail.js is the fixed version I gave you) -->
 <script src="{% static 'js/main.js' %}"></script>
 <script src="{% static 'js/product_detail.js' %}"></script>
 <script src="{% static 'js/message-review.js' %}"></script>
