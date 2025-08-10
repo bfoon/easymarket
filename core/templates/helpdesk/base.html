@@ -1,0 +1,615 @@
+<!-- base.html -->
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}EasyMarket Helpdesk{% endblock %}</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary-color: #4f46e5;
+      --primary-hover: #4338ca;
+      --primary-light: #eef2ff;
+      --secondary-color: #64748b;
+      --success-color: #10b981;
+      --warning-color: #f59e0b;
+      --danger-color: #ef4444;
+      --info-color: #06b6d4;
+      --light-bg: #f8fafc;
+      --card-bg: #ffffff;
+      --border-color: #e2e8f0;
+      --text-primary: #1e293b;
+      --text-secondary: #64748b;
+      --text-muted: #94a3b8;
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+      --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+      --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+      --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      --gradient-success: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+      --gradient-warning: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+      color: var(--text-primary);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* Navbar Styling */
+    .navbar {
+      background: rgba(255, 255, 255, 0.95) !important;
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border-color);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .navbar-brand {
+      font-weight: 700;
+      font-size: 1.4rem;
+      color: var(--primary-color) !important;
+      text-decoration: none;
+    }
+
+    .navbar-nav .nav-link {
+      color: var(--text-secondary) !important;
+      font-weight: 500;
+      padding: 0.75rem 1rem !important;
+      border-radius: 8px;
+      margin: 0 0.25rem;
+      transition: all 0.3s ease;
+    }
+
+    .navbar-nav .nav-link:hover {
+      color: var(--primary-color) !important;
+      background: var(--primary-light);
+      transform: translateY(-1px);
+    }
+
+    /* Main Content */
+    .main-content {
+      background: var(--card-bg);
+      border-radius: 16px;
+      box-shadow: var(--shadow-lg);
+      padding: 2rem;
+      margin-bottom: 2rem;
+      border: 1px solid var(--border-color);
+      backdrop-filter: blur(10px);
+    }
+
+    /* Cards */
+    .card {
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      box-shadow: var(--shadow-sm);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      background: var(--card-bg);
+    }
+
+    .card:hover {
+      box-shadow: var(--shadow-xl);
+      transform: translateY(-4px);
+    }
+
+    .ticket-card {
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      margin-bottom: 1rem;
+      background: var(--card-bg);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .ticket-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: var(--gradient-primary);
+      transform: scaleX(0);
+      transition: transform 0.3s ease;
+    }
+
+    .ticket-card:hover {
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-xl);
+      text-decoration: none;
+      border-color: var(--primary-color);
+    }
+
+    .ticket-card:hover::before {
+      transform: scaleX(1);
+    }
+
+    /* Status and Priority Badges */
+    .priority-badge, .status-badge {
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.375rem 0.75rem;
+      border-radius: 20px;
+      text-transform: uppercase;
+      letter-spacing: 0.025em;
+      border: none;
+    }
+
+    .priority-low { 
+      background: linear-gradient(135deg, #e0f2fe, #b3e5fc);
+      color: #0277bd;
+    }
+    .priority-medium { 
+      background: linear-gradient(135deg, #fff3e0, #ffcc02);
+      color: #e65100;
+    }
+    .priority-high { 
+      background: linear-gradient(135deg, #fce4ec, #f8bbd9);
+      color: #c2185b;
+    }
+    .priority-urgent { 
+      background: linear-gradient(135deg, #ffebee, #ffcdd2);
+      color: #d32f2f;
+      animation: pulse 2s infinite;
+    }
+
+    .status-open { 
+      background: linear-gradient(135deg, #e8f5e8, #c8e6c9);
+      color: #2e7d32;
+    }
+    .status-in-progress { 
+      background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+      color: #1565c0;
+    }
+    .status-pending { 
+      background: linear-gradient(135deg, #fff3e0, #ffe0b2);
+      color: #ef6c00;
+    }
+    .status-resolved { 
+      background: linear-gradient(135deg, #f3e5f5, #e1bee7);
+      color: #7b1fa2;
+    }
+    .status-closed { 
+      background: linear-gradient(135deg, #fafafa, #f5f5f5);
+      color: #616161;
+    }
+
+    /* Message Cards */
+    .message-card {
+      border: none;
+      border-radius: 16px;
+      margin-bottom: 1.5rem;
+      background: var(--card-bg);
+      box-shadow: var(--shadow-md);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .message-card::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 4px;
+      background: var(--gradient-primary);
+    }
+
+    .message-internal {
+      background: linear-gradient(135deg, #fffbf0, #fff4e6);
+    }
+
+    .message-internal::before {
+      background: var(--gradient-warning);
+    }
+
+    /* Forms */
+    .form-control, .form-select {
+      border-radius: 10px;
+      border: 2px solid var(--border-color);
+      padding: 0.875rem 1rem;
+      font-weight: 500;
+      transition: all 0.3s ease;
+      background: var(--card-bg);
+    }
+
+    .form-control:focus, .form-select:focus {
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+      transform: translateY(-1px);
+    }
+
+    .form-label {
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 0.5rem;
+    }
+
+    /* Buttons */
+    .btn {
+      font-weight: 600;
+      padding: 0.75rem 1.5rem;
+      border-radius: 10px;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      border: none;
+      text-transform: none;
+      letter-spacing: 0.025em;
+    }
+
+    .btn-primary {
+      background: var(--gradient-primary);
+      color: white;
+      box-shadow: var(--shadow-md);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-lg);
+      background: var(--gradient-primary);
+    }
+
+    .btn-outline-primary {
+      border: 2px solid var(--primary-color);
+      color: var(--primary-color);
+      background: transparent;
+    }
+
+    .btn-outline-primary:hover {
+      background: var(--primary-color);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .btn-warning {
+      background: var(--gradient-warning);
+      color: white;
+      box-shadow: var(--shadow-md);
+    }
+
+    .btn-warning:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-lg);
+    }
+
+    /* Filter Section */
+    .filter-section {
+      background: var(--card-bg);
+      border-radius: 16px;
+      padding: 2rem;
+      margin-bottom: 2rem;
+      box-shadow: var(--shadow-md);
+      border: 1px solid var(--border-color);
+    }
+
+    /* Stats Cards */
+    .stats-card {
+      background: var(--gradient-primary);
+      color: white;
+      border-radius: 16px;
+      padding: 2rem;
+      margin-bottom: 1rem;
+      box-shadow: var(--shadow-lg);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .stats-card::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      right: -50%;
+      width: 100%;
+      height: 100%;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 50%;
+      transition: transform 0.6s ease;
+    }
+
+    .stats-card:hover::before {
+      transform: scale(1.5);
+    }
+
+    /* User Avatar */
+    .user-avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      color: white;
+      font-size: 0.875rem;
+      background: var(--gradient-primary);
+      box-shadow: var(--shadow-md);
+    }
+
+    /* Attachments */
+    .attachment-item {
+      background: linear-gradient(135deg, #f8fafc, #e2e8f0);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 0.75rem;
+      margin: 0.25rem;
+      display: inline-block;
+      transition: all 0.3s ease;
+    }
+
+    .attachment-item:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 4rem 2rem;
+      color: var(--text-secondary);
+    }
+
+    .empty-state i {
+      font-size: 4rem;
+      margin-bottom: 1.5rem;
+      opacity: 0.6;
+      background: var(--gradient-primary);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    /* Animations */
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .slide-in {
+      animation: slideIn 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Pagination */
+    .pagination .page-link {
+      border: 2px solid var(--border-color);
+      color: var(--text-secondary);
+      border-radius: 8px !important;
+      margin: 0 0.25rem;
+      font-weight: 500;
+      transition: all 0.3s ease;
+    }
+
+    .pagination .page-item.active .page-link {
+      background: var(--gradient-primary);
+      border-color: var(--primary-color);
+      box-shadow: var(--shadow-md);
+    }
+
+    .pagination .page-link:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+      border-color: var(--primary-color);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .main-content {
+        padding: 1.5rem;
+        margin: 1rem;
+        border-radius: 12px;
+      }
+      
+      .filter-section {
+        padding: 1.5rem;
+        margin: 1rem;
+      }
+      
+      .stats-card {
+        padding: 1.5rem;
+      }
+    }
+
+    /* Loading States */
+    .loading {
+      position: relative;
+      overflow: hidden;
+    }
+
+    .loading::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+      animation: loading 1.5s infinite;
+    }
+
+    @keyframes loading {
+      0% { left: -100%; }
+      100% { left: 100%; }
+    }
+
+    /* Dark mode support */
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --card-bg: #1e293b;
+        --light-bg: #0f172a;
+        --text-primary: #f8fafc;
+        --text-secondary: #cbd5e1;
+        --border-color: #334155;
+      }
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-expand-lg sticky-top">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="{% url 'marketplace:product_list' %}">
+        <i class="bi bi-headset me-2"></i>
+        EasyMarket Helpdesk
+      </a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav me-auto">
+          <li class="nav-item">
+            <a class="nav-link" href="{% url 'helpdesk:dashboard' %}">
+              <i class="bi bi-grid me-1"></i>Dashboard
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{% url 'helpdesk:ticket_list' %}">
+              <i class="bi bi-ticket-detailed me-1"></i>My Tickets
+            </a>
+          </li>
+        </ul>
+        <div class="d-flex align-items-center gap-2">
+          <a href="{% url 'helpdesk:ticket_create' %}" class="btn btn-warning btn-sm">
+            <i class="bi bi-plus-circle me-1"></i>New Ticket
+          </a>
+          {% if user.is_authenticated %}
+          <div class="dropdown">
+            <button class="btn btn-outline-primary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+              <i class="bi bi-person-circle me-1"></i>{{ user.username }}
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li><a class="dropdown-item" href="#"><i class="bi bi-gear me-2"></i>Settings</a></li>
+              <li><hr class="dropdown-divider"></li>
+              <li><a class="dropdown-item" href="{% url 'logout' %}"><i class="bi bi-box-arrow-right me-2"></i>Logout</a></li>
+            </ul>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container-fluid py-4">
+    {% if messages %}
+      {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show slide-in" role="alert" style="border-radius: 12px; border: none; box-shadow: var(--shadow-md);">
+          {{ message }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      {% endfor %}
+    {% endif %}
+
+    {% block content %}{% endblock %}
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Add smooth animations
+      const observerOptions = {
+        threshold: 0.1,
+        rootMargin: '0px 0px -50px 0px'
+      };
+
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('slide-in');
+          }
+        });
+      }, observerOptions);
+
+      // Observe cards and content elements
+      document.querySelectorAll('.card, .main-content, .filter-section').forEach(el => {
+        observer.observe(el);
+      });
+
+      // Enhanced hover effects
+      document.querySelectorAll('.ticket-card').forEach(card => {
+        card.addEventListener('mouseenter', function() {
+          this.style.transform = 'translateY(-4px)';
+          this.style.boxShadow = 'var(--shadow-xl)';
+        });
+        
+        card.addEventListener('mouseleave', function() {
+          this.style.transform = 'translateY(0)';
+          this.style.boxShadow = 'var(--shadow-sm)';
+        });
+      });
+
+      // Auto-dismiss alerts with animation
+      setTimeout(() => {
+        document.querySelectorAll('.alert').forEach(alert => {
+          alert.style.transition = 'all 0.5s ease';
+          alert.style.opacity = '0';
+          alert.style.transform = 'translateY(-20px)';
+          setTimeout(() => alert.remove(), 500);
+        });
+      }, 5000);
+
+      // Add ripple effect to buttons
+      document.querySelectorAll('.btn').forEach(button => {
+        button.addEventListener('click', function(e) {
+          const ripple = document.createElement('span');
+          const rect = this.getBoundingClientRect();
+          const size = Math.max(rect.width, rect.height);
+          const x = e.clientX - rect.left - size / 2;
+          const y = e.clientY - rect.top - size / 2;
+          
+          ripple.style.cssText = `
+            position: absolute;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.6);
+            width: ${size}px;
+            height: ${size}px;
+            left: ${x}px;
+            top: ${y}px;
+            animation: ripple 0.6s ease-out;
+            pointer-events: none;
+          `;
+          
+          this.style.position = 'relative';
+          this.style.overflow = 'hidden';
+          this.appendChild(ripple);
+          
+          setTimeout(() => ripple.remove(), 600);
+        });
+      });
+
+      // Add CSS for ripple animation
+      const style = document.createElement('style');
+      style.textContent = `
+        @keyframes ripple {
+          from {
+            transform: scale(0);
+            opacity: 1;
+          }
+          to {
+            transform: scale(2);
+            opacity: 0;
+          }
+        }
+      `;
+      document.head.appendChild(style);
+    });
+  </script>
+  {% block extra_js %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,205 @@
+{% extends 'helpdesk/base.html' %}
+{% load helpdesk_tags %}
+
+{% block title %}Dashboard - {{ block.super }}{% endblock %}
+
+{% block content %}
+<div class="main-content slide-in">
+  <div class="d-flex justify-content-between align-items-center mb-5">
+    <div>
+      <h1 class="mb-2 fw-bold" style="background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+        <i class="bi bi-speedometer2 me-3"></i>Support Dashboard
+      </h1>
+      <p class="text-muted mb-0">Manage and track all your support tickets efficiently</p>
+    </div>
+    <a class="btn btn-primary btn-lg" href="{% url 'helpdesk:ticket_create' %}">
+      <i class="bi bi-plus-circle me-2"></i>Create New Ticket
+    </a>
+  </div>
+
+  {% include 'helpdesk/_filters.html' with ticket=page.object_list.model %}
+
+  <!-- Quick Stats -->
+  {% if user.is_staff %}
+  <div class="row mb-5">
+    <div class="col-xl-3 col-md-6 mb-4">
+      <div class="stats-card position-relative overflow-hidden">
+        <div class="d-flex justify-content-between align-items-center position-relative">
+          <div>
+            <h2 class="mb-0 fw-bold">{{ total_tickets|default:0 }}</h2>
+            <small class="opacity-75">Total Tickets</small>
+          </div>
+          <div style="font-size: 3rem; opacity: 0.3;">
+            <i class="bi bi-ticket-detailed"></i>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+      <div class="card border-0 h-100" style="background: var(--gradient-warning);">
+        <div class="card-body text-white">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <h2 class="mb-0 fw-bold">{{ open_tickets|default:0 }}</h2>
+              <small class="opacity-75">Open Tickets</small>
+            </div>
+            <div style="font-size: 3rem; opacity: 0.3;">
+              <i class="bi bi-folder2-open"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+      <div class="card border-0 h-100" style="background: var(--gradient-success);">
+        <div class="card-body text-white">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <h2 class="mb-0 fw-bold">{{ pending_tickets|default:0 }}</h2>
+              <small class="opacity-75">Pending Review</small>
+            </div>
+            <div style="font-size: 3rem; opacity: 0.3;">
+              <i class="bi bi-clock-history"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+      <div class="card border-0 h-100" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+        <div class="card-body text-white">
+          <div class="d-flex justify-content-between align-items-center">
+            <div>
+              <h2 class="mb-0 fw-bold">{{ resolved_tickets|default:0 }}</h2>
+              <small class="opacity-75">Resolved</small>
+            </div>
+            <div style="font-size: 3rem; opacity: 0.3;">
+              <i class="bi bi-check-circle"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Ticket List Header -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="fw-bold mb-0">
+      <i class="bi bi-list-ul me-2 text-primary"></i>Recent Tickets
+    </h3>
+    <div class="d-flex gap-2">
+      <button class="btn btn-outline-primary btn-sm">
+        <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+      </button>
+      <button class="btn btn-outline-primary btn-sm">
+        <i class="bi bi-download me-1"></i>Export
+      </button>
+    </div>
+  </div>
+
+  <!-- Ticket List -->
+  <div class="ticket-list">
+    {% for t in page.object_list %}
+      <a class="ticket-card text-decoration-none text-dark d-block" href="{% url 'helpdesk:ticket_detail' t.id %}">
+        <div class="card-body p-4">
+          <div class="row align-items-center">
+            <div class="col-lg-6">
+              <div class="d-flex align-items-center mb-3">
+                <span class="badge bg-primary bg-gradient me-3 fs-6">#{{ t.id }}</span>
+                <h5 class="mb-0 fw-bold">{{ t.subject|truncatechars:60 }}</h5>
+              </div>
+              <div class="d-flex align-items-center gap-3 text-muted small">
+                <span>
+                  <i class="bi bi-person-circle me-1"></i>
+                  {{ t.customer.get_full_name|default:t.customer.username }}
+                </span>
+                <span>
+                  <i class="bi bi-clock me-1"></i>
+                  {{ t.updated_at|timesince }} ago
+                </span>
+              </div>
+            </div>
+
+            <div class="col-lg-2 text-center">
+              <span class="priority-badge priority-{{ t.priority|lower }}">
+                {% if t.priority == 'urgent' %}
+                  <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                {% elif t.priority == 'high' %}
+                  <i class="bi bi-exclamation-triangle me-1"></i>
+                {% else %}
+                  <i class="bi bi-flag me-1"></i>
+                {% endif %}
+                {{ t.get_priority_display }}
+              </span>
+            </div>
+
+            <div class="col-lg-2 text-center">
+              <span class="status-badge status-{{ t.status|lower }}">
+                <i class="bi bi-kanban me-1"></i>
+                {{ t.get_status_display }}
+              </span>
+            </div>
+
+            <div class="col-lg-2 text-end">
+              <div class="d-flex align-items-center justify-content-end">
+                {% if t.assignee %}
+                  <div class="user-avatar user-avatar-sm me-2">
+                    {{ t.assignee.first_name.0|default:t.assignee.username.0|upper }}
+                  </div>
+                  <small class="text-muted fw-medium">
+                    {{ t.assignee.get_full_name|default:t.assignee.username|truncatechars:15 }}
+                  </small>
+                {% else %}
+                  <span class="badge bg-light text-muted">
+                    <i class="bi bi-person-x me-1"></i>Unassigned
+                  </span>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+      </a>
+    {% empty %}
+      <div class="empty-state">
+        <i class="bi bi-ticket-detailed"></i>
+        <h4 class="fw-bold mb-3">No tickets found</h4>
+        <p class="text-muted mb-4">Looks like there are no tickets matching your criteria.<br>Try adjusting your filters or create a new ticket to get started.</p>
+        <a href="{% url 'helpdesk:ticket_create' %}" class="btn btn-primary btn-lg">
+          <i class="bi bi-plus-circle me-2"></i>Create Your First Ticket
+        </a>
+      </div>
+    {% endfor %}
+  </div>
+
+  <!-- Pagination -->
+  {% if page.has_other_pages %}
+  <nav class="mt-5">
+    <ul class="pagination justify-content-center">
+      {% if page.has_previous %}
+        <li class="page-item">
+          <a class="page-link" href="?page={{ page.previous_page_number }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.priority %}&priority={{ request.GET.priority }}{% endif %}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}">
+            <i class="bi bi-chevron-left"></i>
+          </a>
+        </li>
+      {% endif %}
+
+      <li class="page-item active">
+        <span class="page-link fw-bold">{{ page.number }}</span>
+      </li>
+
+      {% if page.has_next %}
+        <li class="page-item">
+          <a class="page-link" href="?page={{ page.next_page_number }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}{% if request.GET.priority %}&priority={{ request.GET.priority }}{% endif %}{% if request.GET.search %}&search={{ request.GET.search }}{% endif %}">
+            <i class="bi bi-chevron-right"></i>
+          </a>
+        </li>
+      {% endif %}
+    </ul>
+  </nav>
+  {% endif %}
+</div>
+{% endblock %}

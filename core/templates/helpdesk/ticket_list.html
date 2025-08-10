@@ -1,0 +1,100 @@
+{% extends 'helpdesk/base.html' %}
+
+{% block title %}My Tickets - EasyMarket Helpdesk{% endblock %}
+
+{% block content %}
+<div class="main-content slide-in">
+  <div class="d-flex justify-content-between align-items-center mb-5">
+    <div>
+      <h1 class="fw-bold mb-2" style="background: var(--gradient-primary); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+        <i class="bi bi-person-circle me-3"></i>My Support Tickets
+      </h1>
+      <p class="text-muted mb-0">Track and manage all your support requests in one place</p>
+    </div>
+    <a class="btn btn-primary btn-lg" href="{% url 'helpdesk:ticket_create' %}">
+      <i class="bi bi-plus-circle me-2"></i>Create New Ticket
+    </a>
+  </div>
+
+  <div class="ticket-list">
+    {% for t in page.object_list %}
+      <a class="ticket-card text-decoration-none text-dark d-block" href="{% url 'helpdesk:ticket_detail' t.id %}">
+        <div class="card-body p-4">
+          <div class="d-flex justify-content-between align-items-start">
+            <div class="flex-grow-1 me-4">
+              <div class="d-flex align-items-center mb-3">
+                <span class="badge bg-primary bg-gradient me-3 fs-6">#{{ t.id }}</span>
+                <h4 class="mb-0 fw-bold">{{ t.subject }}</h4>
+              </div>
+
+              <p class="text-muted mb-3 lh-base">{{ t.description|truncatechars:150 }}</p>
+
+              <div class="d-flex align-items-center gap-4">
+                <span class="text-muted small">
+                  <i class="bi bi-clock me-1"></i>
+                  Updated {{ t.updated_at|timesince }} ago
+                </span>
+                <span class="status-badge status-{{ t.status|lower }}">
+                  <i class="bi bi-kanban me-1"></i>
+                  {{ t.get_status_display }}
+                </span>
+                <span class="priority-badge priority-{{ t.priority|lower }}">
+                  {% if t.priority == 'urgent' %}
+                    <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                  {% elif t.priority == 'high' %}
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                  {% else %}
+                    <i class="bi bi-flag me-1"></i>
+                  {% endif %}
+                  {{ t.get_priority_display }}
+                </span>
+              </div>
+            </div>
+
+            <div class="text-end">
+              <div class="text-muted small mb-2">{{ t.updated_at|date:'M j, Y' }}</div>
+              <i class="bi bi-chevron-right text-primary fs-4"></i>
+            </div>
+          </div>
+        </div>
+      </a>
+    {% empty %}
+      <div class="empty-state">
+        <i class="bi bi-ticket-detailed"></i>
+        <h4 class="fw-bold mb-3">No tickets yet</h4>
+        <p class="text-muted mb-4 fs-5">You haven't created any support tickets yet.<br>When you need help, we're just one click away!</p>
+        <a href="{% url 'helpdesk:ticket_create' %}" class="btn btn-primary btn-lg">
+          <i class="bi bi-plus-circle me-2"></i>Create Your First Ticket
+        </a>
+      </div>
+    {% endfor %}
+  </div>
+
+  <!-- Pagination -->
+  {% if page.has_other_pages %}
+  <nav class="mt-5">
+    <ul class="pagination justify-content-center">
+      {% if page.has_previous %}
+        <li class="page-item">
+          <a class="page-link" href="?page={{ page.previous_page_number }}">
+            <i class="bi bi-chevron-left"></i>
+          </a>
+        </li>
+      {% endif %}
+
+      <li class="page-item active">
+        <span class="page-link fw-bold">Page {{ page.number }}</span>
+      </li>
+
+      {% if page.has_next %}
+        <li class="page-item">
+          <a class="page-link" href="?page={{ page.next_page_number }}">
+            <i class="bi bi-chevron-right"></i>
+          </a>
+        </li>
+      {% endif %}
+    </ul>
+  </nav>
+  {% endif %}
+</div>
+{% endblock %}

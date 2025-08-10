@@ -66,6 +66,7 @@ INSTALLED_APPS = [
     'stores',
     'finance',
     'auction',
+    'helpdesk',
 
 ]
 
