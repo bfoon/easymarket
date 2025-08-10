@@ -165,6 +165,7 @@
 {% endblock %}
 
 {% block content %}
+{% load phone_utils %}
 <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
 <link rel="stylesheet" type="text/css" href="{% static 'css/store.css' %}">
 
@@ -270,6 +271,7 @@
                 <i class="fas fa-envelope" aria-hidden="true"></i>
                 <span class="btn-text">Contact</span>
               </button>
+
 
               <!-- Notifications Button (will be added by JavaScript if user is authenticated) -->
 
@@ -1146,6 +1148,24 @@
   </div>
 </div>
 
+
+  {% if store.whatsapp_number|default:store.phone %}
+<style>
+  .wa-float{position:fixed;right:18px;bottom:18px;z-index:1050}
+  .wa-float a{display:inline-flex;align-items:center;gap:.5rem;padding:.75rem 1rem;border-radius:999px;background:#25D366;color:#fff;text-decoration:none;box-shadow:0 8px 24px rgba(0,0,0,.18)}
+  .wa-float a:hover{filter:brightness(0.95)}
+</style>
+{% with wa_text="Hi "|add:store.name|add:", I'm browsing your store on EasyMarket." %}
+<div class="wa-float">
+  <a href="https://wa.me/{{ store.whatsapp_number|default:store.phone|phone_to_wa }}?text={{ wa_text|urlencode }}"
+     target="_blank" rel="noopener" aria-label="Open WhatsApp chat">
+    <i class="fab fa-whatsapp"></i> Chat
+  </a>
+</div>
+{% endwith %}
+{% endif %}
+
+
 <!-- JavaScript -->
 <script src="{% static 'js/main.js' %}"></script>
 <script src="{% static 'js/store-page-manager.js' %}" defer></script>
@@ -1445,6 +1465,7 @@ document.addEventListener('DOMContentLoaded', function() {
     window.storeFollowManager = new StoreFollowManager();
 });
 </script>
+
 
 
 {% endblock %}
