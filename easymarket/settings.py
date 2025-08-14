@@ -52,6 +52,11 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.humanize',
+    "django.contrib.sites",
+    "allauth",
+    "allauth.account",
+    "allauth.socialaccount",
+    "allauth.socialaccount.providers.google",
     'crispy_forms',
     'crispy_bootstrap5',
     'widget_tweaks',
@@ -70,6 +75,23 @@ INSTALLED_APPS = [
 
 ]
 
+
+SITE_ID = 1
+AUTH_USER_MODEL = "accounts.User"
+
+# Email-based auth, username auto-generated (since your form doesn’t ask for it)
+# ACCOUNT_AUTHENTICATION_METHOD = "username_email"
+# ACCOUNT_EMAIL_REQUIRED = True
+ACCOUNT_EMAIL_VERIFICATION = "optional"
+# ACCOUNT_USERNAME_REQUIRED = False
+ACCOUNT_SIGNUP_FORM_CLASS = "accounts.forms.CustomSignupForm"
+ACCOUNT_LOGIN_METHODS = {"username", "email"}  # or {"email"} if you prefer
+ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*", "password2*"]  # * marks required
+
+SOCIALACCOUNT_PROVIDERS = {
+    "google": {"SCOPE": ["profile", "email"], "AUTH_PARAMS": {"prompt": "select_account"}}
+}
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -78,6 +100,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'allauth.account.middleware.AccountMiddleware',
 ]
 
 ROOT_URLCONF = 'easymarket.urls'

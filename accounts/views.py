@@ -18,7 +18,8 @@ from django.views.decorators.http import require_POST
 import json
 from django.core.paginator import Paginator
 from django.utils.timezone import now
-
+from django.contrib.sites.shortcuts import get_current_site
+from allauth.socialaccount.models import SocialApp
 
 def login_view(request):
     if request.method == 'POST':
@@ -92,7 +93,9 @@ def register_view(request):
         messages.success(request, "Account created successfully.")
         return redirect('/')
     else:
-        return render(request, 'accounts/register.html')
+        site = get_current_site(request)
+        google_enabled = SocialApp.objects.filter(provider="google", sites=site).exists()
+        return render(request, 'accounts/register.html', {"google_enabled": google_enabled})
 
 def admin_logs(request):
     logs = AdminLog.objects.order_by('-created_at')

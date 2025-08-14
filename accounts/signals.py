@@ -6,6 +6,7 @@ from marketplace.models import Product
 from reviews.models import Review
 from stores.models import Store
 from orders.models import CustomerComplaint
+from allauth.account.signals import user_signed_up
 
 User = get_user_model()
 
@@ -100,3 +101,11 @@ def log_customer_complaint(sender, instance, created, **kwargs):
             message=f"New complaint from {instance.customer.get_full_name()}",
             created_by=instance.customer
         )
+@receiver(user_signed_up)
+def after_social_signup(request, user, **kwargs):
+    # Set any defaults you want on social sign-up
+    if not user.username:
+        from django.utils.crypto import get_random_string
+        base = (user.email.split("@")[0] if user.email else "user")[:20] or get_random_string(8).lower()
+        user.username = base
+        user.save()
