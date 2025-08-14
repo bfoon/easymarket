@@ -18,6 +18,7 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from django.views.generic import TemplateView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -34,6 +35,8 @@ urlpatterns = [
     path('auction/', include('auction.urls')),
     path("helpdesk/", include("helpdesk.urls", namespace="helpdesk")),
     path('', include(('orders.urls_returns', 'returns'), namespace='returns')),
+    path("legal/terms/", TemplateView.as_view(template_name="legal/terms/terms.html"), name="legal_terms"),
+    path("legal/privacy/", TemplateView.as_view(template_name="legal/privacy/privacy.html"), name="legal_privacy"),
 
 ]
 if settings.DEBUG:
