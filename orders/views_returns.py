@@ -57,7 +57,7 @@ def return_policy(request):
     }
     return render(request, "returns/policy.html", {"policy": policy})
 
-@login_required
+@login_required()
 def returns_hub(request):
     # Delivered orders within your return window logic (adjust filter)
     orders = (Order.objects
@@ -76,7 +76,7 @@ def returns_hub(request):
         'my_returns': my_returns,
     })
 
-@login_required
+@login_required()
 def start_return(request, order_id, store_id):
     order = get_object_or_404(Order, pk=order_id, buyer=request.user)
     store = get_object_or_404(Store, pk=store_id)
@@ -165,7 +165,7 @@ def start_return(request, order_id, store_id):
     }
     return render(request, "returns/start_return.html", context)
 
-@login_required
+@login_required()
 def return_detail_buyer(request, rma: str):
     ret = get_object_or_404(
         Return.objects
@@ -195,7 +195,7 @@ def return_detail_buyer(request, rma: str):
     return render(request, 'returns/buyer_detail.html', context)
 
 
-@login_required
+@login_required()
 def return_detail_store(request, store_id, rma):
     # Ensure this store is owned by the current user
     store = get_object_or_404(Store, pk=store_id, owner=request.user)
@@ -228,7 +228,7 @@ def return_detail_store(request, store_id, rma):
     }
     return render(request, 'returns/store_detail.html', context)
 
-@login_required
+@login_required()
 def store_returns(request, store_id):
     store = get_object_or_404(Store, pk=store_id, owner=request.user)
 
@@ -331,7 +331,7 @@ def _append_history(ret, new_status=None, note=""):
 
 # --- Actions --------------------------------------------------------------
 
-@login_required
+@login_required()
 @require_POST
 def store_approve_return(request, store_id, rma):
     try:
@@ -354,7 +354,7 @@ def store_approve_return(request, store_id, rma):
 
 
 
-@login_required
+@login_required()
 @require_POST
 def store_reject_return(request, store_id, rma):
     try:
@@ -383,7 +383,7 @@ def store_reject_return(request, store_id, rma):
         return JsonResponse({"success": False, "message": str(e)}, status=400)
 
 
-@login_required
+@login_required()
 @require_POST
 def store_mark_received(request, store_id, rma):
     try:
@@ -413,7 +413,7 @@ def store_mark_received(request, store_id, rma):
         return JsonResponse({"success": False, "message": str(e)}, status=400)
 
 
-@login_required
+@login_required()
 @require_POST
 def store_finalize_refund(request, store_id, rma):
     try:
@@ -447,7 +447,7 @@ def store_finalize_refund(request, store_id, rma):
         return JsonResponse({"success": False, "message": str(e)}, status=400)
 
 
-@login_required
+@login_required()
 @require_POST
 def store_fulfill_exchange(request, store_id, rma):
     try:
@@ -471,7 +471,7 @@ def store_fulfill_exchange(request, store_id, rma):
         return JsonResponse({"success": False, "message": str(e)}, status=400)
 
 
-@login_required
+@login_required()
 @require_POST
 def add_return_note(request, store_id, rma):
     """

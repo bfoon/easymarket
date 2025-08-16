@@ -1,11 +1,12 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils import timezone
+from django.core.exceptions import ValidationError
 
 class User(AbstractUser):
     verify_doc = models.FileField(upload_to='company/', blank=True, null=True)
     profile_pic = models.ImageField(upload_to='profile/', blank=True, null=True)
-    telephone = models.CharField(max_length=200, blank=True, null=True)
+    telephone = models.CharField(max_length=20, unique=True)
     is_buyer = models.BooleanField(default=False)
     is_seller = models.BooleanField(default=False)
     is_logistic = models.BooleanField(default=False)
@@ -23,8 +24,18 @@ class User(AbstractUser):
     def get_store_name(self):
         return self.owned_stores.first().name if self.owned_stores.exists() else "Unknown"
 
+    def clean(self):
+        super().clean()
+        # Enforce email uniqueness only if provided (case-insensitive)
+        if self.email:
+            qs = type(self).objects.filter(email__iexact=self.email)
+            if self.pk:
+                qs = qs.exclude(pk=self.pk)
+            if qs.exists():
+                raise ValidationError({"email": "This email is already in use."})
+
     def __str__(self):
-        return self.get_full_name() or self.username
+        return self.username or (self.phone or "")
 
 
 class Address(models.Model):

@@ -27,10 +27,6 @@ DEBUG = bool(int(os.environ.get('DEBUG', 1)))
 
 ALLOWED_HOSTS = ['*']
 
-# Authentication settings
-LOGIN_URL = '/'
-LOGIN_REDIRECT_URL = '/'  # Change to your desired redirect after login
-LOGOUT_REDIRECT_URL = '/'
 
 # Session settings
 SESSION_COOKIE_AGE = 1209600  # 2 weeks
@@ -79,18 +75,28 @@ INSTALLED_APPS = [
 SITE_ID = 1
 AUTH_USER_MODEL = "accounts.User"
 
-# Email-based auth, username auto-generated (since your form doesn’t ask for it)
-# ACCOUNT_AUTHENTICATION_METHOD = "username_email"
-# ACCOUNT_EMAIL_REQUIRED = True
-ACCOUNT_EMAIL_VERIFICATION = "optional"
-# ACCOUNT_USERNAME_REQUIRED = False
-ACCOUNT_SIGNUP_FORM_CLASS = "accounts.forms.CustomSignupForm"
-ACCOUNT_LOGIN_METHODS = {"username", "email"}  # or {"email"} if you prefer
-ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*", "password2*"]  # * marks required
+# # Email-based auth, username auto-generated (since your form doesn’t ask for it)
+# # ACCOUNT_AUTHENTICATION_METHOD = "username_email"
+# # ACCOUNT_EMAIL_REQUIRED = True
+# ACCOUNT_EMAIL_VERIFICATION = "optional"
+# # ACCOUNT_USERNAME_REQUIRED = False
+# ACCOUNT_SIGNUP_FORM_CLASS = "accounts.forms.CustomSignupForm"
+# ACCOUNT_LOGIN_METHODS = {"username", "email"}  # or {"email"} if you prefer
+# ACCOUNT_SIGNUP_FIELDS = ["email*", "password1*", "password2*"]  # * marks required
 
+# settings.py
 SOCIALACCOUNT_PROVIDERS = {
-    "google": {"SCOPE": ["profile", "email"], "AUTH_PARAMS": {"prompt": "select_account"}}
+    "google": {
+        "APP": {
+            "client_id": "319115351610-7qnvcruvv40mfqlhdmtv55ehbo0sfevo.apps.googleusercontent.com.apps.googleusercontent.com",
+            "secret": "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",
+            "key": ""
+        },
+        "SCOPE": ["profile", "email"],
+        "AUTH_PARAMS": {"prompt": "select_account"},
+    }
 }
+
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -253,13 +259,25 @@ SEARCH_RESULTS_PER_PAGE = 12
 SEARCH_SUGGESTIONS_LIMIT = 8
 SEARCH_MIN_QUERY_LENGTH = 2
 
+AUTHENTICATION_BACKENDS = [
+    "accounts.auth_backends.UsernameOrPhoneOrEmailBackend",  # <- our backend first
+    "allauth.account.auth_backends.AuthenticationBackend",
+]
+
+ACCOUNT_LOGIN_METHODS = {"username", "email"}
+ACCOUNT_UNIQUE_EMAIL = True
+
+ACCOUNT_SIGNUP_FORM_CLASS = "accounts.forms.CustomSignupForm"
+
+ACCOUNT_SIGNUP_FIELDS = ["username*", "password1*", "password2*", "email"]
+
 # settings.py
-LOGIN_URL = '/accounts/login/'
+LOGIN_URL = '/accounts/sign_in/'
 LOGIN_REDIRECT_URL = '/'  # Where to go after successful login
 LOGOUT_REDIRECT_URL = '/'  # Where to go after logout
 
 # Google Maps API Key (optional but recommended for better geocoding)
-GOOGLE_MAPS_API_KEY = 'your_google_maps_api_key_here'
+GOOGLE_MAPS_API_KEY = 'AIzaSyATmZVpBYY0zrs14-mXKVLhUm0K4iTkhXM'
 
 # Plus Code settings
 PLUS_CODE_SETTINGS = {

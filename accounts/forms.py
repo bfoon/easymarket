@@ -2,68 +2,61 @@
 from django import forms
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from django.utils.crypto import get_random_string
 
 User = get_user_model()
 
-
 class CustomSignupForm(forms.Form):
+    # Email optional (since ACCOUNT_EMAIL_REQUIRED=False)
+    email = forms.EmailField(required=False, label="Email (optional)")
+
+    # Your required extras
     first_name = forms.CharField(max_length=150, required=True)
     last_name = forms.CharField(max_length=150, required=True)
-    telephone = forms.CharField(max_length=200, required=False)
-    date_of_birth = forms.DateField(
-        required=False,
-        widget=forms.DateInput(attrs={"type": "date"})
-    )
+    telephone = forms.CharField(label="Phone number", max_length=32, required=True)
+
+    # Optional extras
+    date_of_birth = forms.DateField(required=False, widget=forms.DateInput(attrs={"type": "date"}))
     profile_picture = forms.ImageField(required=False)
 
-    def _generate_username(self, email: str | None = None) -> str:
-        email = email or ""
-        base = (email.split("@")[0] or "user")[:20] or get_random_string(8).lower()
-        candidate = base
-        for _ in range(25):
-            if not User.objects.filter(username=candidate).exists():
-                return candidate
-            candidate = f"{base}-{get_random_string(6).lower()}"[:30]
-        return get_random_string(12).lower()
+    # Uniqueness checks for values we own here
+    def clean_telephone(self):
+        tel = self.cleaned_data["telephone"].strip()
+        if User.objects.filter(telephone__iexact=tel).exists():
+            raise forms.ValidationError("This phone number is already in use.")
+        return tel
 
-    def _apply_extra_fields(self, user):
-        user.first_name = self.cleaned_data.get("first_name", "")
-        user.last_name = self.cleaned_data.get("last_name", "")
-        user.telephone = self.cleaned_data.get("telephone", "")
-
-        # Ensure username exists (AbstractUser still has username)
-        if not getattr(user, "username", None):
-            # allauth may auto-populate; but be safe:
-            email_from_request = getattr(user, "email", None)
-            user.username = self._generate_username(email_from_request)
-
-        pic = self.cleaned_data.get("profile_picture")
-        if pic:
-            user.profile_pic = pic  # your model field name
-
-        user.save()
-
-        # Optional: write DOB to a Profile model if you have one
-        dob = self.cleaned_data.get("date_of_birth")
-        if dob:
-            try:
-                from .models import Profile  # adjust/import only if exists
-                Profile.objects.update_or_create(
-                    user=user, defaults={"date_of_birth": dob}
-                )
-            except Exception:
-                pass
-
-        return user
+    def clean_email(self):
+        e = (self.cleaned_data.get("email") or "").strip()
+        if e and User.objects.filter(email__iexact=e).exists():
+            raise forms.ValidationError("This email is already in use.")
+        return e or None
 
     @transaction.atomic
     def signup(self, request, user):
         """
-        Called by allauth AFTER the user has been created.
-        Use this to copy extra fields to the user/profile.
+        Called by allauth AFTER the base user is created (username/password handled by allauth).
+        Attach extras here.
         """
-        return self._apply_extra_fields(user)
+        user.first_name = self.cleaned_data.get("first_name", "")
+        user.last_name = self.cleaned_data.get("last_name", "")
+        user.telephone = self.cleaned_data["telephone"]
+        if self.cleaned_data.get("email"):
+            user.email = self.cleaned_data["email"]
+
+        pic = self.cleaned_data.get("profile_picture")
+        if pic and hasattr(user, "profile_pic"):
+            user.profile_pic = pic
+
+        user.save()
+
+        dob = self.cleaned_data.get("date_of_birth")
+        if dob:
+            try:
+                from .models import Profile
+                Profile.objects.update_or_create(user=user, defaults={"date_of_birth": dob})
+            except Exception:
+                pass
+        return user
 
 
 class ProfileUpdateForm(forms.ModelForm):
