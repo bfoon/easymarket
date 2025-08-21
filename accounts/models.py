@@ -1,6 +1,8 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils import timezone
+from django.conf import settings
+from django.utils.timezone import now, timedelta
 from django.core.exceptions import ValidationError
 
 class User(AbstractUser):
@@ -113,3 +115,49 @@ class AdminLog(models.Model):
             'stock_update': 'info',
         }
         return status_map.get(self.action_type, 'info')
+
+class Device(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="devices")
+    device_id = models.CharField(max_length=128, db_index=True)  # fingerprint hash
+    user_agent = models.TextField(blank=True)
+    browser = models.CharField(max_length=50, blank=True)
+    os = models.CharField(max_length=50, blank=True)
+    ip = models.GenericIPAddressField(null=True, blank=True)
+    is_trusted = models.BooleanField(default=False)
+    first_seen = models.DateTimeField(auto_now_add=True)
+    last_seen = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("user", "device_id")
+
+    def __str__(self):
+        return f"{self.user} - {self.browser} on {self.os} ({'trusted' if self.is_trusted else 'untrusted'})"
+
+class OneTimeCode(models.Model):
+    PURPOSE_LOGIN = "login"
+    PURPOSES = [(PURPOSE_LOGIN, "Login")]
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="otps")
+    device = models.ForeignKey(Device, null=True, blank=True, on_delete=models.SET_NULL)
+    code = models.CharField(max_length=6)
+    purpose = models.CharField(max_length=20, choices=PURPOSES, default=PURPOSE_LOGIN)
+    expires_at = models.DateTimeField()
+    attempts = models.PositiveIntegerField(default=0)
+    consumed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    @classmethod
+    def make(cls, user, device, ttl_minutes=10):
+        import secrets
+        code = f"{secrets.randbelow(1000000):06d}"
+        return cls.objects.create(
+            user=user,
+            device=device,
+            code=code,
+            expires_at=now() + timedelta(minutes=ttl_minutes),
+        )
+
+    def is_valid(self, candidate: str) -> bool:
+        if self.consumed_at or now() > self.expires_at:
+            return False
+        return self.code == candidate

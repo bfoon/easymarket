@@ -267,7 +267,7 @@ def build_cart_context(request, limit=None):
             total_price += entry['subtotal']
 
     # Use the same tax rate you use elsewhere (0.15 in your earlier view)
-    tax_rate = Decimal('0.15')
+    tax_rate = Decimal('0.0')
     tax_amount = total_price * tax_rate
     final_total = total_price + tax_amount
 

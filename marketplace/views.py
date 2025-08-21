@@ -1359,7 +1359,7 @@ def add_to_cart(request, product_id):
             cart_count = sum(item.quantity for item in cart_items)
             cart_total = sum(item.product.price * item.quantity for item in cart_items)
 
-            tax_rate = Decimal('0.085')
+            tax_rate = Decimal('0.00')
             tax_amount = cart_total * tax_rate
             final_total = cart_total + tax_amount
 
@@ -1605,7 +1605,7 @@ def update_cart_quantity(request):
             item_count = sum(item.quantity for item in cart_items)
 
             # Calculate tax (assuming 8.5% tax rate, adjust as needed)
-            tax_rate = Decimal('0.085')
+            tax_rate = Decimal('0.00')
             tax_amount = total_price * tax_rate
             final_total = total_price + tax_amount
 

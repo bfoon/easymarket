@@ -102,12 +102,9 @@ ACCOUNT_EMAIL_VERIFICATION = config("ACCOUNT_EMAIL_VERIFICATION", default="optio
 ACCOUNT_UNIQUE_EMAIL = config("ACCOUNT_UNIQUE_EMAIL", default=True, cast=bool)
 
 # "ACCOUNT_LOGIN_METHODS" is newer; fall back to classic flags if needed
-ACCOUNT_LOGIN_METHODS = {"username", "email"}
-ACCOUNT_USERNAME_REQUIRED = True
-ACCOUNT_EMAIL_REQUIRED = True
+ACCOUNT_SIGNUP_FIELDS = ['username*', 'password1*', 'password2*', 'email']
 
 ACCOUNT_SIGNUP_FORM_CLASS = "accounts.forms.CustomSignupForm"
-ACCOUNT_SIGNUP_FIELDS = ["username*", "password1*", "password2*", "email"]
 
 SOCIALACCOUNT_PROVIDERS = {
     "google": {

@@ -1,14 +1,18 @@
-# accounts/views.py
-
 from __future__ import annotations
 
-from django.contrib import messages
 import json
+import logging
+import re
+import secrets
+from django.conf import settings
+from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth import authenticate, get_user_model, login, logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import PasswordChangeForm
 from django.core.paginator import Paginator
+from django.db import IntegrityError, transaction
+from django.db.models import Q
 from django.http import Http404, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.text import slugify
@@ -16,154 +20,390 @@ from django.utils.timezone import now
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_POST
 
+from allauth.socialaccount.adapter import get_adapter
 from allauth.socialaccount.models import SocialApp
+from django.contrib.sites.shortcuts import get_current_site
 
 from marketplace.utils import migrate_session_cart_to_user
 from orders.models import Order
 
 from .forms import ProfileUpdateForm
-from .models import Address, AdminLog
-from django.contrib.sites.shortcuts import get_current_site
-from allauth.socialaccount.adapter import get_adapter
-import logging
+from .models import Address, AdminLog, Device, OneTimeCode
+from .utils import device_fingerprint, parse_ua, send_otp_email, send_otp_whatsapp
 
 logger = logging.getLogger(__name__)
-
 User = get_user_model()
 
+# -------------------------------------------------------------------
+# Device cookie
+# -------------------------------------------------------------------
+DEVICE_COOKIE_NAME = "em_dev"
+DEVICE_COOKIE_MAX_AGE = 60 * 60 * 24 * 365 * 2  # 2 years
 
-# ---------- Auth ----------
+def _client_ip(request):
+    xff = request.META.get("HTTP_X_FORWARDED_FOR")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.META.get("REMOTE_ADDR")
 
+def _get_device_token(request):
+    return request.COOKIES.get(DEVICE_COOKIE_NAME)
+
+def _set_device_cookie(response, token, request):
+    secure = getattr(settings, "SESSION_COOKIE_SECURE", False) or request.is_secure()
+    response.set_cookie(
+        DEVICE_COOKIE_NAME,
+        token,
+        max_age=DEVICE_COOKIE_MAX_AGE,
+        httponly=True,
+        samesite="Lax",
+        secure=secure,
+        path="/",
+    )
+    return response
+
+# -------------------------------------------------------------------
+# Phone normalization (force E.164 with +220)
+# -------------------------------------------------------------------
+DEFAULT_COUNTRY_CODE = "+220"
+_phone_re = re.compile(r"[^\d+]")  # keep digits and '+'
+
+def _normalize_phone(raw: str) -> str:
+    raw = (raw or "").strip()
+    if not raw:
+        return ""
+    # strip everything except digits and '+'
+    if raw.startswith("+"):
+        cleaned = "+" + _phone_re.sub("", raw)[1:]
+    else:
+        cleaned = _phone_re.sub("", raw)
+
+    if cleaned.startswith("+"):
+        return cleaned
+    if cleaned.startswith("00220"):
+        return "+220" + cleaned[5:]
+    if cleaned.startswith("220"):
+        return "+220" + cleaned[3:]
+    return f"{DEFAULT_COUNTRY_CODE}{cleaned}"
+
+def generate_unique_username(email: str) -> str:
+    base = (email.split("@")[0].lower() if email else "user")
+    base = re.sub(r"[^a-z0-9]+", "", base) or "user"
+    candidate = f"{base}{secrets.token_hex(2)}"
+    while User.objects.filter(username=candidate).exists():
+        candidate = f"{base}{secrets.token_hex(2)}"
+    return candidate
+
+# -------------------------------------------------------------------
+# Auth
+# -------------------------------------------------------------------
+@csrf_protect
 def login_view(request):
     if request.method == "POST":
-        username = request.POST.get("username", "").strip()
-        password = request.POST.get("password", "")
+        # Accept multiple possible field names from the template
+        raw_identifier = (
+            request.POST.get("username")
+            or request.POST.get("email")
+            or request.POST.get("login")
+            or request.POST.get("phone")
+            or ""
+        ).strip()
+        password = request.POST.get("password") or ""
 
-        user = authenticate(request, username=username, password=password)
-        if user is not None:
-            login(request, user)
+        # Resolve by username/email/telephone (telephone normalized to +220…)
+        norm_phone = _normalize_phone(raw_identifier)
 
-            # If checkout flow was interrupted, migrate cart and continue
+        # Build phone candidates to match legacy rows too (without +, with 220, plain local)
+        digits = re.sub(r"\D+", "", raw_identifier or "")
+        candidates = set()
+        if norm_phone:
+            candidates.add(norm_phone)  # +2203930160
+        if digits:
+            candidates.add(digits)  # 3930160
+            if not digits.startswith("220"):
+                candidates.add(f"220{digits}")  # 2203930160
+
+        phone_q = Q()
+        for p in candidates:
+            phone_q |= Q(telephone__iexact=p)
+
+        user_obj = (
+            User.objects.filter(
+                Q(username__iexact=raw_identifier) |
+                Q(email__iexact=raw_identifier) |
+                phone_q
+            )
+            .order_by("-id")
+            .first()
+        )
+
+        if not user_obj:
+            messages.error(request, "Invalid username or password.")
+            return render(request, "accounts/login.html")
+
+        # Authenticate using the model's USERNAME_FIELD
+        login_identifier_value = getattr(user_obj, user_obj.USERNAME_FIELD)
+        user = authenticate(request, username=login_identifier_value, password=password)
+        if user is None:
+            logger.warning(
+                "Auth failed for identifier=%r (resolved %s=%r). is_active=%s",
+                raw_identifier, user_obj.USERNAME_FIELD, login_identifier_value, user_obj.is_active
+            )
+            messages.error(request, "Invalid username or password.")
+            return render(request, "accounts/login.html")
+
+        # Device bind via persistent cookie token
+        token = _get_device_token(request)
+        new_cookie_needed = False
+        if not token:
+            token = secrets.token_urlsafe(32)
+            new_cookie_needed = True
+
+        ua = request.META.get("HTTP_USER_AGENT", "")
+        ip = _client_ip(request)
+        browser, os = parse_ua(ua)
+
+        device, created = Device.objects.get_or_create(
+            user=user,
+            device_id=token,
+            defaults={"user_agent": ua, "browser": browser, "os": os, "ip": ip, "is_trusted": False},
+        )
+        if not created:
+            update_fields = []
+            if getattr(device, "user_agent", None) != ua:
+                device.user_agent = ua; update_fields.append("user_agent")
+            if getattr(device, "ip", None) != ip:
+                device.ip = ip; update_fields.append("ip")
+            if update_fields:
+                device.save(update_fields=update_fields)
+
+        # Untrusted device => send OTP and redirect to verify (don't log in yet)
+        if not device.is_trusted:
+            otp = OneTimeCode.make(user=user, device=device, ttl_minutes=10)
+            send_otp_email(user, otp.code)
+            send_otp_whatsapp(user, otp.code)
+
+            request.session["pending_login_user_id"] = user.id
+            request.session["pending_device_id"] = device.id
+            # Store the backend to use after OTP verification (multiple backends configured)
+            backend = getattr(user, "backend", None) or settings.AUTHENTICATION_BACKENDS[0]
+            request.session["pending_auth_backend"] = backend
+
+            messages.info(request, "We sent a 6-digit code to your email and WhatsApp. Enter it to finish logging in.")
+            resp = redirect("accounts:verify_login_otp")
+            if new_cookie_needed:
+                _set_device_cookie(resp, token, request)
+            return resp
+
+        # Trusted device: complete login normally (user.backend should be set by authenticate)
+        login(request, user)
+        if request.session.get("checkout_after_login"):
+            migrate_session_cart_to_user(request, user)
+            request.session.pop("checkout_after_login", None)
+            return redirect("orders:checkout_redirect")
+
+        resp = redirect("/")
+        if new_cookie_needed:
+            _set_device_cookie(resp, token, request)
+        messages.success(request, f"Welcome back, {user.username}!")
+        return resp
+
+    return render(request, "accounts/login.html")
+
+
+@csrf_protect
+def verify_login_otp(request):
+    """
+    GET: render form
+    POST: validate code, trust device, log in, continue flow
+    """
+    pending_user_id = request.session.get("pending_login_user_id")
+    pending_device_id = request.session.get("pending_device_id")
+    if not pending_user_id or not pending_device_id:
+        messages.error(request, "Your session expired. Please sign in again.")
+        return redirect("accounts:sign_in")
+
+    if request.method == "POST":
+        code = (request.POST.get("code") or "").strip()
+        try:
+            user = User.objects.get(id=pending_user_id)
+            device = Device.objects.get(id=pending_device_id, user=user)
+        except (User.DoesNotExist, Device.DoesNotExist):
+            messages.error(request, "Session invalid. Please sign in again.")
+            return redirect("accounts:sign_in")
+
+        otp = (
+            OneTimeCode.objects
+            .filter(user=user, device=device, consumed_at__isnull=True)
+            .order_by("-created_at")
+            .first()
+        )
+        if not otp:
+            messages.error(request, "No active code. Please sign in again.")
+            return redirect("accounts:sign_in")
+
+        if now() > otp.expires_at:
+            messages.error(request, "That code expired. Please sign in again.")
+            return redirect("accounts:sign_in")
+
+        otp.attempts += 1
+        if otp.is_valid(code):
+            otp.consumed_at = now()
+            otp.save(update_fields=["attempts", "consumed_at"])
+
+            # Trust this device and finish login
+            if not device.is_trusted:
+                device.is_trusted = True
+                device.save(update_fields=["is_trusted"])
+
+            backend = request.session.get("pending_auth_backend", settings.AUTHENTICATION_BACKENDS[0])
+            login(request, user, backend=backend)
+
+            # Cleanup pending session keys
+            request.session.pop("pending_login_user_id", None)
+            request.session.pop("pending_device_id", None)
+            request.session.pop("pending_auth_backend", None)
+
+            # Continue interrupted checkout if any
             if request.session.get("checkout_after_login"):
                 migrate_session_cart_to_user(request, user)
                 request.session.pop("checkout_after_login", None)
-                return redirect("orders:checkout_redirect")
+                resp = redirect("orders:checkout_redirect")
+            else:
+                resp = redirect("/")
 
-            messages.success(request, f"Welcome back, {user.username}!")
-            return redirect("/")  # or user dashboard
+            # Ensure the device cookie matches this trusted device
+            token = _get_device_token(request)
+            if not token or token != device.device_id:
+                _set_device_cookie(resp, device.device_id, request)
 
-        messages.error(request, "Invalid username or password.")
+            messages.success(request, f"Welcome, {user.username}! Device trusted.")
+            return resp
+        else:
+            otp.save(update_fields=["attempts"])
+            messages.error(request, "Incorrect code. Please try again.")
 
-    return render(request, "accounts/login.html")
+    return render(request, "accounts/verify_login_otp.html")
 
 
 def custom_logout(request):
     logout(request)
     return redirect("marketplace:product_list")
 
-
-def generate_unique_username(email: str) -> str:
-    local_part = email.split("@")[0] if email and "@" in email else email
-    base_username = slugify(local_part) or "user"
-    username = base_username
-    counter = 1
-    while User.objects.filter(username=username).exists():
-        username = f"{base_username}{counter}"
-        counter += 1
-    return username
-
-
+# -------------------------------------------------------------------
+# Registration
+# -------------------------------------------------------------------
 @csrf_protect
 def register_view(request):
     if request.method == "POST":
-        first_name = request.POST.get("first_name", "").strip()
-        last_name = request.POST.get("last_name", "").strip()
-        email = request.POST.get("email", "").strip().lower()
-        password = request.POST.get("password") or ""
+        first_name = (request.POST.get("first_name") or "").strip()
+        last_name  = (request.POST.get("last_name")  or "").strip()
+        email      = (request.POST.get("email")      or "").strip().lower()
+        password   = request.POST.get("password") or ""
         password_confirm = request.POST.get("password_confirm") or ""
-        telephone = request.POST.get("phone", "").strip()
+        telephone_raw = request.POST.get("phone") or ""
         profile_pic = request.FILES.get("profile_picture")
-
-        if not email:
-            messages.error(request, "Email is required.")
-            return redirect("accounts:register")
 
         if password != password_confirm:
             messages.error(request, "Passwords do not match.")
             return redirect("accounts:register")
 
-        if User.objects.filter(email=email).exists():
+        telephone = _normalize_phone(telephone_raw)
+        if not telephone:
+            messages.error(request, "Phone number is required.")
+            return redirect("accounts:register")
+
+        if User.objects.filter(telephone__iexact=telephone).exists():
+            messages.error(request, "Phone number is already in use.")
+            return redirect("accounts:register")
+
+        if email and User.objects.filter(email__iexact=email).exists():
             messages.error(request, "Email is already in use.")
             return redirect("accounts:register")
 
         username = generate_unique_username(email)
 
-        user = User.objects.create_user(
-            username=username,
-            email=email,
-            password=password,
-            first_name=first_name,
-            last_name=last_name,
-        )
-        # Optional fields on your custom User
-        if hasattr(user, "telephone"):
-            user.telephone = telephone
-        if hasattr(user, "profile_pic"):
-            user.profile_pic = profile_pic
-        if hasattr(user, "is_buyer"):
-            user.is_buyer = True
-        user.save(update_fields=["first_name", "last_name", "telephone", "profile_pic", "is_buyer"])
+        try:
+            with transaction.atomic():
+                extra = {
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "telephone": telephone,
+                    "is_buyer": True,
+                }
+                if email:
+                    extra["email"] = email
+                if profile_pic:
+                    extra["profile_pic"] = profile_pic
 
-        login(request, user)
+                user = User.objects.create_user(
+                    username=username,
+                    password=password,
+                    **extra,
+                )
+        except IntegrityError as e:
+            logger.exception("Integrity error creating user: %s", e)
+            messages.error(
+                request,
+                "Could not create account. The phone number or username already exists."
+            )
+            return redirect("accounts:register")
+
+        # Authenticate to set backend (since multiple backends are configured)
+        auth_user = authenticate(request, username=username, password=password)
+        if auth_user:
+            login(request, auth_user)
+        else:
+            login(request, user, backend=settings.AUTHENTICATION_BACKENDS[0])
+
+        # Trust & store the first device
+        try:
+            fp = device_fingerprint(request)
+            ua = request.META.get("HTTP_USER_AGENT", "")
+            ip = request.META.get("REMOTE_ADDR")
+            browser, os = parse_ua(ua)
+
+            device, created = Device.objects.get_or_create(
+                user=user,
+                device_id=fp,
+                defaults={
+                    "user_agent": ua,
+                    "browser": browser,
+                    "os": os,
+                    "ip": ip,
+                    "is_trusted": True,
+                },
+            )
+            if not created and not device.is_trusted:
+                device.is_trusted = True
+                device.save(update_fields=["is_trusted"])
+        except Exception:
+            logger.exception("Failed to store/trust first device after registration")
+
         messages.success(request, "Account created successfully.")
         return redirect("/")
 
-    # GET: show whether Google is configured for this Site
+    # GET: show Google provider status
+    ctx = {"google_enabled": False, "google_misconfigured": False, "google_count": 0, "google_error": None}
+    try:
+        site = get_current_site(request)
+        google_count = SocialApp.objects.filter(provider="google", sites=site).count()
+        ctx.update({"google_enabled": (google_count == 1), "google_misconfigured": (google_count > 1), "google_count": google_count})
+        if google_count == 1:
+            try:
+                adapter = get_adapter(request); adapter.get_provider(request, "google")
+            except Exception as e:
+                logger.warning(f"Google provider misconfigured: {e}")
+                ctx.update({"google_enabled": False, "google_misconfigured": True, "google_error": str(e)})
+    except Exception:
+        logger.exception("Google social app configuration check failed")
+        ctx.update({"google_enabled": False, "google_misconfigured": True, "google_error": "Configuration check failed"})
 
-    else:
-        # Initialize context with safe defaults
-        ctx = {
-            "google_enabled": False,
-            "google_misconfigured": False,
-            "google_count": 0,
-            "google_error": None,
-        }
-
-        try:
-            site = get_current_site(request)
-            google_count  = SocialApp.objects.filter(provider="google", sites=site).count()
-
-            ctx.update({
-                "google_enabled": google_count == 1,
-                "google_misconfigured": google_count > 1,
-                "google_count": google_count,
-            })
-
-            # Additional validation - check if provider is actually accessible
-            if google_count == 1:
-                try:
-                    adapter = get_adapter(request)
-                    adapter.get_provider(request, "google")
-                except Exception as e:
-                    logger.warning(f"Google provider misconfigured: {e}")
-                    ctx.update({
-                        "google_enabled": False,
-                        "google_misconfigured": True,
-                        "google_error": str(e),
-                    })
-
-        except Exception as e:
-            logger.error(f"Error checking Google social app configuration: {e}")
-            ctx.update({
-                "google_enabled": False,
-                "google_misconfigured": True,
-                "google_error": "Configuration check failed",
-            })
     return render(request, "accounts/register.html", ctx)
 
-
-# ---------- Admin Logs (staff-only) ----------
-
+# -------------------------------------------------------------------
+# Admin Logs (staff-only)
+# -------------------------------------------------------------------
 @staff_member_required
 def admin_logs(request):
     logs_qs = AdminLog.objects.order_by("-created_at")
@@ -172,25 +412,19 @@ def admin_logs(request):
     logs = paginator.get_page(page_number)
 
     if request.headers.get("x-requested-with") == "XMLHttpRequest":
-        # Return just the list fragment for AJAX pagination
         return render(request, "accounts/partials/log_list.html", {"logs": logs})
 
     return render(request, "accounts/admin_logs.html", {"logs": logs})
-
 
 @staff_member_required
 def admin_log_detail(request, pk):
     log = get_object_or_404(AdminLog, pk=pk)
     return render(request, "accounts/log_detail.html", {"log": log})
 
-
 @staff_member_required
 @require_POST
 @csrf_protect
 def mark_log_reviewed(request, pk):
-    """
-    Expects JSON: {"review_note": "..."}
-    """
     try:
         data = json.loads(request.body.decode("utf-8") or "{}")
     except json.JSONDecodeError:
@@ -207,7 +441,6 @@ def mark_log_reviewed(request, pk):
 
     return JsonResponse({"success": True, "message": "Log marked as reviewed."})
 
-
 @staff_member_required
 @require_POST
 @csrf_protect
@@ -219,14 +452,10 @@ def flag_log_entry(request, pk):
     log.save(update_fields=["is_flagged", "flagged_at", "flagged_by"])
     return JsonResponse({"success": True, "message": "Log flagged successfully."})
 
-
 @staff_member_required
 @require_POST
 @csrf_protect
 def save_log_note(request, pk):
-    """
-    Expects JSON: {"note": "..."}
-    """
     try:
         data = json.loads(request.body.decode("utf-8") or "{}")
     except json.JSONDecodeError:
@@ -241,9 +470,9 @@ def save_log_note(request, pk):
     log.save(update_fields=["notes"])
     return JsonResponse({"success": True})
 
-
-# ---------- Profile / Address ----------
-
+# -------------------------------------------------------------------
+# Profile / Address
+# -------------------------------------------------------------------
 @login_required
 @require_POST
 @csrf_protect
@@ -259,7 +488,6 @@ def edit_address_modal(request):
     address.geo_code = request.POST.get("geo_code", "").strip()  # geo fence identifier
     address.save()
     return redirect(request.META.get("HTTP_REFERER") or "marketplace:product_list")
-
 
 @login_required
 def user_profile(request):
@@ -290,7 +518,6 @@ def user_profile(request):
                 messages.success(request, "Password changed successfully.")
                 return redirect("accounts:user_profile")
         else:
-            # Unknown submit source
             return HttpResponseBadRequest("Invalid form submission.")
     else:
         profile_form = ProfileUpdateForm(instance=user)
@@ -307,7 +534,6 @@ def user_profile(request):
             "password_form": password_form,
         },
     )
-
 
 @login_required
 @require_POST

@@ -466,7 +466,7 @@ class StorePageManager {
     try {
       const product = document.querySelector(`[data-product-id="${productId}"]`);
       const productName = product?.querySelector('.product-name')?.textContent;
-      const productUrl = `${window.location.origin}/products/${productId}/`;
+      const productUrl = `${window.location.origin}/product/${productId}/`;
       
       const shareData = {
         title: productName || 'Check out this product',

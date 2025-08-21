@@ -1,0 +1,136 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verify Login - EasyMarket</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <link rel="stylesheet" type="text/css" href="{% static 'css/login.css' %}">
+</head>
+<body>
+  <div class="header">
+    <a href="/" class="logo">EasyMarket</a>
+  </div>
+
+  <div class="login-container">
+    <h1>Verify your login</h1>
+
+    <p class="verification-description">Enter the 6-digit code we sent to your email and WhatsApp.</p>
+
+    {% if messages %}
+      <div class="messages">
+        {% for message in messages %}
+          <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <form method="post" id="verificationForm">
+      {% csrf_token %}
+
+      <div class="form-group">
+        <label for="code">Verification Code</label>
+        <input type="text"
+               id="code"
+               name="code"
+               maxlength="6"
+               class="verification-input"
+               autocomplete="one-time-code"
+               placeholder="Enter 6-digit code"
+               required>
+      </div>
+
+      <button type="submit" class="sign-in-btn" id="submitBtn">
+        <span class="loading-spinner" id="loadingSpinner"></span>
+        <span id="btnText">Verify & Continue</span>
+      </button>
+    </form>
+
+    <div class="help-section">
+      <div class="help-title">Need help?</div>
+      <a href="#" class="help-link">Didn't receive the code?</a>
+      <a href="#" class="help-link">Resend verification code</a>
+    </div>
+
+    <div class="divider"><span>Security Notice</span></div>
+    <p class="security-notice">
+      For your security, this code will expire in 10 minutes.
+      Never share this code with anyone.
+    </p>
+  </div>
+
+  <div class="footer">
+    <a href="{% url 'legal_terms' %}">Conditions of Use</a> |
+    <a href="{% url 'legal_privacy' %}">Privacy Notice</a> |
+    <a href="#">Help</a>
+    <br><br>
+    © 2025 EasyMarket, Inc. or its affiliates
+  </div>
+
+  <script>
+    document.getElementById('verificationForm').addEventListener('submit', function() {
+      const submitBtn = document.getElementById('submitBtn');
+      const loadingSpinner = document.getElementById('loadingSpinner');
+      const btnText = document.getElementById('btnText');
+      loadingSpinner.style.display = 'inline-block';
+      btnText.textContent = 'Verifying...';
+      submitBtn.disabled = true;
+    });
+
+    document.addEventListener('DOMContentLoaded', function() {
+      const codeInput = document.getElementById('code');
+      codeInput.focus();
+
+      // Auto-format and restrict to numbers only
+      codeInput.addEventListener('input', function(e) {
+        this.value = this.value.replace(/[^0-9]/g, '');
+        if (this.value.length > 6) {
+          this.value = this.value.slice(0, 6);
+        }
+      });
+
+      // Auto-submit when 6 digits are entered
+      codeInput.addEventListener('input', function() {
+        if (this.value.length === 6) {
+          setTimeout(() => {
+            document.getElementById('verificationForm').submit();
+          }, 500);
+        }
+      });
+    });
+  </script>
+
+  <style>
+    .verification-description {
+      color: #666;
+      margin-bottom: 24px;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    .verification-input {
+      text-align: center;
+      font-size: 24px;
+      font-weight: 600;
+      letter-spacing: 8px;
+      padding: 16px 12px;
+    }
+
+    .security-notice {
+      font-size: 12px;
+      color: #888;
+      text-align: center;
+      margin-top: 16px;
+      line-height: 1.4;
+    }
+
+    .divider span {
+      background: #fff;
+      padding: 0 16px;
+      color: #666;
+      font-size: 12px;
+    }
+  </style>
+</body>
+</html>
