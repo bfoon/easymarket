@@ -1,0 +1,626 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% load static %}
+{% block title %}Promote Store – {{ store.name }}{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+<link rel="stylesheet" type="text/css" href="{% static 'css/store_promote.css' %}">
+
+<div class="container-fluid px-4">
+  <!-- Header Section -->
+  <div class="promotion-header">
+    <div class="container">
+      <div class="row align-items-center">
+        <div class="col-12 col-lg-8">
+          <h1 class="display-5 fw-bold mb-3">
+            <i class="bi bi-megaphone-fill me-3"></i>
+            Promote Your Store
+          </h1>
+          <p class="lead mb-0">
+            Boost {{ store.name }}'s visibility with targeted campaigns across multiple channels
+          </p>
+        </div>
+        <div class="col-12 col-lg-4 text-center text-lg-end mt-3 mt-lg-0">
+          <a class="btn btn-outline-light btn-lg mobile-w-100" href="{% url 'stores:store_dashboard' store.id %}">
+            <i class="bi bi-arrow-left me-2"></i>Back to Store
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- Metrics Overview -->
+    <div class="row mb-5 fade-in">
+      <div class="col-6 col-lg-3 mb-4">
+        <div class="metric-card">
+          <div class="metric-icon" style="background: var(--success-gradient);">
+            <i class="bi bi-graph-up"></i>
+          </div>
+          <h4 class="fw-bold mb-1">{{ campaigns|length }}</h4>
+          <p class="text-muted mb-0 small">Total Campaigns</p>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3 mb-4">
+        <div class="metric-card">
+          <div class="metric-icon" style="background: var(--primary-gradient);">
+            <i class="bi bi-eye-fill"></i>
+          </div>
+          <h4 class="fw-bold mb-1">
+            {% if active_sub %}{{ active_sub.allowed_placements|length }}{% else %}0{% endif %}
+          </h4>
+          <p class="text-muted mb-0 small">Active Placements</p>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3 mb-4">
+        <div class="metric-card">
+          <div class="metric-icon" style="background: var(--warning-gradient);">
+            <i class="bi bi-calendar-event"></i>
+          </div>
+          <h4 class="fw-bold mb-1">
+            {% if active_sub %}{{ active_sub.end_at|timeuntil }}{% else %}N/A{% endif %}
+          </h4>
+          <p class="text-muted mb-0 small">Sub. Remaining</p>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3 mb-4">
+        <div class="metric-card">
+          <div class="metric-icon" style="background: var(--danger-gradient);">
+            <i class="bi bi-lightning-fill"></i>
+          </div>
+          <h4 class="fw-bold mb-1">
+            {% with 0 as cnt %}
+              {% for c in campaigns %}
+                {% if c.status == 'live' %}
+                  {% with cnt|add:1 as cnt %}{% endwith %}
+                {% endif %}
+                {% if forloop.last %}{{ cnt }}{% endif %}
+              {% endfor %}
+              {% if campaigns|length == 0 %}0{% endif %}
+            {% endwith %}
+          </h4>
+          <p class="text-muted mb-0 small">Live Campaigns</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Subscription Section -->
+    <div class="card subscription-card mb-5 fade-in">
+      <div class="card-header bg-transparent border-0 pt-4">
+        <div class="d-flex align-items-center justify-content-between flex-wrap">
+          <h3 class="fw-bold mb-0 mobile-text-center mobile-w-100 mb-3 mb-md-0">
+            <i class="bi bi-star-fill text-warning me-2"></i>
+            Promotion Subscription
+          </h3>
+          {% if active_sub %}
+            <span class="badge bg-success fs-6 px-3 py-2">Active Plan</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="card-body px-4 pb-4">
+        {% if active_sub %}
+          <div class="alert alert-success border-0 mb-4" style="background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);">
+            <div class="row align-items-center">
+              <div class="col-lg-8">
+                <h5 class="alert-heading fw-bold mb-2">
+                  <i class="bi bi-check-circle-fill me-2"></i>
+                  {{ active_sub.plan.name }} Plan Active
+                </h5>
+                <p class="mb-0">
+                  <strong>Placements:</strong>
+                  {% for value,label in placements %}
+                    {% if value in active_sub.allowed_placements %}
+                      <span class="badge bg-light text-dark border me-1">{{ label }}</span>
+                    {% endif %}
+                  {% empty %}
+                    <span class="text-muted">—</span>
+                  {% endfor %}
+                  <br>
+                  <strong>Expires:</strong> {{ active_sub.end_at|date:"F j, Y at g:i A" }}
+                </p>
+              </div>
+              <div class="col-lg-4 text-lg-end mt-3 mt-lg-0">
+                <div class="fw-bold text-success h4 mb-0">D{{ active_sub.plan.price|floatformat:2 }}</div>
+                <small class="text-muted">{{ active_sub.plan.duration_days }} days</small>
+              </div>
+            </div>
+          </div>
+        {% else %}
+          <div class="alert alert-warning border-0 mb-4" style="background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);">
+            <h5 class="alert-heading fw-bold mb-2">
+              <i class="bi bi-exclamation-triangle-fill me-2"></i>
+              No Active Subscription
+            </h5>
+            <p class="mb-0">Choose a promotion plan below to start creating campaigns and boost your store's visibility.</p>
+          </div>
+        {% endif %}
+
+        <div class="row g-4">
+          {% for plan in plans %}
+          <div class="col-12 col-md-6 col-lg-4">
+            <div class="plan-card p-4 {% if forloop.counter == 2 %}plan-popular{% endif %}">
+              <div class="text-center mb-4">
+                <h4 class="fw-bold mb-2">{{ plan.name }}</h4>
+                <div class="h2 fw-bold text-primary mb-1">D{{ plan.price|floatformat:2 }}</div>
+                <small class="text-muted">{{ plan.duration_days }} days</small>
+              </div>
+
+              <ul class="feature-list mb-4">
+                <li>Up to {{ plan.max_placements }} placement{{ plan.max_placements|pluralize }}</li>
+                <li>{{ plan.max_concurrent_campaigns }} concurrent campaign{{ plan.max_concurrent_campaigns|pluralize }}</li>
+                <li>Professional copy editing</li>
+                <li>Performance analytics</li>
+                {% if plan.name == "Premium" %}
+                  <li>Priority support</li>
+                  <li>Advanced targeting</li>
+                {% endif %}
+                {% if plan.max_products_per_campaign %}
+                  <li>Up to {{ plan.max_products_per_campaign }} featured products/campaign</li>
+                {% endif %}
+              </ul>
+
+              <form method="post" action="{% url 'stores:promo_subscribe' store.slug %}" class="subscription-form">
+                {% csrf_token %}
+                <input type="hidden" name="plan_id" value="{{ plan.id }}">
+
+                <div class="mb-3">
+                  <label class="form-label fw-semibold">Choose Placements:</label>
+                  <div class="placement-options">
+                    {% for value, label in placements %}
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="p-{{ plan.id }}-{{ forloop.counter }}" name="placements" value="{{ value }}">
+                        <label class="form-check-label" for="p-{{ plan.id }}-{{ forloop.counter }}">
+                          {{ label }}
+                          <span class="info-tooltip d-none d-md-inline" data-tooltip="This placement will show your campaigns in {{ label|lower }}">
+                            <i class="bi bi-info-circle text-muted"></i>
+                          </span>
+                        </label>
+                      </div>
+                    {% endfor %}
+                  </div>
+                  <small class="form-text text-muted">Select up to {{ plan.max_placements }} placement{{ plan.max_placements|pluralize }}</small>
+                </div>
+
+                <button class="btn btn-gradient w-100" type="submit">
+                  <i class="bi bi-credit-card me-2"></i>
+                  <span class="d-none d-md-inline">Subscribe Now</span>
+                  <span class="d-inline d-md-none">Subscribe</span>
+                </button>
+              </form>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Campaign Creation -->
+    <div class="card subscription-card mb-5 fade-in">
+      <div class="card-header bg-transparent border-0 pt-4">
+        <h3 class="fw-bold mb-0">
+          <i class="bi bi-plus-circle-fill text-success me-2"></i>
+          Create New Campaign
+        </h3>
+      </div>
+      <div class="card-body px-4 pb-4">
+        {% if not active_sub %}
+          <div class="text-center py-5">
+            <i class="bi bi-lock-fill text-muted" style="font-size: 4rem;"></i>
+            <h4 class="text-muted mt-3">Subscription Required</h4>
+            <p class="text-muted">Subscribe to a promotion plan first to create campaigns.</p>
+          </div>
+        {% else %}
+          <div class="campaign-form">
+            <form method="post" action="{% url 'stores:promo_campaign_create' store.slug %}" id="campaignForm">
+              {% csrf_token %}
+              <input type="hidden" name="subscription_id" value="{{ active_sub.id }}">
+
+              <div class="row g-3">
+                <div class="col-lg-6">
+                  <div class="form-floating">
+                    <select class="form-select" name="placement" id="placement" required>
+                      <option value="">Choose placement...</option>
+                      {% for value, label in placements %}
+                        {% if value in active_sub.allowed_placements %}
+                          <option value="{{ value }}">{{ label }}</option>
+                        {% endif %}
+                      {% endfor %}
+                    </select>
+                    <label for="placement">Campaign Placement</label>
+                  </div>
+                </div>
+
+                <div class="col-lg-6">
+                  <div class="form-floating">
+                    <select class="form-select" name="audience" id="audience">
+                      <option value="all_buyers">All Buyers</option>
+                      <option value="store_followers">Store Followers Only</option>
+                      <option value="subscribers">Email Subscribers</option>
+                    </select>
+                    <label for="audience">Target Audience</label>
+                  </div>
+                </div>
+
+                <div class="col-lg-6">
+                  <div class="form-floating">
+                    <input class="form-control" name="title" id="title" maxlength="120" placeholder="Campaign Title" required>
+                    <label for="title">Campaign Title</label>
+                  </div>
+                  <small class="text-muted">Max 120 characters</small>
+                </div>
+
+                <div class="col-lg-6">
+                  <div class="form-floating">
+                    <input class="form-control" name="headline" id="headline" maxlength="180" placeholder="Promotional Headline" required>
+                    <label for="headline">Promotional Headline</label>
+                  </div>
+                  <small class="text-muted">Max 180 characters</small>
+                </div>
+
+                <div class="col-12">
+                  <div class="form-floating">
+                    <textarea class="form-control" name="message" id="message" style="height: 120px" placeholder="Campaign message..." required></textarea>
+                    <label for="message">Campaign Message</label>
+                  </div>
+                  <small class="text-muted">Our team will refine and optimize your message before publication</small>
+                </div>
+
+                <div class="col-lg-6">
+                  <div class="form-floating datetime-input">
+                    <input class="form-control" name="scheduled_at" id="scheduled_at" type="datetime-local" required>
+                    <label for="scheduled_at">Start Date & Time</label>
+                  </div>
+                </div>
+
+                <div class="col-lg-6">
+                  <div class="form-floating datetime-input">
+                    <input class="form-control" name="expires_at" id="expires_at" type="datetime-local" required>
+                    <label for="expires_at">End Date & Time</label>
+                  </div>
+                </div>
+
+                <!-- FEATURED PRODUCTS (optional) -->
+                {% if store_products %}
+                <div class="col-12">
+                  <label class="form-label fw-semibold">Feature Products (optional)</label>
+                  <select class="form-select" name="product_ids" multiple size="8">
+                    {% for p in store_products %}
+                      <option value="{{ p.id }}">
+                        {{ p.name|default:"(Unnamed product)" }}{% if p.sku %} ({{ p.sku }}){% endif %}{% if p.price %} – {{ p.price }}{% endif %}
+                      </option>
+                    {% endfor %}
+                  </select>
+                  <small class="text-muted">Hold Ctrl (Windows) / Cmd (Mac) to select multiple. Plan limits apply.</small>
+                </div>
+                {% endif %}
+              </div>
+
+              <div class="d-grid mt-4">
+                <button class="btn btn-gradient btn-lg" type="submit" id="submitBtn">
+                  <i class="bi bi-send-fill me-2"></i>
+                  Submit Campaign for Review
+                </button>
+              </div>
+            </form>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Campaigns Table -->
+    <div class="card subscription-card fade-in">
+      <div class="card-header bg-transparent border-0 pt-4">
+        <div class="d-flex align-items-center justify-content-between flex-wrap">
+          <h3 class="fw-bold mb-0 mobile-text-center mobile-w-100 mb-3 mb-md-0">
+            <i class="bi bi-list-ul me-2"></i>
+            Campaign History
+          </h3>
+          <div class="d-flex align-items-center flex-wrap mobile-w-100 justify-content-center justify-content-md-end">
+            <small class="text-muted me-3 mb-2 mb-md-0">
+              Total: {{ campaigns|length }} campaign{{ campaigns|length|pluralize }}
+            </small>
+            <button class="btn btn-outline-secondary btn-sm mobile-w-100 mobile-d-block" onclick="refreshCampaigns()">
+              <i class="bi bi-arrow-clockwise me-1"></i>
+              Refresh
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card-body p-0">
+        <!-- Desktop Table -->
+        <div class="table-responsive d-none d-md-block">
+          <table class="table campaigns-table mb-0">
+            <thead>
+              <tr>
+                <th>Campaign Details</th>
+                <th>Placement</th>
+                <th>Audience</th>
+                <th>Status</th>
+                <th>Schedule</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for c in campaigns %}
+              <tr>
+                <td>
+                  <div class="campaign-details">
+                    <h6 class="fw-bold mb-1">{{ c.title }}</h6>
+                    <p class="text-muted mb-1 small">{{ c.headline }}</p>
+
+                    <!-- Featured products badges -->
+                    <div class="small mt-1">
+                      {% if c.products.all %}
+                        {% for p in c.products.all|slice:":6" %}
+                      <img src="{{ p.image.url }}" alt="{{ p.name|default:'Product' }}" loading="lazy" style="width:10%; height:10%; object-fit:cover;">
+                      <br>
+                          <span class="badge bg-light text-dark border me-1">{{ p.name|default:"(Unnamed)"|truncatechars:24 }}</span>
+
+                      {% empty %}
+                          <span class="text-muted">No products attached</span>
+                        {% endfor %}
+                        {% if c.products.count > 6 %}
+                          <span class="badge bg-secondary">+{{ c.products.count|add:"-6" }}</span>
+                        {% endif %}
+                      {% endif %}
+                    </div>
+
+                    <small class="text-muted d-block mt-1">
+                      Created {{ c.created_at|date:"M j, Y" }}
+                    </small>
+                  </div>
+                </td>
+                <td><span class="badge bg-light text-dark border">{{ c.get_placement_display }}</span></td>
+                <td><small class="text-muted">{{ c.get_audience_display }}</small></td>
+                <td><span class="status-badge status-{{ c.status }}">{{ c.get_status_display }}</span></td>
+                <td>
+                  <div class="schedule-info">
+                    <small class="d-block">
+                      <i class="bi bi-calendar-event me-1"></i>{{ c.scheduled_at|date:"M j, g:i A" }}
+                    </small>
+                    <small class="d-block text-muted">
+                      <i class="bi bi-calendar-x me-1"></i>{{ c.expires_at|date:"M j, g:i A" }}
+                    </small>
+                  </div>
+                </td>
+                <td>
+                  <div class="btn-group-vertical btn-group-sm">
+                    {% if request.user.is_staff and c.status == 'pending' %}
+                      <a href="{% url 'stores:promo_campaign_push' store.slug c.id %}" class="btn btn-outline-success btn-sm">
+                        <i class="bi bi-check-lg me-1"></i>Approve & Go Live
+                      </a>
+                    {% endif %}
+                    <a href="{% url 'stores:campaign_detail' store.slug c.id %}" class="btn btn-outline-primary btn-sm">
+                      <i class="bi bi-eye me-1"></i>View Details
+                    </a>
+                  </div>
+                </td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="6" class="text-center py-5">
+                  <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
+                  <h5 class="text-muted mt-3">No campaigns yet</h5>
+                  <p class="text-muted">Create your first promotional campaign to get started!</p>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Mobile Card Layout -->
+        <div class="mobile-campaign-list d-block d-md-none p-3">
+          {% for c in campaigns %}
+          <div class="mobile-campaign-card">
+            <div class="mobile-campaign-header">
+              <div class="mobile-campaign-title">
+                <h6 class="fw-bold mb-1">{{ c.title }}</h6>
+                <p class="text-muted mb-0 small">{{ c.headline }}</p>
+                <small class="text-muted">Created {{ c.created_at|date:"M j, Y" }}</small>
+              </div>
+              <span class="status-badge status-{{ c.status }}">{{ c.get_status_display }}</span>
+            </div>
+
+            <div class="mobile-campaign-meta">
+              <div>
+                <strong>Placement:</strong><br>
+                <span class="badge bg-light text-dark border">{{ c.get_placement_display }}</span>
+              </div>
+              <div>
+                <strong>Audience:</strong><br>
+                <small class="text-muted">{{ c.get_audience_display }}</small>
+              </div>
+              <div>
+                <strong>Starts:</strong><br>
+                <small>{{ c.scheduled_at|date:"M j, g:i A" }}</small>
+              </div>
+              <div>
+                <strong>Expires:</strong><br>
+                <small>{{ c.expires_at|date:"M j, g:i A" }}</small>
+              </div>
+            </div>
+
+            <!-- Mobile: show attached products (first 4) -->
+            {% if c.products.all %}
+              <div class="row row-cols-2 g-2 mt-2">
+                {% for p in c.products.all|slice:":4" %}
+                  <div class="col">
+                    <span class="badge bg-light text-dark border w-100 text-truncate">{{ p.name|default:"(Unnamed)" }}</span>
+                  </div>
+                {% endfor %}
+              </div>
+            {% endif %}
+
+            <div class="mobile-campaign-actions">
+              {% if request.user.is_staff and c.status == 'pending' %}
+                <a href="{% url 'stores:promo_campaign_push' store.slug c.id %}" class="btn btn-outline-success btn-sm">
+                  <i class="bi bi-check-lg me-1"></i>Approve
+                </a>
+              {% endif %}
+              <a href="{% url 'stores:campaign_detail' store.slug c.id %}" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-eye me-1"></i>Details
+              </a>
+            </div>
+          </div>
+          {% empty %}
+          <div class="text-center py-5">
+            <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
+            <h5 class="text-muted mt-3">No campaigns yet</h5>
+            <p class="text-muted">Create your first promotional campaign to get started!</p>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const campaignForm   = document.getElementById('campaignForm');
+  const submitBtn      = document.getElementById('submitBtn');
+  const loadingOverlay = document.getElementById('loadingOverlay');
+
+  const titleInput    = document.getElementById('title');
+  const headlineInput = document.getElementById('headline');
+
+  function addCharacterCounter(input, maxLength) {
+    const isMobile = window.innerWidth <= 576;
+    const counter = document.createElement('small');
+    counter.textContent = `0/${maxLength}`;
+    counter.className = isMobile ? 'text-muted d-block mt-1' : 'text-muted float-end';
+    (isMobile ? input.parentNode.parentNode : input.parentNode).appendChild(counter);
+
+    input.addEventListener('input', function() {
+      counter.textContent = `${this.value.length}/${maxLength}`;
+      const nearLimit = this.value.length > maxLength * 0.9;
+      counter.className = nearLimit
+        ? (isMobile ? 'text-warning d-block mt-1' : 'text-warning float-end')
+        : (isMobile ? 'text-muted d-block mt-1' : 'text-muted float-end');
+    });
+  }
+
+  if (titleInput) addCharacterCounter(titleInput, 120);
+  if (headlineInput) addCharacterCounter(headlineInput, 180);
+
+  const scheduleInput = document.getElementById('scheduled_at');
+  const expiresInput  = document.getElementById('expires_at');
+
+  if (scheduleInput && expiresInput) {
+    const nowPlus1Hr = new Date(Date.now() + 60 * 60 * 1000);
+    scheduleInput.min = nowPlus1Hr.toISOString().slice(0, 16);
+
+    scheduleInput.addEventListener('change', function() {
+      const scheduleDate = new Date(this.value);
+      const minExpireDate = new Date(scheduleDate.getTime() + 60 * 60 * 1000);
+      expiresInput.min = minExpireDate.toISOString().slice(0, 16);
+    });
+  }
+
+  if (campaignForm) {
+    campaignForm.addEventListener('submit', function(e) {
+      const formData = new FormData(this);
+      if (!formData.get('placement') || !formData.get('title') || !formData.get('headline') || !formData.get('message')) {
+        e.preventDefault();
+        showMobileAlert('Please fill in all required fields.');
+        return;
+      }
+      loadingOverlay.classList.add('show');
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Submitting...';
+    });
+  }
+
+  document.querySelectorAll('.subscription-form').forEach(form => {
+    const maxText = form.querySelector('small').textContent;
+    const maxPlacements = parseInt((maxText.match(/\d+/) || ['1'])[0], 10);
+
+    form.addEventListener('submit', function(e) {
+      const checked = this.querySelectorAll('input[name="placements"]:checked');
+      if (checked.length === 0) {
+        e.preventDefault();
+        showMobileAlert('Please select at least one placement.');
+        return;
+      }
+      if (checked.length > maxPlacements) {
+        e.preventDefault();
+        showMobileAlert(`You can select maximum ${maxPlacements} placements for this plan.`);
+        return;
+      }
+    });
+
+    const boxes = form.querySelectorAll('input[name="placements"]');
+    boxes.forEach(cb => {
+      cb.addEventListener('change', function() {
+        const checked = form.querySelectorAll('input[name="placements"]:checked').length;
+        boxes.forEach(b => b.disabled = (!b.checked && checked >= maxPlacements));
+      });
+    });
+  });
+
+  if (window.innerWidth > 768) {
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(entry => { if (entry.isIntersecting) entry.target.style.animation = 'fadeIn 0.6s ease-out'; });
+    }, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
+
+    document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+  }
+
+  if (window.innerWidth <= 576) {
+    document.querySelectorAll('.btn').forEach(btn => {
+      btn.style.cursor = 'pointer';
+      btn.addEventListener('touchstart', () => btn.style.transform = 'scale(0.98)');
+      btn.addEventListener('touchend',   () => btn.style.transform = 'scale(1)');
+    });
+  }
+
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.has('success')) showNotification('Campaign created successfully!', 'success');
+  if (urlParams.has('error'))   showNotification('There was an error processing your request.', 'error');
+});
+
+function refreshCampaigns() {
+  if (window.innerWidth <= 576) {
+    showMobileAlert('Refreshing campaigns...', 'info');
+    setTimeout(() => window.location.reload(), 800);
+  } else {
+    window.location.reload();
+  }
+}
+function viewCampaignDetails(campaignId) {
+  window.location.href = `{% url 'stores:campaign_detail' store.slug 0 %}`.replace('0', campaignId);
+}
+function showMobileAlert(message, type = 'warning') {
+  const isMobile = window.innerWidth <= 576;
+  if (isMobile) {
+    const alertDiv = document.createElement('div');
+    const cls = (type === 'info') ? 'info' : (type === 'success' ? 'success' : (type === 'error' ? 'danger' : 'warning'));
+    alertDiv.className = `alert alert-${cls} alert-dismissible fade show position-fixed`;
+    alertDiv.style.cssText = 'top:10px; left:10px; right:10px; z-index:10000; border-radius:8px;';
+    alertDiv.innerHTML = `${message}<button type="button" class="btn-close" onclick="this.parentNode.remove()"></button>`;
+    document.body.appendChild(alertDiv);
+    setTimeout(() => alertDiv.remove(), 4000);
+  } else {
+    alert(message);
+  }
+}
+function showNotification(message, type) {
+  const isMobile = window.innerWidth <= 576;
+  const toast = document.createElement('div');
+  toast.className = `toast align-items-center text-white bg-${type === 'success' ? 'success' : 'danger'} border-0`;
+  toast.style.cssText = isMobile
+    ? 'position:fixed; top:10px; left:10px; right:10px; z-index:10000; border-radius:8px;'
+    : 'position:fixed; top:20px; right:20px; z-index:10000;';
+  toast.innerHTML = `
+    <div class="d-flex">
+      <div class="toast-body">${message}</div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" onclick="this.parentNode.parentNode.remove()"></button>
+    </div>`;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), isMobile ? 3000 : 5000);
+}
+</script>
+{% endblock %}

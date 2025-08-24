@@ -44,10 +44,12 @@ from django.conf import settings
 from django.core.mail import send_mail
 from itertools import groupby
 from operator import attrgetter
+from django.apps import apps
 
 from .models import (
     Store, StoreHours, StoreShippingZone, StoreReturnSettings,
-    StoreInventoryTracking, StoreMetrics, StoreReferral
+    StoreInventoryTracking, StoreMetrics, StoreReferral, PromotionPlan,
+     PromotionSubscription, PromotionCampaign, PromotionPlacement
 )
 from .forms import (
     StoreSettingsForm, StoreHoursFormSet, StoreShippingZoneFormSet,
@@ -55,6 +57,7 @@ from .forms import (
 )
 
 from marketplace.notifications import send_email, send_whatsapp
+
 
 def notify_referrer_referral_used(referral):
     """Send notification to referrer that their referral was used."""
@@ -3077,3 +3080,468 @@ def create_store_referral(request, store_id):
 
     # Fallback if accessed via GET (not intended)
     return redirect("stores:store_detail", store.slug)
+
+def _user_owns_store(user, store):
+    # Adjust according to your Store ownership fields
+    return hasattr(store, "owner") and store.owner_id == user.id
+
+@login_required
+def store_promote(request, slug):
+    store = get_object_or_404(Store, slug=slug)
+    if not _user_owns_store(request.user, store) and not request.user.is_staff:
+        return HttpResponseForbidden("You do not own this store.")
+
+    plans = PromotionPlan.objects.all().order_by("price")
+    active_sub = (PromotionSubscription.objects
+                  .filter(store=store, is_active=True, start_at__lte=timezone.now(), end_at__gte=timezone.now())
+                  .order_by("-created_at")
+                  .first())
+    campaigns = store.promo_campaigns.select_related("subscription", "store").prefetch_related("products")[:25]
+
+    # products owned by this store (adjust filters to your schema: status/stock/etc.)
+    store_products = Product.objects.filter(store=store).order_by("-id")[:500]
+
+    return render(request, "stores/store_promote.html", {
+        "store": store,
+        "plans": plans,
+        "active_sub": active_sub,
+        "campaigns": campaigns,
+        "placements": PromotionPlacement.choices,
+        "store_products": store_products,  # NEW
+    })
+
+@login_required
+@transaction.atomic
+def create_subscription(request, slug):
+    if request.method != "POST":
+        raise Http404
+    store = get_object_or_404(Store, slug=slug)
+    if not _user_owns_store(request.user, store) and not request.user.is_staff:
+        return HttpResponseForbidden("You do not own this store.")
+
+    plan_id = request.POST.get("plan_id")
+    plan = get_object_or_404(PromotionPlan, pk=plan_id)
+
+    # Get requested placements from the form (checkboxes)
+    requested_placements = request.POST.getlist("placements")
+    if not requested_placements:
+        messages.error(request, "Select at least one placement.")
+        return redirect("stores:store_promote", slug=store.slug)
+    if len(requested_placements) > plan.max_placements:
+        messages.error(request, f"You can select up to {plan.max_placements} placements for {plan.name}.")
+        return redirect("stores:store_promote", slug=store.slug)
+
+    start_at = timezone.now()
+    end_at = start_at + timedelta(days=plan.duration_days)
+
+    # Deactivate overlapping subs if needed (business choice)
+    PromotionSubscription.objects.filter(store=store, is_active=True, end_at__gte=start_at).update(is_active=False)
+
+    sub = PromotionSubscription.objects.create(
+        store=store,
+        plan=plan,
+        allowed_placements=requested_placements,
+        start_at=start_at,
+        end_at=end_at,
+        is_active=True,
+    )
+    messages.success(request, f"Subscribed to {plan.name}. Valid until {end_at:%Y-%m-%d %H:%M}.")
+    return redirect("stores:store_promote", slug=store.slug)
+
+@login_required
+@transaction.atomic
+def create_campaign(request, slug):
+    if request.method != "POST":
+        raise Http404
+    store = get_object_or_404(Store, slug=slug)
+    if not _user_owns_store(request.user, store) and not request.user.is_staff:
+        return HttpResponseForbidden("You do not own this store.")
+
+    sub_id = request.POST.get("subscription_id")
+    subscription = get_object_or_404(PromotionSubscription, pk=sub_id, store=store, is_active=True)
+
+    placement = request.POST.get("placement")
+    if placement not in (subscription.allowed_placements or []):
+        messages.error(request, "This placement is not allowed by your subscription.")
+        return redirect("stores:store_promote", slug=store.slug)
+
+    title = (request.POST.get("title") or "").strip()
+    headline = (request.POST.get("headline") or "").strip()
+    message_body = (request.POST.get("message") or "").strip()
+    audience = request.POST.get("audience") or PromotionCampaign.Audience.ALL_BUYERS
+
+    # NEW: collect selected product IDs (multi-select)
+    product_ids = request.POST.getlist("product_ids")
+    # Sanitize to ints
+    product_ids = [int(pid) for pid in product_ids if pid.isdigit()]
+
+    try:
+        scheduled_at = timezone.make_aware(timezone.datetime.fromisoformat(request.POST.get("scheduled_at")))
+        expires_at = timezone.make_aware(timezone.datetime.fromisoformat(request.POST.get("expires_at")))
+    except Exception:
+        messages.error(request, "Invalid schedule window.")
+        return redirect("stores:store_promote", slug=store.slug)
+
+    if not title or not headline or not message_body:
+        messages.error(request, "Please fill in title, headline, and message.")
+        return redirect("stores:store_promote", slug=store.slug)
+
+    # NEW: Validate products belong to this store
+    if product_ids:
+        qs = Product.objects.filter(id__in=product_ids, store=store)
+        if qs.count() != len(product_ids):
+            messages.error(request, "One or more selected products are invalid or not in your store.")
+            return redirect("stores:store_promote", slug=store.slug)
+        # enforce plan limit
+        max_products = getattr(subscription.plan, "max_products_per_campaign", 8)
+        if len(product_ids) > max_products:
+            messages.error(request, f"You can attach up to {max_products} products to a campaign for your plan.")
+            return redirect("stores:store_promote", slug=store.slug)
+
+    campaign = PromotionCampaign.objects.create(
+        store=store,
+        subscription=subscription,
+        placement=placement,
+        audience=audience,
+        title=title,
+        headline=headline,
+        message=message_body,
+        scheduled_at=scheduled_at,
+        expires_at=expires_at,
+        status=PromotionCampaign.Status.PENDING,
+    )
+
+    # NEW: attach products
+    if product_ids:
+        campaign.products.add(*product_ids)
+
+    messages.success(request, "Campaign submitted for review. We’ll refine the copy and approve it.")
+    return redirect("stores:store_promote", slug=store.slug)
+
+@login_required
+@transaction.atomic
+def push_campaign(request, slug, pk):
+    """Admin/staff action to approve & push a campaign.
+       You can expose this behind a staff-only button in the UI or just use the admin."""
+    store = get_object_or_404(Store, slug=slug)
+    campaign = get_object_or_404(PromotionCampaign, pk=pk, store=store)
+
+    if not request.user.is_staff:
+        return HttpResponseForbidden("Only staff can push campaigns.")
+
+    ok, reason = campaign.can_go_live()
+    if not ok:
+        messages.error(request, f"Cannot go live: {reason}")
+        return redirect("stores:store_promote", slug=store.slug)
+
+    # Mark approved/live
+    campaign.status = PromotionCampaign.Status.LIVE
+    campaign.reviewer = request.user
+    campaign.review_note = "Approved & pushed."
+    campaign.save(update_fields=["status", "reviewer", "review_note", "updated_at"])
+
+    # --- PLACEHOLDER PUSH ACTIONS ---
+    # Implement your real integrations here:
+    # - Homepage/Category/Trending: pull via templatetag into those pages
+    # - Push notifications: OneSignal/Firebase
+    # - Email: your mail backend & subscriber list
+    # - Deals page / Spotlight: page sections read active campaigns
+    # --------------------------------
+
+    messages.success(request, "Campaign is now LIVE.")
+    return redirect("stores:store_promote", slug=store.slug)
+
+
+@login_required
+def campaign_detail(request, slug, campaign_id):
+    """
+    Display detailed view of a specific campaign
+    """
+    store = get_object_or_404(Store, slug=slug)
+
+    # Check permissions - store owner or staff
+    if not (request.user == store.owner or request.user.is_staff):
+        messages.error(request, "You don't have permission to view this campaign.")
+        return redirect('stores:store_promote', slug=slug)
+
+    campaign = get_object_or_404(PromotionCampaign, id=campaign_id, store=store)
+
+    # Calculate additional metrics (you might have these fields in your model)
+    # If not, you can remove or modify these calculations
+    context = {
+        'store': store,
+        'campaign': campaign,
+        'can_edit': request.user == store.owner or request.user.is_staff,
+        'can_approve': request.user.is_staff and campaign.status == 'pending',
+    }
+
+    return render(request, 'stores/campaign_detail.html', context)
+
+
+@login_required
+@require_POST
+def campaign_submit_review(request, slug, campaign_id):
+    """
+    Submit campaign for review
+    """
+    store = get_object_or_404(Store, slug=slug)
+
+    if request.user != store.owner and not request.user.is_staff:
+        return JsonResponse({'success': False, 'message': 'Permission denied'})
+
+    campaign = get_object_or_404(PromotionCampaign, id=campaign_id, store=store)
+
+    if campaign.status != 'draft':
+        return JsonResponse({'success': False, 'message': 'Campaign is not in draft status'})
+
+    campaign.status = PromotionCampaign.Status.PENDING
+    campaign.save(update_fields=['status', 'updated_at'])
+
+    return JsonResponse({'success': True, 'message': 'Campaign submitted for review'})
+
+
+@login_required
+@require_POST
+def campaign_approve(request, slug, campaign_id):
+    """
+    Approve campaign (staff only)
+    """
+    if not request.user.is_staff:
+        return JsonResponse({'success': False, 'message': 'Permission denied'})
+
+    store = get_object_or_404(Store, slug=slug)
+    campaign = get_object_or_404(PromotionCampaign, id=campaign_id, store=store)
+
+    if campaign.status != 'pending':
+        return JsonResponse({'success': False, 'message': 'Campaign is not pending approval'})
+
+    # Check if campaign can go live
+    can_go_live, reason = campaign.can_go_live()
+    if not can_go_live:
+        return JsonResponse({'success': False, 'message': f'Cannot approve: {reason}'})
+
+    campaign.status = PromotionCampaign.Status.APPROVED
+    campaign.reviewer = request.user
+    campaign.review_note = "Campaign approved and ready to go live"
+    campaign.save(update_fields=['status', 'reviewer', 'review_note', 'updated_at'])
+
+    return JsonResponse({'success': True, 'message': 'Campaign approved successfully'})
+
+
+@login_required
+@require_POST
+def campaign_reject(request, slug, campaign_id):
+    """
+    Reject campaign (staff only)
+    """
+    if not request.user.is_staff:
+        return JsonResponse({'success': False, 'message': 'Permission denied'})
+
+    store = get_object_or_404(Store, slug=slug)
+    campaign = get_object_or_404(PromotionCampaign, id=campaign_id, store=store)
+
+    if campaign.status != 'pending':
+        return JsonResponse({'success': False, 'message': 'Campaign is not pending review'})
+
+    try:
+        data = json.loads(request.body)
+        reason = data.get('reason', 'No reason provided')
+    except json.JSONDecodeError:
+        reason = 'No reason provided'
+
+    campaign.status = PromotionCampaign.Status.REJECTED
+    campaign.reviewer = request.user
+    campaign.review_note = f"Campaign rejected: {reason}"
+    campaign.save(update_fields=['status', 'reviewer', 'review_note', 'updated_at'])
+
+    return JsonResponse({'success': True, 'message': 'Campaign rejected'})
+
+
+@login_required
+@require_POST
+def campaign_pause(request, slug, campaign_id):
+    """
+    Pause a live campaign
+    """
+    store = get_object_or_404(Store, slug=slug)
+
+    if request.user != store.owner and not request.user.is_staff:
+        return JsonResponse({'success': False, 'message': 'Permission denied'})
+
+    campaign = get_object_or_404(PromotionCampaign, id=campaign_id, store=store)
+
+    if campaign.status != 'live':
+        return JsonResponse({'success': False, 'message': 'Campaign is not currently live'})
+
+    # You might want to add a 'paused' status to your model
+    # For now, we'll set it back to approved
+    campaign.status = PromotionCampaign.Status.APPROVED
+    campaign.review_note = f"Campaign paused by {request.user.get_full_name() or request.user.username}"
+    campaign.save(update_fields=['status', 'review_note', 'updated_at'])
+
+    return JsonResponse({'success': True, 'message': 'Campaign paused successfully'})
+
+
+@login_required
+@require_POST
+def campaign_stop(request, slug, campaign_id):
+    """
+    Stop a campaign permanently
+    """
+    store = get_object_or_404(Store, slug=slug)
+
+    if request.user != store.owner and not request.user.is_staff:
+        return JsonResponse({'success': False, 'message': 'Permission denied'})
+
+    campaign = get_object_or_404(PromotionCampaign, id=campaign_id, store=store)
+
+    if campaign.status not in ['live', 'approved']:
+        return JsonResponse({'success': False, 'message': 'Campaign cannot be stopped'})
+
+    campaign.status = PromotionCampaign.Status.EXPIRED
+    campaign.expires_at = timezone.now()  # Set expiry to now
+    campaign.review_note = f"Campaign stopped by {request.user.get_full_name() or request.user.username}"
+    campaign.save(update_fields=['status', 'expires_at', 'review_note', 'updated_at'])
+
+    return JsonResponse({'success': True, 'message': 'Campaign stopped successfully'})
+
+
+@login_required
+@require_POST
+def campaign_duplicate(request, slug, campaign_id):
+    """
+    Create a duplicate of the campaign
+    """
+    store = get_object_or_404(Store, slug=slug)
+
+    if request.user != store.owner and not request.user.is_staff:
+        return JsonResponse({'success': False, 'message': 'Permission denied'})
+
+    original_campaign = get_object_or_404(PromotionCampaign, id=campaign_id, store=store)
+
+    try:
+        with transaction.atomic():
+            # Create a duplicate campaign
+            new_campaign = PromotionCampaign.objects.create(
+                store=store,
+                subscription=original_campaign.subscription,
+                placement=original_campaign.placement,
+                audience=original_campaign.audience,
+                title=f"Copy of {original_campaign.title}",
+                headline=original_campaign.headline,
+                message=original_campaign.message,
+                banner_image=original_campaign.banner_image,
+                scheduled_at=timezone.now() + timedelta(hours=24),  # Schedule for tomorrow
+                expires_at=timezone.now() + timedelta(days=7),  # 1 week campaign
+                status=PromotionCampaign.Status.DRAFT,
+            )
+
+            return JsonResponse({
+                'success': True,
+                'message': 'Campaign duplicated successfully',
+                'new_campaign_id': new_campaign.id
+            })
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': f'Error duplicating campaign: {str(e)}'})
+
+
+@login_required
+@require_http_methods(["DELETE"])
+def campaign_delete(request, slug, campaign_id):
+    """
+    Delete a campaign (only draft or rejected campaigns)
+    """
+    store = get_object_or_404(Store, slug=slug)
+
+    if request.user != store.owner and not request.user.is_staff:
+        return JsonResponse({'success': False, 'message': 'Permission denied'})
+
+    campaign = get_object_or_404(PromotionCampaign, id=campaign_id, store=store)
+
+    if campaign.status not in ['draft', 'rejected']:
+        return JsonResponse({'success': False, 'message': 'Only draft or rejected campaigns can be deleted'})
+
+    try:
+        campaign_title = campaign.title
+        campaign.delete()
+        return JsonResponse({'success': True, 'message': f'Campaign "{campaign_title}" deleted successfully'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': f'Error deleting campaign: {str(e)}'})
+
+
+@login_required
+def campaign_download_report(request, slug, campaign_id):
+    """
+    Download campaign performance report
+    """
+    store = get_object_or_404(Store, slug=slug)
+
+    if request.user != store.owner and not request.user.is_staff:
+        messages.error(request, "You don't have permission to download this report.")
+        return redirect('stores:campaign_detail', slug=slug, campaign_id=campaign_id)
+
+    campaign = get_object_or_404(PromotionCampaign, id=campaign_id, store=store)
+
+    # Create CSV response
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = f'attachment; filename="campaign_{campaign.id}_report.csv"'
+
+    import csv
+    writer = csv.writer(response)
+
+    # Write campaign details
+    writer.writerow(['Campaign Report'])
+    writer.writerow(['Campaign ID', campaign.id])
+    writer.writerow(['Campaign Title', campaign.title])
+    writer.writerow(['Campaign Headline', campaign.headline])
+    writer.writerow(['Store', campaign.store.name])
+    writer.writerow(['Status', campaign.get_status_display()])
+    writer.writerow(['Placement', campaign.get_placement_display()])
+    writer.writerow(['Audience', campaign.get_audience_display()])
+    writer.writerow(['Created', campaign.created_at.strftime('%Y-%m-%d %H:%M')])
+    writer.writerow(['Scheduled', campaign.scheduled_at.strftime('%Y-%m-%d %H:%M')])
+    writer.writerow(['Expires', campaign.expires_at.strftime('%Y-%m-%d %H:%M')])
+    writer.writerow([])
+
+    # Write performance metrics (if you have these fields)
+    writer.writerow(['Performance Metrics'])
+    writer.writerow(['Metric', 'Value'])
+    writer.writerow(['Impressions', getattr(campaign, 'impressions', 0)])
+    writer.writerow(['Clicks', getattr(campaign, 'clicks', 0)])
+    writer.writerow(
+        ['Click Rate', f"{(getattr(campaign, 'clicks', 0) / max(getattr(campaign, 'impressions', 1), 1) * 100):.2f}%"])
+    writer.writerow(['Budget Spent', f"D{getattr(campaign, 'budget_spent', 0):.2f}"])
+    writer.writerow(['Conversions', getattr(campaign, 'conversions', 0)])
+    writer.writerow(['ROI', f"{getattr(campaign, 'roi', 0):.1f}%"])
+
+    return response
+
+
+@login_required
+@require_POST
+def campaign_request_changes(request, slug, campaign_id):
+    """
+    Request changes to a campaign (staff only)
+    """
+    if not request.user.is_staff:
+        return JsonResponse({'success': False, 'message': 'Permission denied'})
+
+    store = get_object_or_404(Store, slug=slug)
+    campaign = get_object_or_404(PromotionCampaign, id=campaign_id, store=store)
+
+    if campaign.status != 'pending':
+        return JsonResponse({'success': False, 'message': 'Campaign is not pending review'})
+
+    try:
+        data = json.loads(request.body)
+        changes = data.get('changes', 'No changes specified')
+    except json.JSONDecodeError:
+        changes = 'No changes specified'
+
+    campaign.status = PromotionCampaign.Status.DRAFT  # Send back to draft
+    campaign.reviewer = request.user
+    campaign.review_note = f"Changes requested: {changes}"
+    campaign.save(update_fields=['status', 'reviewer', 'review_note', 'updated_at'])
+
+    return JsonResponse({'success': True, 'message': 'Changes requested successfull'})

@@ -16,6 +16,9 @@ from .models import (
     StoreFollow,  # Added missing model
     StoreNotification,  # Added missing model
     ProductPriceHistory,  # Added missing model
+    PromotionPlan,
+    PromotionSubscription,
+    PromotionCampaign
 )
 
 
@@ -328,3 +331,21 @@ class StoreReferralAdmin(admin.ModelAdmin):
 
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('referrer', 'store')
+
+@admin.register(PromotionPlan)
+class PromotionPlanAdmin(admin.ModelAdmin):
+    list_display = ("name", "price", "duration_days", "max_placements", "max_concurrent_campaigns")
+    search_fields = ("name",)
+
+@admin.register(PromotionSubscription)
+class PromotionSubscriptionAdmin(admin.ModelAdmin):
+    list_display = ("store", "plan", "active", "start_at", "end_at", "is_active")
+    list_filter = ("is_active", "plan")
+    search_fields = ("store__name",)
+
+@admin.register(PromotionCampaign)
+class PromotionCampaignAdmin(admin.ModelAdmin):
+    list_display = ("title", "store", "placement", "status", "scheduled_at", "expires_at")
+    list_filter = ("placement", "status",)
+    search_fields = ("title", "store__name", "headline")
+    autocomplete_fields = ("subscription", "store", "reviewer")

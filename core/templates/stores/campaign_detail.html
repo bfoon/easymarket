@@ -1,0 +1,671 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% load static %}
+{% block title %}{{ campaign.title }} - Campaign Details{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+<link rel="stylesheet" type="text/css" href="{% static 'css/campaign_detail.css' %}">
+
+<div class="container-fluid px-4">
+  <!-- Campaign Header -->
+  <div class="campaign-header">
+    <div class="container">
+      <div class="row align-items-center">
+        <div class="col-12 col-lg-8">
+          <div class="d-flex align-items-start flex-wrap">
+            <div class="flex-grow-1 me-3">
+              <h1 class="display-5 fw-bold mb-2">{{ campaign.title }}</h1>
+              <p class="lead mb-2">{{ campaign.headline }}</p>
+              <div class="d-flex align-items-center flex-wrap">
+                <span class="status-badge status-{{ campaign.status }} me-3 mb-2">
+                  {{ campaign.get_status_display }}
+                </span>
+                <small class="text-light opacity-75 mb-2">
+                  <i class="bi bi-calendar-event me-1"></i>
+                  Created {{ campaign.created_at|date:"F j, Y" }}
+                </small>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-12 col-lg-4 text-center text-lg-end mt-3 mt-lg-0">
+          <a class="btn btn-outline-light btn-lg mobile-w-100 mb-2" href="{% url 'stores:store_promote' store.slug %}">
+            <i class="bi bi-arrow-left me-2"></i>Back to Campaigns
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- Campaign Metrics -->
+    <div class="row mb-4 fade-in">
+      <div class="col-6 col-lg-3 mb-4">
+        <div class="metric-card">
+          <div class="metric-icon" style="background: var(--info-gradient);">
+            <i class="bi bi-eye-fill"></i>
+          </div>
+          <h4 class="fw-bold mb-1">{{ campaign.impressions|default:0|intcomma }}</h4>
+          <p class="text-muted mb-0 small">Impressions</p>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3 mb-4">
+        <div class="metric-card">
+          <div class="metric-icon" style="background: var(--success-gradient);">
+            <i class="bi bi-mouse-fill"></i>
+          </div>
+          <h4 class="fw-bold mb-1">{{ campaign.clicks|default:0|intcomma }}</h4>
+          <p class="text-muted mb-0 small">Clicks</p>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3 mb-4">
+        <div class="metric-card">
+          <div class="metric-icon" style="background: var(--warning-gradient);">
+            <i class="bi bi-percent"></i>
+          </div>
+          <h4 class="fw-bold mb-1">
+            {% if campaign.impressions %}
+              {% widthratio campaign.clicks campaign.impressions 100 %}%
+            {% else %}
+              0%
+            {% endif %}
+          </h4>
+          <p class="text-muted mb-0 small">Click Rate</p>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3 mb-4">
+        <div class="metric-card">
+          <div class="metric-icon" style="background: var(--primary-gradient);">
+            <i class="bi bi-currency-dollar"></i>
+          </div>
+          <h4 class="fw-bold mb-1">D{{ campaign.budget_spent|default:0|floatformat:2 }}</h4>
+          <p class="text-muted mb-0 small">Budget Spent</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Campaign Details -->
+    <div class="row">
+      <div class="col-lg-8">
+        <!-- Campaign Overview -->
+        <div class="detail-card fade-in">
+          <div class="card-header bg-transparent border-0 pt-4">
+            <h3 class="fw-bold mb-0">
+              <i class="bi bi-info-circle-fill text-primary me-2"></i>
+              Campaign Overview
+            </h3>
+          </div>
+          <div class="card-body">
+            <div class="info-row">
+              <div class="row">
+                <div class="col-sm-3"><strong>Campaign ID:</strong></div>
+                <div class="col-sm-9"><code>#{{ campaign.id }}</code></div>
+              </div>
+            </div>
+            <div class="info-row">
+              <div class="row">
+                <div class="col-sm-3"><strong>Placement:</strong></div>
+                <div class="col-sm-9">
+                  <span class="badge bg-light text-dark border">{{ campaign.get_placement_display }}</span>
+                </div>
+              </div>
+            </div>
+            <div class="info-row">
+              <div class="row">
+                <div class="col-sm-3"><strong>Target Audience:</strong></div>
+                <div class="col-sm-9">{{ campaign.get_audience_display }}</div>
+              </div>
+            </div>
+            <div class="info-row">
+              <div class="row">
+                <div class="col-sm-3"><strong>Schedule:</strong></div>
+                <div class="col-sm-9">
+                  <div>
+                    <i class="bi bi-calendar-event text-success me-1"></i>
+                    <strong>Starts:</strong> {{ campaign.scheduled_at|date:"F j, Y g:i A" }}
+                  </div>
+                  <div class="mt-1">
+                    <i class="bi bi-calendar-x text-danger me-1"></i>
+                    <strong>Expires:</strong> {{ campaign.expires_at|date:"F j, Y g:i A" }}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="info-row">
+              <div class="row">
+                <div class="col-sm-3"><strong>Duration:</strong></div>
+                <div class="col-sm-9">
+                  {% with duration=campaign.expires_at|timeuntil:campaign.scheduled_at %}{{ duration }}{% endwith %}
+                </div>
+              </div>
+            </div>
+            {% if campaign.reviewer %}
+            <div class="info-row">
+              <div class="row">
+                <div class="col-sm-3"><strong>Reviewed by:</strong></div>
+                <div class="col-sm-9">{{ campaign.reviewer.get_full_name|default:campaign.reviewer.username }}</div>
+              </div>
+            </div>
+            {% endif %}
+            {% if campaign.review_note %}
+            <div class="info-row">
+              <div class="row">
+                <div class="col-sm-3"><strong>Review Note:</strong></div>
+                <div class="col-sm-9"><div class="alert alert-info mb-0">{{ campaign.review_note }}</div></div>
+              </div>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Campaign Content -->
+        <div class="detail-card fade-in">
+          <div class="card-header bg-transparent border-0 pt-4">
+            <h3 class="fw-bold mb-0">
+              <i class="bi bi-file-text-fill text-success me-2"></i>
+              Campaign Content
+            </h3>
+          </div>
+          <div class="card-body">
+            <div class="campaign-preview text-center mb-3">
+              <h5 class="fw-bold text-primary mb-2">{{ campaign.title }}</h5>
+              <h6 class="text-muted mb-3">{{ campaign.headline }}</h6>
+              <p class="mb-3">{{ campaign.message|linebreaks }}</p>
+              <small class="text-muted">
+                <i class="bi bi-info-circle me-1"></i>
+                Preview of how your campaign will appear to users
+              </small>
+            </div>
+
+            {% if campaign.banner_image %}
+            <div class="mt-3">
+              <h6 class="fw-bold mb-2">Banner Image:</h6>
+              <img src="{{ campaign.banner_image.url }}" class="img-fluid rounded" alt="Campaign Banner" style="max-height: 200px;">
+            </div>
+            {% endif %}
+
+            {% if campaign.products.exists %}
+            <div class="mt-4">
+              <h6 class="fw-bold mb-3">Featured Products:</h6>
+              <div class="row g-3">
+                {% for p in campaign.products.all %}
+                <div class="col-6 col-md-4 col-lg-3">
+                  <div class="card h-100 shadow-sm">
+                    <div class="ratio ratio-1x1 bg-light rounded-top overflow-hidden">
+                      {# Try common single-image fields #}
+                      {% if p.image %}
+                        <img src="{{ p.image.url }}" alt="{{ p.name|default:'Product image' }}"
+                             loading="lazy" style="object-fit:cover; width:100%; height:100%;">
+                      {% elif p.photo %}
+                        <img src="{{ p.photo.url }}" alt="{{ p.name|default:'Product image' }}"
+                             loading="lazy" style="object-fit:cover; width:100%; height:100%;">
+                      {% elif p.main_image %}
+                        <img src="{{ p.main_image.url }}" alt="{{ p.name|default:'Product image' }}"
+                             loading="lazy" style="object-fit:cover; width:100%; height:100%;">
+                      {% elif p.thumbnail %}
+                        <img src="{{ p.thumbnail.url }}" alt="{{ p.name|default:'Product image' }}"
+                             loading="lazy" style="object-fit:cover; width:100%; height:100%;">
+                      {# Try a related images set like p.images (first one) #}
+                      {% elif p.images.all %}
+                        {% for img in p.images.all|slice:":1" %}
+                          {% if img.image %}
+                            <img src="{{ img.image.url }}" alt="{{ p.name|default:'Product image' }}"
+                                 loading="lazy" style="object-fit:cover; width:100%; height:100%;">
+                          {% elif img.file %}
+                            <img src="{{ img.file.url }}" alt="{{ p.name|default:'Product image' }}"
+                                 loading="lazy" style="object-fit:cover; width:100%; height:100%;">
+                          {% else %}
+                            <div class="d-flex w-100 h-100 align-items-center justify-content-center text-muted">No image</div>
+                          {% endif %}
+                        {% empty %}
+                          <div class="d-flex w-100 h-100 align-items-center justify-content-center text-muted">No image</div>
+                        {% endfor %}
+                      {% else %}
+                        <div class="d-flex w-100 h-100 align-items-center justify-content-center text-muted">No image</div>
+                      {% endif %}
+                    </div>
+                    <div class="p-2">
+                      <div class="fw-semibold text-truncate" title="{{ p.name }}">{{ p.name|default:"(Unnamed product)" }}</div>
+                      <div class="small text-muted">
+                        {% if p.price %}D{{ p.price|floatformat:2 }}{% endif %}
+                        {% if p.sku %}<span class="ms-1">• {{ p.sku }}</span>{% endif %}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Campaign Timeline -->
+        <div class="detail-card fade-in">
+          <div class="card-header bg-transparent border-0 pt-4">
+            <h3 class="fw-bold mb-0">
+              <i class="bi bi-clock-history text-warning me-2"></i>
+              Campaign Timeline
+            </h3>
+          </div>
+          <div class="card-body">
+            <div class="progress-timeline">
+              <div class="timeline-item">
+                <div class="timeline-icon timeline-completed"><i class="bi bi-plus-circle"></i></div>
+                <div>
+                  <h6 class="mb-1">Campaign Created</h6>
+                  <small class="text-muted">{{ campaign.created_at|date:"M j, Y g:i A" }}</small>
+                </div>
+              </div>
+
+              {% if campaign.status != 'draft' %}
+              <div class="timeline-item">
+                <div class="timeline-icon timeline-completed"><i class="bi bi-send"></i></div>
+                <div>
+                  <h6 class="mb-1">Submitted for Review</h6>
+                  <small class="text-muted">{{ campaign.updated_at|date:"M j, Y g:i A" }}</small>
+                </div>
+              </div>
+              {% endif %}
+
+              {% if campaign.status == 'approved' or campaign.status == 'live' or campaign.status == 'expired' %}
+              <div class="timeline-item">
+                <div class="timeline-icon timeline-completed"><i class="bi bi-check-circle"></i></div>
+                <div>
+                  <h6 class="mb-1">Campaign Approved</h6>
+                  {% if campaign.reviewer %}
+                  <small class="text-muted">Approved by {{ campaign.reviewer.get_full_name|default:campaign.reviewer.username }}</small>
+                  {% endif %}
+                </div>
+              </div>
+              {% endif %}
+
+              <div class="timeline-item">
+                <div class="timeline-icon {% if campaign.status == 'live' %}timeline-current{% elif campaign.status == 'expired' %}timeline-completed{% else %}timeline-pending{% endif %}">
+                  <i class="bi bi-broadcast"></i>
+                </div>
+                <div>
+                  <h6 class="mb-1">Campaign Goes Live</h6>
+                  <small class="text-muted">{{ campaign.scheduled_at|date:"M j, Y g:i A" }}</small>
+                </div>
+              </div>
+
+              <div class="timeline-item">
+                <div class="timeline-icon {% if campaign.status == 'expired' %}timeline-completed{% else %}timeline-pending{% endif %}">
+                  <i class="bi bi-stop-circle"></i>
+                </div>
+                <div>
+                  <h6 class="mb-1">Campaign Expires</h6>
+                  <small class="text-muted">{{ campaign.expires_at|date:"M j, Y g:i A" }}</small>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right column -->
+      <div class="col-lg-4">
+        <!-- Campaign Actions -->
+        <div class="detail-card fade-in">
+          <div class="card-header bg-transparent border-0 pt-4">
+            <h4 class="fw-bold mb-0">
+              <i class="bi bi-gear-fill text-secondary me-2"></i>
+              Campaign Actions
+            </h4>
+          </div>
+          <div class="card-body">
+            {% if campaign.status == 'draft' %}
+              <a class="btn btn-gradient w-100 mb-2" href="{% url 'stores:campaign_edit' store.slug campaign.id %}">
+                <i class="bi bi-pencil-fill me-2"></i>Edit Campaign
+              </a>
+              <button class="btn btn-outline-primary w-100 mb-2" onclick="submitForReview()">
+                <i class="bi bi-send me-2"></i>Submit for Review
+              </button>
+            {% elif campaign.status == 'pending' and request.user.is_staff %}
+              <button class="btn btn-success w-100 mb-2" onclick="approveCampaign()">
+                <i class="bi bi-check-lg me-2"></i>Approve Campaign
+              </button>
+              <button class="btn btn-outline-warning w-100 mb-2" onclick="requestChanges()">
+                <i class="bi bi-arrow-clockwise me-2"></i>Request Changes
+              </button>
+              <button class="btn btn-outline-danger w-100 mb-2" onclick="rejectCampaign()">
+                <i class="bi bi-x-lg me-2"></i>Reject Campaign
+              </button>
+            {% elif campaign.status == 'live' %}
+              <button class="btn btn-warning w-100 mb-2" onclick="pauseCampaign()">
+                <i class="bi bi-pause-circle me-2"></i>Pause Campaign
+              </button>
+              <button class="btn btn-outline-danger w-100 mb-2" onclick="stopCampaign()">
+                <i class="bi bi-stop-circle me-2"></i>Stop Campaign
+              </button>
+            {% elif campaign.status == 'approved' %}
+              <div class="alert alert-info mb-3">
+                <i class="bi bi-info-circle me-2"></i>
+                <strong>Scheduled to go live:</strong><br>
+                {{ campaign.scheduled_at|date:"F j, Y g:i A" }}
+              </div>
+            {% endif %}
+
+            <hr>
+
+            <button class="btn btn-outline-secondary w-100 mb-2" onclick="duplicateCampaign()">
+              <i class="bi bi-files me-2"></i>Duplicate Campaign
+            </button>
+
+            <a class="btn btn-outline-info w-100 mb-2" href="{% url 'stores:campaign_download_report' store.slug campaign.id %}">
+              <i class="bi bi-download me-2"></i>Download Report
+            </a>
+
+            {% if campaign.status == 'draft' or campaign.status == 'rejected' %}
+            <hr>
+            <button class="btn btn-danger-gradient w-100" onclick="deleteCampaign()">
+              <i class="bi bi-trash me-2"></i>Delete Campaign
+            </button>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Quick Stats -->
+        <div class="detail-card fade-in">
+          <div class="card-header bg-transparent border-0 pt-4">
+            <h4 class="fw-bold mb-0">
+              <i class="bi bi-graph-up text-success me-2"></i>
+              Quick Stats
+            </h4>
+          </div>
+          <div class="card-body">
+            <div class="info-row d-flex justify-content-between">
+              <span>Total Reach:</span><strong>{{ campaign.reach|default:0|intcomma }}</strong>
+            </div>
+            <div class="info-row d-flex justify-content-between">
+              <span>Engagement Rate:</span><strong>{{ campaign.engagement_rate|default:0 }}%</strong>
+            </div>
+            <div class="info-row d-flex justify-content-between">
+              <span>Cost Per Click:</span><strong>D{{ campaign.cost_per_click|default:0|floatformat:2 }}</strong>
+            </div>
+            <div class="info-row d-flex justify-content-between">
+              <span>Conversions:</span><strong>{{ campaign.conversions|default:0|intcomma }}</strong>
+            </div>
+            <div class="info-row d-flex justify-content-between">
+              <span>ROI:</span>
+              {% with r=campaign.roi|default:0 %}
+                <strong class="{% if r > 0 %}text-success{% elif r < 0 %}text-danger{% endif %}">
+                  {{ r|floatformat:1 }}%
+                </strong>
+              {% endwith %}
+            </div>
+          </div>
+        </div>
+
+        <!-- Activity Log -->
+        <div class="detail-card fade-in">
+          <div class="card-header bg-transparent border-0 pt-4">
+            <h4 class="fw-bold mb-0">
+              <i class="bi bi-clock-history text-info me-2"></i>
+              Recent Activity
+            </h4>
+          </div>
+          <div class="card-body">
+            <div class="activity-item success">
+              <h6 class="fw-bold mb-1">Campaign Created</h6>
+              <small class="text-muted">{{ campaign.created_at|timesince }} ago</small>
+              <p class="mb-0 small">Initial campaign setup completed</p>
+            </div>
+
+            {% if campaign.status != 'draft' %}
+            <div class="activity-item">
+              <h6 class="fw-bold mb-1">Submitted for Review</h6>
+              <small class="text-muted">{{ campaign.updated_at|timesince }} ago</small>
+              <p class="mb-0 small">Campaign sent to moderation team</p>
+            </div>
+            {% endif %}
+
+            {% if campaign.status == 'approved' or campaign.status == 'live' or campaign.status == 'expired' %}
+            <div class="activity-item success">
+              <h6 class="fw-bold mb-1">Campaign Approved</h6>
+              {% if campaign.reviewer %}
+              <small class="text-muted">Approved by {{ campaign.reviewer.get_full_name|default:campaign.reviewer.username }}</small>
+              {% endif %}
+              {% if campaign.review_note %}
+              <p class="mb-0 small">{{ campaign.review_note }}</p>
+              {% endif %}
+            </div>
+            {% endif %}
+
+            {% if campaign.status == 'rejected' %}
+            <div class="activity-item danger">
+              <h6 class="fw-bold mb-1">Campaign Rejected</h6>
+              {% if campaign.reviewer %}
+              <small class="text-muted">Rejected by {{ campaign.reviewer.get_full_name|default:campaign.reviewer.username }}</small>
+              {% endif %}
+              {% if campaign.review_note %}
+              <p class="mb-0 small">{{ campaign.review_note }}</p>
+              {% endif %}
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal for Campaign Actions -->
+<div class="modal fade" id="actionModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header">
+      <h5 class="modal-title" id="actionModalTitle">Confirm Action</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+    </div>
+    <div class="modal-body" id="actionModalBody"><!-- Dynamic content --></div>
+    <div class="modal-footer" id="actionModalFooter">
+      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+      <!-- Dynamic action button -->
+    </div>
+  </div></div>
+</div>
+
+<script>
+(function () {
+  const ENDPOINTS = {
+    submit:          "{% url 'stores:campaign_submit_review' store.id campaign.id %}",
+    approve:         "{% url 'stores:campaign_approve' store.id campaign.id %}",
+    request_changes: "{% url 'stores:campaign_request_changes' store.id campaign.id %}",
+    reject:          "{% url 'stores:campaign_reject' store.id campaign.id %}",
+    pause:           "{% url 'stores:campaign_pause' store.id campaign.id %}",
+    stop:            "{% url 'stores:campaign_stop' store.id campaign.id %}",
+    dup:             "{% url 'stores:campaign_duplicate' store.id campaign.id %}",
+    del:             "{% url 'stores:campaign_delete' store.id campaign.id %}",
+    detail:          "{% url 'stores:campaign_detail' store.id campaign.id %}",
+    promote:         "{% url 'stores:store_promote' store.id %}"
+  };
+
+  function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie) {
+      const cookies = document.cookie.split(';');
+      for (let c of cookies) {
+        c = c.trim();
+        if (c.startsWith(name + '=')) {
+          cookieValue = decodeURIComponent(c.substring(name.length + 1));
+          break;
+        }
+      }
+    }
+    return cookieValue;
+  }
+
+  function showNotification(message, type) {
+    const isMobile = window.innerWidth <= 576;
+    const toast = document.createElement('div');
+    toast.className = `toast align-items-center text-white bg-${type === 'success' ? 'success' : 'danger'} border-0`;
+    toast.style.cssText = isMobile
+      ? 'position:fixed; top:10px; left:10px; right:10px; z-index:10000; border-radius:8px;'
+      : 'position:fixed; top:20px; right:20px; z-index:10000;';
+    toast.innerHTML = `
+      <div class="d-flex">
+        <div class="toast-body">${message}</div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto"
+                onclick="this.parentNode.parentNode.remove()"></button>
+      </div>`;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), isMobile ? 3000 : 5000);
+  }
+
+  function confirmAction(title, body, actionText, actionClass, onConfirm) {
+    const titleEl = document.getElementById('actionModalTitle');
+    const bodyEl  = document.getElementById('actionModalBody');
+    const footer  = document.getElementById('actionModalFooter');
+    titleEl.textContent = title;
+    bodyEl.innerHTML = `<p>${body}</p>`;
+    footer.innerHTML = `
+      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+      <button type="button" class="btn ${actionClass}" id="confirmAction">${actionText}</button>
+    `;
+    const modalEl = document.getElementById('actionModal');
+    const modal = new bootstrap.Modal(modalEl);
+    modal.show();
+    document.getElementById('confirmAction').addEventListener('click', function () {
+      modal.hide();
+      onConfirm();
+    }, { once: true });
+  }
+
+  function postJSON(url, body, method = 'POST') {
+    return fetch(url, {
+      method,
+      headers: {
+        'X-CSRFToken': getCookie('csrftoken'),
+        'Content-Type': 'application/json'
+      },
+      body: body ? JSON.stringify(body) : null,
+      credentials: 'same-origin'
+    })
+    .then(async (r) => {
+      const ct = r.headers.get('content-type') || '';
+      let data = null;
+      if (ct.includes('application/json')) {
+        data = await r.json();
+      } else {
+        const text = await r.text();
+        if (!r.ok || text.trim().startsWith('<')) {
+          throw new Error('Server returned HTML or an error page instead of JSON.');
+        }
+        try { data = JSON.parse(text); } catch { throw new Error('Unexpected non-JSON response.'); }
+      }
+      if (!r.ok) throw new Error((data && (data.message || data.detail)) || `HTTP ${r.status}`);
+      return data;
+    })
+    .catch((err) => { showNotification(err.message || 'Network error occurred', 'error'); throw err; });
+  }
+
+  function successThen(data, next) {
+    if (data && data.success) {
+      showNotification(data.message || 'Done!', 'success');
+      setTimeout(() => (next ? next() : location.reload()), 1200);
+    } else {
+      showNotification((data && data.message) || 'Action failed', 'error');
+    }
+    return data;
+  }
+
+  window.submitForReview = function () {
+    confirmAction(
+      'Submit Campaign for Review',
+      'Submit this campaign for review? You can’t edit while it’s pending.',
+      'Submit', 'btn-primary',
+      () => postJSON(ENDPOINTS.submit).then(successThen)
+    );
+  };
+
+  window.approveCampaign = function () {
+    confirmAction(
+      'Approve Campaign',
+      'Approve this campaign? It will go live per its schedule.',
+      'Approve', 'btn-success',
+      () => postJSON(ENDPOINTS.approve).then(successThen)
+    );
+  };
+
+  window.requestChanges = function () {
+    const changes = prompt('Please specify what changes are needed:');
+    if (!changes) return;
+    postJSON(ENDPOINTS.request_changes, { changes }).then(successThen);
+  };
+
+  window.rejectCampaign = function () {
+    const reason = prompt('Please provide a reason for rejection:');
+    if (!reason) return;
+    postJSON(ENDPOINTS.reject, { reason }).then(successThen);
+  };
+
+  window.pauseCampaign = function () {
+    confirmAction(
+      'Pause Campaign',
+      'Pause this campaign immediately?',
+      'Pause', 'btn-warning',
+      () => postJSON(ENDPOINTS.pause).then(successThen)
+    );
+  };
+
+  window.stopCampaign = function () {
+    confirmAction(
+      'Stop Campaign',
+      'Stop this campaign permanently? This cannot be undone.',
+      'Stop', 'btn-danger',
+      () => postJSON(ENDPOINTS.stop).then(successThen)
+    );
+  };
+
+  window.duplicateCampaign = function () {
+    confirmAction(
+      'Duplicate Campaign',
+      'Create a copy of this campaign?',
+      'Duplicate', 'btn-primary',
+      () => postJSON(ENDPOINTS.dup).then((data) => {
+        if (data.success && data.new_campaign_id) {
+          const newUrl = ENDPOINTS.detail.replace(/\/\d+\/?$/, '/' + data.new_campaign_id + '/');
+          successThen(data, () => { window.location.href = newUrl; });
+        } else {
+          successThen(data);
+        }
+      })
+    );
+  };
+
+  window.deleteCampaign = function () {
+    confirmAction(
+      'Delete Campaign',
+      'Delete this campaign? This cannot be undone.',
+      'Delete', 'btn-danger',
+      () =>
+        fetch(ENDPOINTS.del, {
+          method: 'DELETE',
+          headers: { 'X-CSRFToken': getCookie('csrftoken') },
+          credentials: 'same-origin'
+        })
+        .then(async (r) => {
+          const ct = r.headers.get('content-type') || '';
+          let data = { success: r.ok };
+          if (ct.includes('application/json')) data = await r.json();
+          if (!r.ok) throw new Error((data && data.message) || `HTTP ${r.status}`);
+          return data;
+        })
+        .then((data) => successThen(data, () => { window.location.href = ENDPOINTS.promote; }))
+        .catch((err) => showNotification(err.message || 'Network error occurred', 'error'))
+    );
+  };
+
+  document.addEventListener('DOMContentLoaded', function () {
+    if (window.innerWidth > 768) {
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(e => { if (e.isIntersecting) e.target.style.animation = 'fadeIn 0.6s ease-out'; });
+      }, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
+      document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+    }
+  });
+})();
+</script>
+{% endblock %}

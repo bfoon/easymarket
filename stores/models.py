@@ -14,6 +14,9 @@ from django.contrib.auth import get_user_model
 from marketplace.models import Product
 import threading
 from django.core.mail import send_mail
+from django.core.validators import MinValueValidator
+from django.contrib.postgres.fields import ArrayField
+from django.apps import apps
 
 User = get_user_model()
 
@@ -860,3 +863,153 @@ class StoreReferral(models.Model):
         if not self.referral_code:
             self.referral_code = generate_referral_code()
         super().save(*args, **kwargs)
+
+
+class PromotionPlacement(models.TextChoices):
+    HOMEPAGE_BANNER = "homepage_banner", "Homepage Banner"
+    CATEGORY_FEATURE = "category_feature", "Category Feature"
+    TRENDING_CAROUSEL = "trending_carousel", "Trending Carousel"
+    PUSH_NOTIFICATION = "push_notification", "Push Notification"
+    EMAIL_CAMPAIGN = "email_campaign", "Email Campaign"
+    DEALS_PAGE = "deals_page", "Deals Page"
+    STORE_SPOTLIGHT = "store_spotlight", "Store Spotlight"
+
+
+class PromotionPlan(models.Model):
+    """Config for what a subscription offers."""
+    name = models.CharField(max_length=50, unique=True)
+    price = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(0)])
+    duration_days = models.PositiveIntegerField(default=30)
+    max_placements = models.PositiveIntegerField(default=1)
+    max_concurrent_campaigns = models.PositiveIntegerField(default=1)
+    max_products_per_campaign = models.PositiveIntegerField(default=8)
+
+    def __str__(self):
+        return f"{self.name} ({self.duration_days} days)"
+
+
+class PromotionSubscription(models.Model):
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="promo_subscriptions")
+    plan = models.ForeignKey(PromotionPlan, on_delete=models.PROTECT, related_name="subscriptions")
+    allowed_placements = ArrayField(
+        base_field=models.CharField(max_length=50, choices=PromotionPlacement.choices),
+        default=list,
+        blank=True,
+        help_text="Which placements this subscription can use"
+    )
+    start_at = models.DateTimeField(default=timezone.now)
+    end_at = models.DateTimeField()
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.store.name} → {self.plan.name} ({'active' if self.is_active else 'inactive'})"
+
+    def clean(self):
+        super().clean()
+        if self.end_at <= self.start_at:
+            from django.core.exceptions import ValidationError
+            raise ValidationError("end_at must be after start_at")
+
+    @property
+    def active(self):
+        now = timezone.now()
+        return self.is_active and self.start_at <= now <= self.end_at
+
+    def active_campaigns_count(self):
+        now = timezone.now()
+        return self.campaigns.filter(
+            status__in=[PromotionCampaign.Status.APPROVED, PromotionCampaign.Status.LIVE],
+            scheduled_at__lte=now,
+            expires_at__gt=now
+        ).count()
+
+
+class PromotionCampaign(models.Model):
+    class Audience(models.TextChoices):
+        ALL_BUYERS = "all_buyers", "All Buyers"
+        STORE_FOLLOWERS = "store_followers", "Store Followers"
+        SUBSCRIBERS = "subscribers", "Email Subscribers"
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        PENDING = "pending", "Pending Review"
+        APPROVED = "approved", "Approved"
+        LIVE = "live", "Live"
+        REJECTED = "rejected", "Rejected"
+        EXPIRED = "expired", "Expired"
+
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="promo_campaigns")
+    subscription = models.ForeignKey(PromotionSubscription, on_delete=models.PROTECT, related_name="campaigns")
+    placement = models.CharField(max_length=50, choices=PromotionPlacement.choices)
+    audience = models.CharField(max_length=50, choices=Audience.choices, default=Audience.ALL_BUYERS)
+
+    title = models.CharField(max_length=120)
+    headline = models.CharField(max_length=180)
+    message = models.TextField()
+    # Optional creative/banner image path if you handle uploads separately
+    banner_image = models.ImageField(upload_to="promotions/banners/", blank=True, null=True)
+
+    scheduled_at = models.DateTimeField()
+    expires_at = models.DateTimeField()
+
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    reviewer = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="reviewed_campaigns"
+    )
+    review_note = models.CharField(max_length=255, blank=True)
+    products = models.ManyToManyField(
+        'marketplace.Product',  # adjust if your Product lives elsewhere
+        related_name='promotion_campaigns',
+        blank=True,
+        help_text="Products featured in this campaign"
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["placement", "status"]),
+            models.Index(fields=["scheduled_at", "expires_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.store.name} – {self.title} ({self.get_status_display()})"
+
+    def clean(self):
+        super().clean()
+        if self.expires_at <= self.scheduled_at:
+            from django.core.exceptions import ValidationError
+            raise ValidationError("expires_at must be after scheduled_at")
+
+    @property
+    def is_live_window(self):
+        now = timezone.now()
+        return self.scheduled_at <= now < self.expires_at
+
+    def can_go_live(self):
+        # Validate subscription & placement eligibility
+        if not self.subscription.active:
+            return False, "Subscription inactive or expired."
+        if self.placement not in (self.subscription.allowed_placements or []):
+            return False, "Placement not allowed for this subscription."
+        # Enforce plan concurrency
+        if self.subscription.active_campaigns_count() >= self.subscription.plan.max_concurrent_campaigns:
+            return False, "Max concurrent campaigns reached for this plan."
+        # Time window
+        if not self.is_live_window:
+            return False, "Campaign not in live window."
+        return True, ""
+
+    def validate_products(self):
+        """Ensure all products belong to this campaign's store."""
+        qs = self.products.all().select_related('store')
+        invalid = [p.id for p in qs if getattr(p, 'store_id', None) != self.store_id]
+        if invalid:
+            from django.core.exceptions import ValidationError
+            raise ValidationError(f"Some products do not belong to store {self.store_id}: {invalid}")

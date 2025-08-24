@@ -87,4 +87,21 @@ urlpatterns = [
         name="store_notification_preferences"
     ),
 
+    path("<slug:slug>/promote/", views.store_promote, name="store_promote"),
+    path("<slug:slug>/promote/subscribe/", views.create_subscription, name="promo_subscribe"),
+    path("<slug:slug>/promote/campaign/new/", views.create_campaign, name="promo_campaign_create"),
+    path("<slug:slug>/promote/campaign/<int:pk>/push/", views.push_campaign, name="promo_campaign_push"),
+
+    # Campaign detail and management URLs
+    path('<slug:slug>/campaigns/<int:campaign_id>/', views.campaign_detail, name='campaign_detail'),
+    path('<slug:slug>/campaigns/<int:campaign_id>/submit/', views.campaign_submit_review, name='campaign_submit_review'),
+    path('<slug:slug>/campaigns/<int:campaign_id>/approve/', views.campaign_approve, name='campaign_approve'),
+    path('<slug:slug>/campaigns/<int:campaign_id>/reject/', views.campaign_reject, name='campaign_reject'),
+    path('<slug:slug>/campaigns/<int:campaign_id>/pause/', views.campaign_pause, name='campaign_pause'),
+    path('<slug:slug>/campaigns/<int:campaign_id>/stop/', views.campaign_stop, name='campaign_stop'),
+    path('<slug:slug>/campaigns/<int:campaign_id>/duplicate/', views.campaign_duplicate, name='campaign_duplicate'),
+    path('<slug:slug>/campaigns/<int:campaign_id>/delete/', views.campaign_delete, name='campaign_delete'),
+    path('<slug:slug>/campaigns/<int:campaign_id>/report/download/', views.campaign_download_report, name='campaign_download_report'),
+    path('<slug:slug>/campaigns/<int:campaign_id>/request-changes/', views.campaign_request_changes, name='campaign_request_changes'),
+
 ]
