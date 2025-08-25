@@ -7,4 +7,5 @@ class OrdersConfig(AppConfig):
 
     def ready(self):
         # Import signals modules
-        from . import signals_return  # noqa
+        from . import signals_return, signals  # noqa
+
