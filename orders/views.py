@@ -25,7 +25,6 @@ from django.template.loader import get_template
 from django.http import HttpResponse
 from django.urls import reverse
 from weasyprint import HTML
-from django.utils.html import format_html
 import tempfile
 from django.contrib.auth import get_user_model
 import threading
@@ -35,7 +34,7 @@ from marketplace.notifications import send_whatsapp, send_email
 def notify_store_new_order(order):
     User = get_user_model()
 
-    # Distinct sellers in this order
+    # Get distinct sellers from this order
     seller_ids = (
         order.items
         .select_related('product__seller')
@@ -48,7 +47,7 @@ def notify_store_new_order(order):
             seller = User.objects.get(id=seller_id)
             seller_items = order.items.filter(product__seller=seller)
 
-            # 🧾 Build order summary with links & images
+            # 🧾 Build order summary for this seller
             item_lines = []
             for item in seller_items:
                 feature_str = ""
@@ -57,13 +56,9 @@ def notify_store_new_order(order):
                         f"{k}: {v}" for k, v in item.selected_features.items()
                     )
 
-                product_link = f"https://www.easymarket.vip{reverse('marketplace:product_detail', args=[item.product.slug])}"
-                product_img = item.product.image.url if item.product.image else ""
-
-                line = f"- {item.product.name} x{item.quantity}{feature_str}\n  👉 {product_link}"
-                if product_img:
-                    line += f"\n  🖼️ {product_img}"
-                item_lines.append(line)
+                item_lines.append(
+                    f"- {item.product.name} x{item.quantity}{feature_str}"
+                )
 
             summary = "\n".join(item_lines)
 
@@ -73,11 +68,11 @@ def notify_store_new_order(order):
                 f"Order Number: {order.id}\n"
                 f"Buyer Email: {order.buyer.email}\n"
                 f"Items:\n{summary}\n\n"
-                f"View and fulfill the order from your dashboard: "
-                f"https://www.easymarket.vip{reverse('stores:order_detail', args=[order.id])}"
+                f"View and fulfill the order from your dashboard."
+                f"https://www.easymarket.vip/"
             )
 
-            # Send
+            # Send batched email and WhatsApp
             send_email(subject, message, [seller.email])
             send_whatsapp(seller.telephone, message)
 

@@ -48,7 +48,7 @@ def _build_order_chat_url(order_id: int) -> str:
     Adjust 'orders:order_chat' to your actual URL name.
     """
     base = _get_site_base_url()
-    path = reverse('orders:order_chat', args=[order_id])  # e.g. /orders/123/chat/
+    path = reverse('orders:order_detail', args=[order_id])  # e.g. /orders/123/chat/
     return f"{base}{path}"
 
 def _preview(text: str, limit: int = 120) -> str:

@@ -17,7 +17,7 @@ from django.utils.text import slugify
 from django.db.models import Q, Avg, F, FloatField, DecimalField, ExpressionWrapper
 from django.db.models.functions import Coalesce
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponseBadRequest
 from django.views.decorators.http import require_POST
 from django.forms import modelformset_factory
 from chat.models import ChatThread, ChatMessage
@@ -57,7 +57,10 @@ from .forms import (
 )
 
 from marketplace.notifications import send_email, send_whatsapp
+from orders.notifications import notify_new_order_message
+import logging
 
+logger = logging.getLogger(__name__)
 
 def notify_referrer_referral_used(referral):
     """Send notification to referrer that their referral was used."""
@@ -1772,28 +1775,89 @@ def store_order_detail(request, store_id, order_id):
     }
     return render(request, 'stores/store_order_detail.html', context)
 
+
+def _get_order_seller_users(order):
+    """Return queryset of seller Users tied to items in this order."""
+    User = get_user_model()
+    seller_ids = (
+        order.items
+        .select_related('product__seller')
+        .values_list('product__seller', flat=True)
+        .distinct()
+    )
+    return User.objects.filter(id__in=seller_ids)
+
+def _user_can_chat_on_order(user, order):
+    """Allow the buyer or any seller on this order (or superuser)."""
+    if user.is_superuser:
+        return True
+    if getattr(order, "buyer_id", None) == user.id:
+        return True
+    return _get_order_seller_users(order).filter(id=user.id).exists()
+
+def _parse_body(request):
+    """Parse JSON or form-encoded body into a dict."""
+    if request.content_type and "application/json" in request.content_type:
+        try:
+            return json.loads(request.body.decode("utf-8"))
+        except json.JSONDecodeError:
+            return None
+    return request.POST  # QueryDict (acts like a dict)
+
 @require_POST
 @login_required
 def send_chat_message(request):
-    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-        order_id = request.POST.get('order_id')
-        content = request.POST.get('message')
+    # Optional: keep accepting only AJAX, but don’t crash if header missing
+    if request.headers.get("x-requested-with") not in (None, "", "XMLHttpRequest"):
+        pass  # header is present (good). If you want to enforce, check equality.
 
-        if not content or not order_id:
-            return JsonResponse({'success': False, 'message': 'Missing content or order ID.'})
+    data = _parse_body(request)
+    if data is None:
+        return HttpResponseBadRequest("Invalid JSON")
 
-        try:
-            order = Order.objects.get(id=order_id)
-            ChatMessage.objects.create(
-                order=order,
-                sender=request.user,
-                content=content
-            )
-            return JsonResponse({'success': True, 'message': content})
-        except Order.DoesNotExist:
-            return JsonResponse({'success': False, 'message': 'Order not found.'})
-    else:
-        return JsonResponse({'success': False, 'message': 'Invalid request type.'})
+    order_id = (data.get("order_id") or "").strip()
+    content = (data.get("message") or "").strip()
+
+    if not order_id or not content:
+        return JsonResponse(
+            {"success": False, "message": "Missing content or order ID."},
+            status=400,
+        )
+
+    order = get_object_or_404(Order, id=order_id)
+
+    # Permission: must be buyer or seller on the order
+    if not _user_can_chat_on_order(request.user, order):
+        return JsonResponse({"success": False, "message": "Not allowed."}, status=403)
+
+    # Create message
+    chat = ChatMessage.objects.create(
+        order=order,
+        sender=request.user,
+        content=content,
+    )
+
+    # Trigger notifications (comment this out if you are using a post_save signal instead)
+    try:
+        notify_new_order_message(chat)
+    except Exception as notify_err:
+        logger.exception("notify_new_order_message failed: %s", notify_err)
+
+    return JsonResponse(
+        {
+            "success": True,
+            "message": {
+                "id": chat.id,
+                "order_id": order.id,
+                "sender_name": request.user.get_full_name() or request.user.username,
+                "content": chat.content,
+                "created_at": timezone.localtime(chat.created_at).strftime("%Y-%m-%d %H:%M"),
+                "is_read": chat.is_read,
+                "is_me": True,
+            },
+        },
+        status=201,
+    )
 
 @login_required
 def fetch_chat_messages(request, order_id):
