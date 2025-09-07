@@ -1,0 +1,454 @@
+{% extends 'logistics/base.html' %}
+
+{% block title %}Warehouse Item #{{ item.id }} - Order #{{ order.id }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">
+    <i class="fas fa-warehouse me-2"></i>Warehouse Item Detail
+  </h1>
+  <p class="page-subtitle">
+    Order item flagged as <strong>Shipped to Warehouse</strong>
+  </p>
+</div>
+
+<!-- Breadcrumb -->
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="{% url 'logistics:dashboard' %}">Dashboard</a></li>
+    <li class="breadcrumb-item"><a href="{% url 'logistics:dashboard' %}#warehouse-queue">Warehouse Queue</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Item #{{ item.id }}</li>
+  </ol>
+</nav>
+
+<div class="row g-4">
+  <!-- Left: Item + Product + Shop -->
+  <div class="col-lg-7">
+    <div class="card mb-4">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="m-0">
+          <i class="fas fa-box me-2"></i>Order Item #{{ item.id }}
+          <span class="badge bg-success ms-2">Shipped to Warehouse</span>
+          {% if order.status == 'cancelled' %}
+            <span class="badge bg-danger ms-2">Order Cancelled</span>
+          {% elif order.status == 'shipped' %}
+            <span class="badge bg-info ms-2">Order Shipped</span>
+          {% endif %}
+        </h5>
+
+      </div>
+      <div class="card-body">
+        <div class="d-flex">
+          <!-- Product image -->
+          <div class="me-3" style="width: 96px;">
+            {% if item.product and item.product.image %}
+              <img src="{{ item.product.image.url }}" alt="{{ item.product.name }}" class="img-fluid rounded border">
+            {% else %}
+              <div class="bg-light rounded d-flex align-items-center justify-content-center border" style="height:96px;">
+                <i class="fas fa-image text-muted"></i>
+              </div>
+            {% endif %}
+          </div>
+
+          <div class="flex-grow-1">
+              {% if item.product %}
+                <h6 class="mb-1">{{ item.product.name }}</h6>
+                {% if item.product.sku %}
+                  <div class="text-muted small">SKU: {{ item.product.sku }}</div>
+                {% endif %}
+                <div class="mt-2">
+                  <span class="me-3"><strong>Qty:</strong> {{ item.quantity }}</span>
+                  <span class="me-3"><strong>Unit Price:</strong> D{{ item.product.price|floatformat:2 }}</span>
+                  <span><strong>Total:</strong> D{{ item.get_total_price|floatformat:2 }}</span>
+                </div>
+              {% else %}
+                <h6 class="mb-1 text-muted">Product unavailable</h6>
+                <div class="mt-2">
+                  <span class="me-3"><strong>Qty:</strong> {{ item.quantity }}</span>
+                  <span class="me-3"><strong>Unit Price:</strong> —</span>
+                  <span><strong>Total:</strong> D{{ item.get_total_price|floatformat:2 }}</span>
+                </div>
+              {% endif %}
+            </div>
+
+            {% if item.shipped_to_warehouse_at %}
+              <div class="text-muted small mt-2">
+                Marked for warehouse: {{ item.shipped_to_warehouse_at|date:"M d, Y H:i" }}
+              </div>
+            {% endif %}
+          </div>
+        </div>
+
+        <hr>
+
+        <!-- Shop -->
+        <div class="row">
+          <div class="col-md-6">
+            <h6 class="mb-2"><i class="fas fa-store me-2"></i>Shop</h6>
+            {% if store %}
+              <div><strong>{{ store.name }}</strong></div>
+              {% if store.city %}<div class="text-muted small">{{ store.city }}</div>{% endif %}
+              {% if store.phone %}<div class="text-muted small"><i class="fas fa-phone me-1"></i>{{ store.phone }}</div>{% endif %}
+            {% else %}
+              <div class="text-muted">No store information</div>
+            {% endif %}
+          </div>
+          <div class="col-md-6">
+            <h6 class="mb-2"><i class="fas fa-user me-2"></i>Buyer</h6>
+            {% if buyer %}
+              <div><strong>{{ buyer.get_full_name|default:buyer.username }}</strong></div>
+              <div class="text-muted small">{{ buyer.email }}</div>
+              {% if buyer.telephone %}
+                <div class="text-muted small"><i class="fas fa-phone me-1"></i>{{ buyer.telephone }}</div>
+              {% endif %}
+            {% else %}
+              <div class="text-muted">No buyer assigned</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Box placements (if any) -->
+    <div class="card">
+      <div class="card-header">
+        <h6 class="m-0"><i class="fas fa-boxes me-2"></i>Box Placements</h6>
+      </div>
+      <div class="card-body">
+        {% if boxed_in %}
+          <div class="table-responsive">
+            <table class="table table-sm align-middle">
+              <thead>
+                <tr>
+                  <th>Shipment</th>
+                  <th>Box #</th>
+                  <th>Qty</th>
+                  <th>Placed</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for bi in boxed_in %}
+                  <tr>
+                    <td>
+                      {% if bi.box and bi.box.shipment %}
+                        <a href="{% url 'logistics:shipment_detail' bi.box.shipment.pk %}">#{{ bi.box.shipment.id }}</a>
+                        <br><small class="text-muted">{{ bi.box.shipment.get_status_display }}</small>
+                      {% else %}
+                        <span class="text-muted">—</span>
+                      {% endif %}
+                    </td>
+                    <td>{{ bi.box.box_number }}</td>
+                    <td>{{ bi.quantity }}</td>
+                    <td>{{ bi.created_at|date:"M d, Y H:i" }}</td>
+                    <td class="text-end">
+                      {% if bi.box and bi.box.shipment %}
+                        <a class="btn btn-sm btn-outline-secondary"
+                           href="{% url 'logistics:shipment_detail' bi.box.shipment.pk %}">
+                           <i class="fas fa-eye"></i>
+                        </a>
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="text-muted">This item hasn’t been placed into a box yet.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Order & Shipments -->
+  <div class="col-lg-5">
+    <div class="card mb-4">
+      <div class="card-header">
+        <h6 class="m-0"><i class="fas fa-receipt me-2"></i>Order</h6>
+      </div>
+      <div class="card-body">
+        <div class="d-flex justify-content-between">
+          <div>
+            <div><strong>#{{ order.id }}</strong></div>
+            <div class="text-muted small">Created: {{ order.created_at|date:"M d, Y H:i" }}</div>
+          </div>
+          <div>
+            <span class="badge bg-secondary">{{ order.get_status_display }}</span>
+          </div>
+        </div>
+
+        {% if order.shipping_address %}
+          <hr>
+          <div>
+            <div class="fw-semibold mb-1"><i class="fas fa-map-marker-alt me-2"></i>Shipping Address</div>
+            <div class="text-muted small">
+              {{ order.shipping_address.full_name }}<br>
+              {{ order.shipping_address.street }}<br>
+              {{ order.shipping_address.city }}, {{ order.shipping_address.region }} {{ order.shipping_address.geo_code }}
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Shipments tied to this order -->
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="m-0">
+          <i class="fas fa-truck me-2"></i>Shipments for this Order
+        </h6>
+        {% if can_create_shipment %}
+          <a href="{% url 'logistics:shipment_create' %}?order={{ order.id }}"
+             class="btn btn-sm btn-primary">
+            <i class="fas fa-plus me-1"></i>Create Shipment
+          </a>
+        {% endif %}
+      </div>
+      <div class="card-body">
+        {% if shipments %}
+          <div class="table-responsive">
+            <table class="table table-hover align-middle">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Status</th>
+                  <th>Driver</th>
+                  <th>Vehicle</th>
+                  <th>Warehouse</th>
+                  <th>Created</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for s in shipments %}
+                <tr>
+                  <td><strong>#{{ s.id }}</strong></td>
+                  <td><span class="status-badge status-{{ s.status }}">{{ s.get_status_display }}</span></td>
+
+                  <td>
+                    {% if s.driver and s.driver.user %}
+                      {{ s.driver.user.get_full_name|default:s.driver.user.username }}
+                    {% else %}
+                      <span class="text-muted">—</span>
+                    {% endif %}
+                  </td>
+
+                  <td>
+                    {% if s.vehicle %}
+                      {{ s.vehicle.plate_number }}
+                    {% else %}
+                      <span class="text-muted">—</span>
+                    {% endif %}
+                  </td>
+
+                  <td>
+                    {% if s.warehouse %}
+                      {{ s.warehouse.name }}
+                    {% else %}
+                      <span class="text-muted">—</span>
+                    {% endif %}
+                  </td>
+
+                  <td>{{ s.created_at|date:"M d, Y" }}</td>
+                  <td class="text-end">
+                    <a href="{% url 'logistics:shipment_detail' s.pk %}" class="btn btn-sm btn-outline-secondary">
+                      <i class="fas fa-eye"></i>
+                    </a>
+                  </td>
+                </tr>
+
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          {% if can_add_to_shipment %}
+            <div class="alert alert-info mt-2">
+              <i class="fas fa-info-circle me-1"></i>
+              A shipment already exists for this order. You can place the item into a box on the shipment detail page.
+            </div>
+          {% endif %}
+        {% else %}
+          <div class="text-muted">No shipments created for this order yet.</div>
+          {% if not can_create_shipment %}
+            <div class="alert alert-warning mt-2">
+              <i class="fas fa-exclamation-triangle me-1"></i>
+              Shipment creation disabled because the order status is
+              <strong>{{ order.get_status_display }}</strong>.
+            </div>
+          {% endif %}
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* =========================
+     Design Tokens
+  ========================== */
+  :root{
+    --clr-text: #0f172a;         /* slate-900 */
+    --clr-muted: #64748b;        /* slate-500 */
+    --clr-border: #e5e7eb;       /* gray-200 */
+    --clr-bg: #f8fafc;           /* slate-50 */
+    --radius: 12px;
+    --shadow: 0 8px 20px rgba(2,6,23,0.06);
+    --pad: 1rem;
+    --gap: 1rem;
+
+    --primary: #2563eb;          /* blue-600 */
+    --success: #16a34a;          /* green-600 */
+    --info: #0ea5e9;             /* sky-500 */
+    --warning: #d97706;          /* amber-600 */
+    --danger: #dc2626;           /* red-600 */
+
+    --chip-bg: #eef2f7;          /* neutral chip bg */
+    --chip-fg: #334155;          /* slate-700 */
+  }
+
+  /* =========================
+     Page Header & Breadcrumb
+  ========================== */
+  .page-header{
+    margin-bottom: 1rem;
+  }
+  .page-title{
+    display:flex; align-items:center; gap:.5rem;
+    font-weight:700; color:var(--clr-text);
+    margin:0 0 .25rem 0;
+  }
+  .page-subtitle{
+    margin:0; color:var(--clr-muted);
+  }
+  nav[aria-label="breadcrumb"] .breadcrumb{
+    margin: .5rem 0 0;
+    background: transparent;
+    padding: 0;
+  }
+  .breadcrumb .breadcrumb-item + .breadcrumb-item::before{
+    content: "›";
+  }
+
+  /* =========================
+     Cards
+  ========================== */
+  .card{
+    border: 1px solid var(--clr-border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    background: #fff;
+  }
+  .card-header{
+    background: var(--bg-muted, #fafafa);
+    border-bottom: 1px solid var(--clr-border);
+    padding: .75rem 1rem;
+  }
+  .card-header .m-0,
+  .card-header h5, .card-header h6{
+    margin:0;
+    display:flex; align-items:center; gap:.5rem;
+  }
+  .card-body{
+    padding: 1rem;
+  }
+
+  /* Make the top item/media row adapt on small screens */
+  @media (max-width: 992px){
+    .card .d-flex{
+      flex-direction: column;
+    }
+    .card .d-flex > .me-3{
+      margin-right:0 !important;
+      margin-bottom: .75rem;
+    }
+  }
+
+  /* =========================
+     Images
+  ========================== */
+  /* Ensures product image containers & thumbnails look neat */
+  .card .me-3 img{
+    display:block;
+    width: 96px;
+    height: 96px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid var(--clr-border);
+  }
+  .card .bg-light.rounded{
+    width: 96px; height:96px;
+  }
+
+  /* =========================
+     Tables
+  ========================== */
+  .table{
+    margin-bottom: 0;
+  }
+  .table thead th{
+    border-bottom: 1px solid var(--clr-border);
+    color: var(--clr-muted);
+    font-weight: 600;
+    font-size: .9rem;
+  }
+  .table tbody td{
+    vertical-align: middle;
+  }
+  .table-hover tbody tr:hover{
+    background: #f9fbff;
+  }
+
+  /* =========================
+     Status Chips / Badges
+  ========================== */
+  .status-badge{
+    display:inline-block;
+    padding:.25rem .5rem;
+    border-radius:.5rem;
+    font-size:.8rem;
+    line-height:1;
+    background: var(--chip-bg);
+    color: var(--chip-fg);
+    border: 1px solid rgba(0,0,0,0.04);
+    white-space: nowrap;
+  }
+  .status-pending   { background:#fff7ed; color:#9a3412; }  /* amber-100 / amber-800 */
+  .status-in_transit{ background:#eff6ff; color:#1d4ed8; }  /* blue-50  / blue-700  */
+  .status-shipped   { background:#ecfeff; color:#0e7490; }  /* cyan-50  / cyan-700  */
+  .status-delivered { background:#ecfdf5; color:#047857; }  /* green-50 / green-700 */
+
+  /* Make Bootstrap badges a bit softer to match */
+  .badge{
+    border-radius: .5rem;
+    font-weight: 600;
+    padding: .35rem .55rem;
+  }
+  .badge.bg-success{ background: rgba(22,163,74,.12) !important; color: var(--success) !important; }
+  .badge.bg-info   { background: rgba(14,165,233,.12) !important; color: var(--info) !important; }
+  .badge.bg-danger { background: rgba(220,38,38,.12) !important; color: var(--danger) !important; }
+  .badge.bg-secondary{ background: rgba(2,6,23,.06) !important; color:#334155 !important; }
+
+  /* =========================
+     Utilities / Minor Tweaks
+  ========================== */
+  .text-muted{ color: var(--clr-muted) !important; }
+  .fw-semibold{ font-weight:600; }
+  .small{ font-size:.875rem; }
+
+  /* Align “view” button in table actions and keep spacing tight */
+  .table .btn.btn-sm{
+    border-radius: 8px;
+  }
+
+  /* Reduce hr contrast slightly for elegance */
+  hr{
+    border-color: var(--clr-border);
+    opacity: 1;
+  }
+</style>
+{% endblock %}

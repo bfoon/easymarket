@@ -131,6 +131,99 @@
     </div>
 </div>
 
+<!-- Shipped to Warehouse (Queue) -->
+<div class="row mb-4">
+  <div class="col-lg-12">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h6 class="m-0 font-weight-bold text-primary">
+          <i class="fas fa-warehouse me-2"></i>
+          Shipped to Warehouse (Queue)
+          {% if warehouse_queue_count %}
+            <span class="badge bg-secondary ms-2">{{ warehouse_queue_count }}</span>
+          {% endif %}
+        </h6>
+        <a href="{% url 'logistics:shipment_create' %}" class="btn btn-primary btn-sm">
+          <i class="fas fa-plus me-1"></i>Create Shipment
+        </a>
+      </div>
+
+      <div class="card-body">
+        {% if warehouse_queue %}
+          <div class="table-responsive">
+            <table class="table table-hover align-middle">
+              <thead>
+                <tr>
+                  <th>Order</th>
+                  <th>Buyer</th>
+                  <th>Shop</th>
+                  <th>Product</th>
+                  <th class="text-end">Qty</th>
+                  <th>Order Date</th>
+                  <th style="width: 170px;">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in warehouse_queue %}
+                  <tr>
+                    <td><strong>#{{ row.order.id }}</strong></td>
+
+                    <td>
+                      {{ row.order.buyer.get_full_name|default:row.order.buyer.username }}
+                      <br>
+                      <small class="text-muted">{{ row.order.buyer.email }}</small>
+                    </td>
+
+                    <td>
+                      {% if row.product.store %}
+                        {{ row.product.store.name }}
+                        {% if row.product.store.city %}
+                          <br><small class="text-muted">{{ row.product.store.city }}</small>
+                        {% endif %}
+                      {% else %}
+                        <span class="text-muted">—</span>
+                      {% endif %}
+                    </td>
+
+                    <td>
+                      {{ row.product.name }}
+                      {% if row.product.sku %}
+                        <br><small class="text-muted">SKU: {{ row.product.sku }}</small>
+                      {% endif %}
+                    </td>
+
+                    <td class="text-end">{{ row.quantity }}</td>
+                    <td>{{ row.order.created_at|date:"M d, Y" }}</td>
+
+                    <td class="d-flex gap-2">
+                      <!-- Prefill shipment creation with this order (adjust param if your view expects a different name) -->
+                      <a href="{% url 'logistics:shipment_create' %}?order={{ row.order.id }}"
+                         class="btn btn-sm btn-outline-primary">
+                        <i class="fas fa-truck-loading"></i> Add
+                      </a>
+                      <!-- View the order (swap URL to your logistics order detail if you have one) -->
+                      <a href="{% url 'logistics:warehouse_item_detail' row.id %}"
+                         class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-eye"></i>
+                      </a>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="text-center text-muted py-4">
+            <i class="fas fa-box-open fa-3x mb-3"></i>
+            <p>No items have been marked as shipped to the warehouse yet.</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+
 <!-- Recent Shipments -->
 <div class="row">
     <div class="col-lg-12">

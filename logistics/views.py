@@ -779,6 +779,16 @@ class DashboardView(LoginRequiredMixin, ListView):
     template_name = 'logistics/dashboard.html'
 
     def get(self, request, *args, **kwargs):
+        warehouse_items_qs = (
+            OrderItem.objects
+            .filter(shipped_to_warehouse=True)
+            .exclude(order__shipments__isnull=False)  # hide if a shipment exists
+            .exclude(order__status__in=['cancelled', 'shipped'])  # hide cancelled or shipped orders
+            .select_related('order__buyer', 'product__store')
+            .order_by('-id')
+            .distinct()
+        )
+
         context = {
             'total_shipments': Shipment.objects.count(),
             'pending_shipments': Shipment.objects.filter(status='pending').count(),
@@ -790,8 +800,64 @@ class DashboardView(LoginRequiredMixin, ListView):
             'recent_shipments': Shipment.objects.select_related(
                 'shipping_address', 'driver', 'vehicle'
             ).order_by('-created_at')[:10],
+
+            # NEW in context
+            'warehouse_queue': warehouse_items_qs[:20],          # show latest 20
+            'warehouse_queue_count': warehouse_items_qs.count(),  # badge count
         }
         return render(request, self.template_name, context)
+
+
+class WarehouseQueueItemDetailView(LoginRequiredMixin, DetailView):
+    """
+    Detail page for a single OrderItem marked shipped_to_warehouse=True.
+    Shows buyer, shop, order, product, and any shipments that already exist.
+    """
+    model = OrderItem
+    template_name = 'logistics/warehouse_item_detail.html'
+    context_object_name = 'item'
+
+    def get_queryset(self):
+        # Preload related objects to avoid N+1
+        return (
+            OrderItem.objects
+            .select_related('order__buyer', 'product__store')
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        item: OrderItem = self.object
+        order = item.order
+
+        shipments = Shipment.objects.filter(order=order).select_related(
+            'driver__user', 'vehicle', 'warehouse', 'shipping_address'
+        ).order_by('-created_at')
+
+        # Box entries (if this item was already placed into any shipment box)
+        boxed_in = (
+            BoxItem.objects
+            .filter(order_item=item)
+            .select_related('box__shipment')
+            .order_by('-box__created_at')
+        )
+
+        # UI guards based on your earlier rules
+        order_status = getattr(order, 'status', None)
+        has_shipment = shipments.exists()
+        can_create_shipment = (not has_shipment) and order_status not in ['cancelled', 'shipped']
+        can_add_to_shipment = has_shipment
+
+        context.update({
+            'order': order,
+            'buyer': getattr(order, 'buyer', None),
+            'store': getattr(item.product, 'store', None) if item.product else None,
+            'shipments': shipments,
+            'boxed_in': boxed_in,
+            'has_shipment': has_shipment,
+            'can_create_shipment': can_create_shipment,
+            'can_add_to_shipment': can_add_to_shipment,
+        })
+        return context
 
 
 # Box Management Views

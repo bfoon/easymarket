@@ -15,6 +15,9 @@ urlpatterns = [
     path('shipments/<int:pk>/update-status/', views.update_shipment_status, name='update_shipment_status'),
     path('ajax/addresses/', views.ajax_addresses_for_order, name='ajax_addresses_for_order'),
     path('ajax/orders/', views.ajax_orders_for_address, name='ajax_orders_for_address'),
+    path('warehouse-queue/item/<int:pk>/',
+         views.WarehouseQueueItemDetailView.as_view(),
+         name='warehouse_item_detail'),
 
     # Order Delivery Management
     path('shipments/<int:shipment_pk>/mark-delivered/', views.mark_order_as_delivered, name='mark_order_delivered'),
