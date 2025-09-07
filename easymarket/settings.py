@@ -88,6 +88,7 @@ INSTALLED_APPS = [
 
 SITE_ID = config("SITE_ID", default=1, cast=int)
 AUTH_USER_MODEL = "accounts.User"
+SITE_BASE_URL = "www.easymarket.vip"
 
 # -----------------------------------------------------------------------------
 # Allauth / Authentication

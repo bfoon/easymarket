@@ -314,79 +314,90 @@ def download_invoice_pdf(request, order_id):
 
     return response
 
+ALLOWED_IMAGE_CT = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
+MAX_IMAGE_MB = 5
+
 @login_required
 @require_POST
 def send_chat_message(request):
-    """Handle AJAX chat message sending"""
+    if request.headers.get('x-requested-with') != 'XMLHttpRequest':
+        return JsonResponse({'success': False, 'error': 'Invalid request type.'}, status=400)
+
+    order_id = request.POST.get('order_id')
+    content = (request.POST.get('message') or '').strip()
+    image = request.FILES.get('image')  # keep if you support photos; else remove
+
+    if not order_id:
+        return JsonResponse({'success': False, 'error': 'Missing order id'}, status=400)
+    if not content and not image:
+        return JsonResponse({'success': False, 'error': 'Type a message or attach an image.'}, status=400)
+
+    # --- load order without buyer filter
     try:
-        # Get form data
-        order_id = request.POST.get('order_id')
-        message_content = request.POST.get('message', '').strip()
+        order = Order.objects.get(id=order_id)
+    except Order.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Order not found'}, status=404)
 
-        if not order_id or not message_content:
-            return JsonResponse({
-                'success': False,
-                'error': 'Missing required data'
-            })
+    # --- permissions: buyer OR seller tied to this order
+    is_buyer = (order.buyer_id == request.user.id)
 
-        # Verify order belongs to user
-        try:
-            order = Order.objects.get(id=order_id, buyer=request.user)
-        except Order.DoesNotExist:
-            return JsonResponse({
-                'success': False,
-                'error': 'Order not found'
-            })
+    # Adjust the relation to match your models:
+    # assumes OrderItem has product -> store -> owner
+    is_store_actor = order.items.filter(product__store__owner_id=request.user.id).exists()
 
-        # Create the chat message
-        chat_message = ChatMessage.objects.create(
-            order=order,
-            sender=request.user,
-            content=message_content
-        )
+    # (optionally) allow store staff:
+    # is_store_actor = is_store_actor or order.items.filter(product__store__staff__user_id=request.user.id).exists()
 
-        return JsonResponse({
-            'success': True,
-            'message': {
-                'id': chat_message.id,
-                'content': chat_message.content,
-                'sender': chat_message.sender.username,
-                'created_at': chat_message.created_at.strftime('%b %d, %Y %H:%M'),
-                'is_sender': True
-            }
-        })
+    if not (is_buyer or is_store_actor or request.user.is_staff):
+        return JsonResponse({'success': False, 'error': 'Forbidden'}, status=403)
 
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'error': str(e)
-        })
+    # (optional) validate image type/size if you support photos
+    # ...
 
+    msg = ChatMessage.objects.create(order=order, sender=request.user, content=content, image=image if image else None)
+
+    return JsonResponse({
+        'success': True,
+        'message': {
+            'id': msg.id,
+            'content': msg.content or '',
+            'image_url': msg.image.url if getattr(msg, "image", None) else '',
+            'sender': msg.sender.username,
+            'created_at': msg.created_at.strftime('%b %d, %Y %H:%M'),
+            'is_sender': True
+        }
+    })
 
 @login_required
 def fetch_chat_messages(request, order_id):
-    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-        try:
-            order = Order.objects.get(id=order_id)
-            messages = order.chat_messages.select_related('sender').order_by('created_at')
+    if request.headers.get('x-requested-with') != 'XMLHttpRequest':
+        return JsonResponse({'success': False, 'message': 'Invalid request'}, status=400)
 
-            return JsonResponse({
-                'success': True,
-                'messages': [
-                    {
-                        'id': msg.id,
-                        'sender_id': msg.sender.id,
-                        'sender_name': msg.sender.get_full_name() or msg.sender.username,
-                        'content': msg.content,
-                        'timestamp': msg.created_at.strftime('%b %d, %H:%M'),
-                        'is_self': msg.sender == request.user,
-                    }
-                    for msg in messages
-                ]
-            })
-        except Order.DoesNotExist:
-            return JsonResponse({'success': False, 'message': 'Order not found'})
-    return JsonResponse({'success': False, 'message': 'Invalid request'})
+    try:
+        order = Order.objects.get(id=order_id)
+    except Order.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'Order not found'}, status=404)
+
+    is_buyer = (order.buyer_id == request.user.id)
+    is_store_actor = order.items.filter(product__store__owner_id=request.user.id).exists()
+    # (optional) include staff check as above
+
+    if not (is_buyer or is_store_actor or request.user.is_staff):
+        return JsonResponse({'success': False, 'message': 'Forbidden'}, status=403)
+
+    msgs = order.chat_messages.select_related('sender').order_by('created_at')
+    return JsonResponse({
+        'success': True,
+        'messages': [{
+            'id': m.id,
+            'sender_id': m.sender_id,
+            'sender_name': m.sender.get_full_name() or m.sender.username,
+            'content': m.content,
+            'image_url': m.image.url if getattr(m, "image", None) else '',
+            'timestamp': m.created_at.strftime('%b %d, %H:%M'),
+            'is_self': (m.sender_id == request.user.id),
+        } for m in msgs]
+    })
 
 @login_required
 def order_history(request):

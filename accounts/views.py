@@ -97,6 +97,26 @@ def generate_unique_username(email: str) -> str:
 # -------------------------------------------------------------------
 # Auth
 # -------------------------------------------------------------------
+import threading
+
+def send_otp_async(user, device):
+    """
+    Fire-and-forget thread that creates an OTP and sends via email + WhatsApp.
+    """
+    def task():
+        try:
+            otp = OneTimeCode.make(user=user, device=device, ttl_minutes=10)
+            send_otp_email(user, otp.code)
+            send_otp_whatsapp(user, otp.code)
+        except Exception as e:
+            # log error but don't crash the request
+            import logging
+            logging.exception("OTP sending failed: %s", e)
+
+    thread = threading.Thread(target=task, daemon=True)
+    thread.start()
+
+
 @csrf_protect
 def login_view(request):
     if request.method == "POST":
@@ -179,9 +199,7 @@ def login_view(request):
 
         # Untrusted device => send OTP and redirect to verify (don't log in yet)
         if not device.is_trusted:
-            otp = OneTimeCode.make(user=user, device=device, ttl_minutes=10)
-            send_otp_email(user, otp.code)
-            send_otp_whatsapp(user, otp.code)
+            send_otp_async(user, device)
 
             request.session["pending_login_user_id"] = user.id
             request.session["pending_device_id"] = device.id

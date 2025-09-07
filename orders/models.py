@@ -6,6 +6,7 @@ from decimal import Decimal
 import uuid
 from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from django.core.exceptions import ValidationError
+from django.core.validators import FileExtensionValidator
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db.models import F, Sum, DecimalField, ExpressionWrapper, Q
 from django.db import IntegrityError, transaction
@@ -884,15 +885,32 @@ def get_return_statistics():
     }
     return stats
 
+def validate_image_size(f):
+    max_mb = 5
+    if f.size > max_mb * 1024 * 1024:
+        raise ValidationError(f"Image too large (>{max_mb}MB).")
+
 class ChatMessage(models.Model):
     order = models.ForeignKey('Order', on_delete=models.CASCADE, related_name='chat_messages')
     sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    content = models.TextField()
+    content = models.TextField(blank=True)
+    image = models.ImageField(
+        upload_to='chat/images/%Y/%m/%d/',
+        blank=True, null=True,
+        validators=[FileExtensionValidator(['jpg','jpeg','png','webp','gif']), validate_image_size]
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     is_read = models.BooleanField(default=False)
 
     class Meta:
-        ordering = ['created_at']
+        ordering = ['created_at']              # oldest → newest; good if you auto-scroll bottom
+        indexes = [                            # speed up queries
+            models.Index(fields=['order', 'created_at']),
+        ]
+
+    def clean(self):
+        if not self.content and not self.image:
+            raise ValidationError("Message cannot be empty—type text or attach an image.")
 
     def __str__(self):
         return f"Message from {self.sender.username} for Order #{self.order.id}"

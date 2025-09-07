@@ -267,30 +267,63 @@
     <span><i class="fas fa-comment me-1"></i>Chat with {{ buyer.get_full_name }}</span>
     <button onclick="toggleChatBox()" class="close-chat">&times;</button>
   </div>
-  <div id="chatMessages" class="chat-messages">
-    {% if chat_messages %}
-      {% for msg in chat_messages %}
-        <div class="mb-2 {% if msg.sender == request.user %}text-end text-primary{% else %}text-start text-dark{% endif %}">
-          <div class="p-2 rounded {% if msg.sender == request.user %}bg-light{% else %}bg-white border{% endif %}">
+  <div id="chatMessages" class="chat-messages"
+     data-fetch-url="{% url 'stores:fetch_chat_messages' order.id %}">
+  {% if chat_messages %}
+    {% for msg in chat_messages %}
+      <div class="mb-2 {% if msg.sender == request.user %}text-end text-primary{% else %}text-start text-dark{% endif %}">
+        <div class="p-2 rounded {% if msg.sender == request.user %}bg-light{% else %}bg-white border{% endif %}">
+          {% if msg.content %}
             <small>{{ msg.content }}</small><br>
-            <small class="text-muted">{{ msg.created_at|date:"M d, H:i" }}</small>
-          </div>
+          {% endif %}
+          {% if msg.image %}
+            <a href="{{ msg.image.url }}" target="_blank" rel="noopener">
+              <img src="{{ msg.image.url }}" alt="attachment" class="img-fluid rounded mt-1" style="max-height:240px;">
+            </a><br>
+          {% endif %}
+          <small class="text-muted">{{ msg.created_at|date:"M d, H:i" }}</small>
         </div>
-      {% endfor %}
-    {% else %}
-      <div class="text-muted small text-center">No messages yet.</div>
-    {% endif %}
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="text-muted small text-center">No messages yet.</div>
+  {% endif %}
+</div>
+
+<form id="chatForm" method="post" enctype="multipart/form-data"
+      data-send-url="{% url 'orders:send_chat_message' %}">
+  {% csrf_token %}
+  <input type="hidden" name="order_id" value="{{ order.id }}">
+
+  <!-- Attach photo -->
+  <div class="d-flex align-items-center gap-2 mb-1">
+    <label for="chatImage" class="btn btn-sm btn-outline-secondary mb-0">
+      <i class="fas fa-paperclip"></i> Attach photo
+    </label>
+    <input type="file" id="chatImage" name="image" accept="image/*" class="d-none">
   </div>
 
-  <form id="chatForm" method="post">
-    {% csrf_token %}
-    <input type="hidden" name="order_id" value="{{ order.id }}">
-    <textarea name="message" class="form-control chat-input" rows="2" required></textarea>
-    <button type="submit" class="btn btn-sm btn-primary w-100 mt-1">
-      <i class="fas fa-paper-plane"></i> Send
-    </button>
-  </form>
-</div>
+  <!-- Optional: preview pill -->
+  <div id="imagePreview" class="d-none mb-2">
+    <div class="d-inline-flex align-items-center gap-2 border rounded-pill px-2 py-1 bg-white">
+      <img id="imagePreviewThumb" src="" alt="preview"
+           style="width:28px;height:28px;object-fit:cover;border-radius:6px;">
+      <small id="imagePreviewName" class="text-muted"></small>
+      <button type="button" class="btn btn-sm btn-link text-danger" id="removeImageBtn" title="Remove">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+  </div>
+
+  <textarea id="chatMessage" name="message" class="form-control chat-input" rows="2"
+            placeholder="Type a message… (optional if you attach a photo)"></textarea>
+
+  <button id="sendMessageBtn" type="submit" class="btn btn-sm btn-primary w-100 mt-1">
+    <i class="fas fa-paper-plane"></i> Send
+  </button>
+</form>
+
+
 
 <!-- Update Status Modal -->
 <div class="modal fade" id="statusModal" tabindex="-1" aria-labelledby="statusModalLabel" aria-hidden="true">
@@ -394,99 +427,170 @@ function confirmStatusUpdate() {
   });
 }
 </script>
-
-<!-- JS: Chat -->
 <script>
-document.getElementById('chatForm').addEventListener('submit', function (e) {
-  e.preventDefault();
-
-  const form = e.target;
-  const formData = new FormData(form);
-  const messageText = form.message.value.trim();
-
-  if (!messageText) return;
-
-  fetch("{% url 'stores:send_chat_message' %}", {
-    method: 'POST',
-    body: formData,
-    headers: {
-      'X-Requested-With': 'XMLHttpRequest',
-      'X-CSRFToken': '{{ csrf_token }}'
-    },
-  })
-  .then(response => response.json())
-  .then(data => {
-    if (data.success) {
-      const messages = document.getElementById('chatMessages');
-
-      const msg = document.createElement('div');
-      msg.classList.add('mb-2', 'text-end', 'text-primary');
-      msg.innerHTML = `
-        <div class="p-2 rounded bg-light">
-          <small>${messageText}</small><br>
-          <small class="text-muted">just now</small>
-        </div>
-      `;
-      messages.appendChild(msg);
-
-      form.message.value = '';
-      messages.scrollTop = messages.scrollHeight;
-    } else {
-      alert(data.message || 'Failed to send message.');
-    }
-  })
-  .catch(error => {
-    alert('Error submitting message.');
-    console.error(error);
-  });
-});
-
 function toggleChatBox() {
-  const chatBox = document.getElementById("floatingChatBox");
-  chatBox.classList.toggle("d-none");
+  const box = document.getElementById('floatingChatBox');
+  if (!box) return;
+  box.classList.toggle('d-none');
 
-  if (!chatBox.classList.contains("d-none")) {
-    const messages = document.getElementById("chatMessages");
-    messages.scrollTop = messages.scrollHeight;
+  // If opened, fetch latest and scroll down
+  if (!box.classList.contains('d-none')) {
+    if (window.__refreshStoreChat) window.__refreshStoreChat();
+    const msgs = document.getElementById('chatMessages');
+    if (msgs) msgs.scrollTop = msgs.scrollHeight;
   }
 }
 </script>
-
-<!-- JS: Poll chat -->
 <script>
-function refreshChatMessages() {
-  fetch("{% url 'stores:fetch_chat_messages' order.id %}", {
-    method: 'GET',
-    headers: { 'X-Requested-With': 'XMLHttpRequest' }
-  })
-  .then(response => response.json())
-  .then(data => {
-    if (data.success) {
-      const messagesContainer = document.getElementById('chatMessages');
-      messagesContainer.innerHTML = '';
+document.addEventListener('DOMContentLoaded', function() {
+  const chatForm = document.getElementById('chatForm');
+  const chatMessages = document.getElementById('chatMessages');
+  const chatMessage = document.getElementById('chatMessage');
+  const sendMessageBtn = document.getElementById('sendMessageBtn');
+  const imageInput = document.getElementById('chatImage');
+  const imagePreview = document.getElementById('imagePreview');
+  const imagePreviewThumb = document.getElementById('imagePreviewThumb');
+  const imagePreviewName = document.getElementById('imagePreviewName');
+  const removeImageBtn = document.getElementById('removeImageBtn');
 
-      data.messages.forEach(msg => {
-        const msgDiv = document.createElement('div');
-        msgDiv.classList.add('mb-2');
-        msgDiv.classList.add(msg.is_self ? 'text-end' : 'text-start');
-        msgDiv.classList.add(msg.is_self ? 'text-primary' : 'text-dark');
+  if (!chatForm || !chatMessages) return;
 
-        msgDiv.innerHTML = `
-          <div class="p-2 rounded ${msg.is_self ? 'bg-light' : 'bg-white border'}">
-            <small>${msg.content}</small><br>
-            <small class="text-muted">${msg.timestamp}</small>
-          </div>
-        `;
-        messagesContainer.appendChild(msgDiv);
-      });
+  const sendUrl = chatForm.dataset.sendUrl;
+  const fetchUrl = chatMessages.dataset.fetchUrl;
 
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    }
+  function scrollToBottom() { chatMessages.scrollTop = chatMessages.scrollHeight; }
+  function escapeHtml(s){return (s||'').replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;");}
+
+  function buildBubble({ is_self, content, image_url, timestamp }) {
+    const wrapper = document.createElement('div');
+    wrapper.className = `mb-2 ${is_self ? 'text-end text-primary' : 'text-start text-dark'}`;
+    const hasText = !!(content && content.trim());
+    const hasImage = !!image_url;
+    wrapper.innerHTML = `
+      <div class="p-2 rounded ${is_self ? 'bg-light' : 'bg-white border'}">
+        ${hasText ? `<small>${escapeHtml(content).replace(/\n/g,'<br>')}</small><br>` : ''}
+        ${hasImage ? `<a href="${image_url}" target="_blank" rel="noopener">
+                        <img src="${image_url}" alt="attachment" class="img-fluid rounded mt-1" style="max-height:240px;">
+                      </a><br>` : ''}
+        <small class="text-muted">${timestamp || ''}</small>
+      </div>`;
+    return wrapper;
+  }
+
+  // Preview
+  if (imageInput) {
+    imageInput.addEventListener('change', () => {
+      const f = imageInput.files && imageInput.files[0];
+      if (!f) { imagePreview?.classList.add('d-none'); return; }
+      if (!f.type.startsWith('image/')) { alert('Please select a valid image.'); imageInput.value=''; imagePreview?.classList.add('d-none'); return; }
+      if (f.size > 5*1024*1024) { alert('Image too large (max 5MB).'); imageInput.value=''; imagePreview?.classList.add('d-none'); return; }
+      if (imagePreview && imagePreviewThumb && imagePreviewName) {
+        imagePreviewThumb.src = URL.createObjectURL(f);
+        imagePreviewName.textContent = f.name;
+        imagePreview.classList.remove('d-none');
+      }
+    });
+  }
+  if (removeImageBtn) {
+    removeImageBtn.addEventListener('click', () => {
+      if (imageInput) imageInput.value = '';
+      if (imagePreview) imagePreview.classList.add('d-none');
+    });
+  }
+
+  function initialRender(messages) {
+    chatMessages.innerHTML = '';
+    messages.forEach(m => chatMessages.appendChild(buildBubble({
+      is_self: !!m.is_self, content: m.content, image_url: m.image_url, timestamp: m.timestamp
+    })));
+    scrollToBottom();
+  }
+
+  function appendNew(messages, seen) {
+    messages.forEach(m => {
+      if (!seen.has(m.id)) {
+        chatMessages.appendChild(buildBubble({
+          is_self: !!m.is_self, content: m.content, image_url: m.image_url, timestamp: m.timestamp
+        }));
+        seen.add(m.id);
+      }
+    });
+    scrollToBottom();
+  }
+
+  const seenIds = new Set();
+
+  function refreshChatMessages() {
+    if (!fetchUrl) return;
+    fetch(fetchUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(r => r.json())
+      .then(data => {
+        if (!data.success || !Array.isArray(data.messages)) return;
+        if (seenIds.size === 0) {
+          data.messages.forEach(m => seenIds.add(m.id));
+          initialRender(data.messages);
+        } else {
+          appendNew(data.messages, seenIds);
+        }
+      })
+      .catch(() => {});
+  }
+
+  window.__refreshStoreChat = refreshChatMessages; // used by toggleChatBox()
+
+  // Load + poll
+  refreshChatMessages();
+  setInterval(refreshChatMessages, 5000);
+
+  // Submit
+  chatForm.addEventListener('submit', function(e) {
+    e.preventDefault();
+    const text = (chatMessage?.value || '').trim();
+    const hasImage = imageInput && imageInput.files && imageInput.files[0];
+    if (!text && !hasImage) return;
+
+    const original = sendMessageBtn.innerHTML;
+    sendMessageBtn.disabled = true;
+    sendMessageBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+    const formData = new FormData(chatForm);
+
+    fetch(sendUrl, {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+      }
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (!data.success || !data.message) throw new Error(data.error || 'Send failed');
+      const m = data.message;
+      chatMessages.appendChild(buildBubble({
+        is_self: true, content: m.content || text, image_url: m.image_url || '', timestamp: m.created_at || 'Just now'
+      }));
+      if (m.id) seenIds.add(m.id);
+      if (chatMessage) chatMessage.value = '';
+      if (imageInput) imageInput.value = '';
+      if (imagePreview) imagePreview.classList.add('d-none');
+      scrollToBottom();
+    })
+    .catch(err => { console.error(err); alert('Failed to send message.'); })
+    .finally(() => {
+      sendMessageBtn.disabled = false;
+      sendMessageBtn.innerHTML = original;
+    });
   });
-}
 
-setInterval(refreshChatMessages, 5000);
-refreshChatMessages();
+  // Enter to send
+  const ta = chatMessage;
+  if (ta) {
+    ta.addEventListener('keypress', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); chatForm.dispatchEvent(new Event('submit')); }
+    });
+  }
+});
 </script>
 
 <script src="{% static 'js/main.js' %}"></script>

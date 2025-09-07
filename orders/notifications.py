@@ -19,9 +19,9 @@ def _get_site_base_url() -> str:
 
     # 2) Sites framework
     try:
-        current_site = Site.objects.get_current()
+        current_site ='easymarket.vip'#Site.objects.get_current()
         scheme = "https" if not settings.DEBUG else "http"
-        return f"{scheme}://{current_site.domain}".rstrip("/")
+        return f"{scheme}://{current_site}".rstrip("/")
     except Exception:
         pass
 
