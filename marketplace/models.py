@@ -6,6 +6,7 @@ from django.db.models import Avg
 from decimal import Decimal
 from django.utils import timezone
 import uuid
+from django.utils.text import slugify
 from django.db import transaction
 from django.db.models.functions import Lower
 
@@ -666,3 +667,72 @@ class Subscription(models.Model):
 
     def __str__(self):
         return self.email
+
+
+class CareerQuerySet(models.QuerySet):
+    def active(self):
+        return self.filter(is_active=True)
+
+class Career(models.Model):
+    class Department(models.TextChoices):
+        ENGINEERING = "Engineering", "Engineering"
+        LOGISTICS = "Logistics", "Logistics"
+        OPERATIONS = "Operations", "Operations"
+        CUSTOMER_SUPPORT = "Customer Support", "Customer Support"
+        SALES_MARKETING = "Sales & Marketing", "Sales & Marketing"
+        DESIGN = "Design", "Design"
+        FINANCE = "Finance", "Finance"
+
+    class EmploymentType(models.TextChoices):
+        FULL_TIME = "Full-time", "Full-time"
+        PART_TIME = "Part-time", "Part-time"
+        CONTRACT = "Contract", "Contract"
+        INTERN = "Internship", "Internship"
+
+    title = models.CharField(max_length=200)
+    slug = models.SlugField(max_length=220, unique=True, blank=True)
+    department = models.CharField(max_length=32, choices=Department.choices)
+    location = models.CharField(max_length=120, default="Banjul, GM", help_text="City, Country or Remote")
+    employment_type = models.CharField(max_length=16, choices=EmploymentType.choices, default=EmploymentType.FULL_TIME)
+    remote_friendly = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=True)
+
+    # Display chips in the careers list (e.g., ["Django","Postgres","Docker"])
+    tags = models.JSONField(default=list, blank=True)
+
+    # Content
+    summary = models.TextField(blank=True, help_text="1–3 sentences shown at top of detail page")
+    description = models.TextField(help_text="Full role description in HTML/Markdown allowed")
+    responsibilities = models.JSONField(default=list, blank=True, help_text="List of bullet points")
+    requirements = models.JSONField(default=list, blank=True, help_text="List of bullet points")
+    benefits = models.JSONField(default=list, blank=True)
+
+    # Meta
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = CareerQuerySet.as_manager()
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["is_active", "department"]),
+            models.Index(fields=["slug"]),
+        ]
+
+    def __str__(self):
+        return self.title
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            base = slugify(self.title)[:200]
+            candidate = base
+            i = 2
+            while Career.objects.filter(slug=candidate).exclude(pk=self.pk).exists():
+                candidate = f"{base}-{i}"
+                i += 1
+            self.slug = candidate
+        super().save(*args, **kwargs)
+
+    def get_absolute_url(self):
+        return reverse("marketplace:career_detail", args=[self.slug])

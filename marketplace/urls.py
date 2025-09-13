@@ -33,4 +33,7 @@ urlpatterns = [
     path('share-cart/', views.share_cart, name='share_cart'),
     path('copy-shared-cart/<uuid:token>/', views.copy_shared_cart, name='copy_shared_cart'),
     path("subscribe/", views_subscriptions.subscribe_email, name="subscribe"),
+
+    path("careers/", views.careers_list, name="careers"),
+    path("careers/<slug:slug>/", views.career_detail, name="career_detail"),
 ]

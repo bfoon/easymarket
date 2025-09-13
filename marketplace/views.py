@@ -4,7 +4,7 @@ from unicodedata import category
 from .models import (Category, Product, ProductView,
                      CartItem, Cart, CelebrityFeature, Wishlist,
                      SearchHistory, PopularSearch, ProductFeature,
-                     ProductFeatureOption, ProductVariant, SharedCart)
+                     ProductFeatureOption, ProductVariant, SharedCart, Career)
 from chat.models import ChatThread, ChatMessage
 from accounts.models import Address
 from stores.models import Store
@@ -2228,3 +2228,27 @@ def copy_shared_cart(request, token):
 
 def about(request):
     return render(request, 'marketplace/about.html')
+
+def careers_list(request):
+    q = (request.GET.get("q") or "").strip()
+    dept = (request.GET.get("dept") or "").strip()
+    jobs = Career.objects.active()
+
+    if q:
+        jobs = jobs.filter(
+            Q(title__icontains=q) |
+            Q(location__icontains=q) |
+            Q(department__icontains=q) |
+            Q(summary__icontains=q) |
+            Q(description__icontains=q)
+        )
+
+    if dept:
+        jobs = jobs.filter(department=dept)
+
+    # Template expects `jobs`
+    return render(request, "careers/careers.html", {"jobs": jobs, "q": q, "dept": dept})
+
+def career_detail(request, slug):
+    job = get_object_or_404(Career.objects.active(), slug=slug)
+    return render(request, "careers/detail.html", {"job": job})

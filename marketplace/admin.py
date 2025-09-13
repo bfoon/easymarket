@@ -2,7 +2,7 @@ from django.contrib import admin
 from .models import (Product, Category, ProductImage, ProductView,
                      Cart, CartItem, CelebrityFeature, Wishlist,
                      SearchHistory, PopularSearch, ProductFeature, ProductFeatureOption,
-                     ProductVariant, SharedCart, Subscription)
+                     ProductVariant, SharedCart, Subscription, Career)
 from django.utils.html import format_html
 from django.urls import path
 from django.http import JsonResponse
@@ -166,3 +166,11 @@ class SubscriptionAdmin(admin.ModelAdmin):
             writer.writerow([s.email, "yes" if s.active else "no", dt, s.source or ""])
 
         return response
+
+@admin.register(Career)
+class CareerAdmin(admin.ModelAdmin):
+    list_display = ("title", "department", "location", "employment_type", "is_active", "created_at")
+    list_filter = ("department", "employment_type", "is_active", "remote_friendly", "location")
+    search_fields = ("title", "location", "slug", "summary", "description")
+    prepopulated_fields = {"slug": ("title",)}
+    date_hierarchy = "created_at"

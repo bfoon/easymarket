@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% block title %}{{ job.title }} – Careers at EasyMarket{% endblock %}
+{% load static humanize %}
+{% block content %}
+<link rel="stylesheet" href="{% static 'css/main.css' %}">
+<div class="container py-4 py-lg-5 career-detail">
+
+  <!-- Breadcrumb -->
+  <nav class="mb-3">
+    <ol class="breadcrumb small mb-0">
+      <li class="breadcrumb-item"><a href="{% url 'marketplace:careers' %}">Careers</a></li>
+      <li class="breadcrumb-item active" aria-current="page">{{ job.title }}</li>
+    </ol>
+  </nav>
+
+  <!-- Header -->
+  <header class="mb-4 p-3 p-md-4 rounded-4 border bg-white shadow-sm">
+    <div class="d-flex align-items-start justify-content-between flex-wrap gap-3">
+      <div>
+        <h1 class="h3 h2-lg fw-bold mb-2">{{ job.title }}</h1>
+        <div class="d-flex flex-wrap align-items-center gap-2">
+          <span class="badge rounded-pill bg-light text-dark border">{{ job.location }}</span>
+          <span class="badge rounded-pill bg-light text-dark border">{{ job.department }}</span>
+          <span class="badge rounded-pill bg-light text-dark border">{{ job.employment_type }}</span>
+          {% if job.remote_friendly %}
+          <span class="badge rounded-pill bg-success-subtle text-success border border-success-subtle">Remote-friendly</span>
+          {% endif %}
+        </div>
+        {% if job.updated_at %}
+        <div class="text-muted small mt-2">Updated {{ job.updated_at|date:"M j, Y" }}</div>
+        {% endif %}
+      </div>
+
+      <div class="d-none d-lg-flex align-items-center gap-2">
+        <a class="btn btn-outline-secondary" href="mailto:info@easymarket.vip?subject=Application: {{ job.title }}">Email HR</a>
+        <a class="btn btn-dark" href="/careers/apply/?role={{ job.slug }}">Apply now</a>
+      </div>
+    </div>
+  </header>
+
+  <div class="row g-4">
+    <!-- Main content -->
+    <div class="col-lg-8">
+      {% if job.tags and job.tags|length %}
+      <div class="d-flex flex-wrap gap-2 mb-3">
+        {% for tag in job.tags %}
+          <span class="career-chip">{{ tag }}</span>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% if job.summary %}
+      <p class="lead">{{ job.summary }}</p>
+      {% endif %}
+
+      <section class="career-section mb-4">
+        <!-- If you store sanitized HTML, you can use |safe instead of |linebreaks -->
+        <div class="prose">
+          {{ job.description|linebreaks }}
+        </div>
+      </section>
+
+      {% if job.responsibilities %}
+      <section class="career-section mb-4">
+        <h2 class="h5 fw-bold mb-2"><i class="fas fa-list-check me-2"></i>Responsibilities</h2>
+        <ul class="list-unstyled ps-3">
+          {% for item in job.responsibilities %}
+            <li class="mb-1"><i class="fas fa-circle small me-2 text-muted"></i>{{ item }}</li>
+          {% endfor %}
+        </ul>
+      </section>
+      {% endif %}
+
+      {% if job.requirements %}
+      <section class="career-section mb-4">
+        <h2 class="h5 fw-bold mb-2"><i class="fas fa-clipboard-check me-2"></i>Requirements</h2>
+        <ul class="list-unstyled ps-3">
+          {% for item in job.requirements %}
+            <li class="mb-1"><i class="fas fa-circle small me-2 text-muted"></i>{{ item }}</li>
+          {% endfor %}
+        </ul>
+      </section>
+      {% endif %}
+
+      {% if job.benefits %}
+      <section class="career-section mb-4">
+        <h2 class="h5 fw-bold mb-2"><i class="fas fa-gift me-2"></i>Benefits</h2>
+        <ul class="list-unstyled ps-3">
+          {% for item in job.benefits %}
+            <li class="mb-1"><i class="fas fa-circle small me-2 text-muted"></i>{{ item }}</li>
+          {% endfor %}
+        </ul>
+      </section>
+      {% endif %}
+
+      <section class="career-section mb-4">
+        <h2 class="h5 fw-bold mb-2"><i class="fas fa-people-arrows me-2"></i>Equal Opportunity</h2>
+        <p class="text-muted mb-0">EasyMarket is an equal opportunity employer. We celebrate diversity and are committed to creating an inclusive environment for all employees.</p>
+      </section>
+
+      <div class="d-flex gap-2 d-lg-none mt-4">
+        <a class="btn btn-outline-secondary w-50" href="mailto:info@easymarket.vip?subject=Application: {{ job.title }}">Email HR</a>
+        <a class="btn btn-dark w-50" href="/careers/apply/?role={{ job.slug }}">Apply now</a>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <aside class="col-lg-4">
+      <div class="card border-0 shadow-sm rounded-4 career-aside">
+        <div class="card-body">
+          <h3 class="h6 fw-bold mb-3">Role summary</h3>
+          <dl class="row mb-0 small">
+            <dt class="col-5 text-muted">Location</dt>
+            <dd class="col-7">{{ job.location }}</dd>
+
+            <dt class="col-5 text-muted">Department</dt>
+            <dd class="col-7">{{ job.department }}</dd>
+
+            <dt class="col-5 text-muted">Employment</dt>
+            <dd class="col-7">{{ job.employment_type }}</dd>
+
+            <dt class="col-5 text-muted">Remote</dt>
+            <dd class="col-7">{{ job.remote_friendly|yesno:"Yes,No" }}</dd>
+          </dl>
+
+          <div class="d-grid gap-2 mt-3">
+            <a class="btn btn-dark" href="/careers/apply/?role={{ job.slug }}" aria-label="Apply for {{ job.title }}">Apply now</a>
+            <a class="btn btn-outline-secondary" href="mailto:info@easymarket.vip?subject=Application: {{ job.title }}">Email HR</a>
+            <button class="btn btn-light border" type="button" id="copyLinkBtn" data-url="{{ request.build_absolute_uri|default:job.get_absolute_url }}">Copy link</button>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Mobile sticky apply bar -->
+  <div class="career-applybar d-lg-none">
+    <div class="container d-flex align-items-center justify-content-between gap-2 py-2">
+      <div class="small text-truncate"><strong>{{ job.title }}</strong> · {{ job.location }}</div>
+      <a class="btn btn-dark btn-sm" href="/careers/apply/?role={{ job.slug }}">Apply</a>
+    </div>
+  </div>
+
+  <!-- JSON-LD (JobPosting). Kept in body for portability -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "JobPosting",
+    "title": "{{ job.title|escapejs }}",
+    "description": "{{ job.summary|default:job.title|escapejs }}",
+    "industry": "E-commerce",
+    "employmentType": "{{ job.employment_type|escapejs }}",
+    "hiringOrganization": {
+      "@type": "Organization",
+      "name": "EasyMarket",
+      "sameAs": "https://www.easymarket.vip"
+    },
+    "jobLocationType": "{% if job.remote_friendly %}TELECOMMUTE{% else %}ONSITE{% endif %}",
+    {% if job.location %}"jobLocation": [{"@type": "Place","address": {"@type": "PostalAddress","addressLocality": "{{ job.location|escapejs }}"}}],{% endif %}
+    "datePosted": "{{ job.created_at|date:'c' }}",
+    "validThrough": "{{ job.updated_at|date:'c' }}",
+    "applicantLocationRequirements": [{"@type": "Country","name":"Gambia"}],
+    "url": "{{ request.build_absolute_uri|default:job.get_absolute_url }}"
+  }
+  </script>
+</div>
+
+<style>
+/* Namespaced polishing */
+.career-detail .career-chip{
+  background:#f6f7f8; border:1px solid #e9ecef; border-radius:999px; padding:.25rem .6rem; font-size:.8rem;
+}
+.career-detail .career-aside{ position: sticky; top: 88px; }
+.career-detail .prose p{ margin-bottom: .9rem; }
+.career-detail .career-applybar{
+  position: fixed; left:0; right:0; bottom:0; background:#fff; border-top:1px solid #eaeaea; box-shadow:0 -6px 18px rgba(0,0,0,.06); z-index:1030;
+}
+</style>
+
+<script>
+  // Copy link to clipboard
+  (function(){
+    const btn = document.getElementById('copyLinkBtn');
+    if(!btn) return;
+    btn.addEventListener('click', async () => {
+      const url = btn.dataset.url || window.location.href;
+      try { await navigator.clipboard.writeText(url); btn.textContent = 'Link copied ✓'; setTimeout(()=>btn.textContent='Copy link', 2000); }
+      catch(e){ btn.textContent = 'Copy failed'; setTimeout(()=>btn.textContent='Copy link', 2000); }
+    });
+  })();
+</script>
+{% endblock %}
