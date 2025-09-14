@@ -2525,3 +2525,6 @@ def investors_home(request):
         "upcoming": upcoming,
         "past": past,
     })
+
+def shipping_info(request):
+    return render(request, "info/shipping.html")

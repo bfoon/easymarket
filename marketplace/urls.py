@@ -59,4 +59,7 @@ urlpatterns = [
 
     path("investors/", views.investors_home, name="investors_home"),
 
+    path("shipping/", views.shipping_info, name="shipping_info"),
+
+
 ]
