@@ -57,4 +57,6 @@ urlpatterns = [
     path("press/new/", views.press_create, name="press_create"),
     path("press/<slug:slug>/", views.press_detail, name="press_detail"),
 
+    path("investors/", views.investors_home, name="investors_home"),
+
 ]

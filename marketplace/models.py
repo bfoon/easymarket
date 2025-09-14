@@ -873,3 +873,98 @@ class PressRelease(models.Model):
     @property
     def display_meta_title(self):
         return self.meta_title or f"{self.title} | Press | EasyMarket"
+
+# ---------- Investor Documents ----------
+class InvestorDocumentQuerySet(models.QuerySet):
+    def published(self):
+        return self.filter(is_published=True, publish_at__lte=timezone.now())
+
+def investor_doc_upload(instance, filename):
+    base, ext = os.path.splitext(filename.lower())
+    safe = slugify(instance.title)[:80]
+    return f"investors/docs/{safe}{ext or '.pdf'}"
+
+class InvestorDocument(models.Model):
+    class Category(models.TextChoices):
+        FINANCIAL_REPORT = "financial_report", "Financial Report"
+        SHAREHOLDER_LETTER = "shareholder_letter", "Shareholder Letter"
+        PRESENTATION = "presentation", "Presentation"
+        GOVERNANCE = "governance", "Governance & Policies"
+        PRESS_KIT = "press_kit", "Press Kit"
+        OTHER = "other", "Other"
+
+    title = models.CharField(max_length=200)
+    slug = models.SlugField(max_length=220, unique=True, blank=True)
+    category = models.CharField(max_length=32, choices=Category.choices, default=Category.FINANCIAL_REPORT)
+    summary = models.TextField(blank=True)
+    file = models.FileField(upload_to=investor_doc_upload, blank=True, null=True)
+    external_url = models.URLField(blank=True, help_text="Optional external link if file is hosted elsewhere.")
+    is_published = models.BooleanField(default=True)
+    publish_at = models.DateTimeField(default=timezone.now)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = InvestorDocumentQuerySet.as_manager()
+
+    class Meta:
+        ordering = ["-publish_at"]
+        indexes = [
+            models.Index(fields=["is_published", "publish_at"]),
+            models.Index(fields=["slug"]),
+            models.Index(fields=["category"]),
+        ]
+
+    def __str__(self):
+        return self.title
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            base = slugify(self.title)[:200]
+            cand, i = base, 2
+            while InvestorDocument.objects.filter(slug=cand).exclude(pk=self.pk).exists():
+                cand = f"{base}-{i}"; i += 1
+            self.slug = cand
+        super().save(*args, **kwargs)
+
+    def get_absolute_url(self):
+        return reverse("marketplace:investors_home") + f"#doc-{self.slug}"
+
+    @property
+    def download_url(self):
+        return self.file.url if self.file else (self.external_url or "")
+
+
+# ---------- Investor Events ----------
+class InvestorEventQuerySet(models.QuerySet):
+    def upcoming(self):
+        return self.filter(start_at__gte=timezone.now()).order_by("start_at")
+    def past(self):
+        return self.filter(start_at__lt=timezone.now()).order_by("-start_at")
+
+class InvestorEvent(models.Model):
+    class EventType(models.TextChoices):
+        EARNINGS = "earnings", "Earnings Call"
+        AGM = "agm", "Annual General Meeting"
+        INVESTOR_CALL = "investor_call", "Investor Call"
+        OTHER = "other", "Other"
+
+    title = models.CharField(max_length=180)
+    event_type = models.CharField(max_length=32, choices=EventType.choices, default=EventType.OTHER)
+    start_at = models.DateTimeField()
+    end_at = models.DateTimeField(blank=True, null=True)
+    location = models.CharField(max_length=140, blank=True)
+    registration_url = models.URLField(blank=True)
+    replay_url = models.URLField(blank=True)
+    is_public = models.BooleanField(default=True)
+    notes = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    objects = InvestorEventQuerySet.as_manager()
+
+    class Meta:
+        ordering = ["start_at"]
+
+    def __str__(self):
+        return self.title

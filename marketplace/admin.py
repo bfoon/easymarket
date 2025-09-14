@@ -2,7 +2,8 @@ from django.contrib import admin
 from .models import (Product, Category, ProductImage, ProductView,
                      Cart, CartItem, CelebrityFeature, Wishlist,
                      SearchHistory, PopularSearch, ProductFeature, ProductFeatureOption,
-                     ProductVariant, SharedCart, Subscription, Career, CareerApplication, PressRelease)
+                     ProductVariant, SharedCart, Subscription, Career, CareerApplication,
+                     PressRelease, InvestorDocument, InvestorEvent)
 from django.utils.html import format_html
 from django.urls import path
 from django.http import JsonResponse
@@ -191,3 +192,18 @@ class PressReleaseAdmin(admin.ModelAdmin):
     date_hierarchy = "publish_at"
     readonly_fields = ("created_at", "updated_at")
 
+@admin.register(InvestorDocument)
+class InvestorDocumentAdmin(admin.ModelAdmin):
+    list_display = ("title", "category", "is_published", "publish_at")
+    list_filter = ("category", "is_published")
+    search_fields = ("title", "summary", "slug")
+    prepopulated_fields = {"slug": ("title",)}
+    date_hierarchy = "publish_at"
+    readonly_fields = ("created_at", "updated_at")
+
+@admin.register(InvestorEvent)
+class InvestorEventAdmin(admin.ModelAdmin):
+    list_display = ("title", "event_type", "start_at", "is_public")
+    list_filter = ("event_type", "is_public")
+    search_fields = ("title", "location", "notes")
+    date_hierarchy = "start_at"

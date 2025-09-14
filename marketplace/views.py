@@ -5,7 +5,7 @@ from .models import (Category, Product, ProductView,
                      CartItem, Cart, CelebrityFeature, Wishlist,
                      SearchHistory, PopularSearch, ProductFeature,
                      ProductFeatureOption, ProductVariant, SharedCart,
-                     Career, CareerApplication, PressRelease)
+                     Career, CareerApplication, PressRelease, InvestorDocument, InvestorEvent,)
 from chat.models import ChatThread, ChatMessage
 from accounts.models import Address
 from stores.models import Store
@@ -2502,3 +2502,26 @@ def press_create(request):
 
     messages.success(request, "Press release created.")
     return redirect(pr.get_absolute_url())
+
+def investors_home(request):
+    q = (request.GET.get("q") or "").strip()
+    cat = (request.GET.get("category") or "").strip()
+
+    docs = InvestorDocument.objects.published()
+    if q:
+        docs = docs.filter(Q(title__icontains=q) | Q(summary__icontains=q))
+    if cat:
+        docs = docs.filter(category=cat)
+
+    latest_finance_news = PressRelease.objects.published().filter(category__in=["finance", "company"])[:3]
+    upcoming = InvestorEvent.objects.upcoming()[:3]
+    past = InvestorEvent.objects.past()[:3]
+
+    return render(request, "investors/index.html", {
+        "docs": docs[:12],  # keep the home concise
+        "q": q,
+        "category": cat,
+        "latest_finance_news": latest_finance_news,
+        "upcoming": upcoming,
+        "past": past,
+    })
