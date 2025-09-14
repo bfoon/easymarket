@@ -2,7 +2,7 @@ from django.contrib import admin
 from .models import (Product, Category, ProductImage, ProductView,
                      Cart, CartItem, CelebrityFeature, Wishlist,
                      SearchHistory, PopularSearch, ProductFeature, ProductFeatureOption,
-                     ProductVariant, SharedCart, Subscription, Career)
+                     ProductVariant, SharedCart, Subscription, Career, CareerApplication, PressRelease)
 from django.utils.html import format_html
 from django.urls import path
 from django.http import JsonResponse
@@ -174,3 +174,20 @@ class CareerAdmin(admin.ModelAdmin):
     search_fields = ("title", "location", "slug", "summary", "description")
     prepopulated_fields = {"slug": ("title",)}
     date_hierarchy = "created_at"
+
+@admin.register(CareerApplication)
+class CareerApplicationAdmin(admin.ModelAdmin):
+    list_display = ("application_code", "full_name", "job", "status", "created_at")
+    list_filter = ("status", "job__department")
+    search_fields = ("application_code", "full_name", "email", "job__title")
+    readonly_fields = ("application_code", "created_at", "updated_at", "ip_address", "user_agent")
+
+@admin.register(PressRelease)
+class PressReleaseAdmin(admin.ModelAdmin):
+    list_display = ("title", "category", "is_published", "publish_at")
+    list_filter = ("is_published", "category", "publish_at")
+    search_fields = ("title", "subtitle", "summary", "body", "slug")
+    prepopulated_fields = {"slug": ("title",)}
+    date_hierarchy = "publish_at"
+    readonly_fields = ("created_at", "updated_at")
+

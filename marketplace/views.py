@@ -4,7 +4,8 @@ from unicodedata import category
 from .models import (Category, Product, ProductView,
                      CartItem, Cart, CelebrityFeature, Wishlist,
                      SearchHistory, PopularSearch, ProductFeature,
-                     ProductFeatureOption, ProductVariant, SharedCart, Career)
+                     ProductFeatureOption, ProductVariant, SharedCart,
+                     Career, CareerApplication, PressRelease)
 from chat.models import ChatThread, ChatMessage
 from accounts.models import Address
 from stores.models import Store
@@ -16,13 +17,14 @@ import re
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, user_passes_test
 from decimal import Decimal
 from django.core.cache import cache
 from .utils import log_search, get_search_suggestions_with_history, build_cart_context
 from django.urls import reverse
 import json
 from datetime import timedelta
+from datetime import datetime
 from django.utils import timezone
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.db.models import Q, Count, F, Sum, Avg
@@ -36,6 +38,10 @@ from django.template.loader import render_to_string
 from django.conf import settings
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_http_methods
+from django.core.mail import EmailMessage
+from django.core.validators import validate_email
+from django.core.exceptions import ValidationError
+import os
 
 # Get the custom User model
 User = get_user_model()
@@ -2252,3 +2258,247 @@ def careers_list(request):
 def career_detail(request, slug):
     job = get_object_or_404(Career.objects.active(), slug=slug)
     return render(request, "careers/detail.html", {"job": job})
+
+MAX_RESUME_SIZE_MB = 5
+ALLOWED_RESUME_TYPES = {
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}
+
+def careers_apply(request):
+    """
+    GET  -> show form (optionally prefilled via ?role=<slug>)
+    POST -> save application and redirect to success
+    """
+    role_slug = request.GET.get("role") or request.POST.get("role")
+    job = None
+    if role_slug:
+        job = get_object_or_404(Career.objects.active(), slug=role_slug)
+
+    if request.method == "GET":
+        return render(request, "careers/apply.html", {"job": job})
+
+    # POST
+    full_name = (request.POST.get("full_name") or "").strip()
+    email = (request.POST.get("email") or "").strip()
+    phone = (request.POST.get("phone") or "").strip()
+    cover_letter = (request.POST.get("cover_letter") or "").strip()
+    portfolio_url = (request.POST.get("portfolio_url") or "").strip()
+    linkedin_url = (request.POST.get("linkedin_url") or "").strip()
+    github_url = (request.POST.get("github_url") or "").strip()
+    source = (request.POST.get("source") or "").strip()
+    consent_privacy = request.POST.get("consent_privacy") == "on"
+    resume = request.FILES.get("resume")
+
+    errors = {}
+
+    if not job:
+        errors["role"] = "Please select a role to apply for."
+    if not full_name:
+        errors["full_name"] = "Your full name is required."
+    if not email:
+        errors["email"] = "Email is required."
+    else:
+        try:
+            validate_email(email)
+        except ValidationError:
+            errors["email"] = "Please enter a valid email address."
+
+    if not resume:
+        errors["resume"] = "Please attach your resume (PDF, DOC, or DOCX)."
+    else:
+        # Basic file checks
+        if hasattr(resume, "content_type") and resume.content_type not in ALLOWED_RESUME_TYPES:
+            errors["resume"] = "Resume must be a PDF, DOC, or DOCX."
+        if resume.size > MAX_RESUME_SIZE_MB * 1024 * 1024:
+            errors["resume"] = f"Resume must be under {MAX_RESUME_SIZE_MB} MB."
+
+    if not consent_privacy:
+        errors["consent_privacy"] = "You must consent to our privacy policy to apply."
+
+    if errors:
+        messages.error(request, "Please correct the errors below.")
+        context = {
+            "job": job,
+            "errors": errors,
+            "form": {
+                "full_name": full_name,
+                "email": email,
+                "phone": phone,
+                "cover_letter": cover_letter,
+                "portfolio_url": portfolio_url,
+                "linkedin_url": linkedin_url,
+                "github_url": github_url,
+                "source": source,
+                "consent_privacy": consent_privacy,
+            },
+        }
+        return render(request, "careers/apply.html", context, status=400)
+
+    app = CareerApplication.objects.create(
+        job=job,
+        full_name=full_name,
+        email=email,
+        phone=phone,
+        resume=resume,
+        cover_letter=cover_letter,
+        portfolio_url=portfolio_url,
+        linkedin_url=linkedin_url,
+        github_url=github_url,
+        source=source,
+        consent_privacy=consent_privacy,
+        ip_address=request.META.get("REMOTE_ADDR"),
+        user_agent=request.META.get("HTTP_USER_AGENT", "")[:1000],
+    )
+
+    # Optional: Notify HR (configure EMAIL_* settings first)
+    try:
+        subject = f"[Careers] {app.full_name} applied for {job.title} ({app.application_code})"
+        body = (
+            f"Role: {job.title}\n"
+            f"Applicant: {app.full_name}\n"
+            f"Email: {app.email}\nPhone: {app.phone}\n"
+            f"Source: {app.source}\n"
+            f"Portfolio: {app.portfolio_url}\nLinkedIn: {app.linkedin_url}\nGitHub: {app.github_url}\n"
+            f"Application code: {app.application_code}\n\n"
+            f"Cover letter:\n{app.cover_letter}\n"
+        )
+        email_hr = getattr(settings, "HR_INBOX", "info@easymarket.vip")
+        msg = EmailMessage(subject, body, to=[email_hr])
+        if app.resume:
+            app.resume.open("rb")
+            msg.attach(os.path.basename(app.resume.name), app.resume.read(), "application/octet-stream")
+        msg.send(fail_silently=True)
+    except Exception:
+        # Silent fail—app is saved; HR can view in admin
+        pass
+
+    return redirect("marketplace:career_apply_success", code=app.application_code)
+
+
+def careers_apply_success(request, code):
+    app = get_object_or_404(CareerApplication, application_code=code)
+    return render(request, "careers/apply_success.html", {"app": app})
+
+
+def press_list(request):
+    q = (request.GET.get("q") or "").strip()
+    cat = (request.GET.get("category") or "").strip()
+
+    qs = PressRelease.objects.published()
+    if q:
+        qs = qs.filter(
+            Q(title__icontains=q) |
+            Q(subtitle__icontains=q) |
+            Q(summary__icontains=q) |
+            Q(body__icontains=q)
+        )
+    if cat:
+        qs = qs.filter(category=cat)
+
+    paginator = Paginator(qs, 10)
+    page_obj = paginator.get_page(request.GET.get("page"))
+
+    return render(request, "press/index.html", {
+        "page_obj": page_obj,
+        "releases": page_obj.object_list,
+        "q": q,
+        "category": cat,
+    })
+
+
+def press_detail(request, slug):
+    obj = get_object_or_404(PressRelease.objects.published(), slug=slug)
+    # Optional: next/prev for footer nav
+    newer = PressRelease.objects.published().filter(publish_at__gt=obj.publish_at).order_by("publish_at").first()
+    older = PressRelease.objects.published().filter(publish_at__lt=obj.publish_at).order_by("-publish_at").first()
+
+    return render(request, "press/detail.html", {
+        "pr": obj,
+        "newer": newer,
+        "older": older,
+    })
+
+def _is_staff(user):
+    return user.is_authenticated and (user.is_staff or user.is_superuser)
+
+@login_required
+@user_passes_test(_is_staff)
+def press_create(request):
+    """Manual create page for PressRelease (staff only, no Django forms)."""
+    if request.method == "GET":
+        return render(request, "press/create.html", {
+            "categories": PressRelease.Category.choices,
+            "now_iso": timezone.localtime().strftime("%Y-%m-%dT%H:%M"),
+        })
+
+    # POST
+    data = request.POST
+    files = request.FILES
+
+    title = (data.get("title") or "").strip()
+    subtitle = (data.get("subtitle") or "").strip()
+    summary = (data.get("summary") or "").strip()
+    body = (data.get("body") or "").strip()
+    category = (data.get("category") or "").strip() or PressRelease.Category.COMPANY
+    tags_raw = (data.get("tags") or "").strip()
+    tags = [t.strip() for t in tags_raw.split(",") if t.strip()]
+
+    author = (data.get("author") or "").strip()
+    source_url = (data.get("source_url") or "").strip()
+
+    is_published = data.get("is_published") == "on"
+    publish_at_str = (data.get("publish_at") or "").strip()
+
+    hero_image = files.get("hero_image")
+
+    errors = {}
+    if not title:
+        errors["title"] = "Title is required."
+    if not summary:
+        errors["summary"] = "Summary is required."
+    if not body:
+        errors["body"] = "Body is required."
+
+    # Parse datetime-local (YYYY-MM-DDTHH:MM)
+    publish_at = timezone.now()
+    if publish_at_str:
+        try:
+            dt = datetime.fromisoformat(publish_at_str)
+            if timezone.is_naive(dt):
+                dt = timezone.make_aware(dt, timezone.get_current_timezone())
+            publish_at = dt
+        except Exception:
+            errors["publish_at"] = "Invalid date/time."
+
+    if errors:
+        messages.error(request, "Please fix the errors below.")
+        return render(request, "press/create.html", {
+            "errors": errors,
+            "categories": PressRelease.Category.choices,
+            "form": {
+                "title": title, "subtitle": subtitle, "summary": summary, "body": body,
+                "category": category, "tags": tags_raw, "author": author,
+                "source_url": source_url, "is_published": is_published,
+                "publish_at": publish_at_str,
+            },
+            "now_iso": timezone.localtime().strftime("%Y-%m-%dT%H:%M"),
+        }, status=400)
+
+    pr = PressRelease.objects.create(
+        title=title,
+        subtitle=subtitle,
+        summary=summary,
+        body=body,
+        category=category,
+        tags=tags,
+        author=author,
+        source_url=source_url,
+        hero_image=hero_image,
+        is_published=is_published,
+        publish_at=publish_at,
+    )
+
+    messages.success(request, "Press release created.")
+    return redirect(pr.get_absolute_url())

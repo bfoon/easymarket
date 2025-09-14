@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Press Releases | EasyMarket{% endblock %}
+{% load static humanize %}
+{% block content %}
+<link rel="stylesheet" href="{% static 'css/main.css' %}">
+<div class="container py-4 py-lg-5 press-index">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <h1 class="h3 fw-bold mb-0">Press Releases</h1>
+    <form class="d-flex gap-2" method="get" action="">
+      <input class="form-control form-control-sm" type="search" name="q" value="{{ q }}" placeholder="Search press…">
+      <select name="category" class="form-select form-select-sm" style="max-width:200px">
+        <option value="">All categories</option>
+        <option value="company" {% if category == "company" %}selected{% endif %}>Company</option>
+        <option value="product" {% if category == "product" %}selected{% endif %}>Product</option>
+        <option value="partnership" {% if category == "partnership" %}selected{% endif %}>Partnership</option>
+        <option value="logistics" {% if category == "logistics" %}selected{% endif %}>Logistics</option>
+        <option value="finance" {% if category == "finance" %}selected{% endif %}>Finance</option>
+        <option value="csr" {% if category == "csr" %}selected{% endif %}>CSR</option>
+        <option value="other" {% if category == "other" %}selected{% endif %}>Other</option>
+      </select>
+      <button class="btn btn-dark btn-sm" type="submit">Filter</button>
+    </form>
+  </div>
+
+  {% if releases %}
+  <div class="row g-3 g-lg-4">
+    {% for item in releases %}
+    <div class="col-md-6 col-lg-4">
+      <article class="card h-100 border-0 shadow-sm rounded-4">
+        {% if item.hero_image %}
+        <img class="card-img-top rounded-top-4" src="{{ item.hero_image.url }}" alt="{{ item.title }}">
+        {% endif %}
+        <div class="card-body">
+          <div class="small text-muted mb-1">{{ item.publish_at|date:"M j, Y" }} • {{ item.get_category_display }}</div>
+          <h2 class="h6 fw-bold"><a href="{{ item.get_absolute_url }}" class="stretched-link text-decoration-none text-dark">{{ item.title }}</a></h2>
+          <p class="text-muted small mb-0">{{ item.summary|truncatechars:160 }}</p>
+        </div>
+      </article>
+    </div>
+    {% endfor %}
+  </div>
+
+  <nav class="mt-4">
+    <ul class="pagination pagination-sm mb-0">
+      {% if page_obj.has_previous %}
+        <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ q }}&category={{ category }}">«</a></li>
+      {% else %}
+        <li class="page-item disabled"><span class="page-link">«</span></li>
+      {% endif %}
+      <li class="page-item disabled"><span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span></li>
+      {% if page_obj.has_next %}
+        <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ q }}&category={{ category }}">»</a></li>
+      {% else %}
+        <li class="page-item disabled"><span class="page-link">»</span></li>
+      {% endif %}
+    </ul>
+  </nav>
+
+  {% else %}
+    <div class="alert alert-info">No press releases yet.</div>
+  {% endif %}
+</div>
+
+<style>
+.press-index .card-img-top{ max-height: 180px; object-fit: cover; }
+</style>
+{% endblock %}

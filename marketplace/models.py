@@ -5,10 +5,11 @@ from django.urls import reverse
 from django.db.models import Avg
 from decimal import Decimal
 from django.utils import timezone
-import uuid
+import os, uuid
 from django.utils.text import slugify
 from django.db import transaction
 from django.db.models.functions import Lower
+from django.core.validators import FileExtensionValidator
 
 
 class Category(models.Model):
@@ -736,3 +737,139 @@ class Career(models.Model):
 
     def get_absolute_url(self):
         return reverse("marketplace:career_detail", args=[self.slug])
+
+def resume_upload_to(instance, filename):
+    base, ext = os.path.splitext(filename.lower())
+    ext = ext if ext in [".pdf", ".doc", ".docx"] else ".pdf"
+    return f"careers/resumes/{instance.application_code}{ext}"
+
+class CareerApplication(models.Model):
+    class Status(models.TextChoices):
+        NEW = "new", "New"
+        IN_REVIEW = "in_review", "In review"
+        SHORTLISTED = "shortlisted", "Shortlisted"
+        REJECTED = "rejected", "Rejected"
+        HIRED = "hired", "Hired"
+
+    application_code = models.CharField(max_length=20, unique=True, editable=False)
+    job = models.ForeignKey("marketplace.Career", on_delete=models.CASCADE, related_name="applications")
+
+    full_name = models.CharField(max_length=150)
+    email = models.EmailField()
+    phone = models.CharField(max_length=50, blank=True)
+
+    resume = models.FileField(
+        upload_to=resume_upload_to,
+        validators=[FileExtensionValidator(allowed_extensions=["pdf", "doc", "docx"])],
+    )
+    cover_letter = models.TextField(blank=True)
+    portfolio_url = models.URLField(blank=True)
+    linkedin_url = models.URLField(blank=True)
+    github_url = models.URLField(blank=True)
+
+    source = models.CharField(max_length=120, blank=True, help_text="How did you hear about us?")
+    consent_privacy = models.BooleanField(default=False)
+
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.NEW)
+    notes = models.TextField(blank=True)
+
+    # Basic tracking
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["status"]),
+            models.Index(fields=["application_code"]),
+        ]
+
+    def __str__(self):
+        return f"{self.full_name} → {self.job.title}"
+
+    def save(self, *args, **kwargs):
+        if not self.application_code:
+            # short readable token (8 chars from uuid)
+            self.application_code = uuid.uuid4().hex[:8].upper()
+        super().save(*args, **kwargs)
+
+
+
+class PressReleaseQuerySet(models.QuerySet):
+    def published(self):
+        return self.filter(is_published=True, publish_at__lte=timezone.now())
+
+
+def press_hero_upload(instance, filename):
+    base, ext = os.path.splitext(filename.lower())
+    return f"press/heroes/{instance.slug or slugify(instance.title)}{ext or '.jpg'}"
+
+
+class PressRelease(models.Model):
+    class Category(models.TextChoices):
+        COMPANY = "company", "Company"
+        PRODUCT = "product", "Product"
+        PARTNERSHIP = "partnership", "Partnership"
+        LOGISTICS = "logistics", "Logistics"
+        FINANCE = "finance", "Finance"
+        CSR = "csr", "CSR"
+        OTHER = "other", "Other"
+
+    title = models.CharField(max_length=200)
+    slug = models.SlugField(max_length=220, unique=True, blank=True)
+    subtitle = models.CharField(max_length=240, blank=True)
+    summary = models.TextField(help_text="1–3 sentences shown on listing.")
+    body = models.TextField(help_text="Full body (HTML/Markdown allowed).")
+
+    category = models.CharField(max_length=20, choices=Category.choices, default=Category.COMPANY)
+    tags = models.JSONField(default=list, blank=True)
+
+    author = models.CharField(max_length=120, blank=True)
+    source_url = models.URLField(blank=True)
+
+    hero_image = models.ImageField(upload_to=press_hero_upload, blank=True, null=True)
+
+    # Publication
+    is_published = models.BooleanField(default=False)
+    publish_at = models.DateTimeField(default=timezone.now)
+
+    # SEO (optional)
+    meta_title = models.CharField(max_length=70, blank=True)
+    meta_description = models.CharField(max_length=160, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    objects = PressReleaseQuerySet.as_manager()
+
+    class Meta:
+        ordering = ["-publish_at"]
+        indexes = [
+            models.Index(fields=["is_published", "publish_at"]),
+            models.Index(fields=["slug"]),
+            models.Index(fields=["category"]),
+        ]
+
+    def __str__(self):
+        return self.title
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            base = slugify(self.title)[:200]
+            candidate = base
+            i = 2
+            while PressRelease.objects.filter(slug=candidate).exclude(pk=self.pk).exists():
+                candidate = f"{base}-{i}"
+                i += 1
+            self.slug = candidate
+        super().save(*args, **kwargs)
+
+    def get_absolute_url(self):
+        return reverse("marketplace:press_detail", args=[self.slug])
+
+    @property
+    def display_meta_title(self):
+        return self.meta_title or f"{self.title} | Press | EasyMarket"

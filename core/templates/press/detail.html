@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}{{ pr.display_meta_title }}{% endblock %}
+
+{% load static humanize %}
+{% block content %}
+<link rel="stylesheet" href="{% static 'css/main.css' %}">
+<div class="container py-4 py-lg-5 press-detail">
+  <nav class="mb-3">
+    <ol class="breadcrumb small mb-0">
+      <li class="breadcrumb-item"><a href="{% url 'marketplace:press_list' %}">Press</a></li>
+      <li class="breadcrumb-item active" aria-current="page">{{ pr.title }}</li>
+    </ol>
+  </nav>
+
+  <header class="mb-4 p-3 p-md-4 rounded-4 border bg-white shadow-sm">
+    <h1 class="h3 fw-bold mb-1">{{ pr.title }}</h1>
+    {% if pr.subtitle %}<p class="text-muted mb-2">{{ pr.subtitle }}</p>{% endif %}
+    <div class="d-flex flex-wrap gap-2 small text-muted">
+      <span>{{ pr.publish_at|date:"M j, Y" }}</span>
+      <span>•</span>
+      <span>{{ pr.get_category_display }}</span>
+      {% if pr.author %}<span>• By {{ pr.author }}</span>{% endif %}
+    </div>
+  </header>
+
+{% if pr.hero_image %}
+  <figure class="mb-4 press-hero">
+    <img
+      class="img-fluid rounded-4 shadow-sm press-hero-img"
+      src="{{ pr.hero_image.url }}"
+      alt="{{ pr.title }}"
+      loading="lazy">
+  </figure>
+{% endif %}
+
+
+  <article class="prose mb-4">
+    {{ pr.body|linebreaks }}
+  </article>
+
+  {% if pr.tags %}
+  <div class="d-flex flex-wrap gap-2 mt-3">
+    {% for tag in pr.tags %}
+      <span class="badge bg-light text-dark border">{{ tag }}</span>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <hr class="my-4">
+
+  <div class="d-flex justify-content-between align-items-center">
+    <div class="small">
+      {% if pr.source_url %}<a href="{{ pr.source_url }}" target="_blank" rel="noopener">Source</a>{% endif %}
+    </div>
+    <div class="d-flex gap-2">
+      {% if older %}<a class="btn btn-outline-secondary btn-sm" href="{{ older.get_absolute_url }}">← Older</a>{% endif %}
+      {% if newer %}<a class="btn btn-outline-secondary btn-sm" href="{{ newer.get_absolute_url }}">Newer →</a>{% endif %}
+    </div>
+  </div>
+
+  <!-- JSON-LD -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "NewsArticle",
+    "headline": "{{ pr.title|escapejs }}",
+    "datePublished": "{{ pr.publish_at|date:'c' }}",
+    "dateModified": "{{ pr.updated_at|date:'c' }}",
+    "author": {"@type": "Organization", "name": "EasyMarket"},
+    "publisher": {"@type": "Organization", "name": "EasyMarket"},
+    {% if pr.hero_image %}"image": ["{{ pr.hero_image.url }}"],{% endif %}
+    "description": "{{ pr.summary|escapejs }}",
+    "mainEntityOfPage": {"@type": "WebPage", "@id": "{{ request.build_absolute_uri }}"}
+  }
+  </script>
+</div>
+
+<style>
+.press-detail .prose p{margin-bottom:.9rem;}
+</style>
+{% endblock %}
+
+{% block meta %}
+  {% if pr.meta_description %}<meta name="description" content="{{ pr.meta_description }}">{% endif %}
+  <meta property="og:title" content="{{ pr.display_meta_title }}">
+  <meta property="og:description" content="{{ pr.meta_description|default:pr.summary }}">
+  {% if pr.hero_image %}<meta property="og:image" content="{{ pr.hero_image.url }}">{% endif %}
+  <meta property="og:type" content="article">
+{% endblock %}

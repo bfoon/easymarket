@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Apply{% if job %} – {{ job.title }}{% endif %} | EasyMarket Careers{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{% static 'css/main.css' %}">
+<div class="container py-4 py-lg-5 career-apply">
+  <nav class="mb-3">
+    <ol class="breadcrumb small mb-0">
+      <li class="breadcrumb-item"><a href="{% url 'marketplace:careers' %}">Careers</a></li>
+      {% if job %}<li class="breadcrumb-item"><a href="{{ job.get_absolute_url }}">{{ job.title }}</a></li>{% endif %}
+      <li class="breadcrumb-item active">Apply</li>
+    </ol>
+  </nav>
+
+  <div class="row g-4">
+    <div class="col-lg-8">
+      <div class="p-3 p-md-4 rounded-4 border bg-white shadow-sm">
+        <h1 class="h4 fw-bold mb-3">Submit your application</h1>
+
+        <form method="post" enctype="multipart/form-data" novalidate>
+          {% csrf_token %}
+          {% if job %}<input type="hidden" name="role" value="{{ job.slug }}">{% endif %}
+
+          {% if messages %}
+            {% for message in messages %}
+              <div class="alert alert-{{ message.tags }} small">{{ message }}</div>
+            {% endfor %}
+          {% endif %}
+
+          {% if not job %}
+          <div class="mb-3">
+            <label class="form-label">Role <span class="text-danger">*</span></label>
+            <input type="text" class="form-control is-invalid" placeholder="No role selected" disabled>
+            <div class="invalid-feedback">{{ errors.role }}</div>
+          </div>
+          {% endif %}
+
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Full name <span class="text-danger">*</span></label>
+              <input name="full_name" value="{{ form.full_name }}" class="form-control {% if errors.full_name %}is-invalid{% endif %}">
+              {% if errors.full_name %}<div class="invalid-feedback">{{ errors.full_name }}</div>{% endif %}
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Email <span class="text-danger">*</span></label>
+              <input name="email" type="email" value="{{ form.email }}" class="form-control {% if errors.email %}is-invalid{% endif %}">
+              {% if errors.email %}<div class="invalid-feedback">{{ errors.email }}</div>{% endif %}
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Phone</label>
+            <input name="phone" value="{{ form.phone }}" class="form-control">
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Resume (PDF/DOC/DOCX, max 5MB) <span class="text-danger">*</span></label>
+            <input name="resume" type="file" class="form-control {% if errors.resume %}is-invalid{% endif %}">
+            {% if errors.resume %}<div class="invalid-feedback">{{ errors.resume }}</div>{% endif %}
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Cover letter</label>
+            <textarea name="cover_letter" rows="5" class="form-control">{{ form.cover_letter }}</textarea>
+          </div>
+
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Portfolio URL</label>
+              <input name="portfolio_url" value="{{ form.portfolio_url }}" class="form-control" placeholder="https://...">
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label">LinkedIn</label>
+              <input name="linkedin_url" value="{{ form.linkedin_url }}" class="form-control" placeholder="https://linkedin.com/in/...">
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label">GitHub</label>
+              <input name="github_url" value="{{ form.github_url }}" class="form-control" placeholder="https://github.com/...">
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label">How did you hear about us?</label>
+              <input name="source" value="{{ form.source }}" class="form-control" placeholder="Friend, Social, EasyMarket, etc.">
+            </div>
+          </div>
+
+          <div class="form-check mb-3">
+            <input class="form-check-input {% if errors.consent_privacy %}is-invalid{% endif %}" type="checkbox" name="consent_privacy" id="consent" {% if form.consent_privacy %}checked{% endif %}>
+            <label for="consent" class="form-check-label">
+              I consent to EasyMarket storing my data for recruitment purposes.
+            </label>
+            {% if errors.consent_privacy %}<div class="invalid-feedback d-block">{{ errors.consent_privacy }}</div>{% endif %}
+          </div>
+
+          <div class="d-flex gap-2">
+            <button class="btn btn-dark" type="submit">Submit application</button>
+            {% if job %}<a class="btn btn-outline-secondary" href="{{ job.get_absolute_url }}">Back to role</a>{% endif %}
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <aside class="col-lg-4">
+      <div class="p-3 p-md-4 rounded-4 border bg-white shadow-sm position-sticky" style="top:88px">
+        <h2 class="h6 fw-bold mb-2">Role summary</h2>
+        {% if job %}
+        <div class="small text-muted mb-2">{{ job.title }}</div>
+        <dl class="row mb-0 small">
+          <dt class="col-5 text-muted">Location</dt><dd class="col-7">{{ job.location }}</dd>
+          <dt class="col-5 text-muted">Department</dt><dd class="col-7">{{ job.department }}</dd>
+          <dt class="col-5 text-muted">Employment</dt><dd class="col-7">{{ job.employment_type }}</dd>
+          <dt class="col-5 text-muted">Remote</dt><dd class="col-7">{{ job.remote_friendly|yesno:"Yes,No" }}</dd>
+        </dl>
+        {% else %}
+        <p class="small text-muted mb-0">Select a role from the careers page to apply.</p>
+        {% endif %}
+      </div>
+    </aside>
+  </div>
+</div>
+{% endblock %}

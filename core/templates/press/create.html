@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}New Press Release | EasyMarket{% endblock %}
+{% load static humanize %}
+
+{% block content %}
+<link rel="stylesheet" href="{% static 'css/main.css' %}">
+<div class="container py-4 py-lg-5">
+  <nav class="mb-3">
+    <ol class="breadcrumb small mb-0">
+      <li class="breadcrumb-item"><a href="{% url 'marketplace:press_list' %}">Press</a></li>
+      <li class="breadcrumb-item active">New</li>
+    </ol>
+  </nav>
+
+  <div class="row g-4">
+    <div class="col-lg-8">
+      <div class="p-3 p-md-4 rounded-4 border bg-white shadow-sm">
+        <h1 class="h4 fw-bold mb-3">Create Press Release</h1>
+
+        {% if messages %}
+          {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} small">{{ message }}</div>
+          {% endfor %}
+        {% endif %}
+
+        <form method="post" enctype="multipart/form-data" novalidate>
+          {% csrf_token %}
+
+          <div class="mb-3">
+            <label class="form-label">Title <span class="text-danger">*</span></label>
+            <input name="title" value="{{ form.title }}" class="form-control {% if errors.title %}is-invalid{% endif %}">
+            {% if errors.title %}<div class="invalid-feedback">{{ errors.title }}</div>{% endif %}
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Subtitle</label>
+            <input name="subtitle" value="{{ form.subtitle }}" class="form-control">
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Summary <span class="text-danger">*</span></label>
+            <textarea name="summary" rows="3" class="form-control {% if errors.summary %}is-invalid{% endif %}">{{ form.summary }}</textarea>
+            {% if errors.summary %}<div class="invalid-feedback">{{ errors.summary }}</div>{% endif %}
+            <div class="form-text">1–3 sentences shown on the listing.</div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Body <span class="text-danger">*</span></label>
+            <textarea name="body" rows="12" class="form-control {% if errors.body %}is-invalid{% endif %}">{{ form.body }}</textarea>
+            {% if errors.body %}<div class="invalid-feedback">{{ errors.body }}</div>{% endif %}
+            <div class="form-text">You can paste HTML or plain text.</div>
+          </div>
+
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Category</label>
+              <select name="category" class="form-select">
+                {% for val,label in categories %}
+                  <option value="{{ val }}" {% if form.category == val %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Tags (comma-separated)</label>
+              <input name="tags" value="{{ form.tags }}" class="form-control" placeholder="EasyMove, Logistics, Launch">
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Author</label>
+              <input name="author" value="{{ form.author }}" class="form-control" placeholder="Communications Team">
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Source URL</label>
+              <input name="source_url" value="{{ form.source_url }}" class="form-control" placeholder="https://...">
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Hero image</label>
+            <input name="hero_image" type="file" class="form-control">
+            <div class="form-text">Optional. JPG/PNG recommended.</div>
+          </div>
+
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="is_published" id="is_published" {% if form.is_published %}checked{% endif %}>
+                <label for="is_published" class="form-check-label">Publish now</label>
+              </div>
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Publish at</label>
+              <input name="publish_at" type="datetime-local" value="{{ form.publish_at|default:now_iso }}" class="form-control {% if errors.publish_at %}is-invalid{% endif %}">
+              {% if errors.publish_at %}<div class="invalid-feedback">{{ errors.publish_at }}</div>{% endif %}
+            </div>
+          </div>
+
+          <div class="d-flex gap-2">
+            <button class="btn btn-dark" type="submit">Create</button>
+            <a href="{% url 'marketplace:press_list' %}" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <aside class="col-lg-4">
+      <div class="p-3 p-md-4 rounded-4 border bg-white shadow-sm position-sticky" style="top:88px">
+        <h2 class="h6 fw-bold mb-2">Tips</h2>
+        <ul class="small text-muted mb-0">
+          <li>Keep the <strong>title</strong> short and clear.</li>
+          <li><strong>Summary</strong> appears on the listing and social previews.</li>
+          <li>Use <strong>tags</strong> for discoverability.</li>
+          <li>Set <strong>Publish at</strong> for embargoed releases.</li>
+        </ul>
+      </div>
+    </aside>
+  </div>
+</div>
+{% endblock %}
