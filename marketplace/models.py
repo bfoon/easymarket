@@ -5,7 +5,7 @@ from django.urls import reverse
 from django.db.models import Avg
 from decimal import Decimal
 from django.utils import timezone
-import os, uuid
+import os, uuid, secrets
 from django.utils.text import slugify
 from django.db import transaction
 from django.db.models.functions import Lower
@@ -562,6 +562,11 @@ class Cart(models.Model):
     def total_price(self):
         return sum(item.product.price * item.quantity for item in self.items.all())
 
+    def social_guard(self):
+        social = getattr(self, 'social', None)
+        if social and social.status in ('locked', 'closed', 'cancelled'):
+            raise ValidationError("Cart is locked for checkout.")
+        return social
 
 class CartItem(models.Model):
     cart = models.ForeignKey(Cart, on_delete=models.CASCADE, related_name='items')
@@ -577,6 +582,132 @@ class CartItem(models.Model):
 
     def subtotal(self):
         return self.product.price * self.quantity
+
+
+def _invite_code():
+    return secrets.token_urlsafe(10)
+
+class SocialCart(models.Model):
+    """
+    Wraps a normal Cart to make it collaborative.
+    """
+    cart = models.OneToOneField('marketplace.Cart', on_delete=models.CASCADE, related_name='social')
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='owned_social_carts')
+    invite_code = models.CharField(max_length=64, unique=True, default=_invite_code)
+    is_active = models.BooleanField(default=True)
+    status = models.CharField(max_length=20, default='open', choices=[
+        ('open','Open'),
+        ('checkout','CheckoutInProgress'),
+        ('locked','Locked'),
+        ('closed','Closed'),
+        ('cancelled','Cancelled'),
+    ])
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def total(self) -> Decimal:
+        subtotal = sum((i.product.price * i.quantity for i in self.cart.items.all()), Decimal('0'))
+        tax_rate = getattr(settings, "CART_TAX_RATE", Decimal("0.00"))
+        return subtotal + (subtotal * tax_rate)
+
+    def recalc_members_due(self):
+        total = self.total()
+        shares = self.payment_shares.filter(is_active=True)
+        if not shares.exists():
+            return
+        perc_total = sum((s.percentage or Decimal('0')) for s in shares)  # percentage in 0..100
+        fixed_total = sum((s.fixed_amount or Decimal('0')) for s in shares)
+        items_total = sum((s.items_total_amount or Decimal('0')) for s in shares)
+        remaining = total - (fixed_total + items_total)
+        # Avoid div by zero
+        per_unit = Decimal('0')
+        if perc_total and remaining > 0:
+            per_unit = remaining / perc_total
+
+        for s in shares:
+            due = Decimal('0')
+            if s.fixed_amount:
+                due += s.fixed_amount
+            if s.items_total_amount:
+                due += s.items_total_amount
+            if s.percentage:
+                due += (s.percentage * per_unit)
+            s.amount_due = max(due, Decimal('0'))
+            s.save(update_fields=['amount_due'])
+
+
+class CartMember(models.Model):
+    ROLE = (('owner','Owner'), ('editor','Editor'), ('viewer','Viewer'))
+    STATUS = (('invited','Invited'), ('joined','Joined'), ('left','Left'), ('blocked','Blocked'))
+
+    social_cart = models.ForeignKey(SocialCart, on_delete=models.CASCADE, related_name='members')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='social_cart_memberships')
+    role = models.CharField(max_length=12, choices=ROLE, default='editor')
+    status = models.CharField(max_length=12, choices=STATUS, default='joined')
+    joined_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('social_cart','user')
+
+
+class CartInvite(models.Model):
+    social_cart = models.ForeignKey(SocialCart, on_delete=models.CASCADE, related_name='invites')
+    code = models.CharField(max_length=64, unique=True, default=_invite_code)
+    invited_email = models.EmailField(blank=True, null=True)
+    invited_phone = models.CharField(max_length=50, blank=True, null=True)
+    inviter = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='sent_cart_invites')
+    accepted_by = models.ForeignKey(settings.AUTH_USER_MODEL, blank=True, null=True, on_delete=models.SET_NULL, related_name='accepted_cart_invites')
+    status = models.CharField(max_length=12, default='pending', choices=[('pending','Pending'),('accepted','Accepted'),('expired','Expired')])
+    expires_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def is_valid(self):
+        return self.status=='pending' and (self.expires_at is None or self.expires_at > timezone.now())
+
+
+class PaymentShare(models.Model):
+    """
+    A member's intended share. Choose one or combine:
+    - percentage (0..100, counts toward the remainder after fixed & items)
+    - fixed_amount
+    - items_total_amount (auto from 'claimed' items)
+    """
+    social_cart = models.ForeignKey(SocialCart, on_delete=models.CASCADE, related_name='payment_shares')
+    member = models.ForeignKey(CartMember, on_delete=models.CASCADE, related_name='shares')
+    percentage = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)  # 0..100
+    fixed_amount = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    items_total_amount = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    amount_due = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        unique_together = ('social_cart','member')
+
+
+class Contribution(models.Model):
+    PROVIDERS = (
+        ('wave','Wave'),
+        ('qmoney','Qmoney'),
+        ('afrimoney','Afrimoney'),
+        ('gamswitch','Gamswitch'),
+        ('cash','Cash'),
+    )
+    STATUS = (
+        ('init','Initiated'), ('pending','Pending'), ('success','Success'),
+        ('failed','Failed'), ('refunded','Refunded'),
+    )
+    social_cart = models.ForeignKey(SocialCart, on_delete=models.CASCADE, related_name='contributions')
+    member = models.ForeignKey(CartMember, on_delete=models.CASCADE, related_name='contributions')
+    provider = models.CharField(max_length=20, choices=PROVIDERS)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    status = models.CharField(max_length=12, choices=STATUS, default='init')
+    provider_ref = models.CharField(max_length=120, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    @staticmethod
+    def total_paid_for_cart(social_cart_id):
+        return Contribution.objects.filter(
+            social_cart_id=social_cart_id, status='success'
+        ).aggregate(s=models.Sum('amount'))['s'] or Decimal('0')
 
 class Wishlist(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='wishlist_items')

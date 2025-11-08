@@ -1,9 +1,9 @@
 from django.contrib.auth.signals import user_logged_in
 from django.dispatch import receiver
-from django.db.models.signals import pre_save, post_save
+from django.db.models.signals import pre_save, post_save, post_delete
 from marketplace.utils import migrate_session_cart_to_user
 from django.core.cache import cache
-from .models import Product
+from .models import Product, CartItem, Cart
 from django.db import transaction
 from stock.models import Stock
 from .background import submit
@@ -38,3 +38,10 @@ def _notify_back_in_stock(sender, instance: Stock, created, **kwargs):
         transaction.on_commit(lambda: submit(
             notify_wishlist_back_in_stock_threadsafe, product_id, old_qty, new_qty
         ))
+
+@receiver([post_save, post_delete], sender=CartItem)
+def _recalc_social_on_item_change(sender, instance, **kwargs):
+    cart = instance.cart
+    social = getattr(cart, 'social', None)
+    if social and social.is_active and social.status in ('open','checkout'):
+        social.recalc_members_due()
