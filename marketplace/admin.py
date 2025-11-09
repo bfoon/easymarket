@@ -3,7 +3,8 @@ from .models import (Product, Category, ProductImage, ProductView,
                      Cart, CartItem, CelebrityFeature, Wishlist,
                      SearchHistory, PopularSearch, ProductFeature, ProductFeatureOption,
                      ProductVariant, SharedCart, Subscription, Career, CareerApplication,
-                     PressRelease, InvestorDocument, InvestorEvent)
+                     PressRelease, InvestorDocument, InvestorEvent,
+                     SocialCart, CartMember, CartInvite, PaymentShare, Contribution)
 from django.utils.html import format_html
 from django.urls import path
 from django.http import JsonResponse
@@ -207,3 +208,23 @@ class InvestorEventAdmin(admin.ModelAdmin):
     list_filter = ("event_type", "is_public")
     search_fields = ("title", "location", "notes")
     date_hierarchy = "start_at"
+
+
+@admin.register(SocialCart)
+class SocialCartAdmin(admin.ModelAdmin):
+    list_display = ('id','cart','owner','status','is_active','created_at')
+    search_fields = ('invite_code','owner__username')
+
+@admin.register(CartMember)
+class CartMemberAdmin(admin.ModelAdmin):
+    list_display = ('social_cart','user','role','status','joined_at')
+    list_filter = ('role','status')
+
+@admin.register(PaymentShare)
+class PaymentShareAdmin(admin.ModelAdmin):
+    list_display = ('social_cart','member','percentage','fixed_amount','items_total_amount','amount_due','is_active')
+
+@admin.register(Contribution)
+class ContributionAdmin(admin.ModelAdmin):
+    list_display = ('social_cart','member','provider','amount','status','provider_ref','created_at')
+    list_filter = ('provider','status')

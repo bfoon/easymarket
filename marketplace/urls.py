@@ -1,6 +1,7 @@
 from django.urls import path
 from . import views
 from . import views_subscriptions
+from . import social_cart
 
 app_name = 'marketplace'
 
@@ -60,6 +61,16 @@ urlpatterns = [
     path("investors/", views.investors_home, name="investors_home"),
 
     path("shipping/", views.shipping_info, name="shipping_info"),
+
+    path('cart/social/create/', social_cart.create_social_cart, name='create_social_cart'),
+    path('cart/invite/send/', social_cart.send_cart_invite, name='send_cart_invite'),
+    path('cart/invite/join/<str:invite_code>/', social_cart.join_open_social_cart, name='join_open_social_cart'),
+    path('cart/invite/accept/<str:code>/', social_cart.accept_cart_invite, name='accept_cart_invite'),
+    path('cart/share/set/', social_cart.set_share, name='set_share'),
+    path('cart/pay/start/', social_cart.start_my_payment, name='start_my_payment'),
+    path('cart/member/leave/', social_cart.leave_cart, name='leave_cart'),
+    path('cart/member/remove/<int:member_id>/', social_cart.remove_member, name='remove_member')  # owner-only
+
 
 
 ]

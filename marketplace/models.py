@@ -10,6 +10,7 @@ from django.utils.text import slugify
 from django.db import transaction
 from django.db.models.functions import Lower
 from django.core.validators import FileExtensionValidator
+from django.db.models import UniqueConstraint
 
 
 class Category(models.Model):
@@ -568,14 +569,29 @@ class Cart(models.Model):
             raise ValidationError("Cart is locked for checkout.")
         return social
 
+
 class CartItem(models.Model):
-    cart = models.ForeignKey(Cart, on_delete=models.CASCADE, related_name='items')
-    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    cart = models.ForeignKey('Cart', on_delete=models.CASCADE, related_name='items')
+    product = models.ForeignKey('Product', on_delete=models.CASCADE)
     quantity = models.PositiveIntegerField(default=1)
     selected_features = models.JSONField(null=True, blank=True)
 
+    # NEW: who added this line (enables per-member permissions)
+    added_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='cart_items_added'
+    )
+
     class Meta:
-        unique_together = ('cart', 'product')
+        # Remove the old tuple unique_together; replace with a proper unique constraint
+        constraints = [
+            UniqueConstraint(
+                fields=['cart', 'product', 'selected_features'],
+                name='uniq_cart_product_features'
+            ),
+        ]
 
     def __str__(self):
         return f"{self.quantity} x {self.product.name}"

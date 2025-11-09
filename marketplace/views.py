@@ -1,10 +1,11 @@
+from __future__ import annotations
 from django.shortcuts import render, get_object_or_404, redirect
 from unicodedata import category
 
 from .models import (Category, Product, ProductView,
                      CartItem, Cart, CelebrityFeature, Wishlist,
                      SearchHistory, PopularSearch, ProductFeature,
-                     ProductFeatureOption, ProductVariant, SharedCart,
+                     ProductFeatureOption, ProductVariant, SharedCart, SocialCart, CartMember, PaymentShare,
                      Career, CareerApplication, PressRelease, InvestorDocument, InvestorEvent,)
 from chat.models import ChatThread, ChatMessage
 from accounts.models import Address
@@ -12,6 +13,7 @@ from stores.models import Store
 from reviews.models import Review
 from orders.models import PromoCode
 from reviews.forms import ReviewForm
+from django.db import models
 from django.contrib.auth import get_user_model
 import re
 from django.views.decorators.csrf import csrf_exempt
@@ -20,9 +22,12 @@ from django.views.decorators.http import require_POST
 from django.contrib.auth.decorators import login_required, user_passes_test
 from decimal import Decimal
 from django.core.cache import cache
-from .utils import log_search, get_search_suggestions_with_history, build_cart_context
+from .utils import (log_search, get_search_suggestions_with_history,
+                    build_cart_context, _coerce_int, _ensure_owner_membership,
+                    _resolve_active_social_for, _resolve_active_cart_for_user)
+from .utils import sync_social_items_totals
 from django.urls import reverse
-import json
+import json, uuid
 from datetime import timedelta
 from datetime import datetime
 from django.utils import timezone
@@ -33,7 +38,7 @@ from django.contrib import messages
 from collections import Counter
 from accounts.utils import log_admin_action
 from .notifications import send_email, send_whatsapp
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpRequest
 from django.template.loader import render_to_string
 from django.conf import settings
 from django.views.decorators.csrf import ensure_csrf_cookie
@@ -1319,487 +1324,456 @@ def category_products_ajax(request, pk):
         }
     })
 
-@csrf_exempt
-def add_to_cart(request, product_id):
+CART_TAX_RATE = getattr(settings, "CART_TAX_RATE", Decimal("0.00"))
+
+def _resolve_active_cart_for_user(user):
+    """
+    If user is in an active SocialCart (joined + open/checkout), use that cart.
+    Otherwise use/get their personal cart.
+    Non-owner members are allowed to add items.
+    """
+    social = (SocialCart.objects
+              .filter(is_active=True, status__in=['open', 'checkout'],
+                      members__user=user, members__status='joined')
+              .select_related('cart')
+              .order_by('-created_at')
+              .first())
+    if social:
+        return social.cart, social
+    cart, _ = Cart.objects.get_or_create(user=user)
+    return cart, None
+
+def _coerce_int(v, default=1, lo=1, hi=99):
     try:
-        product = get_object_or_404(Product, id=product_id, is_active=True)
-        quantity = int(request.POST.get('quantity', 1))
+        n = int(v)
+    except Exception:
+        n = default
+    return max(lo, min(hi, n))
 
-        # Get feature selections
-        features_json = request.POST.get('features', '{}')
-        selected_features = json.loads(features_json)
+@require_POST
+def add_to_cart(request, product_id):
+    """
+    Adds to (1) active SocialCart cart if the authed user has one (joined),
+    else (2) user's personal DB cart, else (3) session cart (guest).
 
-        if quantity < 1:
-            quantity = 1
-        elif quantity > 99:
-            quantity = 99
+    Body can be form or JSON:
+      quantity: int, default 1
+      selected_features: JSON (e.g. {"color":"Red","size":"M"})
+    """
+    # Parse incoming
+    quantity = 1
+    selected_features = {}
 
-        if request.user.is_authenticated:
-            cart, created = Cart.objects.get_or_create(user=request.user)
-
-            # Check for same product + same features
-            cart_item = CartItem.objects.filter(
-                cart=cart,
-                product=product,
-                selected_features=selected_features
-            ).first()
-
-            if cart_item:
-                cart_item.quantity += quantity
-                item_created = False
-            else:
-                cart_item = CartItem.objects.create(
-                    cart=cart,
-                    product=product,
-                    quantity=quantity,
-                    selected_features=selected_features
-                )
-                item_created = True
-
-            if cart_item.quantity > 99:
-                cart_item.quantity = 99
-
-            cart_item.save()
-
-            cart_items = CartItem.objects.filter(cart=cart)
-            cart_count = sum(item.quantity for item in cart_items)
-            cart_total = sum(item.product.price * item.quantity for item in cart_items)
-
-            tax_rate = Decimal('0.00')
-            tax_amount = cart_total * tax_rate
-            final_total = cart_total + tax_amount
-
-            if request.user.is_authenticated:
-                log_admin_action(
-                    request.user,
-                    action_type='cart_add',
-                    message=f"Added {product.name} to cart",
-                    model='Product',
-                    object_id=product.id
-                )
-
-            return JsonResponse({
-                'success': True,
-                'message': f'{product.name} added to cart successfully!',
-                'cart_count': cart_count,
-                'cart_total': f"{cart_total:.2f}",
-                'tax_amount': f"{tax_amount:.2f}",
-                'final_total': f"{final_total:.2f}",
-                'item_quantity': cart_item.quantity,
-                'item_was_updated': not item_created,
-                'product_name': product.name
-            })
-
+    if request.content_type and "application/json" in request.content_type:
+        try:
+            payload = json.loads(request.body.decode() or "{}")
+        except Exception:
+            payload = {}
+        quantity = _coerce_int(payload.get("quantity", 1))
+        selected_features = payload.get("selected_features") or {}
+    else:
+        quantity = _coerce_int(request.POST.get("quantity", 1))
+        raw_feats = request.POST.get("selected_features")
+        if raw_feats:
+            try:
+                selected_features = json.loads(raw_feats)
+            except Exception:
+                selected_features = {}
         else:
-            # Session cart
-            cart = request.session.get('cart', {})
+            selected_features = {
+                k.replace("feature_", ""): v
+                for k, v in request.POST.items()
+                if k.startswith("feature_")
+            }
 
-            key = f"{product_id}::{json.dumps(selected_features, sort_keys=True)}"
+    # Product
+    product = get_object_or_404(Product, pk=product_id, is_active=True)
 
-            if key in cart:
-                cart[key]['quantity'] += quantity
-                if cart[key]['quantity'] > 99:
-                    cart[key]['quantity'] = 99
-                item_was_updated = True
-            else:
-                cart[key] = {
-                    'quantity': quantity,
-                    'name': product.name,
-                    'price': str(product.price),
-                    'features': selected_features
-                }
-                item_was_updated = False
+    # Authenticated flow: prefer SocialCart
+    if request.user.is_authenticated:
+        cart, social = _resolve_active_cart_for_user(request.user)
 
-            request.session['cart'] = cart
-            request.session.modified = True
+        # Create/update DB CartItem (assumes JSONField on selected_features)
+        item, created = CartItem.objects.get_or_create(
+            cart=cart,
+            product=product,
+            selected_features=selected_features or {},
+            defaults={"quantity": quantity, "added_by": request.user},
+        )
+        if not created:
+            item.quantity = _coerce_int(item.quantity + quantity)
+            # keep original added_by
+            item.save(update_fields=["quantity"])
+        else:
+            item.save(update_fields=["quantity", "added_by"])
 
-            cart_count = sum(item['quantity'] for item in cart.values())
-            cart_total = Decimal('0')
+        # optional: recompute social shares
+        if social:
+            _ensure_owner_membership(social)
+            if hasattr(social, "recalc_members_due"):
+                social.recalc_members_due()
 
-            for entry in cart.values():
-                try:
-                    cart_total += Decimal(entry['price']) * entry['quantity']
-                except:
-                    continue
+        total_qty = cart.items.aggregate(s=models.Sum("quantity"))["s"] or 0
+        return JsonResponse(
+            {
+                "success": True,
+                "product_name": product.name,      # <- helps your main.js toast
+                "cart_item_id": item.id,
+                "cart_count": total_qty,
+                "in_social_cart": bool(social),
+                "social_owner_id": getattr(social, "owner_id", None),
+            }
+        )
 
-            tax_rate = Decimal('0.085')
-            tax_amount = cart_total * tax_rate
-            final_total = cart_total + tax_amount
+    # Guest: session cart
+    key = f"{product.id}::{uuid.uuid4().hex[:6]}"
+    session_cart = request.session.get("cart", {})
+    session_cart[key] = {
+        "product_id": product.id,
+        "quantity": quantity,
+        "selected_features": selected_features or {},
+    }
+    request.session["cart"] = session_cart
+    request.session.modified = True
 
-            return JsonResponse({
-                'success': True,
-                'message': f'{product.name} added to cart successfully!',
-                'cart_count': cart_count,
-                'cart_total': f"{cart_total:.2f}",
-                'tax_amount': f"{tax_amount:.2f}",
-                'final_total': f"{final_total:.2f}",
-                'item_quantity': cart[key]['quantity'],
-                'item_was_updated': item_was_updated,
-                'product_name': product.name
-            })
-
-    except ValueError:
-        return JsonResponse({
-            'success': False,
-            'message': 'Invalid quantity specified'
-        })
-    except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'message': f'Error adding item to cart: {str(e)}'
-        })
+    total_qty = sum(int(v.get("quantity", 1) or 1) for v in session_cart.values())
+    return JsonResponse(
+        {
+            "success": True,
+            "product_name": product.name,
+            "cart_count": total_qty,
+            "in_social_cart": False,
+            "line_key": key,
+        }
+    )
 
 def cart_preview(request):
     """
     Returns a small HTML snippet (partial) with up to 5 items + subtotal.
     """
     ctx = build_cart_context(request, limit=5)
-    return render(request, 'marketplace/partials/cart_preview.html', ctx)
+    return render(request, "marketplace/partials/cart_preview.html", ctx)
 
 def cart_view(request):
     ctx = build_cart_context(request, limit=None)
-    return render(request, 'marketplace/cart_detail.html', ctx)
-
+    return render(request, "marketplace/cart_detail.html", ctx)
 
 @csrf_exempt
 def get_cart_count(request):
     """
-    Get current cart count and total - useful for page load synchronization
+    Returns counts/totals. If user has an active SocialCart, we use that cart.
     """
     try:
         if request.user.is_authenticated:
-            cart = Cart.objects.filter(user=request.user).first()
+            social = _resolve_active_social_for(request.user)
+            if social and social.cart_id:
+                cart = social.cart
+            else:
+                cart = Cart.objects.filter(user=request.user).first()
+
             if cart:
-                cart_items = CartItem.objects.filter(cart=cart)
-                cart_count = sum(item.quantity for item in cart_items)
-                cart_total = sum(item.product.price * item.quantity for item in cart_items)
+                items = CartItem.objects.filter(cart=cart)
+                cart_count = sum(i.quantity for i in items)
+                cart_total = sum(i.product.price * i.quantity for i in items)
             else:
                 cart_count = 0
-                cart_total = Decimal('0')
+                cart_total = Decimal("0")
         else:
-            cart = request.session.get('cart', {})
-            cart_count = sum(item['quantity'] for item in cart.values())
-            cart_total = Decimal('0')
-
-            for pid, item in cart.items():
+            sess = request.session.get("cart", {})
+            cart_count = sum(int(item.get("quantity", 1) or 1) for item in sess.values())
+            cart_total = Decimal("0")
+            for key, item in sess.items():
                 try:
+                    pid = int(key.split("::", 1)[0])
                     prod = Product.objects.get(id=pid, is_active=True)
-                    cart_total += prod.price * item['quantity']
+                    cart_total += prod.price * int(item.get("quantity", 1) or 1)
                 except Product.DoesNotExist:
                     continue
 
-        # Calculate tax
-        tax_rate = Decimal('0.00')
-        tax_amount = cart_total * tax_rate
+        tax_amount = cart_total * CART_TAX_RATE
         final_total = cart_total + tax_amount
 
-        return JsonResponse({
-            'success': True,
-            'cart_count': cart_count,
-            'cart_total': f"{cart_total:.2f}",
-            'tax_amount': f"{tax_amount:.2f}",
-            'final_total': f"{final_total:.2f}"
-        })
-
+        return JsonResponse(
+            {
+                "success": True,
+                "cart_count": cart_count,
+                "cart_total": f"{cart_total:.2f}",
+                "tax_amount": f"{tax_amount:.2f}",
+                "final_total": f"{final_total:.2f}",
+            }
+        )
     except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'message': f'Error getting cart count: {str(e)}'
-        })
+        return JsonResponse(
+            {"success": False, "message": f"Error getting cart count: {str(e)}"}
+        )
 
-
-# Helper function to get cart context for templates
 def get_cart_context(request):
     """
-    Helper function to get cart data for template context
-    Use this in other views that need cart information
+    Lightweight cart summary you can include in other views.
+    Prefers SocialCart when present.
     """
     if request.user.is_authenticated:
-        cart = Cart.objects.filter(user=request.user).first()
+        social = _resolve_active_social_for(request.user)
+        cart = social.cart if social else Cart.objects.filter(user=request.user).first()
         if cart:
             cart_items = CartItem.objects.filter(cart=cart)
             cart_count = sum(item.quantity for item in cart_items)
             cart_total = sum(item.product.price * item.quantity for item in cart_items)
         else:
             cart_count = 0
-            cart_total = Decimal('0')
+            cart_total = Decimal("0")
     else:
-        cart = request.session.get('cart', {})
-        cart_count = sum(item['quantity'] for item in cart.values())
-        cart_total = Decimal('0')
-
-        for pid, item in cart.items():
+        sess = request.session.get("cart", {})
+        cart_count = sum(int(item.get("quantity", 1) or 1) for item in sess.values())
+        cart_total = Decimal("0")
+        for key, item in sess.items():
             try:
+                pid = int(key.split("::", 1)[0])
                 prod = Product.objects.get(id=pid, is_active=True)
-                cart_total += prod.price * item['quantity']
+                cart_total += prod.price * int(item.get("quantity", 1) or 1)
             except Product.DoesNotExist:
                 continue
 
-    return {
-        'cart_count': cart_count,
-        'cart_total': cart_total
-    }
+    return {"cart_count": cart_count, "cart_total": cart_total}
 
 @csrf_exempt
 @require_POST
 def update_cart_quantity(request):
     """
-    Update cart item quantity - handles both direct quantity updates and increase/decrease actions
-    Expects: product_id, and either 'quantity' or 'action' parameter
+    Update cart item quantity for authenticated users (prefers SocialCart) and guests.
     """
+    # Resolve user cart (and guard social if needed)
+    if request.user.is_authenticated:
+        cart, social = _resolve_active_cart_for_user(request.user)
+        try:
+            if hasattr(cart, "social_guard"):
+                cart.social_guard()
+        except ValidationError as e:
+            return JsonResponse({"success": False, "message": str(e)})
+
     try:
-        product_id = request.POST.get('product_id')
-        quantity = request.POST.get('quantity')
-        action = request.POST.get('action')  # 'increase' or 'decrease'
+        cart_item_id = request.POST.get("cart_item_id")
+        product_id = request.POST.get("product_id")
+        session_key = request.POST.get("session_key")
+        quantity = request.POST.get("quantity")
+        action = request.POST.get("action")
 
-        if not product_id:
-            return JsonResponse({
-                'success': False,
-                'message': 'Product ID is required'
-            })
-
-        product = get_object_or_404(Product, id=product_id, is_active=True)
-
-        # Handle authenticated users
+        # ---- Auth users
         if request.user.is_authenticated:
-            cart = Cart.objects.filter(user=request.user).first()
-            if not cart:
-                return JsonResponse({
-                    'success': False,
-                    'message': 'Cart not found'
-                })
-
-            cart_item = CartItem.objects.filter(cart=cart, product=product).first()
-            if not cart_item:
-                return JsonResponse({
-                    'success': False,
-                    'message': 'Item not found in cart'
-                })
-
-            # Determine new quantity
-            if quantity:
-                # Direct quantity update
-                new_quantity = int(quantity)
-                if new_quantity < 1:
-                    new_quantity = 1
-                elif new_quantity > 99:
-                    new_quantity = 99
-                cart_item.quantity = new_quantity
-            elif action:
-                # Action-based update
-                if action == 'increase':
-                    cart_item.quantity = min(cart_item.quantity + 1, 99)
-                elif action == 'decrease':
-                    cart_item.quantity = max(cart_item.quantity - 1, 1)
-                else:
-                    return JsonResponse({
-                        'success': False,
-                        'message': 'Invalid action'
-                    })
+            if cart_item_id:
+                cart_item = get_object_or_404(CartItem, id=cart_item_id, cart=cart)
             else:
-                return JsonResponse({
-                    'success': False,
-                    'message': 'Either quantity or action is required'
-                })
+                # Fallback to product_id
+                product = get_object_or_404(Product, id=product_id, is_active=True)
+                cart_item = CartItem.objects.filter(cart=cart, product=product).first()
+                if not cart_item:
+                    return JsonResponse(
+                        {"success": False, "message": "Item not found in cart"}
+                    )
 
-            cart_item.save()
+            # Compute new quantity
+            if quantity:
+                new_q = max(1, min(99, int(quantity)))
+            elif action == "increase":
+                new_q = min(cart_item.quantity + 1, 99)
+            elif action == "decrease":
+                new_q = max(cart_item.quantity - 1, 1)
+            else:
+                return JsonResponse(
+                    {"success": False, "message": "Either quantity or action is required"}
+                )
 
-            # Calculate totals
+            cart_item.quantity = new_q
+            cart_item.save(update_fields=["quantity"])
+
+            # Update social shares if in social cart
+            if social and social.is_active and social.status in ("open", "checkout"):
+                if hasattr(social, "recalc_members_due"):
+                    social.recalc_members_due()
+
             subtotal = cart_item.product.price * cart_item.quantity
             cart_items = CartItem.objects.filter(cart=cart)
-            total_price = sum(item.product.price * item.quantity for item in cart_items)
-            item_count = sum(item.quantity for item in cart_items)
+            total_price = sum(i.product.price * i.quantity for i in cart_items)
+            item_count = sum(i.quantity for i in cart_items)
 
-            # Calculate tax (assuming 8.5% tax rate, adjust as needed)
-            tax_rate = Decimal('0.00')
-            tax_amount = total_price * tax_rate
+            tax_amount = total_price * CART_TAX_RATE
             final_total = total_price + tax_amount
 
-            return JsonResponse({
-                'success': True,
-                'quantity': cart_item.quantity,
-                'subtotal': f"{subtotal:.2f}",
-                'total_price': f"{total_price:.2f}",
-                'tax_amount': f"{tax_amount:.2f}",
-                'final_total': f"{final_total:.2f}",
-                'item_count': item_count,
-                'message': 'Cart updated successfully'
-            })
+            return JsonResponse(
+                {
+                    "success": True,
+                    "quantity": cart_item.quantity,
+                    "subtotal": f"{subtotal:.2f}",
+                    "total_price": f"{total_price:.2f}",
+                    "tax_amount": f"{tax_amount:.2f}",
+                    "final_total": f"{final_total:.2f}",
+                    "item_count": item_count,
+                    "cart_count": item_count,
+                    "message": "Cart updated successfully",
+                }
+            )
 
-        # Handle session-based cart for anonymous users
+        # ---- Guests
+        cart = request.session.get("cart", {})
+        if not session_key:
+            return JsonResponse(
+                {"success": False, "message": "session_key is required for guests"}
+            )
+
+        if session_key not in cart:
+            return JsonResponse({"success": False, "message": "Item not found in cart"})
+
+        # Compute new qty
+        if quantity:
+            new_q = max(1, min(99, int(quantity)))
+        elif action == "increase":
+            new_q = min(int(cart[session_key]["quantity"]) + 1, 99)
+        elif action == "decrease":
+            new_q = max(int(cart[session_key]["quantity"]) - 1, 1)
         else:
-            cart = request.session.get('cart', {})
-            product_key = str(product_id)
+            return JsonResponse(
+                {"success": False, "message": "Either quantity or action is required"}
+            )
 
-            if product_key not in cart:
-                return JsonResponse({
-                    'success': False,
-                    'message': 'Item not found in cart'
-                })
+        cart[session_key]["quantity"] = new_q
+        request.session["cart"] = cart
+        request.session.modified = True
 
-            # Determine new quantity
-            if quantity:
-                # Direct quantity update
-                new_quantity = int(quantity)
-                if new_quantity < 1:
-                    new_quantity = 1
-                elif new_quantity > 99:
-                    new_quantity = 99
-                cart[product_key]['quantity'] = new_quantity
-            elif action:
-                # Action-based update
-                current_qty = cart[product_key]['quantity']
-                if action == 'increase':
-                    cart[product_key]['quantity'] = min(current_qty + 1, 99)
-                elif action == 'decrease':
-                    cart[product_key]['quantity'] = max(current_qty - 1, 1)
-                else:
-                    return JsonResponse({
-                        'success': False,
-                        'message': 'Invalid action'
-                    })
-            else:
-                return JsonResponse({
-                    'success': False,
-                    'message': 'Either quantity or action is required'
-                })
+        # Calculate totals
+        pid_str = session_key.split("::", 1)[0]
+        product = get_object_or_404(Product, id=int(pid_str), is_active=True)
 
-            request.session['cart'] = cart
-            request.session.modified = True
+        quantity_val = int(cart[session_key]["quantity"])
+        subtotal = product.price * quantity_val
 
-            # Calculate totals
-            quantity = cart[product_key]['quantity']
-            subtotal = product.price * quantity
+        total_price = Decimal("0")
+        item_count = 0
+        for key, item in cart.items():
+            try:
+                pid = int(key.split("::", 1)[0])
+                prod = Product.objects.get(id=pid, is_active=True)
+                q = int(item.get("quantity", 1) or 1)
+                total_price += prod.price * q
+                item_count += q
+            except Product.DoesNotExist:
+                continue
 
-            total_price = Decimal('0')
-            item_count = 0
-            for pid, item in cart.items():
-                try:
-                    prod = Product.objects.get(id=pid, is_active=True)
-                    item_total = prod.price * item['quantity']
-                    total_price += item_total
-                    item_count += item['quantity']
-                except Product.DoesNotExist:
-                    continue
+        tax_amount = total_price * CART_TAX_RATE
+        final_total = total_price + tax_amount
 
-            # Calculate tax
-            tax_rate = Decimal('0.085')
-            tax_amount = total_price * tax_rate
-            final_total = total_price + tax_amount
+        return JsonResponse(
+            {
+                "success": True,
+                "quantity": quantity_val,
+                "subtotal": f"{subtotal:.2f}",
+                "total_price": f"{total_price:.2f}",
+                "tax_amount": f"{tax_amount:.2f}",
+                "final_total": f"{final_total:.2f}",
+                "item_count": item_count,
+                "cart_count": item_count,
+                "message": "Cart updated successfully",
+            }
+        )
 
-            return JsonResponse({
-                'success': True,
-                'quantity': quantity,
-                'subtotal': f"{subtotal:.2f}",
-                'total_price': f"{total_price:.2f}",
-                'tax_amount': f"{tax_amount:.2f}",
-                'final_total': f"{final_total:.2f}",
-                'item_count': item_count,
-                'message': 'Cart updated successfully'
-            })
-
-    except ValueError as e:
-        return JsonResponse({
-            'success': False,
-            'message': 'Invalid quantity value'
-        })
+    except ValueError:
+        return JsonResponse({"success": False, "message": "Invalid quantity value"})
     except Exception as e:
-        return JsonResponse({
-            'success': False,
-            'message': f'An error occurred: {str(e)}'
-        })
+        return JsonResponse({"success": False, "message": f"An error occurred: {str(e)}"})
 
-
-CART_TAX_RATE = getattr(settings, "CART_TAX_RATE", Decimal("0.00"))
-
-@ensure_csrf_cookie
 @require_POST
 def remove_cart_item(request):
     """
-    Remove an item from the cart.
-    Expects JSON:
-      { "item_type": "db"|"session", "remove_id": "<CartItem.id or session key>" }
-
-    Backward-compatible fallback (not recommended):
-      { "product_id": <int> }  # will remove ONE matching entry, arbitrary for session carts with variants
+    Remove one cart line.
+    - Guests: remove session entry by 'remove_id'
+    - Authed: remove CartItem by id (permission-aware for SocialCart)
     """
-    # --- Parse payload ---
     try:
-        # Works for application/json; if you're posting form-encoded, adjust accordingly
-        payload = json.loads(request.body.decode("utf-8"))
-    except Exception:
-        payload = request.POST  # fallback if you submit as form data
-
-    item_type = payload.get("item_type")
-    remove_id = payload.get("remove_id")
-    product_id = payload.get("product_id")  # legacy fallback
-
-    # --- Preferred path: precise identifiers ---
-    if item_type in ("db", "session") and remove_id:
-        # Authenticated DB cart item removal
-        if item_type == "db":
-            if not request.user.is_authenticated:
-                return JsonResponse({"success": False, "message": "Authentication required"})
-            CartItem.objects.filter(id=remove_id, cart__user=request.user).delete()
-
-        # Session cart entry removal
-        elif item_type == "session":
-            session_cart = request.session.get("cart", {})
-            if remove_id in session_cart:
-                del session_cart[remove_id]
-                request.session["cart"] = session_cart
-                request.session.modified = True
-            else:
-                return JsonResponse({"success": False, "message": "Item not found in session cart"})
-
-    # --- Legacy fallback: product_id only (NOT recommended for variants) ---
-    elif product_id:
-        try:
-            pid = int(product_id)
-        except (TypeError, ValueError):
-            return JsonResponse({"success": False, "message": "Invalid product ID"})
-
-        # Auth user: remove one CartItem for that product
-        if request.user.is_authenticated:
-            cart = Cart.objects.filter(user=request.user).first()
-            if not cart:
-                return JsonResponse({"success": False, "message": "Cart not found"})
-            CartItem.objects.filter(cart=cart, product_id=pid).first() and \
-                CartItem.objects.filter(cart=cart, product_id=pid).first().delete()
+        # Parse data from POST or JSON
+        if request.content_type and "application/json" in request.content_type:
+            data = json.loads(request.body.decode() or "{}")
         else:
-            # Guest: remove ONE entry whose key starts with "pid::"
-            session_cart = request.session.get("cart", {})
-            key_to_delete = None
-            for key in list(session_cart.keys()):
-                # keys look like "1::{}" or "1::{\"color\":\"Red\"}"
-                if key.split("::")[0] == str(pid):
-                    key_to_delete = key
-                    break
-            if not key_to_delete:
-                return JsonResponse({"success": False, "message": "Item not found in cart"})
-            del session_cart[key_to_delete]
+            data = request.POST
+    except Exception:
+        data = request.POST
+
+    item_type = (data.get("item_type") or "").strip()
+    remove_id = data.get("remove_id")
+
+    if not remove_id:
+        return JsonResponse({"success": False, "message": "Invalid payload"}, status=400)
+
+    # --- GUEST: session cart
+    if (not request.user.is_authenticated) or item_type == "session":
+        session_cart = request.session.get("cart", {})
+        if str(remove_id) in session_cart:
+            del session_cart[str(remove_id)]
             request.session["cart"] = session_cart
             request.session.modified = True
+
+            ctx = build_cart_context(request)
+            return JsonResponse(
+                {
+                    "success": True,
+                    "cart_count": ctx["cart_count"],
+                    "total_price": str(ctx["total_price"]),
+                    "final_total": str(ctx["final_total"]),
+                    "tax_amount": str(ctx.get("tax_amount", 0)),
+                    "item_count": ctx["cart_count"],
+                }
+            )
+        return JsonResponse(
+            {"success": False, "message": "Item not found in session"}, status=404
+        )
+
+    # --- AUTHED: DB cart
+    user = request.user
+    social = _resolve_active_social_for(user)
+    cart = social.cart if social else Cart.objects.filter(user=user).first()
+
+    if not cart:
+        return JsonResponse({"success": False, "message": "No cart found"}, status=404)
+
+    try:
+        item = CartItem.objects.select_related("cart", "product").get(id=remove_id, cart=cart)
+    except CartItem.DoesNotExist:
+        return JsonResponse({"success": False, "message": "Item not found"}, status=404)
+
+    # Permission check for social cart
+    if social:
+        me_member = CartMember.objects.filter(
+            social_cart=social, user=user, status="joined"
+        ).first()
+
+        is_owner = bool(me_member and social.owner_id == user.id)
+        is_adder = bool(getattr(item, "added_by_id", None) == user.id)
+
+        if not (is_owner or is_adder):
+            return JsonResponse(
+                {"success": False, "message": "Not allowed to remove this item"},
+                status=403,
+            )
     else:
-        return JsonResponse({"success": False, "message": "Missing parameters"})
+        if cart.user_id != user.id:
+            return JsonResponse({"success": False, "message": "Not allowed"}, status=403)
 
-    # --- Rebuild contexts ---
-    preview_ctx = build_cart_context(request, limit=5)
-    full_ctx = build_cart_context(request, limit=None)
+    item.delete()
 
-    # Re-render the mini-cart HTML
-    preview_html = render_to_string(
-        "marketplace/partials/cart_preview.html", preview_ctx, request=request
+    # Recalc social shares if needed
+    if social and hasattr(social, "recalc_members_due"):
+        social.recalc_members_due()
+
+    # Return fresh totals
+    ctx = build_cart_context(request)
+    return JsonResponse(
+        {
+            "success": True,
+            "cart_count": ctx["cart_count"],
+            "total_price": str(ctx["total_price"]),
+            "final_total": str(ctx["final_total"]),
+            "tax_amount": str(ctx.get("tax_amount", 0)),
+            "item_count": ctx["cart_count"],
+        }
     )
-
-    return JsonResponse({
-        "success": True,
-        "message": "Item removed from cart",
-        "html": preview_html,
-        "badge_count": full_ctx["cart_count"],                # use full count for badge
-        "subtotal": f'{preview_ctx["total_price"]:.2f}',      # preview subtotal (visible rows)
-        "final_total": f'{full_ctx["final_total"]:.2f}',      # full final total
-    })
 
 @require_http_methods(["GET", "POST"])
 @login_required

@@ -1,95 +1,97 @@
+from django.conf import settings
 from django.db.models import Q, Sum, F
 from django.urls import reverse
-from .models import Cart, CartItem
-from .models import Product, SearchHistory, PopularSearch  # adjust app name if needed
 from decimal import Decimal
+from io import BytesIO
+import uuid
+
+from .models import Cart, CartItem, Product, SearchHistory, PopularSearch
+
+from .models import SocialCart, CartMember, PaymentShare
+
 import webcolors
 from PIL import Image, ImageStat
 import requests
-from io import BytesIO
+
+# --- Utils ---------------------------------------------------------
 
 def get_client_ip(request):
-    """Get client IP address from request"""
-    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-    if x_forwarded_for:
-        ip = x_forwarded_for.split(',')[0]
-    else:
-        ip = request.META.get('REMOTE_ADDR')
-    return ip
-
+    xff = request.META.get('HTTP_X_FORWARDED_FOR')
+    return xff.split(',')[0].strip() if xff else request.META.get('REMOTE_ADDR')
 
 def log_search(request, query, results_count):
-    """Log search query for analytics"""
-    if not query.strip():
+    q = (query or '').strip()
+    if not q:
         return
 
-    # Log to search history
     SearchHistory.objects.create(
         user=request.user if request.user.is_authenticated else None,
-        query=query,
+        query=q,
         results_count=results_count,
         ip_address=get_client_ip(request)
     )
 
-    # Update popular searches
-    popular_search, created = PopularSearch.objects.get_or_create(
-        query=query,
+    popular, created = PopularSearch.objects.get_or_create(
+        query=q,
         defaults={'search_count': 1}
     )
     if not created:
-        popular_search.search_count += 1
-        popular_search.save()
-
+        popular.search_count = F('search_count') + 1
+        popular.save(update_fields=['search_count'])
 
 def get_search_suggestions_with_history(request, query):
-    """Get search suggestions including user history"""
     suggestions = []
+    q = (query or '').strip()
+    if not q:
+        return suggestions
 
-    # Product suggestions (existing functionality)
-    products = Product.objects.filter(
-        Q(name__icontains=query) |
-        Q(description__icontains=query) |
-        Q(category__name__icontains=query)
-    ).select_related('category')[:5]
+    # Product suggestions
+    products = (
+        Product.objects.filter(
+            Q(name__icontains=q) |
+            Q(description__icontains=q) |
+            Q(category__name__icontains=q)
+        )
+        .select_related('category')[:5]
+    )
 
-    for product in products:
+    for p in products:
         suggestions.append({
             'type': 'product',
-            'id': product.id,
-            'name': product.name,
-            'price': str(product.price),
-            'category': product.category.name,
-            'image': product.image.url if product.image else None,
-            'url': reverse('marketplace:product_detail', kwargs={'pk': product.pk})
+            'id': p.id,
+            'name': p.name,
+            'price': str(p.price),
+            'category': p.category.name if p.category else '',
+            'image': (getattr(p.image, 'url', None) if getattr(p, 'image', None) else None),
+            # your URL pattern is product/<int:product_id>/
+            'url': reverse('marketplace:product_detail', kwargs={'product_id': p.pk})
         })
 
-    # Recent searches by user
+    # Recent searches (user)
     if request.user.is_authenticated:
-        recent_searches = SearchHistory.objects.filter(
-            user=request.user,
-            query__icontains=query
-        ).values_list('query', flat=True).distinct()[:3]
-
-        for search_query in recent_searches:
+        recent = (SearchHistory.objects
+                  .filter(user=request.user, query__icontains=q)
+                  .values_list('query', flat=True)
+                  .distinct()[:3])
+        for s in recent:
             suggestions.append({
                 'type': 'recent',
-                'query': search_query,
-                'url': reverse('marketplace:search_products') + f'?q={search_query}'
+                'query': s,
+                'url': reverse('marketplace:search_products') + f'?q={s}'
             })
 
     # Popular searches
-    popular_searches = PopularSearch.objects.filter(
-        query__icontains=query
-    ).values_list('query', flat=True)[:3]
-
-    for popular_query in popular_searches:
+    popular = (PopularSearch.objects
+               .filter(query__icontains=q)
+               .values_list('query', flat=True)[:3])
+    for s in popular:
         suggestions.append({
             'type': 'popular',
-            'query': popular_query,
-            'url': reverse('marketplace:search_products') + f'?q={popular_query}'
+            'query': s,
+            'url': reverse('marketplace:search_products') + f'?q={s}'
         })
 
-    return suggestions[:10]  # Limit total suggestions
+    return suggestions[:10]
 
 def migrate_session_cart_to_user(request, user):
     session_cart = request.session.get('cart', {})
@@ -100,188 +102,323 @@ def migrate_session_cart_to_user(request, user):
 
     for key, item in session_cart.items():
         try:
-            product_id = int(key.split("::")[0])
-            product = Product.objects.get(id=product_id)
+            product_id = int(key.split('::', 1)[0])
+            product = Product.objects.get(id=product_id, is_active=True)
         except (ValueError, Product.DoesNotExist):
             continue
 
-        quantity = item.get('quantity', 1)
-        selected_features = item.get('selected_features', {})
+        quantity = int(item.get('quantity', 1)) or 1
+        # SESSION uses 'features' (your add_to_cart stores 'features': selected_features)
+        selected_features = item.get('features') or item.get('selected_features') or {}
 
-        existing = CartItem.objects.filter(cart=cart, product=product, selected_features=selected_features).first()
+        existing = CartItem.objects.filter(
+            cart=cart, product=product, selected_features=selected_features
+        ).first()
         if existing:
-            existing.quantity += quantity
-            existing.save()
+            existing.quantity = min(existing.quantity + quantity, 99)
+            existing.save(update_fields=['quantity'])
         else:
-            CartItem.objects.create(cart=cart, product=product, quantity=quantity, selected_features=selected_features)
+            CartItem.objects.create(
+                cart=cart, product=product, quantity=min(quantity, 99),
+                selected_features=selected_features
+            )
 
     request.session['cart'] = {}
     request.session.modified = True
 
+# --- Color utils ---------------------------------------------------
 
 class ColorUtils:
-
     @staticmethod
     def extract_dominant_color_from_image(image_url):
-        """Extract dominant color from an image URL"""
         try:
-            response = requests.get(image_url)
-            img = Image.open(BytesIO(response.content))
-
-            # Resize image for faster processing
+            resp = requests.get(image_url, timeout=5)
+            resp.raise_for_status()
+            img = Image.open(BytesIO(resp.content))
             img = img.resize((50, 50))
-
-            # Convert to RGB if necessary
             if img.mode != 'RGB':
                 img = img.convert('RGB')
-
-            # Get dominant color
             stat = ImageStat.Stat(img)
-            dominant_color = tuple(map(int, stat.mean))
-
-            return ColorUtils.rgb_to_hex(dominant_color)
-        except Exception as e:
-            print(f"Error extracting color from image: {e}")
+            dominant = tuple(map(int, stat.mean))
+            return ColorUtils.rgb_to_hex(dominant)
+        except Exception:
             return None
 
     @staticmethod
     def rgb_to_hex(rgb_tuple):
-        """Convert RGB tuple to hex color"""
         return '#{:02x}{:02x}{:02x}'.format(*rgb_tuple)
 
     @staticmethod
     def hex_to_rgb(hex_color):
-        """Convert hex color to RGB tuple"""
-        hex_color = hex_color.lstrip('#')
-        return tuple(int(hex_color[i:i + 2], 16) for i in (0, 2, 4))
+        h = (hex_color or '').lstrip('#')
+        return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
 
     @staticmethod
     def get_color_name(hex_color):
-        """Get closest color name for a hex color"""
         try:
             return webcolors.hex_to_name(hex_color)
-        except ValueError:
-            # Find closest named color
+        except Exception:
             rgb = ColorUtils.hex_to_rgb(hex_color)
             min_colors = {}
-
             for key, name in webcolors.CSS3_HEX_TO_NAMES.items():
                 r_c, g_c, b_c = ColorUtils.hex_to_rgb(key)
                 rd = (r_c - rgb[0]) ** 2
                 gd = (g_c - rgb[1]) ** 2
                 bd = (b_c - rgb[2]) ** 2
-                min_colors[(rd + gd + bd)] = name
-
-            return min_colors[min(min_colors.keys())]
+                min_colors[rd + gd + bd] = name
+            return min(min_colors, key=min_colors.get) and min_colors[min(min_colors.keys())]
 
     @staticmethod
     def suggest_color_from_image(product_image):
-        """Suggest a color name based on the product image"""
-        if not product_image.image:
+        if not getattr(product_image, 'image', None):
             return None
+        dominant_hex = ColorUtils.extract_dominant_color_from_image(product_image.image.url)
+        return ColorUtils.get_color_name(dominant_hex) if dominant_hex else None
 
-        try:
-            dominant_hex = ColorUtils.extract_dominant_color_from_image(product_image.image.url)
-            if dominant_hex:
-                return ColorUtils.get_color_name(dominant_hex)
-        except Exception as e:
-            print(f"Error suggesting color: {e}")
+# --- Cart context (social-aware) -----------------------------------
+CART_TAX_RATE = getattr(settings, "CART_TAX_RATE", Decimal("0.00"))
+def _coerce_int(v, default=1):
+    try:
+        return int(v)
+    except Exception:
+        return default
 
-        return None
+def _ensure_owner_membership(social: SocialCart):
+    """
+    Make sure the SocialCart owner is represented in CartMember with role='owner' and status='joined'.
+    This lets templates reliably show the owner even if members were created later.
+    """
+    if not social or not social.owner_id:
+        return
 
+    owner_member, created = CartMember.objects.get_or_create(
+        social_cart=social,
+        user_id=social.owner_id,
+        defaults={"role": "owner", "status": "joined"},
+    )
+    # normalize any drift
+    updates = {}
+    if owner_member.role != "owner":
+        updates["role"] = "owner"
+    if owner_member.status != "joined":
+        updates["status"] = "joined"
+    if updates:
+        for k, v in updates.items():
+            setattr(owner_member, k, v)
+        owner_member.save(update_fields=list(updates.keys()))
 
+def _resolve_active_social_for(user):
+    """
+    Return the active SocialCart for a given user, if any.
+    """
+    social = (
+        SocialCart.objects.filter(
+            is_active=True,
+            status__in=["open", "checkout"],
+            members__user=user,
+            members__status="joined",
+        )
+        .select_related("cart")
+        .order_by("-created_at")
+        .first()
+    )
+    if social:
+        _ensure_owner_membership(social)
+    return social
+
+def _resolve_active_cart_for_user(user):
+    """
+    Return (cart, social) for an authenticated user.
+    Prefer the active SocialCart's cart if present; else personal cart.
+    """
+    social = _resolve_active_social_for(user)
+    if social and social.cart_id:
+        return social.cart, social
+    # fallback: personal cart
+    cart, _ = Cart.objects.get_or_create(user=user)
+    return cart, None
+
+# -----------------------------
+# Cart context builder (used by templates)
+# -----------------------------
 def build_cart_context(request, limit=None):
-    """
-    Reusable cart context for full cart and mini‑cart preview.
-    Adds:
-      - item_type: 'db' or 'session'
-      - remove_id: CartItem.id (db) OR exact session key (session)
-    """
     cart_items = []
-    total_price = Decimal('0.00')
+    total_price = Decimal("0.00")
+    tax_rate = CART_TAX_RATE
+
+    total_items_count = 0
+    cart_count = 0
+
+    social = None
+    is_owner = False
+    social_members = []
+    social_shares = []
+    my_share = None
 
     if request.user.is_authenticated:
-        cart = Cart.objects.filter(user=request.user).first()
+        # Prefer social cart if present
+        social = _resolve_active_social_for(request.user)
+        cart = social.cart if social else Cart.objects.filter(user=request.user).first()
+
+        if social:
+            me_member = (
+                CartMember.objects.filter(
+                    social_cart=social, user=request.user, status="joined"
+                )
+                .select_related("user")
+                .first()
+            )
+            # authoritative owner: social.owner_id
+            is_owner = bool(me_member and social.owner_id == request.user.id)
+
+            social_members = list(
+                social.members.select_related("user")
+                .filter(status="joined")
+                .order_by("joined_at")
+            )
+            social_shares = list(
+                PaymentShare.objects.filter(social_cart=social, is_active=True)
+                .select_related("member", "member__user")
+            )
+            if me_member:
+                my_share = next(
+                    (ps for ps in social_shares if ps.member_id == me_member.id), None
+                )
+
         if cart:
-            # For accurate "has_more", count on full qs
-            base_qs = CartItem.objects.filter(cart=cart).select_related('product').order_by('-id')
+            base_qs = (
+                CartItem.objects.filter(cart=cart)
+                .select_related("product", "added_by")
+                .order_by("-id")
+            )
             total_items_count = base_qs.count()
+            cart_count = base_qs.aggregate(s=Sum("quantity"))["s"] or 0
 
             items_qs = base_qs[:limit] if limit else base_qs
-            for item in items_qs:
-                if not item.product:
+            for it in items_qs:
+                if not it.product:
                     continue
-                subtotal = item.product.price * item.quantity
-                cart_items.append({
-                    'id': item.id,
-                    'product': item.product,
-                    'quantity': item.quantity,
-                    'subtotal': subtotal,
-                    'selected_features': getattr(item, 'selected_features', {}) or {},
-                    'item_type': 'db',           # <-- needed by template/JS
-                    'remove_id': str(item.id),   # <-- needed by template/JS
-                })
-                total_price += subtotal
-        else:
-            total_items_count = 0
+                line_total = it.product.price * it.quantity
+
+                # permission: owner can remove any; member only if they added it
+                can_remove = bool(
+                    (social and (is_owner or it.added_by_id == request.user.id))
+                    or (not social and it.cart and it.cart.user_id == request.user.id)
+                )
+
+                cart_items.append(
+                    {
+                        "id": it.id,
+                        "product": it.product,
+                        "quantity": it.quantity,
+                        "subtotal": line_total,
+                        "selected_features": getattr(it, "selected_features", {}) or {},
+                        "item_type": "db",
+                        "remove_id": str(it.id),
+                        "added_by_id": it.added_by_id,
+                        "can_remove": can_remove,
+                    }
+                )
+                total_price += line_total
 
     else:
-        session_cart = request.session.get('cart', {})
-        tmp_items = []
-        product_key_map = {}
+        # guests (session cart)
+        session_cart = request.session.get("cart", {})
+        tmp = []
+        keymap = {}
+        full_qty = 0
 
-        # Group keys by product id (keys look like "123::{}" or "123::{...}")
-        for key in session_cart.keys():
+        for key, val in session_cart.items():
             try:
-                pid = int(key.split("::")[0])
-                product_key_map.setdefault(pid, []).append(key)
-            except (ValueError, IndexError):
+                pid = int(key.split("::", 1)[0])
+                keymap.setdefault(pid, []).append(key)
+                full_qty += int(val.get("quantity", 1)) or 1
+            except Exception:
                 continue
 
-        product_ids = list(product_key_map.keys())
-        products = {p.id: p for p in Product.objects.filter(id__in=product_ids, is_active=True)}
+        products = {
+            p.id: p
+            for p in Product.objects.filter(id__in=keymap.keys(), is_active=True)
+        }
 
-        for pid, keys in product_key_map.items():
-            product = products.get(pid)
-            if not product:
+        for pid, keys in keymap.items():
+            p = products.get(pid)
+            if not p:
                 continue
             for key in keys:
-                cart_data = session_cart.get(key, {})
-                quantity = cart_data.get('quantity', 1)
-                selected_features = cart_data.get('selected_features', {})
-                subtotal = product.price * quantity
-                tmp_items.append({
-                    'id': pid,  # reference only
-                    'product': product,
-                    'quantity': quantity,
-                    'subtotal': subtotal,
-                    'selected_features': selected_features,
-                    'item_type': 'session',  # <-- needed
-                    'remove_id': key,        # <-- exact session key; may include braces/quotes
-                })
+                data = session_cart.get(key, {})
+                q = int(data.get("quantity", 1)) or 1
+                feats = data.get("selected_features") or data.get("features") or {}
+                line = p.price * q
+                tmp.append(
+                    {
+                        "id": pid,
+                        "product": p,
+                        "quantity": q,
+                        "subtotal": line,
+                        "selected_features": feats,
+                        "item_type": "session",
+                        "remove_id": key,
+                        "added_by_id": None,
+                        "can_remove": True,
+                    }
+                )
 
-        total_items_count = len(tmp_items)
-        items_iter = tmp_items[:limit] if limit else tmp_items
-        for entry in items_iter:
-            cart_items.append(entry)
-            total_price += entry['subtotal']
+        total_items_count = len(tmp)
+        cart_count = full_qty
+        items_iter = tmp[:limit] if limit else tmp
+        for row in items_iter:
+            cart_items.append(row)
+            total_price += row["subtotal"]
 
-    # Use the same tax rate you use elsewhere (0.15 in your earlier view)
-    tax_rate = Decimal('0.0')
     tax_amount = total_price * tax_rate
     final_total = total_price + tax_amount
-
-    cart_count = sum(i['quantity'] for i in cart_items)
     has_more = total_items_count > len(cart_items)
     remaining = max(total_items_count - len(cart_items), 0)
 
     return {
-        'cart_items': cart_items,
-        'total_price': total_price,
-        'tax_amount': tax_amount,
-        'final_total': final_total,
-        'cart_count': cart_count,
-        'has_more': has_more,
-        'remaining': remaining,
-        'total_items_count': total_items_count,
+        "cart_items": cart_items,
+        "total_price": total_price,
+        "tax_amount": tax_amount,
+        "final_total": final_total,
+        "cart_count": cart_count,
+        "has_more": has_more,
+        "remaining": remaining,
+        "total_items_count": total_items_count,
+        "social": social if request.user.is_authenticated else None,
+        "is_owner": is_owner,
+        "social_members": social_members,
+        "social_shares": social_shares,
+        "my_share": my_share,
     }
+
+def sync_social_items_totals(social):
+    """
+    Recompute each active member's items_total_amount as the sum of cart
+    items they personally added (price * qty). Then recalc amount_due.
+    """
+    if not social or not social.is_active:
+        return
+
+    cart = social.cart
+    if not cart:
+        return
+
+    # Map user_id -> total they added
+    per_user_totals = (
+        CartItem.objects
+        .filter(cart=cart, added_by__isnull=False)
+        .values('added_by_id')
+        .annotate(total=Sum(models.F('product__price') * models.F('quantity')))
+    )
+    totals_map = {row['added_by_id']: row['total'] or Decimal('0') for row in per_user_totals}
+
+    # Update shares for active members
+    shares = PaymentShare.objects.filter(social_cart=social, is_active=True).select_related('member__user')
+    for share in shares:
+        user_id = share.member.user_id
+        share.items_total_amount = totals_map.get(user_id, Decimal('0')) or Decimal('0')
+        share.save(update_fields=['items_total_amount'])
+
+    # Final due math
+    social.recalc_members_due()

@@ -1,437 +1,351 @@
 /**
- * Cart Management JavaScript
- * Handles cart operations including quantity updates, item removal, and promo codes
+ * Cart Management JavaScript – Fixed & Hardened
+ * - Quantity updates
+ * - Item removal (session + db, with social-cart permissions on server)
+ * - Order summary + badge refresh
  */
 
-// Global variables
 let csrfToken = null;
 
-// Initialize cart functionality when DOM is loaded
-document.addEventListener('DOMContentLoaded', function() {
-    initializeCart();
+document.addEventListener('DOMContentLoaded', function () {
+  initializeCart();
 });
 
-/**
- * Initialize cart functionality
- */
+/* -------------------- Init -------------------- */
 function initializeCart() {
-    // Get CSRF token
-    csrfToken = getCSRFToken();
+  csrfToken = getCSRFToken();
+  if (!csrfToken) {
+    console.warn('CSRF token not found; cart operations may fail.');
+  }
 
-    if (!csrfToken) {
-        console.error('CSRF token not found! Cart operations may fail.');
-    }
-
-    // Initialize event listeners
-    initializeQuantityControls();
-    initializeRemoveButtons();
-    initializePromoCode();
-    initializeInputValidation();
+  initializeQuantityControls();
+  initializeInputValidation();
+  initializeRemoveButtons();
 }
 
-/**
- * Get CSRF token from various sources
- */
+/* -------------------- CSRF helpers -------------------- */
 function getCSRFToken() {
-    // Try multiple sources for CSRF token
-    return document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
-           document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
-           document.querySelector('input[name="csrfmiddlewaretoken"]')?.value ||
-           getCookie('csrftoken');
+  return (
+    document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
+    document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
+    getCookie('csrftoken')
+  );
 }
 
-/**
- * Get cookie value by name (for CSRF token)
- */
 function getCookie(name) {
-    let cookieValue = null;
-    if (document.cookie && document.cookie !== '') {
-        const cookies = document.cookie.split(';');
-        for (let i = 0; i < cookies.length; i++) {
-            const cookie = cookies[i].trim();
-            if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                break;
-            }
-        }
+  let cookieValue = null;
+  if (document.cookie && document.cookie !== '') {
+    const cookies = document.cookie.split(';');
+    for (let i = 0; i < cookies.length; i++) {
+      const cookie = cookies[i].trim();
+      if (cookie.substring(0, name.length + 1) === name + '=') {
+        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+        break;
+      }
     }
-    return cookieValue;
+  }
+  return cookieValue;
 }
 
-/**
- * Initialize quantity control buttons
- */
+/* -------------------- Quantity controls -------------------- */
 function initializeQuantityControls() {
-    document.querySelectorAll('.quantity-btn').forEach(button => {
-        button.addEventListener('click', function() {
-            const action = this.dataset.action;
-            const itemId = this.dataset.itemId;
-            const productId = this.dataset.productId;
-            const input = document.querySelector(`input[data-item-id="${itemId}"]`);
-            let currentValue = parseInt(input.value) || 1;
+  document.querySelectorAll('.quantity-btn').forEach((button) => {
+    button.addEventListener('click', function (e) {
+      e.preventDefault();
+      const action = this.dataset.action; // 'increase' | 'decrease'
+      const itemId = this.dataset.itemId;
+      const productId = this.dataset.productId;
 
-            let newValue = currentValue;
-            if (action === 'increase' && currentValue < 99) {
-                newValue = currentValue + 1;
-            } else if (action === 'decrease' && currentValue > 1) {
-                newValue = currentValue - 1;
-            }
+      // IMPORTANT: match your HTML wrapper
+      const input = this.closest('.quantity-control')?.querySelector('.quantity-input');
+      if (!input) {
+        console.error('Quantity input not found for item', itemId);
+        return;
+      }
 
-            if (newValue !== currentValue) {
-                input.value = newValue;
-                updateCartItem(productId, itemId, newValue);
-            }
-        });
+      let current = parseInt(input.value) || 1;
+      let next = current;
+
+      if (action === 'increase' && current < 99) next = current + 1;
+      if (action === 'decrease' && current > 1) next = current - 1;
+
+      if (next !== current) {
+        input.value = next;
+        updateCartItem(itemId, productId, next);
+      }
     });
+  });
 }
 
-/**
- * Initialize direct quantity input handling
- */
+/* -------------------- Direct input validation -------------------- */
 function initializeInputValidation() {
-    document.querySelectorAll('.quantity-input').forEach(input => {
-        // Store original value for reverting on error
-        input.dataset.originalValue = input.value;
+  document.querySelectorAll('.quantity-input').forEach((input) => {
+    input.dataset.originalValue = input.value;
 
-        // Handle focus event
-        input.addEventListener('focus', function() {
-            this.dataset.originalValue = this.value;
-        });
-
-        // Handle change event
-        input.addEventListener('change', function() {
-            const itemId = this.dataset.itemId;
-            const productId = this.dataset.productId;
-            let value = parseInt(this.value) || 1;
-
-            // Validate input
-            if (value < 1) value = 1;
-            if (value > 99) value = 99;
-
-            this.value = value;
-            updateCartItem(productId, itemId, value);
-        });
-
-        // Prevent invalid input during typing
-        input.addEventListener('input', function() {
-            const value = this.value;
-            if (value === '' || parseInt(value) < 1) {
-                // Don't change immediately, wait for blur/change
-            } else if (parseInt(value) > 99) {
-                this.value = 99;
-            }
-        });
+    input.addEventListener('focus', function () {
+      this.dataset.originalValue = this.value;
     });
+
+    input.addEventListener('input', function () {
+      // hard clamp to 99 on-the-fly
+      const v = this.value;
+      if (v !== '' && parseInt(v) > 99) this.value = 99;
+    });
+
+    input.addEventListener('change', function () {
+      const itemId = this.dataset.itemId;
+      const productId = this.dataset.productId;
+
+      let value = parseInt(this.value) || 1;
+      if (value < 1) value = 1;
+      if (value > 99) value = 99;
+      this.value = value;
+
+      if (value !== parseInt(this.dataset.originalValue)) {
+        updateCartItem(itemId, productId, value);
+      }
+    });
+  });
 }
 
-/**
- * Initialize remove item buttons
- */
+/* -------------------- Remove buttons -------------------- */
 function initializeRemoveButtons() {
-    document.querySelectorAll('.remove-item').forEach(button => {
-        button.addEventListener('click', function() {
-            const itemId = this.dataset.itemId;
-            const productId = this.dataset.productId;
+  document.querySelectorAll('.remove-item').forEach((button) => {
+    button.addEventListener('click', function (e) {
+      e.preventDefault();
 
-            if (confirm('Are you sure you want to remove this item from your cart?')) {
-                removeCartItem(productId, itemId);
-            }
-        });
+      const itemId = this.dataset.itemId;           // CartItem ID (db)
+      const productId = this.dataset.productId;     // Product ID (optional)
+      const itemType = this.dataset.itemType || 'db';   // 'db' | 'session'
+      const removeId = this.dataset.removeId || itemId; // session key or CartItem.id
+
+      if (!removeId) {
+        showToast('Missing item identifier', 'error');
+        return;
+      }
+
+      if (confirm('Remove this item from your cart?')) {
+        removeCartItem({ itemId, productId, itemType, removeId });
+      }
     });
+  });
 }
 
-/**
- * Initialize promo code functionality
- */
-function initializePromoCode() {
-    const applyButton = document.getElementById('applyPromo');
-    const promoInput = document.getElementById('promoCode');
+/* -------------------- Update cart item -------------------- */
+function updateCartItem(itemId, productId, quantity) {
+  const buttons = document.querySelectorAll(`[data-item-id="${itemId}"]`);
+  buttons.forEach((b) => (b.disabled = true));
 
-    if (applyButton) {
-        applyButton.addEventListener('click', function() {
-            const promoCode = promoInput?.value.trim();
-            if (promoCode) {
-                applyPromoCode(promoCode);
-            } else {
-                showToast('Please enter a promo code', 'error');
-            }
-        });
-    }
+  const body = new URLSearchParams();
+  body.append('cart_item_id', itemId);
+  body.append('product_id', productId || '');
+  body.append('quantity', quantity);
 
-    if (promoInput) {
-        promoInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                applyButton?.click();
-            }
-        });
-    }
-}
-
-/**
- * Update cart item quantity
- */
-function updateCartItem(productId, itemId, quantity) {
-    // Disable buttons during request
-    const buttons = document.querySelectorAll(`[data-item-id="${itemId}"]`);
-    buttons.forEach(btn => btn.disabled = true);
-
-    // Get URLs from global variables or construct them
-    const updateUrl = window.cartUrls?.updateQuantity || '/update-cart-quantity/';
-
-    fetch(updateUrl, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'X-CSRFToken': csrfToken,
-            'X-Requested-With': 'XMLHttpRequest'
-        },
-        body: `product_id=${productId}&quantity=${quantity}`
+  fetch('/update-cart-quantity/', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'X-CSRFToken': csrfToken,
+      'X-Requested-With': 'XMLHttpRequest',
+    },
+    body: body.toString(),
+  })
+    .then(async (r) => {
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        const msg = data?.message || `HTTP ${r.status}`;
+        throw new Error(msg);
+      }
+      return data;
     })
-    .then(response => {
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+    .then((data) => {
+      if (data.success) {
+        // reflect server truth
+        const input = document.querySelector(`input.quantity-input[data-item-id="${itemId}"]`);
+        if (input && typeof data.quantity !== 'undefined') {
+          input.value = data.quantity;
+          input.dataset.originalValue = String(data.quantity);
         }
-        return response.json();
-    })
-    .then(data => {
-        if (data.success) {
-            // Update quantity input
-            const input = document.querySelector(`input[data-item-id="${itemId}"]`);
-            if (input) {
-                input.value = data.quantity;
-                input.dataset.originalValue = data.quantity;
-            }
 
-            // Update subtotal for this item
-            const subtotalEl = document.querySelector(`tr[data-item-id="${itemId}"] .subtotal`);
-            if (subtotalEl) subtotalEl.textContent = `$${data.subtotal}`;
-
-            // Update order summary
-            updateOrderSummary(data);
-
-            showToast('Cart updated successfully!');
-        } else {
-            showToast(data.message || 'Failed to update cart', 'error');
-            revertInputValue(itemId);
+        const subtotalEl = document.querySelector(`tr[data-item-id="${itemId}"] .subtotal`);
+        if (subtotalEl && typeof data.subtotal !== 'undefined') {
+          subtotalEl.textContent = `D${data.subtotal}`;
         }
-    })
-    .catch(error => {
-        console.error('Error updating cart:', error);
-        showToast('Error updating cart. Please try again.', 'error');
+
+        updateOrderSummary(data);
+        showToast('Cart updated successfully!', 'success');
+      } else {
+        showToast(data.message || 'Failed to update cart', 'error');
         revertInputValue(itemId);
+      }
+    })
+    .catch((err) => {
+      console.error('Update error:', err);
+      showToast(err.message || 'Error updating cart. Please try again.', 'error');
+      revertInputValue(itemId);
     })
     .finally(() => {
-        // Re-enable buttons
-        buttons.forEach(btn => btn.disabled = false);
+      buttons.forEach((b) => (b.disabled = false));
     });
 }
 
-/**
- * Remove item from cart
- */
-function removeCartItem(productId, itemId) {
-    const row = document.querySelector(`tr[data-item-id="${itemId}"]`);
-    const removeUrl = window.cartUrls?.removeItem || '/remove-cart-item/';
+/* -------------------- Remove cart item (session + db) -------------------- */
+function removeCartItem({ itemId, productId, itemType = 'db', removeId }) {
+  const row = document.querySelector(`tr[data-item-id="${itemId}"]`) ||
+              document.querySelector(`tr[data-remove-id="${removeId}"]`) ||
+              document.querySelector(`tr[data-product-id="${productId}"]`);
 
-    fetch(removeUrl, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'X-CSRFToken': csrfToken,
-            'X-Requested-With': 'XMLHttpRequest'
-        },
-        body: `product_id=${productId}`
+  const buttons = row ? row.querySelectorAll('button') : [];
+  buttons.forEach((b) => (b.disabled = true));
+
+  const body = new URLSearchParams();
+  body.append('item_type', itemType); // 'db' or 'session'
+  body.append('remove_id', removeId);
+  if (productId) body.append('product_id', productId);
+
+  fetch('/remove-cart-item/', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'X-CSRFToken': csrfToken,
+      'X-Requested-With': 'XMLHttpRequest',
+    },
+    body: body.toString(),
+  })
+    .then(async (r) => {
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        const msg = data?.message || `HTTP ${r.status}`;
+        throw new Error(msg);
+      }
+      return data;
     })
-    .then(response => {
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        return response.json();
-    })
-    .then(data => {
-        if (data.success) {
-            // Remove the row with animation
-            if (row) {
-                row.style.transition = 'opacity 0.3s ease';
-                row.style.opacity = '0';
-                setTimeout(() => {
-                    row.remove();
-                    // Check if cart is empty
-                    if (document.querySelectorAll('.cart-item').length === 0) {
-                        location.reload(); // Reload to show empty cart message
-                    }
-                }, 300);
-            }
+    .then((data) => {
+      if (data.success) {
+        // animate then remove row if we have it
+        if (row) {
+          row.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
+          row.style.opacity = '0';
+          row.style.transform = 'translateX(-12px)';
 
-            // Update order summary
-            updateOrderSummary(data);
+          setTimeout(() => {
+            row.remove();
 
-            showToast('Item removed from cart!');
-        } else {
-            showToast(data.message || 'Failed to remove item', 'error');
-        }
-    })
-    .catch(error => {
-        console.error('Error removing item:', error);
-        showToast('Error removing item. Please try again.', 'error');
-    });
-}
-
-/**
- * Apply promo code
- */
-function applyPromoCode(code) {
-    const applyUrl = window.cartUrls?.applyPromo || '/apply-promo-code/';
-
-    fetch(applyUrl, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'X-CSRFToken': csrfToken,
-            'X-Requested-With': 'XMLHttpRequest'
-        },
-        body: `promo_code=${encodeURIComponent(code)}`
-    })
-    .then(response => {
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        return response.json();
-    })
-    .then(data => {
-        if (data.success) {
-            updateOrderSummary(data);
-            showToast(`Promo code applied! You saved $${data.discount}`);
-            document.getElementById('promoCode').value = '';
-        } else {
-            showToast(data.message || 'Invalid promo code', 'error');
-        }
-    })
-    .catch(error => {
-        console.error('Error applying promo code:', error);
-        showToast('Error applying promo code. Please try again.', 'error');
-    });
-}
-
-/**
- * Update order summary with new data
- */
-function updateOrderSummary(data) {
-    // Update item count
-    const itemCountEl = document.getElementById('item-count');
-    if (itemCountEl && data.item_count !== undefined) {
-        itemCountEl.textContent = data.item_count;
-    }
-
-    // Update subtotal
-    const subtotalEl = document.getElementById('order-subtotal');
-    if (subtotalEl && data.total_price !== undefined) {
-        subtotalEl.textContent = `$${data.total_price}`;
-    }
-
-    // Update total
-    const totalEl = document.getElementById('total-price');
-    if (totalEl && data.final_total !== undefined) {
-        totalEl.textContent = `$${data.final_total}`;
-    } else if (totalEl && data.total_price !== undefined) {
-        totalEl.textContent = `$${data.total_price}`;
-    }
-
-    // Update tax if provided
-    const taxEl = document.getElementById('tax-amount');
-    if (taxEl && data.tax_amount !== undefined) {
-        taxEl.textContent = `$${data.tax_amount}`;
-    }
-
-    // Update cart badge in header
-    updateCartBadge(data.item_count);
-}
-
-/**
- * Update cart badge in navigation
- */
-function updateCartBadge(itemCount) {
-    const badges = document.querySelectorAll('.cart-badge, .badge[data-cart-count]');
-    badges.forEach(badge => {
-        if (badge && itemCount !== undefined) {
-            if (itemCount > 0) {
-                badge.textContent = itemCount;
-                badge.style.display = 'inline';
+            const remaining = document.querySelectorAll('.cart-item').length;
+            if (remaining === 0) {
+              showToast('Cart is now empty. Refreshing…', 'info');
+              setTimeout(() => location.reload(), 800);
             } else {
-                badge.style.display = 'none';
+              updateOrderSummary(data);
+              showToast('Item removed from cart!', 'success');
             }
-        }
-    });
-
-    // Update cart count text
-    const countTexts = document.querySelectorAll('[data-cart-count-text]');
-    countTexts.forEach(element => {
-        if (element && itemCount !== undefined) {
-            const itemText = itemCount === 1 ? 'item' : 'items';
-            element.textContent = `${itemCount} ${itemText}`;
-        }
-    });
-}
-
-/**
- * Revert input value to original on error
- */
-function revertInputValue(itemId) {
-    const input = document.querySelector(`input[data-item-id="${itemId}"]`);
-    if (input) {
-        input.value = input.dataset.originalValue || 1;
-    }
-}
-
-/**
- * Show toast notification
- */
-function showToast(message, type = 'success') {
-    const toast = document.getElementById('cartToast');
-
-    if (toast) {
-        const toastBody = toast.querySelector('.toast-body');
-
-        // Update message
-        if (toastBody) toastBody.textContent = message;
-
-        // Update toast color based on type
-        toast.className = `toast align-items-center text-white border-0 ${type === 'error' ? 'bg-danger' : 'bg-success'}`;
-
-        // Show toast
-        if (typeof bootstrap !== 'undefined') {
-            const bsToast = new bootstrap.Toast(toast);
-            bsToast.show();
+          }, 250);
         } else {
-            // Fallback if Bootstrap JS is not loaded
-            toast.style.display = 'block';
-            setTimeout(() => {
-                toast.style.display = 'none';
-            }, 3000);
+          // No row (possibly removed elsewhere) — just update summary
+          updateOrderSummary(data);
+          showToast('Item removed from cart!', 'success');
         }
+      } else {
+        buttons.forEach((b) => (b.disabled = false));
+        showToast(data.message || 'Failed to remove item', 'error');
+      }
+    })
+    .catch((err) => {
+      console.error('Remove error:', err);
+      buttons.forEach((b) => (b.disabled = false));
+      showToast(err.message || 'Error removing item. Please try again.', 'error');
+    });
+}
+
+/* -------------------- Order summary & badges -------------------- */
+function updateOrderSummary(data) {
+  // item count (server may return cart_count or item_count)
+  const itemCount =
+    (typeof data.item_count !== 'undefined' && data.item_count) ??
+    (typeof data.cart_count !== 'undefined' && data.cart_count);
+
+  const itemCountEl = document.getElementById('item-count');
+  if (itemCountEl && itemCount != null) {
+    itemCountEl.textContent = itemCount;
+  }
+
+  const subtotalEl = document.getElementById('order-subtotal');
+  if (subtotalEl && typeof data.total_price !== 'undefined') {
+    subtotalEl.textContent = `D${data.total_price}`;
+  }
+
+  const totalEl = document.getElementById('total-price');
+  if (totalEl) {
+    const total =
+      (typeof data.final_total !== 'undefined' && data.final_total) ??
+      (typeof data.total_price !== 'undefined' && data.total_price);
+    if (total != null) totalEl.textContent = `D${total}`;
+  }
+
+  const taxEl = document.getElementById('tax-amount');
+  if (taxEl && typeof data.tax_amount !== 'undefined') {
+    taxEl.textContent = `D${data.tax_amount}`;
+  }
+
+  if (itemCount != null) {
+    updateCartBadge(itemCount);
+  }
+}
+
+function updateCartBadge(itemCount) {
+  const badges = document.querySelectorAll('.cart-badge, .badge[data-cart-count], #cartCountBadge');
+  badges.forEach((badge) => {
+    if (!badge) return;
+    if (itemCount > 0) {
+      badge.textContent = itemCount;
+      badge.style.display = 'inline-block';
     } else {
-        // Fallback: create a simple alert
-        console.log(`${type.toUpperCase()}: ${message}`);
-        // You could create a custom toast here if needed
+      badge.style.display = 'none';
     }
+  });
 }
 
-/**
- * Utility function to refresh CSRF token if needed
- */
-function refreshCSRFToken() {
-    csrfToken = getCSRFToken();
-    return csrfToken;
+/* -------------------- Utilities -------------------- */
+function revertInputValue(itemId) {
+  const input = document.querySelector(`input.quantity-input[data-item-id="${itemId}"]`);
+  if (input) {
+    input.value = input.dataset.originalValue || 1;
+  }
 }
 
-// Export functions for global access if needed
+function showToast(message, type = 'success') {
+  const toast = document.getElementById('cartToast');
+  if (!toast) {
+    if (type === 'error') alert(`Error: ${message}`);
+    else console.log(`[Toast] ${type}: ${message}`);
+    return;
+  }
+
+  const toastBody = toast.querySelector('.toast-body');
+  if (toastBody) toastBody.textContent = message;
+
+  const bgClass =
+    type === 'error' ? 'bg-danger' :
+    type === 'warning' ? 'bg-warning' :
+    type === 'info' ? 'bg-info' : 'bg-success';
+
+  toast.className = `toast align-items-center text-white border-0 shadow-lg ${bgClass}`;
+
+  if (window.bootstrap?.Toast) {
+    new bootstrap.Toast(toast, { autohide: true, delay: 4000 }).show();
+  } else {
+    toast.style.display = 'block';
+    setTimeout(() => (toast.style.display = 'none'), 4000);
+  }
+}
+
+/* Expose for other scripts if needed */
 window.cartManager = {
-    updateCartItem,
-    removeCartItem,
-    applyPromoCode,
-    updateOrderSummary,
-    updateCartBadge,
-    showToast,
-    refreshCSRFToken,
-    getCSRFToken
+  updateCartItem,
+  removeCartItem,
+  updateOrderSummary,
+  updateCartBadge,
+  showToast,
+  getCSRFToken,
 };
+window.showToast = showToast;

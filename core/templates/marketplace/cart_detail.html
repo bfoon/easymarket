@@ -4,394 +4,724 @@
 {% block content %}
 <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
 
-<section class="py-5 bg-light">
-    <div class="container">
-        <!-- Header -->
-        <div class="d-flex align-items-center justify-content-between mb-4">
-            <h2 class="h3 fw-bold mb-0">
-                <i class="fas fa-shopping-cart me-2 text-primary"></i>
-                Shopping Cart
-                {% if cart_items %}
-                    <span class="badge bg-primary ms-2">{{ cart_items|length }}</span>
-                {% endif %}
-            </h2>
-            {% if cart_items %}
-                <a href="{% url 'marketplace:all_products' %}" class="btn btn-outline-primary">
-                    <i class="fas fa-plus me-1"></i> Add More Items
-                </a>
+<section class="py-4 bg-light min-vh-100">
+  <div class="container">
+    <!-- Header -->
+    <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between mb-4 gap-3">
+      <div>
+        <h1 class="h3 fw-bold mb-1 d-flex align-items-center">
+          <i class="fas fa-shopping-cart me-2 text-primary"></i>
+          Shopping Cart
+          {% if cart_count %}
+            <span class="badge bg-primary rounded-pill ms-2 fs-6">{{ cart_count }}</span>
+          {% endif %}
+        </h1>
+        <p class="text-muted mb-0 small">Review and manage your items before checkout</p>
+      </div>
+      {% if cart_items %}
+        <a href="{% url 'marketplace:all_products' %}" class="btn btn-outline-primary">
+          <i class="fas fa-plus me-1"></i> Add More Items
+        </a>
+      {% endif %}
+    </div>
+
+    {% if cart_items %}
+    <div class="row g-4">
+      <!-- Cart Items -->
+      <div class="col-lg-8">
+        <div class="card shadow-sm border-0 mb-4">
+          <div class="card-header bg-white border-bottom py-3">
+            <h5 class="mb-0 fw-semibold"><i class="fas fa-list me-2 text-muted"></i>Items in Cart</h5>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th class="border-0 ps-4 fw-semibold">Product</th>
+                    <th class="border-0 text-center fw-semibold d-none d-md-table-cell">Price</th>
+                    <th class="border-0 text-center fw-semibold">Quantity</th>
+                    <th class="border-0 text-center fw-semibold d-none d-lg-table-cell">Subtotal</th>
+                    <th class="border-0 text-center fw-semibold">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for item in cart_items %}
+                  <tr class="cart-item" data-item-id="{{ item.id }}" data-product-id="{{ item.product.id }}">
+                    <td class="ps-4 py-3">
+                      <div class="d-flex align-items-center gap-3">
+                        <img src="{{ item.product.image.url|default:'' }}"
+                             alt="{{ item.product.name }}"
+                             class="rounded-3 shadow-sm"
+                             style="width:90px;height:90px;object-fit:cover;"
+                             onerror="this.src='{% static 'img/placeholder.png' %}'">
+                        <div class="flex-grow-1 min-w-0">
+                          <h6 class="mb-1 fw-semibold text-truncate">{{ item.product.name }}</h6>
+                          <p class="text-muted small mb-2"><i class="fas fa-tag me-1"></i>{{ item.product.category }}</p>
+                          {% if item.selected_features %}
+                          <div class="mb-2">
+                            {% for key, value in item.selected_features.items %}
+                              <span class="badge bg-light text-dark border me-1 mb-1">{{ key|title }}: {{ value }}</span>
+                            {% endfor %}
+                          </div>
+                          {% endif %}
+                          <div class="d-md-none">
+                            <span class="fw-bold text-primary">D{{ item.product.price|floatformat:"2" }}</span>
+                            <span class="text-muted mx-2">×</span>
+                            <span class="text-muted">{{ item.quantity }}</span>
+                            <span class="text-muted mx-2">=</span>
+                            <span class="fw-bold text-success">D{{ item.subtotal|floatformat:"2" }}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="text-center d-none d-md-table-cell">
+                      <span class="fw-semibold text-dark">D{{ item.product.price|floatformat:"2" }}</span>
+                    </td>
+                    <td class="text-center">
+                      <div class="d-flex justify-content-center">
+                        <div class="btn-group shadow-sm" role="group" style="max-width:140px;">
+                          <button class="btn btn-sm btn-outline-secondary quantity-btn"
+                                  type="button" data-action="decrease"
+                                  data-item-id="{{ item.id }}" data-product-id="{{ item.product.id }}"
+                                  title="Decrease quantity"><i class="fas fa-minus"></i></button>
+                          <input type="number" class="form-control form-control-sm text-center quantity-input border-secondary"
+                                 value="{{ item.quantity }}" min="1" max="99"
+                                 data-item-id="{{ item.id }}" data-product-id="{{ item.product.id }}"
+                                 style="width:60px;">
+                          <button class="btn btn-sm btn-outline-secondary quantity-btn"
+                                  type="button" data-action="increase"
+                                  data-item-id="{{ item.id }}" data-product-id="{{ item.product.id }}"
+                                  title="Increase quantity"><i class="fas fa-plus"></i></button>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="text-center d-none d-lg-table-cell">
+                      <span class="fw-bold text-success fs-5 subtotal">D{{ item.subtotal|floatformat:"2" }}</span>
+                    </td>
+                    <td class="text-center">
+                      {% if item.can_remove %}
+                        <button class="btn btn-sm btn-outline-danger remove-item rounded-circle p-2"
+                                data-item-id="{{ item.id }}" data-product-id="{{ item.product.id }}"
+                                title="Remove item" style="width:40px;height:40px;">
+                          <i class="fas fa-trash"></i>
+                        </button>
+                      {% else %}
+                        <small class="text-muted d-block" style="font-size:.7rem;line-height:1.2;">
+                          <i class="fas fa-lock me-1"></i>Locked
+                        </small>
+                      {% endif %}
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Promo Code -->
+        <div class="card shadow-sm border-0 mb-4">
+          <div class="card-body">
+            <h6 class="fw-semibold mb-3"><i class="fas fa-ticket-alt me-2 text-warning"></i>Have a Promo Code?</h6>
+            <div id="appliedPromo" class="alert alert-success d-none mb-3" role="alert">
+              <div class="d-flex justify-content-between align-items-center">
+                <span><i class="fas fa-check-circle me-2"></i>Code <strong id="appliedPromoCode"></strong> applied!</span>
+                <button type="button" class="btn btn-sm btn-outline-success" id="removePromo">
+                  <i class="fas fa-times me-1"></i> Remove
+                </button>
+              </div>
+            </div>
+            <div class="input-group">
+              <input type="text" class="form-control" id="promoCodeInput" placeholder="Enter promo code" aria-label="Promo code">
+              <button class="btn btn-warning text-dark" type="button" id="applyPromo"><i class="fas fa-check me-1"></i> Apply</button>
+            </div>
+            <div id="promoFeedback" class="small mt-2 d-none"></div>
+          </div>
+        </div>
+
+        <!-- Social Shopping Card (server-rendered when available) -->
+        {% if social %}
+        <div class="card shadow-sm border-0 border-start border-primary border-4" id="socialServerCard">
+          <div class="card-header bg-gradient-primary text-white d-flex align-items-center justify-content-between py-3">
+            <div>
+              <h5 class="mb-0 fw-bold"><i class="fas fa-users me-2"></i> Social Shopping Cart</h5>
+              <small class="opacity-75">Shop together with friends</small>
+            </div>
+            <span class="badge bg-white text-primary px-3 py-2 text-uppercase fw-semibold">{{ social.status }}</span>
+          </div>
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h6 class="mb-0 fw-semibold text-muted"><i class="fas fa-user-friends me-2"></i>Members</h6>
+              <span class="badge bg-light text-dark">{{ social_members|length }} total</span>
+            </div>
+            <div class="list-group list-group-flush">
+              {% for m in social_members %}
+              <div class="list-group-item px-0 border-0 border-bottom py-3">
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                  <div class="d-flex align-items-center gap-2">
+                    <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center" style="width:40px;height:40px;">
+                      <i class="fas fa-user"></i>
+                    </div>
+                    <div>
+                      <div class="fw-semibold">
+                        {{ m.user.get_full_name|default:m.user.username }}
+                        {% if request.user.id == m.user_id %}<span class="badge bg-info text-dark ms-1">You</span>{% endif %}
+                        {% if m.user_id == social.owner_id %}<span class="badge bg-warning text-dark ms-1"><i class="fas fa-crown me-1"></i> Owner</span>{% endif %}
+                      </div>
+                      <small class="text-muted">
+                        {% if m.role == 'editor' %}<i class="fas fa-edit me-1"></i>Editor{% elif m.role == 'viewer' %}<i class="fas fa-eye me-1"></i>Viewer{% endif %}
+                      </small>
+                    </div>
+                  </div>
+                  <div class="d-flex align-items-center gap-2">
+                    {% with has_share=False %}
+                      {% for sh in social_shares %}
+                        {% if sh.member_id == m.id %}
+                          <small class="text-muted">
+                            {% if sh.fixed_amount %}<i class="fas fa-money-bill-wave me-1"></i>D{{ sh.fixed_amount|floatformat:"2" }}{% endif %}
+                            {% if sh.percentage %}{% if sh.fixed_amount %} • {% endif %}{{ sh.percentage|floatformat:"0" }}%{% endif %}
+                            {% if sh.amount_due %}<span class="text-success fw-semibold"> • Due: D{{ sh.amount_due|floatformat:"2" }}</span>{% endif %}
+                          </small>
+                          {% with has_share=True %}{% endwith %}
+                        {% endif %}
+                      {% endfor %}
+                      {% if not has_share %}<small class="text-muted">No share set</small>{% endif %}
+                    {% endwith %}
+
+                    {% if is_owner and m.user_id != social.owner_id %}
+                      <button type="button" class="btn btn-sm btn-outline-danger js-remove-member"
+                              data-remove-url="{% url 'marketplace:remove_member' member_id=m.id %}" title="Remove member">
+                        <i class="fas fa-user-minus"></i>
+                      </button>
+                    {% endif %}
+                    {% if request.user.id == m.user_id and m.user_id != social.owner_id %}
+                      <button type="button" class="btn btn-sm btn-outline-secondary js-leave-social"
+                              data-social-id="{{ social.id }}" title="Leave cart">
+                        <i class="fas fa-sign-out-alt"></i>
+                      </button>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+              {% empty %}
+                <div class="text-center py-4 text-muted">
+                  <i class="fas fa-user-slash mb-2" style="font-size:2rem;opacity:.3;"></i>
+                  <p class="mb-0">No members yet</p>
+                </div>
+              {% endfor %}
+            </div>
+
+            {% if my_share %}
+              <div class="alert alert-info mt-3 mb-0" role="alert">
+                <div class="d-flex align-items-center">
+                  <i class="fas fa-wallet me-3 fs-4"></i>
+                  <div>
+                    <strong class="d-block">Your Share</strong>
+                    <span>
+                      {% if my_share.fixed_amount %}Fixed: D{{ my_share.fixed_amount|floatformat:"2" }}{% endif %}
+                      {% if my_share.percentage %}{% if my_share.fixed_amount %} • {% endif %}{{ my_share.percentage|floatformat:"0" }}%{% endif %}
+                      {% if my_share.amount_due %}<span class="text-success"> • <strong>Due: D{{ my_share.amount_due|floatformat:"2" }}</strong></span>{% endif %}
+                    </span>
+                  </div>
+                </div>
+              </div>
             {% endif %}
+            <input type="hidden" id="socialId" value="{{ social.id }}">
+          </div>
         </div>
-
-        {% if cart_items %}
-        <!-- Cart Items -->
-        <div class="row">
-            <div class="col-lg-8">
-                <div class="card shadow-sm">
-                    <div class="card-body p-0">
-                        <div class="table-responsive">
-                            <table class="table table-hover mb-0">
-                                <thead class="bg-light">
-                                    <tr>
-                                        <th class="border-0 ps-4">Product</th>
-                                        <th class="border-0 text-center">Price</th>
-                                        <th class="border-0 text-center">Quantity</th>
-                                        <th class="border-0 text-center">Subtotal</th>
-                                        <th class="border-0 text-center">Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for item in cart_items %}
-                                    <tr class="cart-item" data-item-id="{{ item.id }}" data-product-id="{{ item.product.id }}">
-                                        <td class="ps-4 py-3">
-                                            <div class="d-flex align-items-center">
-                                                <div class="position-relative me-3">
-                                                    <img src="{{ item.product.image.url }}"
-                                                         alt="{{ item.product.name }}"
-                                                         class="rounded cart-item-image"
-                                                         style="width: 80px; height: 80px; object-fit: cover;">
-                                                </div>
-                                                <div>
-                                                    <h6 class="mb-1 fw-semibold">{{ item.product.name|truncatechars:40 }}</h6>
-                                                    <p class="text-muted small mb-0">{{ item.product.category }}</p>
-                                                    {% if item.selected_features %}
-                                                    <ul class="list-unstyled mb-1 small text-muted ps-2" style="font-size: 0.85rem;">
-                                                        {% for key, value in item.selected_features.items %}
-                                                            <li>
-                                                                <span class="badge bg-light text-dark border">
-                                                                    <strong>{{ key|title }}:</strong> {{ value }}
-                                                                </span>
-                                                            </li>
-                                                        {% endfor %}
-                                                    </ul>
-                                                {% endif %}
-                                                <p class="text-muted small mb-0">{{ item.product.description|truncatechars:50 }}</p>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td class="text-center align-middle">
-                                            <span class="fw-semibold">D{{ item.product.price }}</span>
-                                        </td>
-                                        <td class="text-center align-middle">
-                                            <div class="input-group quantity-control" style="width: 120px; margin: 0 auto;">
-                                                <button class="btn btn-outline-secondary btn-sm quantity-btn"
-                                                        type="button"
-                                                        data-action="decrease"
-                                                        data-item-id="{{ item.id }}"
-                                                        data-product-id="{{ item.product.id }}">
-                                                    <i class="fas fa-minus"></i>
-                                                </button>
-                                                <input type="number"
-                                                       class="form-control form-control-sm text-center quantity-input"
-                                                       value="{{ item.quantity }}"
-                                                       min="1"
-                                                       max="99"
-                                                       data-item-id="{{ item.id }}"
-                                                       data-product-id="{{ item.product.id }}">
-                                                <button class="btn btn-outline-secondary btn-sm quantity-btn"
-                                                        type="button"
-                                                        data-action="increase"
-                                                        data-item-id="{{ item.id }}"
-                                                        data-product-id="{{ item.product.id }}">
-                                                    <i class="fas fa-plus"></i>
-                                                </button>
-                                            </div>
-                                        </td>
-                                        <td class="text-center align-middle">
-                                            <span class="fw-bold text-success subtotal">D{{ item.subtotal }}</span>
-                                        </td>
-                                        <td class="text-center align-middle">
-                                            <button class="btn btn-outline-danger btn-sm remove-item"
-                                                    data-item-id="{{ item.id }}"
-                                                    data-product-id="{{ item.product.id }}"
-                                                    title="Remove item">
-                                                <i class="fas fa-trash"></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Order Summary -->
-            <div class="col-lg-4">
-                <div class="card shadow-sm">
-                    <div class="card-header bg-primary text-white">
-                        <h5 class="mb-0">
-                            <i class="fas fa-receipt me-2"></i> Order Summary
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between mb-2">
-                            <span>Subtotal (<span id="item-count">{{ cart_items|length }}</span> items):</span>
-                            <span class="order-summary-subtotal" id="order-subtotal">D{{ total_price }}</span>
-                        </div>
-                        <div class="d-flex justify-content-between mb-2">
-                            <span>Shipping:</span>
-                            <span class="text-success">Free</span>
-                        </div>
-                        <div class="d-flex justify-content-between mb-2">
-                            <span>Tax:</span>
-                            <span id="tax-amount">D{{ tax_amount|default:"0.00" }}</span>
-                        </div>
-
-                        <!-- Promo Code Discount Display -->
-                        <div class="d-flex justify-content-between mb-2 promo-discount d-none">
-                            <span class="text-success">Promo Discount:</span>
-                            <span class="text-success" id="promo-discount-amount">-D0.00</span>
-                        </div>
-
-                        <hr>
-                        <div class="d-flex justify-content-between mb-3">
-                            <strong>Total:</strong>
-                            <strong class="text-success" id="total-price">D{{ final_total|default:total_price }}</strong>
-                        </div>
-
-                        <div class="d-grid gap-2">
-                           <form action="{% url 'orders:checkout_cart' %}" method="post" id="checkoutForm">
-                                {% csrf_token %}
-                                <!-- Hidden field for promo code -->
-                                <input type="hidden" name="promo_code" id="promoCodeHidden" value="">
-                                <button type="submit" class="btn btn-success btn-lg w-100">
-                                    <i class="fas fa-credit-card me-2"></i> Proceed to Checkout
-                                </button>
-                            </form>
-                            <button class="btn btn-outline-secondary" id="copyCartBtn">
-                                <i class="fas fa-copy me-1"></i> Copy Cart
-                            </button>
-                            <button class="btn btn-outline-success" id="whatsappShareBtn">
-                                <i class="fab fa-whatsapp me-1"></i> Share on WhatsApp
-                            </button>
-                            <a href="{% url 'marketplace:all_products' %}" class="btn btn-outline-primary">
-                                <i class="fas fa-arrow-left me-2"></i> Continue Shopping
-                            </a>
-                        </div>
-                    </div>
-                    </div>
-
-               <!-- Promo Code -->
-                <div class="card shadow-sm mt-3">
-                    <div class="card-body">
-                        <h6 class="card-title">
-                            <i class="fas fa-tag me-2"></i> Promo Code
-                        </h6>
-                        <div class="input-group">
-                            <input type="text" class="form-control" placeholder="Enter promo code" id="promoCodeInput">
-                            <button class="btn btn-outline-secondary" type="button" id="applyPromo">
-                                Apply
-                            </button>
-                        </div>
-                        <div id="promoFeedback" class="small mt-2 d-none">
-                            <!-- Feedback messages will be shown here -->
-                        </div>
-                        <div id="appliedPromo" class="small text-success mt-2 d-none">
-                            <i class="fas fa-check-circle me-1"></i>
-                            <span>Promo code applied: <strong id="appliedPromoCode"></strong></span>
-                            <button type="button" class="btn btn-sm btn-outline-danger ms-2" id="removePromo">
-                                <i class="fas fa-times"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         {% else %}
-        <!-- Empty Cart -->
-        <div class="text-center py-5">
-            <div class="empty-cart-icon mb-4">
-                <i class="fas fa-shopping-cart text-muted" style="font-size: 5rem; opacity: 0.3;"></i>
-            </div>
-            <h4 class="text-muted mb-3">Your cart is empty</h4>
-            <p class="text-muted mb-4">Looks like you haven't added any items to your cart yet.</p>
-            <a href="{% url 'marketplace:all_products' %}" class="btn btn-primary btn-lg">
-                <i class="fas fa-shopping-bag me-2"></i> Start Shopping
-            </a>
+        <!-- Create Social Cart CTA when no server-side social -->
+        <div class="card shadow-sm border-0 border-start border-info border-4" id="socialCtaCard">
+          <div class="card-body text-center py-3">
+            <i class="fas fa-users-cog text-info mb-3" style="font-size:3rem;opacity:.7;"></i>
+            <h5 class="fw-bold mb-2">Shop with Friends</h5>
+            <p class="text-muted mb-4">Create a social cart and invite friends to shop together</p>
+            <button class="btn btn-info text-white" id="createSocialCartBtn">
+              <i class="fas fa-plus-circle me-2"></i> Create Social Cart
+            </button>
+          </div>
         </div>
         {% endif %}
+
+        <!-- Social Cart Actions (client-persistent) -->
+        <div id="socialCartActions" class="card shadow-sm border-0 mt-4" style="{% if not social %}display:none;{% endif %}">
+          <div class="card-body">
+            <h6 class="fw-semibold mb-3"><i class="fas fa-share-alt me-2 text-primary"></i>Invite Friends</h6>
+
+            <div class="row g-2 mb-3">
+              <div class="col-md-5"><input type="email" class="form-control" placeholder="Email address" id="inviteEmail"></div>
+              <div class="col-md-4"><input type="tel" class="form-control" placeholder="Phone number" id="invitePhone"></div>
+              <div class="col-md-3"><button class="btn btn-primary w-100" id="sendInviteBtn"><i class="fas fa-paper-plane me-1"></i> Send</button></div>
+            </div>
+
+            <div class="border rounded p-3 bg-light">
+              <label class="form-label small text-muted mb-2">Share Link</label>
+              <div class="input-group">
+                <input type="text" class="form-control form-control-sm bg-white" id="socialInviteLink" value="" readonly>
+                <button class="btn btn-sm btn-outline-secondary" id="copyInviteBtn" title="Copy link"><i class="fas fa-copy"></i></button>
+              </div>
+            </div>
+
+            <hr class="my-3">
+
+            <div class="d-flex justify-content-between align-items-center">
+              <span class="text-muted small">Done collaborating?</span>
+              <button class="btn btn-sm btn-outline-danger" id="leaveCartBtn"><i class="fas fa-sign-out-alt me-1"></i> Leave Cart</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Order Summary -->
+      <div class="col-lg-4">
+        <div class="sticky-lg-top" style="top:20px;">
+          <div class="card shadow border-0">
+            <div class="card-header bg-white border-bottom py-3">
+              <h5 class="mb-0 fw-bold"><i class="fas fa-receipt me-2 text-primary"></i> Order Summary</h5>
+            </div>
+            <div class="card-body">
+              <div class="d-flex justify-content-between mb-3 pb-2">
+                <span class="text-muted">Subtotal (<span id="item-count">{{ cart_count }}</span> items)</span>
+                <span class="fw-semibold order-summary-subtotal" id="order-subtotal">D{{ total_price|floatformat:"2" }}</span>
+              </div>
+              <div class="d-flex justify-content-between mb-3 pb-2">
+                <span class="text-muted">Shipping</span>
+                <span class="text-success fw-semibold"><i class="fas fa-truck me-1"></i> Free</span>
+              </div>
+              <div class="d-flex justify-content-between mb-3 pb-2">
+                <span class="text-muted">Tax</span>
+                <span id="tax-amount">D{{ tax_amount|default:"0.00"|floatformat:"2" }}</span>
+              </div>
+              <div class="d-flex justify-content-between mb-3 pb-2 promo-discount d-none">
+                <span class="text-success"><i class="fas fa-tags me-1"></i> Promo Discount</span>
+                <span class="text-success fw-semibold" id="promo-discount-amount">-D0.00</span>
+              </div>
+              <hr class="my-3">
+              <div class="d-flex justify-content-between mb-4">
+                <strong class="fs-5">Total</strong>
+                <strong class="text-success fs-4" id="total-price">D{{ final_total|default:total_price|floatformat:"2" }}</strong>
+              </div>
+
+              <div class="d-grid gap-2">
+                <form action="{% url 'orders:checkout_cart' %}" method="post" id="checkoutForm">
+                  {% csrf_token %}
+                  <input type="hidden" name="promo_code" id="promoCodeHidden" value="">
+                  <button type="submit" class="btn btn-success btn-lg w-100 py-3 fw-bold shadow">
+                    <i class="fas fa-lock me-2"></i> Secure Checkout
+                  </button>
+                </form>
+
+                <div class="btn-group" role="group">
+                  <button class="btn btn-outline-secondary" id="copyCartBtn" title="Copy cart link"><i class="fas fa-copy me-1"></i> Copy Link</button>
+                  <button class="btn btn-outline-success" id="whatsappShareBtn" title="Share on WhatsApp"><i class="fab fa-whatsapp me-1"></i> Share</button>
+                </div>
+
+                <a href="{% url 'marketplace:all_products' %}" class="btn btn-outline-primary">
+                  <i class="fas fa-shopping-bag me-2"></i> Continue Shopping
+                </a>
+              </div>
+
+              <div class="mt-4 pt-3 border-top">
+                <div class="row g-2 text-center small text-muted">
+                  <div class="col-4"><i class="fas fa-shield-alt text-success d-block mb-1"></i><small>Secure Payment</small></div>
+                  <div class="col-4"><i class="fas fa-undo text-primary d-block mb-1"></i><small>Easy Returns</small></div>
+                  <div class="col-4"><i class="fas fa-headset text-info d-block mb-1"></i><small>24/7 Support</small></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
+
+    {% else %}
+    <!-- Empty -->
+    <div class="card shadow-sm border-0">
+      <div class="card-body text-center py-5">
+        <div class="mb-4"><i class="fas fa-shopping-cart text-muted" style="font-size:6rem;opacity:.15;"></i></div>
+        <h3 class="fw-bold mb-3">Your cart is empty</h3>
+        <p class="text-muted mb-4 lead">Discover amazing products and start shopping!</p>
+        <a href="{% url 'marketplace:all_products' %}" class="btn btn-primary btn-lg px-5 py-3"><i class="fas fa-shopping-bag me-2"></i> Browse Products</a>
+      </div>
+    </div>
+    {% endif %}
+  </div>
 </section>
 
-<!-- Toast Notifications -->
-<div class="toast-container position-fixed top-0 end-0 p-3">
-    <div id="cartToast" class="toast align-items-center border-0" role="alert" aria-live="assertive" aria-atomic="true">
-        <div class="d-flex">
-            <div class="toast-body">
-                <!-- Toast message will be set by JavaScript -->
-            </div>
-            <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast"></button>
-        </div>
+<!-- Toast -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index:1050;">
+  <div id="cartToast" class="toast align-items-center border-0 shadow-lg" role="alert">
+    <div class="d-flex">
+      <div class="toast-body fw-semibold"></div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
     </div>
+  </div>
 </div>
 
+<link rel="stylesheet" type="text/css" href="{% static 'css/cart.css' %}">
 <script src="{% static 'js/main.js' %}"></script>
 <script src="{% static 'js/cart.js' %}"></script>
-<link rel="stylesheet" type="text/css" href="{% static 'css/cart.css' %}">
+
+<!-- Cart Sharing Script -->
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    const copyCartBtn = document.getElementById('copyCartBtn');
-    const whatsappShareBtn = document.getElementById('whatsappShareBtn');
-    let shareUrl = null;
+  const copyCartBtn = document.getElementById('copyCartBtn');
+  const whatsappShareBtn = document.getElementById('whatsappShareBtn');
+  let shareUrl = null;
 
-    // Fetch share URL without headers
+  fetch("{% url 'marketplace:share_cart' %}")
+    .then(r => r.json())
+    .then(data => { if (data.share_url) shareUrl = data.share_url; })
+    .catch(()=>console.warn('Share URL fetch failed'));
+
+  function fallbackCopyText(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); showToast("Cart link copied to clipboard!", 'success'); }
+    catch { showToast("Please copy manually: " + text, 'warning'); }
+    document.body.removeChild(ta);
+  }
+
+  copyCartBtn?.addEventListener('click', function () {
+    if (!shareUrl) return showToast("Generating share link, please wait...", 'info');
+    (navigator.clipboard
+      ? navigator.clipboard.writeText(shareUrl).then(() => showToast("Cart link copied!", 'success'))
+      : Promise.reject()).catch(() => fallbackCopyText(shareUrl));
+  });
+
+  whatsappShareBtn?.addEventListener('click', function () {
+    if (!shareUrl) return showToast("Generating share link, please wait...", 'info');
+    const msg = encodeURIComponent(`🛒 Check out my cart on EasyMarket!\n\n${shareUrl}`);
+    window.open(`https://wa.me/?text=${msg}`, '_blank');
+  });
+});
+</script>
+
+<!-- Social Cart Management Script (PERSISTENT, NO AUTO-RELOAD) -->
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const csrfToken = (document.querySelector('[name=csrfmiddlewaretoken]')||{}).value || '';
+  const createBtn      = document.getElementById('createSocialCartBtn');
+  const actionsWrap    = document.getElementById('socialCartActions');
+  const inviteEmail    = document.getElementById('inviteEmail');
+  const invitePhone    = document.getElementById('invitePhone');
+  const sendInviteBtn  = document.getElementById('sendInviteBtn');
+  const inviteLinkEl   = document.getElementById('socialInviteLink');
+  const copyInviteBtn  = document.getElementById('copyInviteBtn');
+  const leaveBtn       = document.getElementById('leaveCartBtn');
+  const serverSocialId = document.getElementById('socialId')?.value || null;
+  const ctaCard        = document.getElementById('socialCtaCard');
+
+  // Hydrate from server or localStorage
+  let socialId = serverSocialId || localStorage.getItem('em_social_id') || null;
+  let socialInviteLink = localStorage.getItem('em_social_invite') || '';
+
+  // If no server social but we have a stored social, keep actions visible and refresh link
+  if (!serverSocialId && socialId && actionsWrap) {
+    actionsWrap.style.display = 'block';
+    if (ctaCard) ctaCard.style.display = 'none';
+    // fetch a fresh invite/share link
     fetch("{% url 'marketplace:share_cart' %}")
-        .then(response => response.json())
+      .then(r => r.json())
+      .then(d => {
+        if (d.share_url) {
+          socialInviteLink = d.share_url;
+          inviteLinkEl && (inviteLinkEl.value = socialInviteLink);
+          localStorage.setItem('em_social_invite', socialInviteLink);
+        }
+      })
+      .catch(()=>{});
+  }
+
+  // If server provided a social, sync storage
+  if (serverSocialId) {
+    localStorage.setItem('em_social_id', serverSocialId);
+    // also refresh and store invite link
+    fetch("{% url 'marketplace:share_cart' %}")
+      .then(r => r.json())
+      .then(d => {
+        if (d.share_url) {
+          localStorage.setItem('em_social_invite', d.share_url);
+          inviteLinkEl && (inviteLinkEl.value = d.share_url);
+        }
+      }).catch(()=>{});
+  } else if (socialInviteLink && inviteLinkEl) {
+    inviteLinkEl.value = socialInviteLink;
+  }
+
+  // Create social cart (NO PAGE RELOAD)
+  createBtn?.addEventListener('click', () => {
+    createBtn.disabled = true;
+    const original = createBtn.innerHTML;
+    createBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Creating...';
+
+    fetch("{% url 'marketplace:create_social_cart' %}", {
+      method: 'POST',
+      headers: {'X-CSRFToken': csrfToken}
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (!data.success) throw new Error(data.message || 'Failed to create social cart');
+
+      socialId = data.social_id;
+      localStorage.setItem('em_social_id', socialId);
+
+      // Get share link and persist
+      return fetch("{% url 'marketplace:share_cart' %}")
+        .then(r => r.json())
+        .then(d => {
+          if (d.share_url) {
+            socialInviteLink = d.share_url;
+            localStorage.setItem('em_social_invite', socialInviteLink);
+          }
+        })
+        .catch(()=>{});
+    })
+    .then(() => {
+      // Reveal actions smoothly and hide CTA
+      if (actionsWrap) {
+        actionsWrap.style.display = 'block';
+        actionsWrap.style.opacity = '0';
+        actionsWrap.style.transition = 'opacity 0.3s ease';
+        void actionsWrap.offsetWidth;
+        actionsWrap.style.opacity = '1';
+      }
+      if (ctaCard) ctaCard.style.display = 'none';
+      if (inviteLinkEl && socialInviteLink) inviteLinkEl.value = socialInviteLink;
+      showToast('Social cart created! Share the link with friends.', 'success');
+    })
+    .catch(err => {
+      showToast(err.message || 'Error creating social cart', 'danger');
+    })
+    .finally(() => {
+      createBtn.disabled = false;
+      createBtn.innerHTML = original;
+    });
+  });
+
+  // Send invite
+  sendInviteBtn?.addEventListener('click', () => {
+    if (!socialId) return showToast('No active social cart', 'warning');
+
+    const email = (inviteEmail?.value || '').trim();
+    const phone = (invitePhone?.value || '').trim();
+    if (!email && !phone) return showToast('Enter an email or phone number', 'warning');
+
+    const original = sendInviteBtn.innerHTML;
+    sendInviteBtn.disabled = true;
+    sendInviteBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+    fetch("{% url 'marketplace:send_cart_invite' %}", {
+      method: 'POST',
+      headers: {
+        'Content-Type':'application/x-www-form-urlencoded',
+        'X-CSRFToken': csrfToken
+      },
+      body: `email=${encodeURIComponent(email)}&phone=${encodeURIComponent(phone)}&social_id=${encodeURIComponent(socialId)}`
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (!data.success) throw new Error(data.message || 'Failed to send invite');
+      // keep UI
+      if (data.invite_link) {
+        localStorage.setItem('em_social_invite', data.invite_link);
+        if (inviteLinkEl) inviteLinkEl.value = data.invite_link;
+      }
+      inviteEmail.value = '';
+      invitePhone.value = '';
+      showToast('Invitation sent successfully!', 'success');
+    })
+    .catch(err => showToast(err.message || 'Error sending invite', 'danger'))
+    .finally(() => {
+      sendInviteBtn.disabled = false;
+      sendInviteBtn.innerHTML = original;
+    });
+  });
+
+  // Copy invite link
+  copyInviteBtn?.addEventListener('click', function () {
+    const linkToCopy = inviteLinkEl?.value || localStorage.getItem('em_social_invite');
+    if (!linkToCopy) return showToast('No invite link available', 'warning');
+
+    (navigator.clipboard
+      ? navigator.clipboard.writeText(linkToCopy).then(() => showToast('Invite link copied!', 'success'))
+      : Promise.reject()
+    ).catch(() => {
+      const ta = document.createElement('textarea');
+      ta.value = linkToCopy; ta.style.position='fixed'; ta.style.opacity='0';
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); showToast('Invite link copied!', 'success'); }
+      catch { prompt('Copy this link:', linkToCopy); }
+      document.body.removeChild(ta);
+    });
+  });
+
+  // Leave cart (clears localStorage; optional reload)
+  leaveBtn?.addEventListener('click', function () {
+    if (!socialId) return showToast('No active social cart', 'warning');
+    if (!confirm('Leave this collaborative cart?')) return;
+
+    const original = leaveBtn.innerHTML;
+    leaveBtn.disabled = true;
+    leaveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Leaving...';
+
+    fetch("{% url 'marketplace:leave_cart' %}", {
+      method: 'POST',
+      headers: { 'Content-Type':'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken },
+      body: `social_id=${encodeURIComponent(socialId)}`
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (!data.success) throw new Error(data.message || 'Failed to leave cart');
+      // Clear persistence and UI
+      localStorage.removeItem('em_social_id');
+      localStorage.removeItem('em_social_invite');
+      if (actionsWrap) actionsWrap.style.display = 'none';
+      const serverCard = document.getElementById('socialServerCard');
+      if (serverCard) serverCard.style.display = 'none';
+      if (ctaCard) ctaCard.style.display = 'block';
+      showToast('You have left the cart', 'info');
+    })
+    .catch(err => {
+      showToast(err.message || 'Error leaving cart', 'danger');
+    })
+    .finally(() => {
+      leaveBtn.disabled = false;
+      leaveBtn.innerHTML = original;
+    });
+  });
+
+  // Owner remove member
+  document.querySelectorAll('.js-remove-member').forEach(btn => {
+    btn.addEventListener('click', function () {
+      const url = this.dataset.removeUrl;
+      if (!url) return showToast('Invalid remove URL', 'danger');
+      if (!confirm('Remove this member from the social cart?')) return;
+
+      const original = this.innerHTML;
+      this.disabled = true;
+      this.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+      fetch(url, { method: 'POST', headers: { 'X-CSRFToken': csrfToken } })
+        .then(r => r.json())
         .then(data => {
-            if (data.share_url) {
-                shareUrl = data.share_url;
-            } else {
-                console.warn("No share_url in response", data);
-            }
+          if (!data.success) throw new Error(data.message || 'Failed to remove member');
+          showToast('Member removed successfully', 'success');
+          // No reload required; simplest is refresh to re-render server list if present:
+          setTimeout(() => location.reload(), 600);
         })
         .catch(err => {
-            console.error("Fetch failed:", err);
+          showToast(err.message || 'Error removing member', 'danger');
+          this.disabled = false;
+          this.innerHTML = original;
         });
-
-    if (copyCartBtn) {
-        copyCartBtn.addEventListener('click', function () {
-            if (!shareUrl) {
-                alert("Please wait, generating share link...");
-                return;
-            }
-            if (navigator.clipboard) {
-                navigator.clipboard.writeText(shareUrl)
-                    .then(() => alert("Cart share link copied!"))
-                    .catch(() => fallbackCopyText(shareUrl));
-            } else {
-                fallbackCopyText(shareUrl);
-            }
-        });
-    }
-
-    if (whatsappShareBtn) {
-        whatsappShareBtn.addEventListener('click', function () {
-            if (!shareUrl) {
-                alert("Please wait, generating share link...");
-                return;
-            }
-            const message = encodeURIComponent(`🛒 Check out my cart on EasyMarket!\n${shareUrl}`);
-            const whatsappUrl = `https://wa.me/?text=${message}`;
-            window.open(whatsappUrl, '_blank');
-        });
-    }
-
-    function fallbackCopyText(text) {
-        const textarea = document.createElement('textarea');
-        textarea.value = text;
-        document.body.appendChild(textarea);
-        textarea.select();
-        try {
-            document.execCommand('copy');
-            alert("Cart link copied!");
-        } catch (err) {
-            alert("Failed to copy. Please copy manually:\n" + text);
-        }
-        document.body.removeChild(textarea);
-    }
+    });
+  });
 });
-
 </script>
 
+<!-- Promo Code Script (unchanged logic) -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const applyBtn = document.getElementById('applyPromo');
-    const promoInput = document.getElementById('promoCodeInput');
-    const promoHidden = document.getElementById('promoCodeHidden');
-    const feedback = document.getElementById('promoFeedback');
-    const appliedPromo = document.getElementById('appliedPromo');
-    const appliedPromoCode = document.getElementById('appliedPromoCode');
-    const removePromoBtn = document.getElementById('removePromo');
-    const promoDiscountDiv = document.querySelector('.promo-discount');
-    const promoDiscountAmount = document.getElementById('promo-discount-amount');
-    const totalPriceSpan = document.getElementById('total-price');
-    const subtotalSpan = document.getElementById('order-subtotal');
-    const cartToast = document.getElementById('cartToast');
-    const toastBody = cartToast.querySelector('.toast-body');
+  const applyBtn = document.getElementById('applyPromo');
+  const promoInput = document.getElementById('promoCodeInput');
+  const promoHidden = document.getElementById('promoCodeHidden');
+  const feedback = document.getElementById('promoFeedback');
+  const appliedPromo = document.getElementById('appliedPromo');
+  const appliedPromoCode = document.getElementById('appliedPromoCode');
+  const removePromoBtn = document.getElementById('removePromo');
+  const promoDiscountDiv = document.querySelector('.promo-discount');
+  const promoDiscountAmount = document.getElementById('promo-discount-amount');
+  const totalPriceSpan = document.getElementById('total-price');
+  const subtotalSpan = document.getElementById('order-subtotal');
+  const csrfToken = (document.querySelector('[name=csrfmiddlewaretoken]')||{}).value || '';
 
-    // Get CSRF token
-    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+  function parseCurrency(text){ return parseFloat((text||'').replace(/[^\d.]/g,''))||0; }
+  function formatCurrency(n){ return `D${Number(n).toFixed(2)}`; }
 
-    // Show toast notification
-    function showToast(message, type = 'success') {
-        cartToast.className = `toast align-items-center text-white bg-${type} border-0`;
-        toastBody.textContent = message;
-        const toast = new bootstrap.Toast(cartToast);
-        toast.show();
-    }
+  applyBtn?.addEventListener('click', function() {
+    const code = promoInput.value.trim();
+    if (!code) return showToast('Please enter a promo code', 'warning');
 
-    // Apply promo code
-    applyBtn.addEventListener('click', function() {
-        const code = promoInput.value.trim();
-        if (!code) {
-            showToast('Please enter a promo code', 'warning');
-            return;
-        }
+    const original = applyBtn.innerHTML;
+    applyBtn.disabled = true;
+    applyBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Applying...';
 
-        // Validate promo code via AJAX
-        fetch("{% url 'orders:validate_promo' %}", {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'X-CSRFToken': csrfToken
-            },
-            body: `promo_code=${encodeURIComponent(code)}`
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // Apply the promo code
-                promoHidden.value = code;
-                appliedPromoCode.textContent = code;
-                appliedPromo.classList.remove('d-none');
-                promoInput.value = '';
-                feedback.classList.add('d-none');
+    fetch("{% url 'orders:validate_promo' %}", {
+      method: 'POST',
+      headers: { 'Content-Type':'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken },
+      body: `promo_code=${encodeURIComponent(code)}`
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (!data.success) {
+        feedback.textContent = data.message;
+        feedback.className = 'small text-danger mt-2';
+        feedback.classList.remove('d-none');
+        showToast(data.message, 'danger');
+        return;
+      }
+      promoHidden.value = code;
+      appliedPromoCode.textContent = code;
+      appliedPromo.classList.remove('d-none');
+      promoInput.value = '';
+      feedback.classList.add('d-none');
 
-                // Show discount in order summary
-                const currentSubtotal = parseFloat(subtotalSpan.textContent.replace('$', ''));
-                const discountAmount = (currentSubtotal * data.discount_percentage) / 100;
-                const newTotal = currentSubtotal - discountAmount;
+      const currentSubtotal = parseCurrency(subtotalSpan.textContent);
+      const discountAmount = (currentSubtotal * (data.discount_percentage || 0)) / 100.0;
+      const newTotal = Math.max(currentSubtotal - discountAmount, 0);
 
-                promoDiscountAmount.textContent = `-${discountAmount.toFixed(2)}`;
-                promoDiscountDiv.classList.remove('d-none');
-                totalPriceSpan.textContent = `${newTotal.toFixed(2)}`;
+      promoDiscountAmount.textContent = `-${formatCurrency(discountAmount)}`;
+      promoDiscountDiv.classList.remove('d-none');
+      totalPriceSpan.textContent = formatCurrency(newTotal);
 
-                showToast(`Promo code applied! ${data.discount_percentage}% discount`, 'success');
-            } else {
-                feedback.textContent = data.message;
-                feedback.className = 'small text-danger mt-2';
-                feedback.classList.remove('d-none');
-                showToast(data.message, 'danger');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            showToast('Error validating promo code', 'danger');
-        });
+      showToast(`Promo code applied! ${data.discount_percentage}% discount`, 'success');
+    })
+    .catch(() => showToast('Error validating promo code', 'danger'))
+    .finally(() => {
+      applyBtn.disabled = false;
+      applyBtn.innerHTML = '<i class="fas fa-check me-1"></i> Apply';
     });
+  });
 
-    // Remove promo code
-    removePromoBtn.addEventListener('click', function() {
-        promoHidden.value = '';
-        appliedPromo.classList.add('d-none');
-        promoDiscountDiv.classList.add('d-none');
+  removePromoBtn?.addEventListener('click', function() {
+    promoHidden.value = '';
+    appliedPromo.classList.add('d-none');
+    promoDiscountDiv.classList.add('d-none');
+    const currentSubtotal = parseFloat((subtotalSpan.textContent||'').replace(/[^\d.]/g,''))||0;
+    totalPriceSpan.textContent = `D${currentSubtotal.toFixed(2)}`;
+    showToast('Promo code removed', 'info');
+  });
 
-        // Reset total price
-        const currentSubtotal = parseFloat(subtotalSpan.textContent.replace('D', ''));
-        totalPriceSpan.textContent = `${currentSubtotal.toFixed(2)}`;
-
-        showToast('Promo code removed', 'info');
-    });
-
-    // Allow Enter key to apply promo code
-    promoInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            applyBtn.click();
-        }
-    });
+  promoInput?.addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); applyBtn.click(); }
+  });
 });
 </script>
+
+<!-- Global Toast Helper (Bootstrap) -->
+<script>
+function showToast(message, type = 'success') {
+  const toast = document.getElementById('cartToast');
+  const toastBody = toast.querySelector('.toast-body');
+  const bgClass = { 'success':'bg-success','danger':'bg-danger','warning':'bg-warning','info':'bg-info' }[type] || 'bg-success';
+  toast.className = `toast align-items-center text-white ${bgClass} border-0 shadow-lg`;
+  toastBody.textContent = message;
+  const bsToast = new bootstrap.Toast(toast, { autohide: true, delay: 4000 });
+  bsToast.show();
+}
+</script>
+
+<style>
+#socialCartActions { transition: opacity .3s ease, max-height .3s ease; overflow: hidden; }
+#socialCartActions.show { opacity: 1; max-height: 1000px; }
+.sticky-lg-top { z-index: 100 !important; }
+.navbar { z-index: 1030 !important; }
+.toast-container { z-index: 1060 !important; }
+.cart-item { transition: opacity .3s ease, transform .3s ease; }
+.cart-item.removing { opacity: 0; transform: translateX(-20px); }
+</style>
 
 {% endblock %}

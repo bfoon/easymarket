@@ -1,516 +1,483 @@
-
 // ==============================================
-// UTILITY FUNCTIONS
+// UTILITIES
 // ==============================================
 
-// Get CSRF token for AJAX requests
+// CSRF utilities (shared with cart.js style)
+function getCookie(name) {
+  let cookieValue = null;
+  if (document.cookie && document.cookie !== '') {
+    const cookies = document.cookie.split(';');
+    for (let i = 0; i < cookies.length; i++) {
+      const cookie = cookies[i].trim();
+      if (cookie.substring(0, name.length + 1) === name + '=') {
+        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+        break;
+      }
+    }
+  }
+  return cookieValue;
+}
 function getCSRFToken() {
-    return document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+  return (
+    document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
+    document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
+    getCookie('csrftoken') ||
+    ''
+  );
 }
 
-// Universal toast notification system
+// Simple debounce
+function debounce(fn, wait = 250) {
+  let t = null;
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn.apply(null, args), wait);
+  };
+}
+
+// Universal toast (lightweight; one-off DOM node)
 function showToast(message, type = 'success', title = null) {
-    const toast = document.createElement('div');
-    toast.className = `position-fixed shadow`;
-    toast.style.cssText = `
-        top: 20px;
-        right: 20px;
-        z-index: 1055;
-        min-width: 320px;
-        max-width: 400px;
-        border-radius: 12px;
-        overflow: hidden;
-        animation: slideInRight 0.3s ease;
-    `;
+  const toast = document.createElement('div');
+  toast.className = 'position-fixed shadow';
+  toast.style.cssText = `
+    top: 20px; right: 20px; z-index: 1055;
+    min-width: 320px; max-width: 400px;
+    border-radius: 12px; overflow: hidden;
+    animation: slideInRight 0.25s ease;
+  `;
 
-    const bgColor = type === 'success' ? '#067d62' : type === 'error' ? '#c0392b' : '#ffc107';
-    const iconClass = type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle';
-    const headerText = title || (type === 'success' ? 'Success' : type === 'error' ? 'Error' : 'Info');
+  const bgColor = type === 'success' ? '#067d62'
+                : type === 'error'   ? '#c0392b'
+                : '#17a2b8';
+  const iconClass = type === 'success' ? 'fa-check-circle'
+                  : type === 'error'   ? 'fa-exclamation-circle'
+                  : 'fa-info-circle';
+  const headerText = title || (type === 'success' ? 'Success' : type === 'error' ? 'Error' : 'Info');
 
-    toast.innerHTML = `
-        <div class="toast-header d-flex align-items-center justify-content-between" style="background-color: ${bgColor}; color: white; padding: 0.75rem 1rem;">
-            <div class="d-flex align-items-center">
-                <i class="fas ${iconClass} me-2"></i>
-                <strong>${headerText}</strong>
-            </div>
-            <button type="button" class="btn-close btn-close-white" style="margin-left: auto;"></button>
-        </div>
-        <div class="toast-body" style="background-color: white; color: #232f3e; font-size: 0.95rem; padding: 1rem;">
-            ${message}
-        </div>
-    `;
+  toast.innerHTML = `
+    <div class="toast-header d-flex align-items-center justify-content-between"
+         style="background-color:${bgColor}; color:#fff; padding:0.75rem 1rem;">
+      <div class="d-flex align-items-center">
+        <i class="fas ${iconClass} me-2"></i>
+        <strong>${headerText}</strong>
+      </div>
+      <button type="button" class="btn-close btn-close-white" style="margin-left:auto;"></button>
+    </div>
+    <div class="toast-body" style="background:#fff; color:#232f3e; font-size:0.95rem; padding:1rem;">
+      ${message}
+    </div>
+  `;
 
-    document.body.appendChild(toast);
+  document.body.appendChild(toast);
 
-    // Dismiss button functionality
-    toast.querySelector('.btn-close').addEventListener('click', () => {
-        toast.style.animation = 'slideOutRight 0.3s ease';
-        setTimeout(() => toast.remove(), 300);
-    });
+  // Dismiss
+  const closeBtn = toast.querySelector('.btn-close');
+  closeBtn?.addEventListener('click', () => {
+    toast.style.animation = 'slideOutRight 0.25s ease';
+    setTimeout(() => toast.remove(), 250);
+  });
 
-    // Auto-remove after 5 seconds
-    setTimeout(() => {
-        if (toast.parentElement) {
-            toast.style.animation = 'slideOutRight 0.3s ease';
-            setTimeout(() => toast.remove(), 300);
-        }
-    }, 5000);
+  // Auto-remove
+  setTimeout(() => {
+    if (toast.parentElement) {
+      toast.style.animation = 'slideOutRight 0.25s ease';
+      setTimeout(() => toast.remove(), 250);
+    }
+  }, 5000);
 }
 
-// Update cart count in navigation
+// Update cart count in nav + bubble
 function updateCartCount(count) {
-    const countBadge = document.getElementById('cartCountBadge');
-    if (countBadge) {
-        countBadge.textContent = count;
-        countBadge.style.display = count > 0 ? 'inline-block' : 'none';
-
-        // Add animation
-        countBadge.style.transform = 'scale(1.3)';
-        setTimeout(() => {
-            countBadge.style.transform = 'scale(1)';
-        }, 200);
-    }
+  const countBadge = document.getElementById('cartCountBadge');
+  if (countBadge) {
+    countBadge.textContent = count;
+    countBadge.style.display = count > 0 ? 'inline-block' : 'none';
+    countBadge.style.transform = 'scale(1.3)';
+    setTimeout(() => (countBadge.style.transform = 'scale(1)'), 180);
+  }
+  // If cart.js is loaded, sync its badge too
+  if (window.cartManager?.updateCartBadge) {
+    window.cartManager.updateCartBadge(Number(count || 0));
+  }
 }
 
 // ==============================================
-// SEARCH FUNCTIONALITY
+// SEARCH
 // ==============================================
 
-// Universal search functionality - works with both header and mobile search
-function filterProducts() {
-    const headerSearch = document.querySelector('.navbar .search-bar');
-    const mobileSearch = document.getElementById('mobileSearchInput');
-    const searchInput = document.getElementById('searchInput'); // Fallback
-
-    const searchTerm = (
-        headerSearch?.value ||
-        mobileSearch?.value ||
-        searchInput?.value ||
-        ''
-    ).toLowerCase();
-
-    const products = document.querySelectorAll('.product-item');
-    let visibleCount = 0;
-
-    products.forEach(product => {
-        const productName = product.dataset.name?.toLowerCase() || '';
-        const productDescription = product.querySelector('.card-text')?.textContent?.toLowerCase() || '';
-
-        if (productName.includes(searchTerm) || productDescription.includes(searchTerm)) {
-            product.style.display = 'block';
-            visibleCount++;
-
-            // Highlight search term
-            const titleElement = product.querySelector('.card-title');
-            if (titleElement) {
-                titleElement.innerHTML = highlightText(titleElement.textContent, searchTerm);
-            }
-        } else {
-            product.style.display = 'none';
-        }
-    });
-
-    // Update product count
-    const countElement = document.querySelector('.container h2 + p');
-    if (countElement) {
-        countElement.textContent = `${visibleCount} product${visibleCount !== 1 ? 's' : ''} found`;
-    }
-}
-
-// Highlight search text
 function highlightText(text, searchTerm) {
-    if (!searchTerm) return text;
-    const regex = new RegExp(`(${searchTerm})`, 'gi');
+  if (!searchTerm) return text;
+  try {
+    const regex = new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
     return text.replace(regex, '<span class="highlight">$1</span>');
+  } catch {
+    return text;
+  }
+}
+
+function filterProducts() {
+  const headerSearch = document.querySelector('.navbar .search-bar');
+  const mobileSearch = document.getElementById('mobileSearchInput');
+  const searchInput  = document.getElementById('searchInput');
+
+  const searchTerm = (
+    headerSearch?.value ||
+    mobileSearch?.value ||
+    searchInput?.value ||
+    ''
+  ).toLowerCase();
+
+  const products = document.querySelectorAll('.product-item');
+  let visibleCount = 0;
+
+  products.forEach((product) => {
+    const name = product.dataset.name?.toLowerCase() || '';
+    const desc = product.querySelector('.card-text')?.textContent?.toLowerCase() || '';
+
+    const match = searchTerm === '' || name.includes(searchTerm) || desc.includes(searchTerm);
+    product.style.display = match ? '' : 'none';
+    if (match) {
+      visibleCount += 1;
+      const titleEl = product.querySelector('.card-title');
+      if (titleEl) {
+        // Reset then highlight to avoid nested spans
+        titleEl.textContent = product.dataset.name || titleEl.textContent;
+        if (searchTerm) titleEl.innerHTML = highlightText(titleEl.textContent, searchTerm);
+      }
+    }
+  });
+
+  const countEl = document.querySelector('.container h2 + p');
+  if (countEl) {
+    countEl.textContent = `${visibleCount} product${visibleCount === 1 ? '' : 's'} found`;
+  }
 }
 
 // ==============================================
-// PRODUCT GRID FUNCTIONALITY
+// PRODUCT GRID
 // ==============================================
 
-// Sort functionality
-function sortProducts(sortType) {
-    const container = document.getElementById('productsContainer');
-    if (!container) return;
+function sortProducts(type) {
+  const container = document.getElementById('productsContainer');
+  if (!container) return;
 
-    const products = Array.from(container.querySelectorAll('.product-item'));
+  const products = Array.from(container.querySelectorAll('.product-item'));
+  products.sort((a, b) => {
+    const pa = parseFloat(a.dataset.price || '0');
+    const pb = parseFloat(b.dataset.price || '0');
+    const na = (a.dataset.name || '');
+    const nb = (b.dataset.name || '');
 
-    products.sort((a, b) => {
-        switch(sortType) {
-            case 'price-low':
-                return parseFloat(a.dataset.price || 0) - parseFloat(b.dataset.price || 0);
-            case 'price-high':
-                return parseFloat(b.dataset.price || 0) - parseFloat(a.dataset.price || 0);
-            case 'name':
-                return (a.dataset.name || '').localeCompare(b.dataset.name || '');
-            default:
-                return 0;
-        }
-    });
+    switch (type) {
+      case 'price-low':  return pa - pb;
+      case 'price-high': return pb - pa;
+      case 'name':       return na.localeCompare(nb);
+      default:           return 0;
+    }
+  });
 
-    // Re-append sorted products
-    products.forEach(product => container.appendChild(product));
+  products.forEach((p) => container.appendChild(p));
 }
 
-// View mode toggle
 function setViewMode(mode) {
-    const container = document.getElementById('productsContainer');
-    const gridBtn = document.getElementById('gridView');
-    const listBtn = document.getElementById('listView');
+  const container = document.getElementById('productsContainer');
+  const gridBtn = document.getElementById('gridView');
+  const listBtn = document.getElementById('listView');
+  if (!container) return;
 
-    if (!container) return;
-
-    if (mode === 'list') {
-        container.classList.add('list-view');
-        listBtn?.classList.add('active');
-        gridBtn?.classList.remove('active');
-    } else {
-        container.classList.remove('list-view');
-        gridBtn?.classList.add('active');
-        listBtn?.classList.remove('active');
-    }
-}
-
-// Quick view modal
-function quickView(name, description, price, image) {
-    const elements = {
-        name: document.getElementById('modalProductName'),
-        description: document.getElementById('modalProductDescription'),
-        price: document.getElementById('modalProductPrice'),
-        image: document.getElementById('modalProductImage')
-    };
-
-    if (elements.name) elements.name.textContent = name;
-    if (elements.description) elements.description.textContent = description;
-    if (elements.price) elements.price.textContent = 'D' + price;
-    if (elements.image) elements.image.src = image;
-
-    const modalElement = document.getElementById('quickViewModal');
-    if (modalElement && typeof bootstrap !== 'undefined') {
-        const modal = new bootstrap.Modal(modalElement);
-        modal.show();
-    }
+  if (mode === 'list') {
+    container.classList.add('list-view');
+    listBtn?.classList.add('active');
+    gridBtn?.classList.remove('active');
+  } else {
+    container.classList.remove('list-view');
+    gridBtn?.classList.add('active');
+    listBtn?.classList.remove('active');
+  }
 }
 
 // ==============================================
-// CART FUNCTIONALITY
+// QUICK VIEW (single, id-based)
 // ==============================================
 
-// Add to cart functionality with AJAX
-function addToCart(productId, button) {
-    if (!button || !productId) return;
+function quickView(productId) {
+  const modalEl = document.getElementById('quickViewModal');
+  const content = document.getElementById('quickViewContent');
 
-    const originalContent = button.innerHTML;
+  if (!modalEl || !content) return;
 
-    // Collect selected features
-    const selectedFeatures = {};
-    document.querySelectorAll('.temu-feature-options').forEach(group => {
-        const featureName = group.getAttribute('data-feature');
-        const selectedInput = group.querySelector('input[type="radio"]:checked');
-        if (selectedInput) {
-            const value = selectedInput.value || selectedInput.nextElementSibling?.textContent.trim() || 'Unknown';
-            selectedFeatures[featureName] = value;
-        }
+  if (window.bootstrap?.Modal) {
+    new bootstrap.Modal(modalEl).show();
+  } else {
+    modalEl.style.display = 'block';
+  }
+
+  content.innerHTML = `
+    <div class="text-center py-4">
+      <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>
+    </div>
+  `;
+
+  fetch(`/product/${productId}/quick-view/`)
+    .then((r) => {
+      if (!r.ok) throw new Error('Failed to fetch product details');
+      return r.text();
+    })
+    .then((html) => {
+      content.innerHTML = html;
+
+      // bind thumbs
+      content.querySelectorAll('.quickview-thumb').forEach((thumb) => {
+        thumb.addEventListener('click', () => {
+          const full = thumb.dataset.full;
+          const main = content.querySelector('#mainPreviewImage');
+          if (main && full) main.src = full;
+
+          content.querySelectorAll('.quickview-thumb').forEach((img) => img.classList.remove('border-primary'));
+          thumb.classList.add('border-primary');
+        });
+      });
+    })
+    .catch(() => {
+      content.innerHTML = `
+        <div class="text-center p-4">
+          <h5>Unable to load product details.</h5>
+          <p>Please try again later.</p>
+          <a href="/product/${productId}/" class="btn btn-primary">View Full Product</a>
+        </div>
+      `;
     });
+}
 
-    // Convert features to x-www-form-urlencoded
-    const formData = new URLSearchParams();
-    formData.append('features', JSON.stringify(selectedFeatures));
+// ==============================================
+// CART – ADD TO CART (works with social cart server rules)
+// ==============================================
 
-    // Add loading state
+function addToCart(productId, button) {
+  if (!productId) return;
+
+  const originalHTML = button?.innerHTML;
+
+  // Gather selected features from radio/select groups with data-feature name
+  const selectedFeatures = {};
+  document.querySelectorAll('[data-feature]').forEach((group) => {
+    const feature = group.getAttribute('data-feature');
+    let value = null;
+
+    // radios
+    const chosenRadio = group.querySelector('input[type="radio"]:checked');
+    if (chosenRadio) value = chosenRadio.value || chosenRadio.getAttribute('data-value');
+
+    // selects
+    const select = group.querySelector('select');
+    if (!value && select) value = select.value;
+
+    // fallback badge text
+    if (!value) {
+      const active = group.querySelector('.active,[aria-pressed="true"]');
+      if (active) value = active.dataset.value || active.textContent?.trim();
+    }
+
+    if (feature && value) selectedFeatures[feature] = value;
+  });
+
+  const body = new URLSearchParams();
+  body.append('features', JSON.stringify(selectedFeatures));
+
+  if (button) {
     button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Adding...';
     button.disabled = true;
+  }
 
-    fetch(`/add-to-cart/${productId}/`, {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': getCSRFToken(),
-            'Accept': 'application/json',
-            'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        body: formData.toString()
+  fetch(`/add-to-cart/${productId}/`, {
+    method: 'POST',
+    headers: {
+      'X-CSRFToken': getCSRFToken(),
+      'Accept': 'application/json',
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'X-Requested-With': 'XMLHttpRequest',
+    },
+    body: body.toString(),
+  })
+    .then(async (r) => {
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        const msg = data?.error || data?.message || `HTTP ${r.status}`;
+        throw new Error(msg);
+      }
+      return data;
     })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            button.innerHTML = '<i class="fas fa-check me-1"></i> Added!';
-            button.classList.remove('btn-outline-primary');
-            button.classList.add('btn-success');
-
-            showToast(`${data.product_name} was successfully added!`, 'success', 'Added to Cart');
-            updateCartCount(data.cart_count);
-
-            setTimeout(() => {
-                button.innerHTML = originalContent;
-                button.classList.remove('btn-success');
-                button.classList.add('btn-outline-primary');
-                button.disabled = false;
-            }, 2000);
-        } else {
-            showToast(data.error || 'Failed to add to cart.', 'error');
-            resetButton(button, originalContent);
+    .then((data) => {
+      if (data.success) {
+        if (button) {
+          button.innerHTML = '<i class="fas fa-check me-1"></i> Added!';
+          button.classList.remove('btn-outline-primary');
+          button.classList.add('btn-success');
         }
+
+        showToast(`${data.product_name || 'Item'} added to cart.`, 'success', 'Added to Cart');
+        if (typeof data.cart_count !== 'undefined') updateCartCount(data.cart_count);
+      } else {
+        showToast(data.error || 'Failed to add to cart.', 'error');
+      }
     })
-    .catch(error => {
-        console.error('Add to cart error:', error);
-        showToast('Error adding to cart.', 'error');
-        resetButton(button, originalContent);
+    .catch((err) => {
+      console.error('Add-to-cart error:', err);
+      showToast(err.message || 'Error adding to cart.', 'error');
+    })
+    .finally(() => {
+      if (button) {
+        setTimeout(() => {
+          button.innerHTML = originalHTML || '<i class="fas fa-cart-plus me-1"></i> Add to Cart';
+          button.disabled = false;
+          button.classList.remove('btn-success');
+          button.classList.add('btn-outline-primary');
+        }, 1200);
+      }
     });
 }
 
-// Reset button to original state
-function resetButton(button, originalContent) {
-    if (button) {
-        button.innerHTML = originalContent || '<i class="fas fa-cart-plus me-1"></i> Add to Cart';
-        button.disabled = false;
-        button.classList.remove('btn-success');
-        button.classList.add('btn-outline-primary');
-    }
-}
-
-// Product Quick View Modal
-function quickView(productId) {
-    const modal = new bootstrap.Modal(document.getElementById('quickViewModal'));
-    document.getElementById('quickViewContent').innerHTML = `
-        <div class="text-center py-4">
-            <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">Loading...</span>
-            </div>
-        </div>
-    `;
-    modal.show();
-
-    fetch(`/product/${productId}/quick-view/`)
-        .then(response => {
-            if (!response.ok) throw new Error("Failed to fetch product details");
-            return response.text();
-        })
-            .then(html => {
-                document.getElementById('quickViewContent').innerHTML = html;
-
-                // Attach thumbnail click handlers
-                document.querySelectorAll('#quickViewContent .quickview-thumb').forEach(thumb => {
-                    thumb.addEventListener('click', () => {
-                        const newSrc = thumb.dataset.full;
-                        const preview = document.getElementById('mainPreviewImage');
-                        if (preview) preview.src = newSrc;
-
-                        // Optionally add active border
-                        document.querySelectorAll('.quickview-thumb').forEach(img => {
-                            img.classList.remove('border-primary');
-                        });
-                        thumb.classList.add('border-primary');
-                    });
-                });
-            })
-        .catch(error => {
-            document.getElementById('quickViewContent').innerHTML = `
-                <div class="text-center p-4">
-                    <h5>Unable to load product details.</h5>
-                    <p>Please try again later.</p>
-                    <a href="/product/${productId}/" class="btn btn-primary">View Full Product</a>
-                </div>
-            `;
-        });
-}
-
 // ==============================================
-// WISHLIST FUNCTIONALITY
+// WISHLIST
 // ==============================================
 
-// Universal wishlist toggle
 function addToWishlist(productId, button) {
-    const heartIcon = button?.querySelector('i') || button;
-    if (!heartIcon) return;
+  const heart = button?.querySelector('i') || button;
+  if (!heart) return;
+  const original = heart.className;
 
-    const originalClasses = heartIcon.className;
-
-    fetch(`/wishlist/toggle/${productId}/`, {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': getCSRFToken(),
-            'X-Requested-With': 'XMLHttpRequest'
-        }
+  fetch(`/wishlist/toggle/${productId}/`, {
+    method: 'POST',
+    headers: {
+      'X-CSRFToken': getCSRFToken(),
+      'X-Requested-With': 'XMLHttpRequest',
+    },
+  })
+    .then(async (r) => {
+      const isJSON = r.headers.get('content-type')?.includes('application/json');
+      const data = isJSON ? await r.json() : {};
+      if (!r.ok) throw new Error(data?.error || `HTTP ${r.status}`);
+      return data;
     })
-    .then(response => {
-        const contentType = response.headers.get("content-type");
-        if (response.ok && contentType && contentType.includes("application/json")) {
-            return response.json();
+    .then((data) => {
+      if (data.success) {
+        if (data.status === 'added') {
+          heart.classList.remove('far');
+          heart.classList.add('fas', 'text-danger');
+          showToast(data.message || 'Added to wishlist!', 'success');
         } else {
-            throw new Error('Unexpected response format');
+          heart.classList.remove('fas', 'text-danger');
+          heart.classList.add('far');
+          showToast(data.message || 'Removed from wishlist!', 'success');
         }
+      } else {
+        showToast(data.error || 'Unable to update wishlist.', 'error');
+        heart.className = original;
+      }
     })
-    .then(data => {
-        if (data.success) {
-            if (data.status === 'added') {
-                heartIcon.classList.remove('far');
-                heartIcon.classList.add('fas', 'text-danger');
-                showToast(data.message || 'Added to wishlist!', 'success');
-            } else {
-                heartIcon.classList.remove('fas', 'text-danger');
-                heartIcon.classList.add('far');
-                showToast(data.message || 'Removed from wishlist!', 'success');
-            }
-        } else {
-            showToast(data.error || "Something went wrong.", 'error');
-        }
-    })
-    .catch(error => {
-        console.error('Wishlist toggle failed:', error);
-        heartIcon.className = originalClasses; // Restore original state
-        showToast("An error occurred while updating your wishlist.", 'error');
+    .catch((err) => {
+      console.error('Wishlist error:', err);
+      heart.className = original;
+      showToast('An error occurred while updating your wishlist.', 'error');
     });
 }
 
-
-
-
 // ==============================================
-// PAGINATION
+// PAGINATION (stubbed)
 // ==============================================
 
-// Load more products (for pagination)
 function loadMoreProducts() {
-    const loadBtn = document.getElementById('loadMoreBtn');
-    if (!loadBtn) return;
+  const btn = document.getElementById('loadMoreBtn');
+  if (!btn) return;
+  const original = btn.innerHTML;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Loading...';
+  btn.disabled = true;
 
-    const originalContent = loadBtn.innerHTML;
-    loadBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Loading...';
-    loadBtn.disabled = true;
-
-    // This would typically be an AJAX call to load more products
-    setTimeout(() => {
-        loadBtn.innerHTML = originalContent;
-        loadBtn.disabled = false;
-        // Here you would append new products to the container
-    }, 2000);
+  // Replace with real AJAX when backend route is ready
+  setTimeout(() => {
+    btn.innerHTML = original;
+    btn.disabled = false;
+  }, 1500);
 }
 
 // ==============================================
 // SCROLL TO TOP
 // ==============================================
 
-// Scroll to top functionality
 function initScrollToTop() {
-    const scrollToTopBtn = document.getElementById('scrollToTopBtn');
-    if (scrollToTopBtn) {
-        scrollToTopBtn.addEventListener('click', function() {
-            window.scrollTo({
-                top: 0,
-                behavior: 'smooth'
-            });
-        });
+  const btn = document.getElementById('scrollToTopBtn');
+  if (!btn) return;
 
-        // Show/hide scroll to top button
-        window.addEventListener('scroll', function() {
-            if (window.pageYOffset > 300) {
-                scrollToTopBtn.style.display = 'block';
-            } else {
-                scrollToTopBtn.style.display = 'none';
-            }
-        });
-    }
+  btn.addEventListener('click', () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+
+  window.addEventListener('scroll', () => {
+    btn.style.display = window.pageYOffset > 300 ? 'block' : 'none';
+  });
 }
 
 // ==============================================
-// INITIALIZATION
+/* INIT */
 // ==============================================
 
-document.addEventListener('DOMContentLoaded', function() {
-    // Initialize search functionality
-    const searchElements = [
-        document.querySelector('.navbar .search-bar'),
-        document.getElementById('mobileSearchInput'),
-        document.getElementById('searchInput')
-    ];
+document.addEventListener('DOMContentLoaded', () => {
+  // Debounced search on multiple inputs
+  const inputs = [
+    document.querySelector('.navbar .search-bar'),
+    document.getElementById('mobileSearchInput'),
+    document.getElementById('searchInput'),
+  ].filter(Boolean);
 
-    searchElements.forEach(element => {
-        if (element) {
-            element.addEventListener('input', function() {
-                if (this.value.length >= 2 || this.value.length === 0) {
-                    filterProducts();
-                }
-            });
-        }
+  const runFilter = debounce(() => filterProducts(), 200);
+
+  inputs.forEach((el) => {
+    el.addEventListener('input', () => {
+      if (el.value.length >= 2 || el.value.length === 0) runFilter();
     });
+  });
 
-    // Connect search buttons
-    const searchButtons = document.querySelectorAll('.navbar .btn-primary, .mobile-search-btn');
-    searchButtons.forEach(btn => {
-        if (btn) {
-            btn.addEventListener('click', filterProducts);
-        }
-    });
+  // Click search buttons
+  document.querySelectorAll('.navbar .btn-primary, .mobile-search-btn').forEach((btn) => {
+    btn.addEventListener('click', filterProducts);
+  });
 
-    // Initialize tooltips if Bootstrap is available
-    if (typeof bootstrap !== 'undefined') {
-        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[title]'));
-        tooltipTriggerList.map(function (tooltipTriggerEl) {
-            return new bootstrap.Tooltip(tooltipTriggerEl);
-        });
+  // Bootstrap tooltips (if available)
+  if (window.bootstrap?.Tooltip) {
+    const triggers = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"], [title]'));
+    triggers.forEach((el) => new bootstrap.Tooltip(el));
+  }
+
+  // Scroll to top
+  initScrollToTop();
+
+  // Animations / helpers CSS
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @keyframes slideOutRight { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
+    .highlight { background:#fff3cd; color:#856404; padding:0.1em 0.2em; border-radius:0.2em; }
+    #scrollToTopBtn {
+      display:none; position:fixed; bottom:20px; right:20px; z-index:1000;
+      background:#007bff; color:#fff; border:none; border-radius:50%;
+      width:50px; height:50px; cursor:pointer; box-shadow:0 2px 10px rgba(0,0,0,0.2);
+      transition:all .3s ease;
     }
-
-    // Initialize scroll to top
-    initScrollToTop();
-
-    // Add CSS for animations
-    const style = document.createElement('style');
-    style.textContent = `
-        @keyframes slideInRight {
-            from { transform: translateX(100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
-        }
-
-        @keyframes slideOutRight {
-            from { transform: translateX(0); opacity: 1; }
-            to { transform: translateX(100%); opacity: 0; }
-        }
-
-        .highlight {
-            background-color: #fff3cd;
-            color: #856404;
-            padding: 0.1em 0.2em;
-            border-radius: 0.2em;
-        }
-
-        .btn-loading {
-            position: relative;
-            pointer-events: none;
-        }
-
-        #scrollToTopBtn {
-            display: none;
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            z-index: 1000;
-            background: #007bff;
-            color: white;
-            border: none;
-            border-radius: 50%;
-            width: 50px;
-            height: 50px;
-            cursor: pointer;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-            transition: all 0.3s ease;
-        }
-
-        #scrollToTopBtn:hover {
-            background: #0056b3;
-            transform: translateY(-2px);
-        }
-    `;
-    document.head.appendChild(style);
+    #scrollToTopBtn:hover { background:#0056b3; transform: translateY(-2px); }
+  `;
+  document.head.appendChild(style);
 });
 
-// Make functions globally available
-window.filterProducts = filterProducts;
-window.sortProducts = sortProducts;
-window.setViewMode = setViewMode;
-window.quickView = quickView;
-window.addToCart = addToCart;
-window.addToWishlist = addToWishlist;
+// ==============================================
+// EXPORTS
+// ==============================================
+window.filterProducts   = filterProducts;
+window.sortProducts     = sortProducts;
+window.setViewMode      = setViewMode;
+window.quickView        = quickView;
+window.addToCart        = addToCart;
+window.addToWishlist    = addToWishlist;
 window.loadMoreProducts = loadMoreProducts;
-window.showToast = showToast;
-window.getCSRFToken = getCSRFToken;
-window.updateCartCount = updateCartCount;
+window.showToast        = showToast;
+window.getCSRFToken     = getCSRFToken;
+window.updateCartCount  = updateCartCount;
