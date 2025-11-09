@@ -69,8 +69,8 @@ urlpatterns = [
     path('cart/share/set/', social_cart.set_share, name='set_share'),
     path('cart/pay/start/', social_cart.start_my_payment, name='start_my_payment'),
     path('cart/member/leave/', social_cart.leave_cart, name='leave_cart'),
-    path('cart/member/remove/<int:member_id>/', social_cart.remove_member, name='remove_member')  # owner-only
-
+    path('cart/member/remove/<int:member_id>/', social_cart.remove_member, name='remove_member'),  # owner-only
+    path("cart/split/set/", social_cart.set_split_mode, name="set_split_mode"),
 
 
 ]

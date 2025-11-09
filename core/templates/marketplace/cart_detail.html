@@ -230,6 +230,61 @@
             <input type="hidden" id="socialId" value="{{ social.id }}">
           </div>
         </div>
+
+        <!-- Split Settings (Owner only) -->
+        {% if social and is_owner %}
+        <div class="card shadow-sm border-0 mt-3">
+          <div class="card-header bg-white border-bottom py-3 d-flex align-items-center justify-content-between">
+            <h6 class="mb-0 fw-semibold"><i class="fas fa-balance-scale me-2 text-primary"></i> Split Settings</h6>
+            <span class="badge bg-light text-dark">Current:
+              <strong id="currentSplitMode">
+                {% if social.split_mode == 'by_percent' %}Percent{% elif social.split_mode == 'single_payer' %}Single Payer{% else %}By Items{% endif %}
+              </strong>
+            </span>
+          </div>
+          <div class="card-body">
+            <div class="row g-3">
+              <div class="col-12">
+                <div class="btn-group" role="group" aria-label="Split mode">
+                  <button type="button" class="btn btn-outline-primary" id="btnSplitItems">Each pays their items</button>
+                  <button type="button" class="btn btn-outline-primary" id="btnSplitPercent">Pay by percentage</button>
+                  <button type="button" class="btn btn-outline-primary" id="btnSplitSingle">One person pays full</button>
+                </div>
+              </div>
+
+              <!-- Percent allocations -->
+              <div class="col-12" id="percentBox" style="display:none;">
+                <div class="alert alert-light border small mb-2">Set percentages for members (must total 100%).</div>
+                {% for m in social_members %}
+                  <div class="input-group mb-2" style="max-width:360px;">
+                    <span class="input-group-text">{{ m.user.get_full_name|default:m.user.username }}</span>
+                    <input type="number" class="form-control split-pct" data-member-id="{{ m.id }}" min="0" max="100" step="0.01" value="0">
+                    <span class="input-group-text">%</span>
+                  </div>
+                {% endfor %}
+                <button class="btn btn-sm btn-primary" id="btnApplyPercent">Apply Percentages</button>
+                <small class="text-muted ms-2" id="pctTotalHint"></small>
+              </div>
+
+              <!-- Single payer -->
+              <div class="col-12" id="payerBox" style="display:none;">
+                <div class="alert alert-light border small mb-2">Choose the member who will pay the full bill.</div>
+                <div style="max-width:360px;">
+                  <select id="singlePayer" class="form-select">
+                    {% for m in social_members %}
+                      <option value="{{ m.id }}"
+                        {% if social.single_payer_id and social.single_payer_id == m.id %}selected{% endif %}>
+                        {{ m.user.get_full_name|default:m.user.username }}
+                      </option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <button class="btn btn-sm btn-primary mt-2" id="btnApplySingle">Set Payer</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% endif %}
         {% else %}
         <!-- Create Social Cart CTA when no server-side social -->
         <div class="card shadow-sm border-0 border-start border-info border-4" id="socialCtaCard">
@@ -399,7 +454,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 
-<!-- Social Cart Management Script (PERSISTENT, NO AUTO-RELOAD) -->
+<!-- Social Cart Management Script (PERSISTENT, NO AUTO-RELOAD) + Split Mode -->
 <script>
 document.addEventListener('DOMContentLoaded', function () {
   const csrfToken = (document.querySelector('[name=csrfmiddlewaretoken]')||{}).value || '';
@@ -414,6 +469,19 @@ document.addEventListener('DOMContentLoaded', function () {
   const serverSocialId = document.getElementById('socialId')?.value || null;
   const ctaCard        = document.getElementById('socialCtaCard');
 
+  // Split settings controls (owner only present)
+  const btnSplitItems  = document.getElementById('btnSplitItems');
+  const btnSplitPercent= document.getElementById('btnSplitPercent');
+  const btnSplitSingle = document.getElementById('btnSplitSingle');
+  const percentBox     = document.getElementById('percentBox');
+  const payerBox       = document.getElementById('payerBox');
+  const btnApplyPercent= document.getElementById('btnApplyPercent');
+  const btnApplySingle = document.getElementById('btnApplySingle');
+  const singlePayerSel = document.getElementById('singlePayer');
+  const pctInputs      = document.querySelectorAll('.split-pct');
+  const pctTotalHint   = document.getElementById('pctTotalHint');
+  const currentSplitEl = document.getElementById('currentSplitMode');
+
   // Hydrate from server or localStorage
   let socialId = serverSocialId || localStorage.getItem('em_social_id') || null;
   let socialInviteLink = localStorage.getItem('em_social_invite') || '';
@@ -422,7 +490,6 @@ document.addEventListener('DOMContentLoaded', function () {
   if (!serverSocialId && socialId && actionsWrap) {
     actionsWrap.style.display = 'block';
     if (ctaCard) ctaCard.style.display = 'none';
-    // fetch a fresh invite/share link
     fetch("{% url 'marketplace:share_cart' %}")
       .then(r => r.json())
       .then(d => {
@@ -438,7 +505,6 @@ document.addEventListener('DOMContentLoaded', function () {
   // If server provided a social, sync storage
   if (serverSocialId) {
     localStorage.setItem('em_social_id', serverSocialId);
-    // also refresh and store invite link
     fetch("{% url 'marketplace:share_cart' %}")
       .then(r => r.json())
       .then(d => {
@@ -451,7 +517,7 @@ document.addEventListener('DOMContentLoaded', function () {
     inviteLinkEl.value = socialInviteLink;
   }
 
-  // Create social cart (NO PAGE RELOAD)
+  // Create social cart (NO RELOAD)
   createBtn?.addEventListener('click', () => {
     createBtn.disabled = true;
     const original = createBtn.innerHTML;
@@ -468,7 +534,6 @@ document.addEventListener('DOMContentLoaded', function () {
       socialId = data.social_id;
       localStorage.setItem('em_social_id', socialId);
 
-      // Get share link and persist
       return fetch("{% url 'marketplace:share_cart' %}")
         .then(r => r.json())
         .then(d => {
@@ -480,7 +545,6 @@ document.addEventListener('DOMContentLoaded', function () {
         .catch(()=>{});
     })
     .then(() => {
-      // Reveal actions smoothly and hide CTA
       if (actionsWrap) {
         actionsWrap.style.display = 'block';
         actionsWrap.style.opacity = '0';
@@ -524,7 +588,6 @@ document.addEventListener('DOMContentLoaded', function () {
     .then(r => r.json())
     .then(data => {
       if (!data.success) throw new Error(data.message || 'Failed to send invite');
-      // keep UI
       if (data.invite_link) {
         localStorage.setItem('em_social_invite', data.invite_link);
         if (inviteLinkEl) inviteLinkEl.value = data.invite_link;
@@ -558,7 +621,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   });
 
-  // Leave cart (clears localStorage; optional reload)
+  // Leave cart
   leaveBtn?.addEventListener('click', function () {
     if (!socialId) return showToast('No active social cart', 'warning');
     if (!confirm('Leave this collaborative cart?')) return;
@@ -575,7 +638,6 @@ document.addEventListener('DOMContentLoaded', function () {
     .then(r => r.json())
     .then(data => {
       if (!data.success) throw new Error(data.message || 'Failed to leave cart');
-      // Clear persistence and UI
       localStorage.removeItem('em_social_id');
       localStorage.removeItem('em_social_invite');
       if (actionsWrap) actionsWrap.style.display = 'none';
@@ -609,7 +671,6 @@ document.addEventListener('DOMContentLoaded', function () {
         .then(data => {
           if (!data.success) throw new Error(data.message || 'Failed to remove member');
           showToast('Member removed successfully', 'success');
-          // No reload required; simplest is refresh to re-render server list if present:
           setTimeout(() => location.reload(), 600);
         })
         .catch(err => {
@@ -618,6 +679,77 @@ document.addEventListener('DOMContentLoaded', function () {
           this.innerHTML = original;
         });
     });
+  });
+
+  // ====== Split Mode logic (Owner only controls exist) ======
+  function postSplit(payload) {
+    return fetch("{% url 'marketplace:set_split_mode' %}", {
+      method: 'POST',
+      headers: {'X-CSRFToken': csrfToken, 'Content-Type':'application/x-www-form-urlencoded'},
+      body: new URLSearchParams(payload).toString()
+    }).then(r=>r.json());
+  }
+
+  btnSplitItems?.addEventListener('click', () => {
+    percentBox && (percentBox.style.display = 'none');
+    payerBox && (payerBox.style.display = 'none');
+    postSplit({mode:'by_items'}).then(data=>{
+      if (data.success){
+        currentSplitEl && (currentSplitEl.textContent = 'By Items');
+        showToast('Split set: Each pays their items', 'success');
+      } else showToast(data.message || 'Failed to set split', 'danger');
+    }).catch(()=>showToast('Error setting split', 'danger'));
+  });
+
+  btnSplitPercent?.addEventListener('click', () => {
+    percentBox && (percentBox.style.display = 'block');
+    payerBox && (payerBox.style.display = 'none');
+  });
+
+  btnSplitSingle?.addEventListener('click', () => {
+    payerBox && (payerBox.style.display = 'block');
+    percentBox && (percentBox.style.display = 'none');
+  });
+
+  // Live total hint for percent
+  pctInputs?.forEach(inp=>{
+    inp.addEventListener('input', ()=>{
+      const total = Array.from(pctInputs).reduce((a,i)=>a+(parseFloat(i.value||'0')||0),0);
+      if (pctTotalHint){
+        pctTotalHint.textContent = `Total: ${total.toFixed(2)}%`;
+        pctTotalHint.className = total.toFixed(2) == '100.00' ? 'text-success small' : 'text-danger small';
+      }
+    });
+  });
+
+  btnApplyPercent?.addEventListener('click', ()=>{
+    const map = {};
+    let total = 0;
+    pctInputs?.forEach(i=>{
+      const v = parseFloat(i.value||'0')||0;
+      total += v;
+      map[i.dataset.memberId] = v;
+    });
+    if (total.toFixed(2) !== '100.00'){
+      return showToast('Percentages must total 100%', 'warning');
+    }
+    postSplit({mode:'by_percent', allocations: JSON.stringify(map)}).then(data=>{
+      if (data.success){
+        currentSplitEl && (currentSplitEl.textContent = 'Percent');
+        showToast('Split set: Pay by percentage', 'success');
+      } else showToast(data.message || 'Failed to set split', 'danger');
+    }).catch(()=>showToast('Error setting split', 'danger'));
+  });
+
+  btnApplySingle?.addEventListener('click', ()=>{
+    const payerId = singlePayerSel?.value;
+    if (!payerId) return showToast('Select a payer', 'warning');
+    postSplit({mode:'single_payer', payer_member_id: payerId}).then(data=>{
+      if (data.success){
+        currentSplitEl && (currentSplitEl.textContent = 'Single Payer');
+        showToast('Split set: One person pays full', 'success');
+      } else showToast(data.message || 'Failed to set split', 'danger');
+    }).catch(()=>showToast('Error setting split', 'danger'));
   });
 });
 </script>

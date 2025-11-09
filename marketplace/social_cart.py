@@ -42,6 +42,14 @@ def ensure_social_cart(cart, user) -> SocialCart:
     social.recalc_members_due()
     return social
 
+def _resolve_active_social_for(user):
+    return (
+        SocialCart.objects
+        .filter(is_active=True, status__in=['open', 'checkout'], members__user=user, members__status='joined')
+        .select_related('cart', 'owner')
+        .order_by('-created_at')
+        .first()
+    )
 
 def _redistribute_equal(social: SocialCart):
     """
@@ -321,3 +329,72 @@ def remove_member(request, member_id):
 
     member.delete()
     return JsonResponse({'success': True})
+
+
+@require_POST
+@login_required
+def set_split_mode(request):
+    """
+    POST body:
+      mode: 'by_items' | 'by_percent' | 'single_payer'
+      allocations: JSON string {"<member_id>": <percentage>, ...}  # for by_percent
+      payer_member_id: int  # for single_payer
+    """
+    social = _resolve_active_social_for(request.user)
+    if not social:
+        return JsonResponse({'success': False, 'message': 'No active social cart'}, status=404)
+
+    # Only owner can change the split mode (adjust if you want editors to do it)
+    if social.owner_id != request.user.id:
+        return JsonResponse({'success': False, 'message': 'Only the owner can change split mode'}, status=403)
+
+    mode = (request.POST.get('mode') or '').strip()
+    allocations_raw = request.POST.get('allocations')  # JSON
+    payer_member_id = request.POST.get('payer_member_id')
+
+    try:
+        if mode == SocialCart.SPLIT_BY_ITEMS:
+            social.set_split_mode(SocialCart.SPLIT_BY_ITEMS)
+
+        elif mode == SocialCart.SPLIT_BY_PERCENT:
+            try:
+                allocations = json.loads(allocations_raw or '{}')
+            except Exception:
+                allocations = {}
+            # Convert keys to int and values to Decimal
+            norm = {}
+            for k, v in allocations.items():
+                try:
+                    mid = int(k)
+                    pct = Decimal(str(v))
+                except Exception:
+                    continue
+                norm[mid] = pct
+            social.set_split_mode(SocialCart.SPLIT_BY_PERCENT, allocations=norm)
+
+        elif mode == SocialCart.SPLIT_SINGLE_PAYER:
+            if not payer_member_id:
+                return JsonResponse({'success': False, 'message': 'payer_member_id is required'}, status=400)
+            social.set_split_mode(SocialCart.SPLIT_SINGLE_PAYER, payer_member_id=int(payer_member_id))
+
+        else:
+            return JsonResponse({'success': False, 'message': 'Invalid mode'}, status=400)
+
+        # Build a compact response with current shares
+        shares = list(
+            social.payment_shares.filter(is_active=True)
+            .select_related('member', 'member__user')
+            .values('member_id', 'member__user__username', 'fixed_amount', 'percentage', 'items_total_amount', 'amount_due')
+        )
+        return JsonResponse({
+            'success': True,
+            'mode': social.split_mode,
+            'single_payer_id': social.single_payer_id,
+            'shares': shares,
+            'message': 'Split mode updated'
+        })
+
+    except ValueError as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=400)
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': f'Error: {e}'}, status=500)

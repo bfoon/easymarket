@@ -604,9 +604,15 @@ def _invite_code():
     return secrets.token_urlsafe(10)
 
 class SocialCart(models.Model):
-    """
-    Wraps a normal Cart to make it collaborative.
-    """
+    SPLIT_BY_ITEMS = 'by_items'
+    SPLIT_BY_PERCENT = 'by_percent'
+    SPLIT_SINGLE_PAYER = 'single_payer'
+    SPLIT_CHOICES = (
+        (SPLIT_BY_ITEMS, 'Each pays their items'),
+        (SPLIT_BY_PERCENT, 'Pay by percentage'),
+        (SPLIT_SINGLE_PAYER, 'One person pays full'),
+    )
+
     cart = models.OneToOneField('marketplace.Cart', on_delete=models.CASCADE, related_name='social')
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='owned_social_carts')
     invite_code = models.CharField(max_length=64, unique=True, default=_invite_code)
@@ -620,21 +626,171 @@ class SocialCart(models.Model):
     ])
     created_at = models.DateTimeField(auto_now_add=True)
 
+    # NEW: split settings
+    split_mode = models.CharField(max_length=20, choices=SPLIT_CHOICES, default=SPLIT_BY_ITEMS)
+    single_payer = models.ForeignKey(
+        'marketplace.CartMember',
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='as_single_payer_for'
+    )
+
     def total(self) -> Decimal:
         subtotal = sum((i.product.price * i.quantity for i in self.cart.items.all()), Decimal('0'))
         tax_rate = getattr(settings, "CART_TAX_RATE", Decimal("0.00"))
         return subtotal + (subtotal * tax_rate)
+
+    def clear_active_shares(self):
+        self.payment_shares.filter(is_active=True).update(is_active=False)
+
+    def _member_for_user_id(self, user_id):
+        return self.members.filter(user_id=user_id, status='joined').first()
+
+    def compute_shares_by_items(self):
+        """
+        Each pays for the items they added. Falls back to owner if we can't map an item.
+        """
+        from django.db.models import Sum, F
+        self.clear_active_shares()
+
+        # Sum by added_by (user)
+        lines = (
+            self.cart.items
+            .select_related('added_by', 'product')
+            .values('added_by_id')
+            .annotate(amount=Sum(F('quantity') * F('product__price')))
+        )
+
+        # If no added_by is set, everything falls to owner
+        owner_member = self.members.filter(user_id=self.owner_id, status='joined').first()
+
+        for row in lines:
+            uid = row['added_by_id']
+            amt = row['amount'] or Decimal('0')
+            member = self._member_for_user_id(uid) if uid else None
+            if not member:
+                member = owner_member
+            if not member:
+                continue
+            PaymentShare.objects.update_or_create(
+                social_cart=self, member=member,
+                defaults={
+                    'fixed_amount': None,
+                    'percentage': None,
+                    'items_total_amount': amt,
+                    'amount_due': Decimal('0'),
+                    'is_active': True,
+                }
+            )
+        # Recalc
+        self.recalc_members_due()
+
+    def compute_shares_by_percentage(self, allocations: dict[int, Decimal]):
+        """
+        allocations: {member_id: percentage (0..100)}, must sum to 100.
+        """
+        self.clear_active_shares()
+
+        total_pct = sum(Decimal(str(p or 0)) for p in allocations.values())
+        if total_pct != Decimal('100'):
+            raise ValueError("Percentages must sum to 100")
+
+        # Create percentage shares only for members in allocations
+        for member_id, pct in allocations.items():
+            member = self.members.filter(id=member_id, status='joined').first()
+            if not member:
+                continue
+            PaymentShare.objects.update_or_create(
+                social_cart=self, member=member,
+                defaults={
+                    'fixed_amount': None,
+                    'items_total_amount': None,
+                    'percentage': Decimal(str(pct)),
+                    'amount_due': Decimal('0'),
+                    'is_active': True,
+                }
+            )
+        self.recalc_members_due()
+
+    def compute_shares_single_payer(self, payer_member_id: int):
+        """
+        One member pays full amount.
+        """
+        self.clear_active_shares()
+        self.single_payer_id = payer_member_id
+        self.save(update_fields=['single_payer'])
+
+        total = self.total()
+        payer = self.members.filter(id=payer_member_id, status='joined').first()
+        if not payer:
+            raise ValueError("Invalid single payer")
+
+        # Give payer fixed_amount = total, others None
+        for m in self.members.filter(status='joined'):
+            if m.id == payer_member_id:
+                PaymentShare.objects.update_or_create(
+                    social_cart=self, member=m,
+                    defaults={
+                        'fixed_amount': total,
+                        'percentage': None,
+                        'items_total_amount': None,
+                        'amount_due': Decimal('0'),
+                        'is_active': True,
+                    }
+                )
+            else:
+                # ensure other members have no active share
+                PaymentShare.objects.update_or_create(
+                    social_cart=self, member=m,
+                    defaults={
+                        'fixed_amount': None,
+                        'percentage': None,
+                        'items_total_amount': None,
+                        'amount_due': Decimal('0'),
+                        'is_active': True,
+                    }
+                )
+        self.recalc_members_due()
+
+    def set_split_mode(self, mode: str, allocations: dict | None = None, payer_member_id: int | None = None):
+        """
+        Public helper to switch modes and recompute shares.
+        """
+        if mode not in dict(self.SPLIT_CHOICES):
+            raise ValueError("Invalid split mode")
+
+        self.split_mode = mode
+        updates = ['split_mode']
+
+        if mode == self.SPLIT_BY_ITEMS:
+            self.single_payer = None
+            updates.append('single_payer')
+            self.save(update_fields=updates)
+            self.compute_shares_by_items()
+
+        elif mode == self.SPLIT_BY_PERCENT:
+            self.single_payer = None
+            updates.append('single_payer')
+            self.save(update_fields=updates)
+            self.compute_shares_by_percentage(allocations or {})
+
+        elif mode == self.SPLIT_SINGLE_PAYER:
+            self.save(update_fields=updates)
+            if not payer_member_id:
+                raise ValueError("payer_member_id is required for single_payer mode")
+            self.compute_shares_single_payer(payer_member_id)
 
     def recalc_members_due(self):
         total = self.total()
         shares = self.payment_shares.filter(is_active=True)
         if not shares.exists():
             return
-        perc_total = sum((s.percentage or Decimal('0')) for s in shares)  # percentage in 0..100
+
+        perc_total = sum((s.percentage or Decimal('0')) for s in shares)  # 0..100
         fixed_total = sum((s.fixed_amount or Decimal('0')) for s in shares)
         items_total = sum((s.items_total_amount or Decimal('0')) for s in shares)
+
         remaining = total - (fixed_total + items_total)
-        # Avoid div by zero
         per_unit = Decimal('0')
         if perc_total and remaining > 0:
             per_unit = remaining / perc_total
