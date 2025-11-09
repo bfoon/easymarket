@@ -466,10 +466,12 @@ document.addEventListener('DOMContentLoaded', function () {
   const inviteLinkEl   = document.getElementById('socialInviteLink');
   const copyInviteBtn  = document.getElementById('copyInviteBtn');
   const leaveBtn       = document.getElementById('leaveCartBtn');
+
+  // ✅ FIX: Use correct ID from template
   const serverSocialId = document.getElementById('socialId')?.value || null;
   const ctaCard        = document.getElementById('socialCtaCard');
 
-  // Split settings controls (owner only present)
+  // Split settings controls
   const btnSplitItems  = document.getElementById('btnSplitItems');
   const btnSplitPercent= document.getElementById('btnSplitPercent');
   const btnSplitSingle = document.getElementById('btnSplitSingle');
@@ -482,11 +484,11 @@ document.addEventListener('DOMContentLoaded', function () {
   const pctTotalHint   = document.getElementById('pctTotalHint');
   const currentSplitEl = document.getElementById('currentSplitMode');
 
-  // Hydrate from server or localStorage
+  // ✅ FIX: Hydrate from server or localStorage
   let socialId = serverSocialId || localStorage.getItem('em_social_id') || null;
   let socialInviteLink = localStorage.getItem('em_social_invite') || '';
 
-  // If no server social but we have a stored social, keep actions visible and refresh link
+  // If no server social but we have a stored social, keep actions visible
   if (!serverSocialId && socialId && actionsWrap) {
     actionsWrap.style.display = 'block';
     if (ctaCard) ctaCard.style.display = 'none';
@@ -517,7 +519,7 @@ document.addEventListener('DOMContentLoaded', function () {
     inviteLinkEl.value = socialInviteLink;
   }
 
-  // Create social cart (NO RELOAD)
+  // ✅ FIX: Create social cart - now properly handles social_id in response
   createBtn?.addEventListener('click', () => {
     createBtn.disabled = true;
     const original = createBtn.innerHTML;
@@ -531,6 +533,7 @@ document.addEventListener('DOMContentLoaded', function () {
     .then(data => {
       if (!data.success) throw new Error(data.message || 'Failed to create social cart');
 
+      // ✅ FIX: Response now includes social_id
       socialId = data.social_id;
       localStorage.setItem('em_social_id', socialId);
 
@@ -681,7 +684,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   });
 
-  // ====== Split Mode logic (Owner only controls exist) ======
+  // ====== Split Mode logic ======
   function postSplit(payload) {
     return fetch("{% url 'marketplace:set_split_mode' %}", {
       method: 'POST',
@@ -753,7 +756,6 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 });
 </script>
-
 <!-- Promo Code Script (unchanged logic) -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {

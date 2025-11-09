@@ -1,5 +1,6 @@
 from decimal import Decimal, InvalidOperation
 import uuid
+import json  # ✅ ADD THIS - used in set_split_mode
 
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
@@ -87,6 +88,7 @@ def create_social_cart(request):
     social = ensure_social_cart(cart, request.user)
     return JsonResponse({
         'success': True,
+        'social_id': social.id,  # ✅ ADD THIS - template expects it
         'invite_link': _abs_uri(request, 'join_open_social_cart', invite_code=social.invite_code),
     })
 
@@ -131,7 +133,7 @@ def join_open_social_cart(request, invite_code):
         defaults={'role': 'editor', 'status': 'joined'}
     )
     PaymentShare.objects.get_or_create(social_cart=social, member=member)
-    _redistribute_equal(social)  # remove if you don’t want auto-redistribute
+    _redistribute_equal(social)  # remove if you don't want auto-redistribute
     social.recalc_members_due()
     return redirect('marketplace:cart_view')
 
@@ -155,7 +157,7 @@ def accept_cart_invite(request, code):
     inv.save(update_fields=['accepted_by', 'status'])
 
     PaymentShare.objects.get_or_create(social_cart=social, member=member)
-    _redistribute_equal(social)  # remove if you don’t want auto-redistribute
+    _redistribute_equal(social)  # remove if you don't want auto-redistribute
     social.recalc_members_due()
     return redirect('marketplace:cart_view')
 
@@ -164,9 +166,9 @@ def accept_cart_invite(request, code):
 @require_POST
 def set_share(request):
     social_id = request.POST.get('social_id')
-    percentage_raw = request.POST.get('percentage')     # "25" -> 25%
-    fixed_raw = request.POST.get('fixed_amount')        # "500.00"
-    member_id = request.POST.get('member_id')           # owner can edit others
+    percentage_raw = request.POST.get('percentage')
+    fixed_raw = request.POST.get('fixed_amount')
+    member_id = request.POST.get('member_id')
 
     social = get_object_or_404(SocialCart, id=social_id, is_active=True)
     me = get_object_or_404(CartMember, social_cart=social, user=request.user, status='joined')
@@ -180,7 +182,6 @@ def set_share(request):
     percentage = _parse_decimal(percentage_raw)
     fixed = _parse_decimal(fixed_raw)
 
-    # Validate and assign
     if percentage is not None:
         if percentage < 0 or percentage > 100:
             return JsonResponse({'success': False, 'message': 'percentage must be between 0 and 100'}, status=400)
@@ -199,7 +200,7 @@ def set_share(request):
 @require_POST
 def start_my_payment(request):
     social_id = request.POST.get('social_id')
-    provider = (request.POST.get('provider') or '').lower()  # wave/qmoney/afrimoney/gamswitch/cash
+    provider = (request.POST.get('provider') or '').lower()
 
     if provider not in {'wave', 'qmoney', 'afrimoney', 'gamswitch', 'cash'}:
         return JsonResponse({'success': False, 'message': 'Unsupported provider'}, status=400)
@@ -211,7 +212,6 @@ def start_my_payment(request):
     member = get_object_or_404(CartMember, social_cart=social, user=request.user, status='joined')
     share = get_object_or_404(PaymentShare, social_cart=social, member=member, is_active=True)
 
-    # Enter checkout mode
     if social.status == 'open':
         social.status = 'checkout'
         social.save(update_fields=['status'])
@@ -234,7 +234,6 @@ def start_my_payment(request):
         status='init'
     )
 
-    # TODO: initiate the provider payment here and set real reference
     c.status = 'pending'
     c.provider_ref = f"{provider.upper()}-{uuid.uuid4()}"
     c.save(update_fields=['status', 'provider_ref'])
@@ -250,11 +249,6 @@ def _not_mutable(social: SocialCart) -> bool:
 @login_required
 @require_POST
 def leave_cart(request):
-    """
-    Current user leaves a social cart.
-    - If owner: transfer ownership to earliest joined member (if any). If none, cancel the cart.
-    - Deactivate the member's share and mark status='left'.
-    """
     social_id = request.POST.get('social_id')
     social = get_object_or_404(SocialCart, id=social_id, is_active=True)
 
@@ -263,15 +257,12 @@ def leave_cart(request):
 
     member = get_object_or_404(CartMember, social_cart=social, user=request.user)
 
-    # Deactivate share (keep history)
     PaymentShare.objects.filter(social_cart=social, member=member).update(is_active=False)
 
-    # Mark member left
     if member.status != 'left':
         member.status = 'left'
         member.save(update_fields=['status'])
 
-    # If owner left, transfer or cancel
     new_owner_id = None
     if member.role == 'owner':
         replacement = social.members.filter(status='joined').exclude(id=member.id).order_by('joined_at').first()
@@ -282,7 +273,6 @@ def leave_cart(request):
             social.owner_id = replacement.user_id
             social.save(update_fields=['owner'])
         else:
-            # No members left → cancel collaborative layer
             social.status = 'cancelled'
             social.is_active = False
             social.save(update_fields=['status', 'is_active'])
@@ -293,7 +283,6 @@ def leave_cart(request):
                 'social_status': social.status,
             })
 
-    # Optional: redistribute equally among remaining active members
     _redistribute_equal(social)
     social.recalc_members_due()
 
@@ -315,15 +304,12 @@ def remove_member(request, member_id):
 
     social = member.social_cart
 
-    # Must be owner
     if social.owner_id != request.user.id:
         return JsonResponse({'success': False, 'message': 'Only the owner can remove members.'}, status=403)
 
-    # Don’t allow removing the owner
     if member.user_id == social.owner_id:
         return JsonResponse({'success': False, 'message': 'Owner cannot be removed.'}, status=400)
 
-    # Optional: ensure the member is currently joined
     if member.status != 'joined':
         return JsonResponse({'success': False, 'message': 'Member is not active.'}, status=400)
 
@@ -337,19 +323,18 @@ def set_split_mode(request):
     """
     POST body:
       mode: 'by_items' | 'by_percent' | 'single_payer'
-      allocations: JSON string {"<member_id>": <percentage>, ...}  # for by_percent
-      payer_member_id: int  # for single_payer
+      allocations: JSON string {"<member_id>": <percentage>, ...}
+      payer_member_id: int
     """
     social = _resolve_active_social_for(request.user)
     if not social:
         return JsonResponse({'success': False, 'message': 'No active social cart'}, status=404)
 
-    # Only owner can change the split mode (adjust if you want editors to do it)
     if social.owner_id != request.user.id:
         return JsonResponse({'success': False, 'message': 'Only the owner can change split mode'}, status=403)
 
     mode = (request.POST.get('mode') or '').strip()
-    allocations_raw = request.POST.get('allocations')  # JSON
+    allocations_raw = request.POST.get('allocations')
     payer_member_id = request.POST.get('payer_member_id')
 
     try:
@@ -361,7 +346,6 @@ def set_split_mode(request):
                 allocations = json.loads(allocations_raw or '{}')
             except Exception:
                 allocations = {}
-            # Convert keys to int and values to Decimal
             norm = {}
             for k, v in allocations.items():
                 try:
@@ -380,7 +364,6 @@ def set_split_mode(request):
         else:
             return JsonResponse({'success': False, 'message': 'Invalid mode'}, status=400)
 
-        # Build a compact response with current shares
         shares = list(
             social.payment_shares.filter(is_active=True)
             .select_related('member', 'member__user')
