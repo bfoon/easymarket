@@ -574,7 +574,7 @@ class CartItem(models.Model):
     cart = models.ForeignKey('Cart', on_delete=models.CASCADE, related_name='items')
     product = models.ForeignKey('Product', on_delete=models.CASCADE)
     quantity = models.PositiveIntegerField(default=1)
-    selected_features = models.JSONField(null=True, blank=True)
+    selected_features = models.JSONField(default=dict, blank=True)
 
     # NEW: who added this line (enables per-member permissions)
     added_by = models.ForeignKey(
@@ -598,6 +598,17 @@ class CartItem(models.Model):
 
     def subtotal(self):
         return self.product.price * self.quantity
+
+    @property
+    def features_dict(self):
+        import json
+        sf = self.selected_features
+        if isinstance(sf, str):
+            try:
+                return json.loads(sf)
+            except Exception:
+                return {}
+        return sf or {}
 
 
 def _invite_code():
