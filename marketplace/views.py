@@ -1332,16 +1332,23 @@ def _resolve_active_cart_for_user(user):
     Otherwise use/get their personal cart.
     Non-owner members are allowed to add items.
     """
-    social = (SocialCart.objects
-              .filter(is_active=True, status__in=['open', 'checkout'],
-                      members__user=user, members__status='joined')
-              .select_related('cart')
-              .order_by('-created_at')
-              .first())
+    social = (
+        SocialCart.objects
+        .filter(
+            is_active=True,
+            status__in=['open', 'checkout'],
+            members__user=user,
+            members__status='joined',
+        )
+        .select_related('cart')
+        .order_by('-created_at')
+        .first()
+    )
     if social:
         return social.cart, social
     cart, _ = Cart.objects.get_or_create(user=user)
     return cart, None
+
 
 def _coerce_int(v, default=1, lo=1, hi=99):
     try:
@@ -1349,6 +1356,62 @@ def _coerce_int(v, default=1, lo=1, hi=99):
     except Exception:
         n = default
     return max(lo, min(hi, n))
+
+
+def _collect_selected_features(request):
+    """
+    Collect dynamic feature selections from request.
+
+    Supports:
+      - JSON body: { "selected_features": {...} } or { "features": {...} }
+      - FORM body: selected_features='{"color":"Red"}'
+      - Fallback: fields named feature_color, feature_size, etc.
+    """
+    selected_features = {}
+
+    # JSON body
+    if request.content_type and "application/json" in request.content_type:
+        try:
+            payload = json.loads(request.body.decode() or "{}")
+        except Exception:
+            payload = {}
+        selected_features = (
+            payload.get("selected_features")
+            or payload.get("features")
+            or {}
+        ) or {}
+        # Ensure dict
+        if not isinstance(selected_features, dict):
+            selected_features = {}
+        return selected_features
+
+    # FORM body (x-www-form-urlencoded / multipart)
+    raw_feats = (
+        request.POST.get("selected_features")
+        or request.POST.get("features")
+    )
+
+    if raw_feats:
+        try:
+            parsed = json.loads(raw_feats)
+            if isinstance(parsed, dict):
+                selected_features = parsed
+        except Exception:
+            selected_features = {}
+
+    # Fallback: look for prefixed dynamic names if we didn't get JSON
+    if not selected_features:
+        # e.g. feature_color = "Red"
+        dynamic = {
+            k.replace("feature_", ""): v
+            for k, v in request.POST.items()
+            if k.startswith("feature_")
+        }
+        if dynamic:
+            selected_features = dynamic
+
+    return selected_features or {}
+
 
 @require_POST
 def add_to_cart(request, product_id):
@@ -1361,30 +1424,16 @@ def add_to_cart(request, product_id):
       selected_features: JSON (e.g. {"color":"Red","size":"M"})
     """
     # Parse incoming
-    quantity = 1
-    selected_features = {}
-
     if request.content_type and "application/json" in request.content_type:
         try:
             payload = json.loads(request.body.decode() or "{}")
         except Exception:
             payload = {}
         quantity = _coerce_int(payload.get("quantity", 1))
-        selected_features = payload.get("selected_features") or {}
     else:
         quantity = _coerce_int(request.POST.get("quantity", 1))
-        raw_feats = request.POST.get("selected_features")
-        if raw_feats:
-            try:
-                selected_features = json.loads(raw_feats)
-            except Exception:
-                selected_features = {}
-        else:
-            selected_features = {
-                k.replace("feature_", ""): v
-                for k, v in request.POST.items()
-                if k.startswith("feature_")
-            }
+
+    selected_features = _collect_selected_features(request)
 
     # Product
     product = get_object_or_404(Product, pk=product_id, is_active=True)
@@ -1417,7 +1466,7 @@ def add_to_cart(request, product_id):
         return JsonResponse(
             {
                 "success": True,
-                "product_name": product.name,      # <- helps your main.js toast
+                "product_name": product.name,
                 "cart_item_id": item.id,
                 "cart_count": total_qty,
                 "in_social_cart": bool(social),

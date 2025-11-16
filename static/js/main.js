@@ -272,17 +272,31 @@ function addToCart(productId, button) {
     const select = group.querySelector('select');
     if (!value && select) value = select.value;
 
-    // fallback badge text
+    // fallback badge/button text (e.g. .btn.active)
     if (!value) {
       const active = group.querySelector('.active,[aria-pressed="true"]');
       if (active) value = active.dataset.value || active.textContent?.trim();
     }
 
-    if (feature && value) selectedFeatures[feature] = value;
+    if (feature && value) {
+      // feature is something like "color", "size", "material"
+      selectedFeatures[feature] = value;
+    }
   });
 
   const body = new URLSearchParams();
-  body.append('features', JSON.stringify(selectedFeatures));
+
+  // 🔴 OLD (wrong key)
+  // body.append('features', JSON.stringify(selectedFeatures));
+
+  // ✅ NEW – this matches what the Django view expects
+  body.append('selected_features', JSON.stringify(selectedFeatures));
+
+  // (optional) quantity if you have it on the page
+  const qtyInput = document.querySelector('[data-cart-qty]');
+  if (qtyInput && qtyInput.value) {
+    body.append('quantity', qtyInput.value);
+  }
 
   if (button) {
     button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Adding...';
