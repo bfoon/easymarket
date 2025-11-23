@@ -147,7 +147,11 @@ class Store(models.Model):
     description = models.TextField()
     short_description = models.CharField(max_length=500, blank=True, null=True)
 
-    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='owned_stores')
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='owned_stores'
+    )
     managers = models.ManyToManyField(
         settings.AUTH_USER_MODEL,
         through='StoreManager',
@@ -156,9 +160,22 @@ class Store(models.Model):
         blank=True
     )
 
-    store_type = models.CharField(max_length=20, choices=STORE_TYPE_CHOICES, default='individual')
-    category = models.ForeignKey(StoreCategory, on_delete=models.SET_NULL, null=True, blank=True)
-    status = models.CharField(max_length=20, choices=STORE_STATUS_CHOICES, default='pending')
+    store_type = models.CharField(
+        max_length=20,
+        choices=STORE_TYPE_CHOICES,
+        default='individual'
+    )
+    category = models.ForeignKey(
+        'StoreCategory',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STORE_STATUS_CHOICES,
+        default='pending'
+    )
 
     email = models.EmailField()
     phone = models.CharField(max_length=20)
@@ -171,6 +188,7 @@ class Store(models.Model):
     postal_code = models.CharField(max_length=20)
     country = models.CharField(max_length=100, default='Gambia')
 
+    # Business / finance info
     business_registration_number = models.CharField(max_length=100, blank=True, null=True)
     tax_identification_number = models.CharField(max_length=100, blank=True, null=True)
     bank_account_number = models.CharField(max_length=100, blank=True, null=True)
@@ -183,19 +201,58 @@ class Store(models.Model):
     allow_reviews = models.BooleanField(default=True)
     auto_approve_products = models.BooleanField(default=False)
 
-    commission_rate = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('5.00'))
-    minimum_order_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
+    commission_rate = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal('5.00')
+    )
+    minimum_order_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('0.00')
+    )
 
-    processing_time = models.PositiveIntegerField(default=2, help_text="Days to process orders")
-    return_policy_days = models.PositiveIntegerField(default=30, help_text="Return policy in days")
+    processing_time = models.PositiveIntegerField(
+        default=2,
+        help_text="Days to process orders"
+    )
+    return_policy_days = models.PositiveIntegerField(
+        default=30,
+        help_text="Return policy in days"
+    )
 
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    approved_at = models.DateTimeField(blank=True, null=True)
+    # --- B2B / Wholesale fields ---
+    allows_b2b = models.BooleanField(
+        default=False,
+        help_text="If enabled, this store can sell in the B2B marketplace."
+    )
+    is_b2b_only = models.BooleanField(
+        default=False,
+        help_text="If true, store appears ONLY in B2B listings (hidden from normal marketplace)."
+    )
+    is_international_supplier = models.BooleanField(
+        default=False,
+        help_text="Highlight this store as an international B2B supplier."
+    )
+    b2b_min_order_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Minimum order amount for B2B transactions (optional)."
+    )
+    b2b_description = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Short description for B2B buyers (MOQ, special terms, etc.)."
+    )
 
+    # Social & marketing
     facebook_url = models.URLField(blank=True, null=True)
     twitter_url = models.URLField(blank=True, null=True)
     instagram_url = models.URLField(blank=True, null=True)
+
+    # Auctions
     allow_auctions = models.BooleanField(default=True)
     auction_commission_rate = models.DecimalField(
         max_digits=5,
@@ -207,11 +264,18 @@ class Store(models.Model):
         default=False,
         help_text="Automatically approve auctions without admin review"
     )
+
+    # Risk / referrals
     accept_cash_risk = models.BooleanField(default=False)
     allow_referrals = models.BooleanField(
         default=False,
         help_text="Allow buyers to refer this store and earn rewards."
     )
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    approved_at = models.DateTimeField(blank=True, null=True)
 
     class Meta:
         ordering = ['-created_at']
@@ -221,19 +285,22 @@ class Store(models.Model):
     def __str__(self):
         return self.name
 
-    def save(self, *args, **kwargs):
-        if not self._state.adding:
-            old_store = Store.objects.get(pk=self.pk)
-            if old_store.status != self.status and self.status == 'active' and not self.approved_at:
-                self.approved_at = timezone.now()
-        super().save(*args, **kwargs)
-
-    def get_absolute_url(self):
-        return reverse('store:store_detail', kwargs={'slug': self.slug})
+    # ---------- PROPERTIES / HELPERS ----------
 
     @property
     def is_active_store(self):
         return self.status == 'active'
+
+    @property
+    def is_local(self):
+        """
+        Convenience flag to check if this is a local (Gambian) store.
+        Useful when highlighting international suppliers in B2B views.
+        """
+        return self.country.strip().lower() in ['gambia', 'the gambia']
+
+    def get_absolute_url(self):
+        return reverse('store:store_detail', kwargs={'slug': self.slug})
 
     def get_total_products(self):
         return self.products.filter(is_active=True).count()
@@ -252,7 +319,12 @@ class Store(models.Model):
             product__store=self,
             order__status='delivered'
         ).aggregate(
-            total=Sum(ExpressionWrapper(F('quantity') * F('price_at_time'), output_field=DecimalField()))
+            total=Sum(
+                ExpressionWrapper(
+                    F('quantity') * F('price_at_time'),
+                    output_field=DecimalField()
+                )
+            )
         )['total']
         return total or Decimal('0.00')
 
@@ -260,14 +332,11 @@ class Store(models.Model):
         return self.is_active_store and self.return_policy_days > 0
 
     def get_active_auctions(self):
-        """Get active auctions for this store"""
+        """Get active auctions for this store."""
         return self.auctions.filter(status='active')
 
     def get_auction_sales(self):
-        """Get total auction sales for this store"""
-        from auction.models import Auction
-        from django.db.models import Sum
-
+        """Get total auction sales for this store."""
         return self.auctions.filter(
             status__in=['sold', 'ended'],
             winner__isnull=False
@@ -282,13 +351,22 @@ class Store(models.Model):
         if not user or not user.is_authenticated:
             return False
 
+        from .models import StoreFollow
         return StoreFollow.objects.filter(user=user, store=self, is_active=True).exists()
 
     def get_followers_count(self):
-        from .models import StoreFollow  # or adjust the import if StoreFollow is elsewhere
+        from .models import StoreFollow
         return StoreFollow.objects.filter(store=self, is_active=True).count()
 
+    # ---------- NOTIFICATIONS / EMAILS ----------
+
+    @staticmethod
     def send_bulk_emails_threaded(emails_data, store_name):
+        """
+        Helper for sending bulk emails (intended for use in a background thread).
+        emails_data: list of dicts with keys: email, name, title, message
+        """
+        from django.conf import settings
         for email_data in emails_data:
             try:
                 send_mail(
@@ -303,7 +381,8 @@ class Store(models.Model):
 
     def notify_followers(self, notification_type, title, message, product=None, **kwargs):
         """
-        Notify all users who follow this store (DB + Email in background thread).
+        Notify all users who follow this store (DB notification + email).
+        notification_type: 'new_product', 'price_decrease', 'price_increase', 'discount'
         """
         from .models import StoreFollow, StoreNotification
 
@@ -325,7 +404,6 @@ class Store(models.Model):
                 should_notify = True
 
             if should_notify:
-                # Notification DB entry
                 notifications_to_create.append(
                     StoreNotification(
                         user=follow.user,
@@ -339,7 +417,6 @@ class Store(models.Model):
                     )
                 )
 
-                # Prepare email data
                 if follow.user.email:
                     emails_to_send.append({
                         'email': follow.user.email,
@@ -351,73 +428,8 @@ class Store(models.Model):
         if notifications_to_create:
             StoreNotification.objects.bulk_create(notifications_to_create)
 
-
-        return len(notifications_to_create)
-
-    def save(self, *args, **kwargs):
-        if not self._state.adding:
-            old_store = Store.objects.get(pk=self.pk)
-            if old_store.status != self.status and self.status == 'active' and not self.approved_at:
-                self.approved_at = timezone.now()
-        super().save(*args, **kwargs)
-
-    # Also fix the notify_followers method to actually send notifications:
-    def notify_followers(self, notification_type, title, message, product=None, **kwargs):
-        """
-        Notify all users who follow this store.
-        """
-        from .models import StoreFollow, StoreNotification
-        from django.core.mail import send_mail
+        # Send emails (you can offload this to a thread / Celery)
         from django.conf import settings
-
-        # Get followers with their notification preferences
-        followers = StoreFollow.objects.filter(
-            store=self,
-            is_active=True
-        ).select_related('user')
-
-        notifications_to_create = []
-        emails_to_send = []
-
-        for follow in followers:
-            # Check notification preferences
-            should_notify = False
-            if notification_type == 'new_product' and follow.notify_new_products:
-                should_notify = True
-            elif notification_type in ['price_decrease', 'price_increase'] and follow.notify_price_changes:
-                should_notify = True
-            elif notification_type == 'discount' and follow.notify_discounts:
-                should_notify = True
-
-            if should_notify:
-                # Create notification record
-                notifications_to_create.append(
-                    StoreNotification(
-                        user=follow.user,
-                        store=self,
-                        product=product,
-                        notification_type=notification_type,
-                        title=title,
-                        message=message,
-                        old_price=kwargs.get('old_price'),
-                        new_price=kwargs.get('new_price')
-                    )
-                )
-
-                # Prepare email
-                if follow.user.email:
-                    emails_to_send.append({
-                        'email': follow.user.email,
-                        'name': follow.user.get_full_name() or follow.user.username,
-                        'title': title,
-                        'message': message
-                    })
-
-        # Bulk create notifications
-        if notifications_to_create:
-            StoreNotification.objects.bulk_create(notifications_to_create)
-
-        # Send emails
         for email_data in emails_to_send:
             try:
                 send_mail(
@@ -432,6 +444,17 @@ class Store(models.Model):
 
         return len(notifications_to_create)
 
+    # ---------- OVERRIDES ----------
+
+    def save(self, *args, **kwargs):
+        """
+        Auto-set approved_at when store becomes active.
+        """
+        if not self._state.adding:
+            old_store = Store.objects.filter(pk=self.pk).first()
+            if old_store and old_store.status != self.status and self.status == 'active' and not self.approved_at:
+                self.approved_at = timezone.now()
+        super().save(*args, **kwargs)
 
 class StoreFavorite(models.Model):
     """

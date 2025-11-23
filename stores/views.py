@@ -3609,3 +3609,105 @@ def campaign_request_changes(request, slug, campaign_id):
     campaign.save(update_fields=['status', 'reviewer', 'review_note', 'updated_at'])
 
     return JsonResponse({'success': True, 'message': 'Changes requested successfull'})
+
+
+def _user_has_store_access(user):
+    """
+    Helper: check if user is a store owner or manager.
+    Adjust logic if you have a custom store-owner profile.
+    """
+    if not user.is_authenticated:
+        return False
+
+    # Owner or manager of at least one store
+    return Store.objects.filter(
+        Q(owner=user) | Q(managers=user)
+    ).exists()
+
+
+@login_required
+def b2b_marketplace(request):
+    """
+    B2B marketplace view:
+    - Only accessible to store owners / managers
+    - Shows B2B suppliers (local & international)
+    - Shows B2B products with wholesale options
+    """
+    user = request.user
+
+    # Restrict to users who have a store relationship
+    if not _user_has_store_access(user):
+        # You can redirect somewhere else or raise 403
+        return redirect("home")  # or use: from django.http import HttpResponseForbidden
+
+    # --- Filters / search ---
+    filter_type = request.GET.get("filter", "all")
+    search_query = request.GET.get("q", "").strip()
+
+    # Base queryset: only stores that allow B2B and are active
+    store_qs = Store.objects.filter(
+        allows_b2b=True,
+        status="active",
+    )
+
+    # Apply filter for international / local
+    if filter_type == "international":
+        store_qs = store_qs.filter(is_international_supplier=True)
+    elif filter_type == "local":
+        store_qs = store_qs.filter(is_international_supplier=False)
+    elif filter_type == "my_country" and user.is_authenticated:
+        # Filter by user's country, if you store it on profile
+        # Fallback: use store.country == 'Gambia'
+        user_country = "Gambia"
+        store_qs = store_qs.filter(country__iexact=user_country)
+
+    # Search across store name and description
+    if search_query:
+        store_qs = store_qs.filter(
+            Q(name__icontains=search_query) |
+            Q(short_description__icontains=search_query) |
+            Q(description__icontains=search_query)
+        )
+
+    # Separate for highlighting
+    international_suppliers = store_qs.filter(is_international_supplier=True)
+    local_suppliers = store_qs.filter(is_international_supplier=False)
+
+    # --- B2B products ---
+    product_qs = Product.objects.filter(
+        visible_in_b2b=True,
+        is_available_b2b=True,
+        is_active=True,
+        store__allows_b2b=True,
+        store__status="active",
+    ).select_related("store", "category")
+
+    # Optional: sync product filtering with store list
+    # (only products from currently-filtered stores)
+    product_qs = product_qs.filter(store__in=store_qs)
+
+    if search_query:
+        product_qs = product_qs.filter(
+            Q(name__icontains=search_query) |
+            Q(description__icontains=search_query) |
+            Q(store__name__icontains=search_query)
+        )
+
+    # Order products by something meaningful for B2B
+    product_qs = product_qs.order_by("-store__is_international_supplier", "-created_at")
+
+    # Pagination for products
+    paginator = Paginator(product_qs, 24)  # 24 products per page
+    page_number = request.GET.get("page")
+    products_page = paginator.get_page(page_number)
+
+    context = {
+        "filter_type": filter_type,
+        "search_query": search_query,
+        "international_suppliers": international_suppliers,
+        "local_suppliers": local_suppliers,
+        "products_page": products_page,
+        "stores_count": store_qs.count(),
+        "products_count": product_qs.count(),
+    }
+    return render(request, "b2b/b2b_marketplace.html", context)

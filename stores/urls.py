@@ -6,6 +6,10 @@ app_name = 'stores'
 urlpatterns = [
     # Store management URLs - Store creation and general management
     path('', views.store_list, name='store_list'),
+
+    # 🔹 NEW: B2B marketplace URL
+    path("b2b/", views.b2b_marketplace, name="b2b_marketplace"),
+
     path('favorites/', views.my_favorite_stores, name='my_favorite_stores'),
     path('create/', views.create_store, name='create_store'),
     path('manage/', views.manage_stores, name='manage_stores'),

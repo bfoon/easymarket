@@ -1,0 +1,1243 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}B2B Marketplace – EasyMarket Wholesale{% endblock %}
+
+{% block meta_description %}
+<meta name="description" content="Connect with {{ stores_count }} verified B2B suppliers and explore {{ products_count }} wholesale products. Negotiate directly, access wholesale pricing, and manage bulk orders.">
+{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+
+<style>
+/* B2B Marketplace Styling - Professional & Consistent */
+:root {
+    --b2b-primary: #1a5f9e;
+    --b2b-secondary: #2d8ccc;
+    --b2b-accent: #ff6b35;
+    --b2b-success: #2ed573;
+    --b2b-warning: #ffc048;
+    --b2b-danger: #ff4757;
+    --neutral-dark: #2c2c54;
+    --neutral-light: #f8f9fa;
+}
+
+/* Hero Section */
+.b2b-hero {
+    background: linear-gradient(135deg, var(--b2b-primary) 0%, var(--b2b-secondary) 100%);
+    color: white;
+    padding: 3rem 0;
+    border-bottom: 3px solid var(--b2b-accent);
+    position: relative;
+    overflow: hidden;
+}
+
+.b2b-hero::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -10%;
+    width: 500px;
+    height: 500px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 50%;
+}
+
+.b2b-hero-content {
+    position: relative;
+    z-index: 1;
+}
+
+.b2b-hero h1 {
+    font-size: 2.5rem;
+    font-weight: 800;
+    margin-bottom: 1rem;
+    letter-spacing: -0.5px;
+}
+
+.b2b-hero-description {
+    font-size: 1.1rem;
+    opacity: 0.95;
+    margin-bottom: 1.5rem;
+    max-width: 600px;
+}
+
+.b2b-hero-stats {
+    display: flex;
+    gap: 2rem;
+    flex-wrap: wrap;
+    margin-top: 1.5rem;
+}
+
+.b2b-stat-item {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+}
+
+.b2b-stat-number {
+    font-size: 1.8rem;
+    font-weight: 700;
+}
+
+.b2b-stat-label {
+    font-size: 0.9rem;
+    opacity: 0.9;
+}
+
+.b2b-hero-badges {
+    display: flex;
+    gap: 0.8rem;
+    flex-wrap: wrap;
+    margin-top: 2rem;
+}
+
+.b2b-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(10px);
+    padding: 0.6rem 1.2rem;
+    border-radius: 25px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* Breadcrumb */
+.b2b-breadcrumb {
+    background: white;
+    border-bottom: 1px solid #e9ecef;
+    padding: 1rem 0;
+}
+
+.b2b-breadcrumb .breadcrumb {
+    margin-bottom: 0;
+}
+
+.b2b-breadcrumb .breadcrumb-item a {
+    color: var(--b2b-primary);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.b2b-breadcrumb .breadcrumb-item a:hover {
+    color: var(--b2b-accent);
+}
+
+/* Search & Filter Container */
+.b2b-search-filter-container {
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    margin-bottom: 2rem;
+}
+
+.b2b-search-input {
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    font-size: 0.95rem;
+    transition: all 0.3s ease;
+}
+
+.b2b-search-input:focus {
+    border-color: var(--b2b-primary);
+    box-shadow: 0 0 0 3px rgba(26, 95, 158, 0.1);
+}
+
+.b2b-filter-select {
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    font-size: 0.95rem;
+    transition: all 0.3s ease;
+}
+
+.b2b-filter-select:focus {
+    border-color: var(--b2b-primary);
+    box-shadow: 0 0 0 3px rgba(26, 95, 158, 0.1);
+}
+
+.b2b-btn-filter {
+    background: var(--b2b-primary);
+    border: none;
+    color: white;
+    border-radius: 8px;
+    padding: 0.75rem 2rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.b2b-btn-filter:hover {
+    background: var(--b2b-secondary);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(26, 95, 158, 0.3);
+}
+
+.b2b-btn-clear {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    color: #6c757d;
+    border-radius: 8px;
+    padding: 0.75rem 1.5rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.b2b-btn-clear:hover {
+    background: #e9ecef;
+    color: var(--neutral-dark);
+}
+
+/* Active Filters */
+.b2b-active-filters {
+    display: flex;
+    gap: 0.8rem;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+
+.b2b-filter-tag {
+    background: var(--b2b-primary);
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.b2b-filter-tag-close {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    color: white;
+}
+
+.b2b-filter-tag-close:hover {
+    background: rgba(255, 255, 255, 0.5);
+}
+
+/* Section Headers */
+.b2b-section-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.b2b-section-title {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--neutral-dark);
+    margin: 0;
+}
+
+.b2b-section-badge {
+    background: var(--b2b-primary);
+    color: white;
+    padding: 0.4rem 0.8rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.b2b-section-subtitle {
+    color: #6c757d;
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+}
+
+/* Supplier Cards */
+.b2b-suppliers-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.b2b-supplier-card {
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.b2b-supplier-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    border-color: var(--b2b-accent);
+}
+
+.b2b-supplier-header {
+    padding: 1.5rem;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.b2b-supplier-name {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--neutral-dark);
+    margin-bottom: 0.5rem;
+}
+
+.b2b-supplier-location {
+    color: #6c757d;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.8rem;
+}
+
+.b2b-supplier-badges {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.b2b-supplier-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    background: #f8f9fa;
+    color: var(--neutral-dark);
+    padding: 0.3rem 0.6rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.b2b-supplier-badge.international {
+    background: rgba(26, 95, 158, 0.1);
+    color: var(--b2b-primary);
+}
+
+.b2b-supplier-badge.b2b-only {
+    background: rgba(44, 44, 84, 0.1);
+    color: var(--neutral-dark);
+}
+
+.b2b-supplier-badge.local {
+    background: rgba(46, 213, 115, 0.1);
+    color: var(--b2b-success);
+}
+
+.b2b-supplier-body {
+    padding: 1.5rem;
+    flex-grow: 1;
+}
+
+.b2b-supplier-description {
+    color: #6c757d;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    margin-bottom: 1rem;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.b2b-supplier-moq {
+    background: var(--neutral-light);
+    padding: 0.75rem;
+    border-radius: 6px;
+    margin-bottom: 1rem;
+}
+
+.b2b-supplier-moq-label {
+    font-size: 0.8rem;
+    color: #6c757d;
+    font-weight: 600;
+    margin-bottom: 0.3rem;
+}
+
+.b2b-supplier-moq-value {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--b2b-primary);
+}
+
+.b2b-supplier-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid #e9ecef;
+    display: flex;
+    gap: 0.8rem;
+}
+
+.b2b-supplier-btn {
+    flex: 1;
+    padding: 0.7rem 1rem;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.b2b-supplier-btn-primary {
+    background: var(--b2b-primary);
+    color: white;
+}
+
+.b2b-supplier-btn-primary:hover {
+    background: var(--b2b-secondary);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(26, 95, 158, 0.3);
+}
+
+.b2b-supplier-btn-secondary {
+    background: var(--neutral-light);
+    color: var(--neutral-dark);
+    border: 1px solid #dee2e6;
+}
+
+.b2b-supplier-btn-secondary:hover {
+    background: #e9ecef;
+    border-color: var(--b2b-primary);
+}
+
+/* Products Grid */
+.b2b-products-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.b2b-product-card {
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    cursor: pointer;
+}
+
+.b2b-product-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.b2b-product-image-container {
+    position: relative;
+    width: 100%;
+    padding-bottom: 100%;
+    overflow: hidden;
+    background: var(--neutral-light);
+}
+
+.b2b-product-image {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+
+.b2b-product-card:hover .b2b-product-image {
+    transform: scale(1.05);
+}
+
+.b2b-product-badges {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    z-index: 2;
+}
+
+.b2b-product-badge {
+    background: var(--b2b-accent);
+    color: white;
+    padding: 0.4rem 0.7rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 700;
+}
+
+.b2b-product-info {
+    padding: 1rem;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.b2b-product-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--neutral-dark);
+    margin-bottom: 0.5rem;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.b2b-product-name a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.b2b-product-name a:hover {
+    color: var(--b2b-primary);
+}
+
+.b2b-product-store {
+    font-size: 0.8rem;
+    color: #6c757d;
+    margin-bottom: 0.8rem;
+}
+
+.b2b-product-pricing {
+    margin-bottom: 0.8rem;
+}
+
+.b2b-product-price {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--b2b-primary);
+}
+
+.b2b-product-price-label {
+    font-size: 0.75rem;
+    color: #6c757d;
+    margin-left: 0.3rem;
+}
+
+.b2b-product-moq {
+    font-size: 0.8rem;
+    color: #6c757d;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.b2b-product-tier {
+    font-size: 0.75rem;
+    color: #6c757d;
+    margin-top: 0.4rem;
+    padding: 0.4rem;
+    background: var(--neutral-light);
+    border-radius: 4px;
+}
+
+.b2b-product-actions {
+    display: flex;
+    gap: 0.6rem;
+    margin-top: auto;
+}
+
+.b2b-product-btn {
+    flex: 1;
+    padding: 0.6rem 0.8rem;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.b2b-product-btn-primary {
+    background: var(--b2b-primary);
+    color: white;
+}
+
+.b2b-product-btn-primary:hover {
+    background: var(--b2b-secondary);
+}
+
+.b2b-product-btn-secondary {
+    background: var(--neutral-light);
+    color: var(--neutral-dark);
+    border: 1px solid #dee2e6;
+}
+
+.b2b-product-btn-secondary:hover {
+    background: #e9ecef;
+    border-color: var(--b2b-primary);
+}
+
+/* Pagination */
+.b2b-pagination {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    margin: 2rem 0;
+    flex-wrap: wrap;
+}
+
+.b2b-pagination-item {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 6px;
+    border: 1px solid #dee2e6;
+    background: white;
+    color: var(--b2b-primary);
+    text-decoration: none;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.b2b-pagination-item:hover:not(.active) {
+    border-color: var(--b2b-primary);
+    background: var(--neutral-light);
+}
+
+.b2b-pagination-item.active {
+    background: var(--b2b-primary);
+    color: white;
+    border-color: var(--b2b-primary);
+}
+
+.b2b-pagination-item.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Empty State */
+.b2b-empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    background: white;
+    border-radius: 12px;
+    border: 1px solid #e9ecef;
+}
+
+.b2b-empty-icon {
+    font-size: 3rem;
+    color: #dee2e6;
+    margin-bottom: 1rem;
+}
+
+.b2b-empty-title {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--neutral-dark);
+    margin-bottom: 0.5rem;
+}
+
+.b2b-empty-text {
+    color: #6c757d;
+    margin-bottom: 1.5rem;
+}
+
+.b2b-empty-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .b2b-hero h1 {
+        font-size: 1.8rem;
+    }
+
+    .b2b-hero-stats {
+        gap: 1rem;
+    }
+
+    .b2b-suppliers-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .b2b-products-grid {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    }
+}
+
+@media (max-width: 576px) {
+    .b2b-hero {
+        padding: 2rem 0;
+    }
+
+    .b2b-hero h1 {
+        font-size: 1.5rem;
+    }
+
+    .b2b-products-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 0.8rem;
+    }
+
+    .b2b-search-filter-container {
+        padding: 1rem;
+    }
+}
+</style>
+
+<!-- Breadcrumb -->
+<section class="b2b-breadcrumb">
+    <div class="container">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item">
+                    <a href="{% url 'marketplace:all_products' %}">
+                        <i class="fas fa-home me-1"></i>Home
+                    </a>
+                </li>
+                <li class="breadcrumb-item active" aria-current="page">
+                    <i class="fas fa-handshake me-1"></i>B2B Marketplace
+                </li>
+            </ol>
+        </nav>
+    </div>
+</section>
+
+<!-- Hero Section -->
+<section class="b2b-hero">
+    <div class="container">
+        <div class="b2b-hero-content">
+            <h1>
+                <i class="fas fa-globe me-2"></i>B2B Marketplace
+            </h1>
+            <p class="b2b-hero-description">
+                Connect with verified wholesale suppliers worldwide. Access competitive pricing, manage bulk orders, and build lasting business partnerships.
+            </p>
+
+            <div class="b2b-hero-stats">
+                <div class="b2b-stat-item">
+                    <i class="fas fa-store fa-2x" style="color: var(--b2b-warning);"></i>
+                    <div>
+                        <div class="b2b-stat-number">{{ stores_count }}</div>
+                        <div class="b2b-stat-label">Verified Suppliers</div>
+                    </div>
+                </div>
+                <div class="b2b-stat-item">
+                    <i class="fas fa-boxes fa-2x" style="color: var(--b2b-warning);"></i>
+                    <div>
+                        <div class="b2b-stat-number">{{ products_count }}</div>
+                        <div class="b2b-stat-label">B2B Products</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="b2b-hero-badges">
+                <div class="b2b-badge">
+                    <i class="fas fa-lock"></i>Secure Transactions
+                </div>
+                <div class="b2b-badge">
+                    <i class="fas fa-handshake"></i>Direct Negotiation
+                </div>
+                <div class="b2b-badge">
+                    <i class="fas fa-shipping-fast"></i>Bulk Shipping
+                </div>
+                <div class="b2b-badge">
+                    <i class="fas fa-globe"></i>Global Reach
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Search & Filter -->
+<div class="container my-4">
+    <div class="b2b-search-filter-container">
+        <form method="get" action="{% url 'stores:b2b_marketplace' %}" class="row g-2 align-items-end">
+            <div class="col-12 col-md-5">
+                <label for="search-input" class="form-label fw-600 mb-2">Search Suppliers or Products</label>
+                <input type="text"
+                       id="search-input"
+                       name="q"
+                       class="form-control b2b-search-input"
+                       placeholder="Enter supplier name, product, or keywords..."
+                       value="{{ search_query }}">
+            </div>
+
+            <div class="col-6 col-md-3">
+                <label for="filter-type" class="form-label fw-600 mb-2">Filter By</label>
+                <select name="filter" id="filter-type" class="form-select b2b-filter-select">
+                    <option value="all" {% if filter_type == 'all' %}selected{% endif %}>All Suppliers</option>
+                    <option value="international" {% if filter_type == 'international' %}selected{% endif %}>🌍 International</option>
+                    <option value="local" {% if filter_type == 'local' %}selected{% endif %}>🇬🇲 Local</option>
+                </select>
+            </div>
+
+            <div class="col-6 col-md-2">
+                <button class="btn b2b-btn-filter w-100" type="submit">
+                    <i class="fas fa-filter me-1"></i>Filter
+                </button>
+            </div>
+
+            <div class="col-12 col-md-2 text-md-end">
+                {% if search_query or filter_type != 'all' %}
+                <a href="{% url 'stores:b2b_marketplace' %}" class="btn b2b-btn-clear w-100">
+                    <i class="fas fa-times me-1"></i>Clear
+                </a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+
+    <!-- Active Filters Display -->
+    {% if search_query or filter_type != 'all' %}
+    <div class="b2b-active-filters">
+        <span class="text-muted small fw-600">Active filters:</span>
+        {% if search_query %}
+        <div class="b2b-filter-tag">
+            <i class="fas fa-search"></i>
+            "{{ search_query }}"
+            <a href="?filter={{ filter_type }}" class="b2b-filter-tag-close">×</a>
+        </div>
+        {% endif %}
+        {% if filter_type != 'all' %}
+        <div class="b2b-filter-tag">
+            {% if filter_type == 'international' %}
+            <i class="fas fa-globe"></i>International
+            {% else %}
+            <i class="fas fa-map-marker-alt"></i>Local
+            {% endif %}
+            <a href="?{% if search_query %}q={{ search_query }}{% endif %}" class="b2b-filter-tag-close">×</a>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- International Suppliers Section -->
+    {% if international_suppliers %}
+    <section class="mb-5">
+        <div class="b2b-section-header">
+            <h2 class="b2b-section-title">
+                <i class="fas fa-globe me-2" style="color: var(--b2b-primary);"></i>International Suppliers
+            </h2>
+            <span class="b2b-section-badge">{{ international_suppliers|length }}</span>
+        </div>
+        <p class="b2b-section-subtitle">Established wholesale partners with global reach and competitive pricing</p>
+
+        <div class="b2b-suppliers-grid">
+            {% for store in international_suppliers %}
+            <div class="b2b-supplier-card">
+                <div class="b2b-supplier-header">
+                    <h3 class="b2b-supplier-name">{{ store.name }}</h3>
+                    <div class="b2b-supplier-location">
+                        <i class="fas fa-map-pin"></i>
+                        <span>{{ store.city }}, {{ store.country }}</span>
+                    </div>
+                    <div class="b2b-supplier-badges">
+                        <span class="b2b-supplier-badge international">
+                            <i class="fas fa-globe"></i>International
+                        </span>
+                        {% if store.is_b2b_only %}
+                        <span class="b2b-supplier-badge b2b-only">
+                            <i class="fas fa-building"></i>B2B Only
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="b2b-supplier-body">
+                    {% if store.b2b_description %}
+                    <p class="b2b-supplier-description">{{ store.b2b_description|truncatewords:25 }}</p>
+                    {% endif %}
+
+                    {% if store.b2b_min_order_amount %}
+                    <div class="b2b-supplier-moq">
+                        <div class="b2b-supplier-moq-label">Minimum Order Value</div>
+                        <div class="b2b-supplier-moq-value">D{{ store.b2b_min_order_amount|floatformat:0 }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="b2b-supplier-footer">
+                    <a href="{% url 'stores:store_detail' store.id %}" class="b2b-supplier-btn b2b-supplier-btn-secondary">
+                        <i class="fas fa-store"></i>View Store
+                    </a>
+                    <button type="button"
+                            class="b2b-supplier-btn b2b-supplier-btn-primary"
+                            data-store-id="{{ store.id }}"
+                            data-action="open-b2b-chat">
+                        <i class="fas fa-comments"></i>Negotiate
+                    </button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- Local Suppliers Section -->
+    {% if local_suppliers %}
+    <section class="mb-5">
+        <div class="b2b-section-header">
+            <h2 class="b2b-section-title">
+                <i class="fas fa-map-marker-alt me-2" style="color: var(--b2b-success);"></i>Local Suppliers
+            </h2>
+            <span class="b2b-section-badge" style="background: var(--b2b-success);">{{ local_suppliers|length }}</span>
+        </div>
+        <p class="b2b-section-subtitle">Regional partners for faster delivery and local market expertise</p>
+
+        <div class="b2b-suppliers-grid">
+            {% for store in local_suppliers %}
+            <div class="b2b-supplier-card">
+                <div class="b2b-supplier-header">
+                    <h3 class="b2b-supplier-name">{{ store.name }}</h3>
+                    <div class="b2b-supplier-location">
+                        <i class="fas fa-map-pin"></i>
+                        <span>{{ store.city }}, {{ store.country }}</span>
+                    </div>
+                    <div class="b2b-supplier-badges">
+                        <span class="b2b-supplier-badge local">
+                            <i class="fas fa-check-circle"></i>Local Partner
+                        </span>
+                        {% if store.is_b2b_only %}
+                        <span class="b2b-supplier-badge b2b-only">
+                            <i class="fas fa-building"></i>B2B Only
+                        </span>
+                        {% elif store.allows_b2b %}
+                        <span class="b2b-supplier-badge b2b-only">
+                            <i class="fas fa-check"></i>B2B Available
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="b2b-supplier-body">
+                    {% if store.b2b_description %}
+                    <p class="b2b-supplier-description">{{ store.b2b_description|truncatewords:25 }}</p>
+                    {% endif %}
+
+                    {% if store.b2b_min_order_amount %}
+                    <div class="b2b-supplier-moq">
+                        <div class="b2b-supplier-moq-label">Minimum Order Value</div>
+                        <div class="b2b-supplier-moq-value">D{{ store.b2b_min_order_amount|floatformat:0 }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="b2b-supplier-footer">
+                    <a href="{% url 'stores:store_detail' store.id %}" class="b2b-supplier-btn b2b-supplier-btn-secondary">
+                        <i class="fas fa-store"></i>View Store
+                    </a>
+                    <button type="button"
+                            class="b2b-supplier-btn b2b-supplier-btn-primary"
+                            data-store-id="{{ store.id }}"
+                            data-action="open-b2b-chat">
+                        <i class="fas fa-comments"></i>Negotiate
+                    </button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    {% if not international_suppliers and not local_suppliers %}
+    <div class="b2b-empty-state mb-5">
+        <div class="b2b-empty-icon">
+            <i class="fas fa-inbox"></i>
+        </div>
+        <h3 class="b2b-empty-title">No Suppliers Found</h3>
+        <p class="b2b-empty-text">
+            {% if search_query %}
+            We couldn't find any suppliers matching "{{ search_query }}". Try adjusting your search terms.
+            {% else %}
+            No suppliers available for this filter. Please try a different selection.
+            {% endif %}
+        </p>
+        <div class="b2b-empty-actions">
+            <a href="{% url 'stores:b2b_marketplace' %}" class="btn b2b-btn-filter">
+                <i class="fas fa-redo me-1"></i>View All Suppliers
+            </a>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- B2B Products Section -->
+    <section>
+        <div class="b2b-section-header">
+            <h2 class="b2b-section-title">
+                <i class="fas fa-cubes me-2" style="color: var(--b2b-primary);"></i>B2B Products
+            </h2>
+            {% if products_page %}
+            <span class="b2b-section-badge">{{ products_page.paginator.count }} items</span>
+            {% endif %}
+        </div>
+        <p class="b2b-section-subtitle">
+            {% if products_page %}
+            Showing {{ products_page.start_index }}–{{ products_page.end_index }} of {{ products_page.paginator.count }} products
+            {% else %}
+            Browse available wholesale products
+            {% endif %}
+        </p>
+
+        {% if products_page %}
+        <div class="b2b-products-grid">
+            {% for product in products_page %}
+            <div class="b2b-product-card">
+                <div class="b2b-product-image-container">
+                    <a href="{% url 'marketplace:product_detail' product.id %}" title="View {{ product.name }}">
+                        {% if product.image %}
+                        <img src="{{ product.image.url }}"
+                             class="b2b-product-image"
+                             alt="{{ product.name }}"
+                             loading="lazy">
+                        {% else %}
+                        <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #999;">
+                            <i class="fas fa-image fa-2x"></i>
+                        </div>
+                        {% endif %}
+                    </a>
+
+                    <div class="b2b-product-badges">
+                        {% if product.b2b_min_quantity %}
+                        <span class="b2b-product-badge">
+                            <i class="fas fa-box me-1"></i>MOQ: {{ product.b2b_min_quantity }}
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="b2b-product-info">
+                    <h3 class="b2b-product-name">
+                        <a href="{% url 'marketplace:product_detail' product.id %}">
+                            {{ product.name|truncatechars:45 }}
+                        </a>
+                    </h3>
+
+                    <div class="b2b-product-store">
+                        <i class="fas fa-store me-1"></i>
+                        {{ product.store.name|truncatechars:35 }}
+                        {% if product.store.is_international_supplier %}
+                        <span style="color: var(--b2b-primary); font-weight: 600;">🌍</span>
+                        {% endif %}
+                    </div>
+
+                    <div class="b2b-product-pricing">
+                        {% if product.b2b_price %}
+                        <div class="b2b-product-price">
+                            D{{ product.b2b_price }}
+                            <span class="b2b-product-price-label">B2B</span>
+                        </div>
+                        {% else %}
+                        <div class="b2b-product-price">
+                            D{{ product.price }}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    {% if product.b2b_min_quantity %}
+                    <div class="b2b-product-moq">
+                        <i class="fas fa-check-circle me-1" style="color: var(--b2b-success);"></i>
+                        MOQ: {{ product.b2b_min_quantity }} units
+                    </div>
+                    {% endif %}
+
+                    {% if product.b2b_tier_price %}
+                    <div class="b2b-product-tier">
+                        <strong>Tier Pricing Available</strong>
+                        {% for min_qty, tier_price in product.b2b_tier_price.items|slice:":2" %}
+                        <div>{{ min_qty }}+ → D{{ tier_price }}</div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
+                    <div class="b2b-product-actions">
+                        <button type="button"
+                                class="b2b-product-btn b2b-product-btn-secondary"
+                                data-product-id="{{ product.id }}"
+                                data-action="add-to-b2b-cart"
+                                title="Add to cart">
+                            <i class="fas fa-cart-plus"></i>Add
+                        </button>
+                        <button type="button"
+                                class="b2b-product-btn b2b-product-btn-primary"
+                                data-product-id="{{ product.id }}"
+                                data-store-id="{{ product.store.id }}"
+                                data-action="open-b2b-chat"
+                                title="Negotiate price">
+                            <i class="fas fa-handshake"></i>Negotiate
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Pagination -->
+        {% if products_page.has_other_pages %}
+        <nav aria-label="Product pagination" class="mt-4">
+            <div class="b2b-pagination">
+                {% if products_page.has_previous %}
+                <a class="b2b-pagination-item"
+                   href="?page=1&filter={{ filter_type }}{% if search_query %}&q={{ search_query }}{% endif %}"
+                   title="First page">
+                    <i class="fas fa-step-backward"></i>
+                </a>
+                <a class="b2b-pagination-item"
+                   href="?page={{ products_page.previous_page_number }}&filter={{ filter_type }}{% if search_query %}&q={{ search_query }}{% endif %}"
+                   title="Previous page">
+                    <i class="fas fa-chevron-left"></i>
+                </a>
+                {% else %}
+                <span class="b2b-pagination-item disabled">
+                    <i class="fas fa-step-backward"></i>
+                </span>
+                <span class="b2b-pagination-item disabled">
+                    <i class="fas fa-chevron-left"></i>
+                </span>
+                {% endif %}
+
+                {% for num in products_page.paginator.page_range %}
+                {% if num == products_page.number %}
+                <span class="b2b-pagination-item active" aria-current="page">{{ num }}</span>
+                {% elif num > products_page.number|add:"-3" and num < products_page.number|add:"3" %}
+                <a class="b2b-pagination-item"
+                   href="?page={{ num }}&filter={{ filter_type }}{% if search_query %}&q={{ search_query }}{% endif %}"
+                   title="Page {{ num }}">{{ num }}</a>
+                {% endif %}
+                {% endfor %}
+
+                {% if products_page.has_next %}
+                <a class="b2b-pagination-item"
+                   href="?page={{ products_page.next_page_number }}&filter={{ filter_type }}{% if search_query %}&q={{ search_query }}{% endif %}"
+                   title="Next page">
+                    <i class="fas fa-chevron-right"></i>
+                </a>
+                <a class="b2b-pagination-item"
+                   href="?page={{ products_page.paginator.num_pages }}&filter={{ filter_type }}{% if search_query %}&q={{ search_query }}{% endif %}"
+                   title="Last page">
+                    <i class="fas fa-step-forward"></i>
+                </a>
+                {% else %}
+                <span class="b2b-pagination-item disabled">
+                    <i class="fas fa-chevron-right"></i>
+                </span>
+                <span class="b2b-pagination-item disabled">
+                    <i class="fas fa-step-forward"></i>
+                </span>
+                {% endif %}
+            </div>
+        </nav>
+        {% endif %}
+        {% else %}
+        <div class="b2b-empty-state">
+            <div class="b2b-empty-icon">
+                <i class="fas fa-box-open"></i>
+            </div>
+            <h3 class="b2b-empty-title">No Products Found</h3>
+            <p class="b2b-empty-text">
+                {% if search_query %}
+                We couldn't find any B2B products matching "{{ search_query }}". Try a different search.
+                {% else %}
+                No B2B products are currently available. Check back soon!
+                {% endif %}
+            </p>
+            <div class="b2b-empty-actions">
+                <a href="{% url 'stores:b2b_marketplace' %}" class="btn b2b-btn-filter">
+                    <i class="fas fa-redo me-1"></i>View All Products
+                </a>
+                <a href="{% url 'marketplace:all_products' %}" class="btn" style="background: var(--neutral-light); color: var(--neutral-dark); border: 1px solid #dee2e6;">
+                    <i class="fas fa-home me-1"></i>Browse Store
+                </a>
+            </div>
+        </div>
+        {% endif %}
+    </section>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle B2B actions
+    document.addEventListener('click', function(e) {
+        const target = e.target.closest('[data-action]');
+        if (!target) return;
+
+        const action = target.getAttribute('data-action');
+        const storeId = target.getAttribute('data-store-id');
+        const productId = target.getAttribute('data-product-id');
+
+        if (action === 'open-b2b-chat') {
+            // TODO: Implement B2B chat integration
+            console.log('Open B2B chat - Store:', storeId, 'Product:', productId);
+            // Example: window.location.href = `/b2b/chat/${storeId}/?product=${productId}`;
+        }
+
+        if (action === 'add-to-b2b-cart') {
+            const btn = target;
+            const originalHTML = btn.innerHTML;
+
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+            // TODO: Implement B2B cart endpoint
+            console.log('Add to B2B cart - Product:', productId);
+
+            setTimeout(() => {
+                btn.innerHTML = '<i class="fas fa-check"></i>Added';
+                btn.style.background = 'var(--b2b-success)';
+
+                setTimeout(() => {
+                    btn.innerHTML = originalHTML;
+                    btn.style.background = '';
+                    btn.disabled = false;
+                }, 1500);
+            }, 800);
+        }
+    });
+
+    // Smooth scroll for pagination and interactions
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.style.opacity = '1';
+                entry.target.style.transform = 'translateY(0)';
+            }
+        });
+    }, { threshold: 0.1 });
+
+    document.querySelectorAll('.b2b-supplier-card, .b2b-product-card').forEach(card => {
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(10px)';
+        card.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+        observer.observe(card);
+    });
+});
+</script>
+{% endblock %}

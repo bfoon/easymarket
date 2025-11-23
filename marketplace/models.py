@@ -170,36 +170,115 @@ class ActiveProductManager(models.Manager):
         return super().get_queryset().filter(is_active=True)
 
 class Product(models.Model):
-    seller = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    seller = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE
+    )
     name = models.CharField(max_length=200)
-    category = models.ForeignKey('Category', on_delete=models.SET_NULL, null=True)
+    category = models.ForeignKey(
+        'Category',
+        on_delete=models.SET_NULL,
+        null=True
+    )
+
     price = models.DecimalField(max_digits=10, decimal_places=2)
-    original_price = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    original_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        blank=True,
+        null=True
+    )
+
     description = models.TextField()
     specifications = models.TextField()
     image = models.ImageField(upload_to='products/')
-    video = models.FileField(upload_to='product_videos/', blank=True, null=True)
+    video = models.FileField(
+        upload_to='product_videos/',
+        blank=True,
+        null=True
+    )
 
+    # Visibility / marketing flags
     is_featured = models.BooleanField(default=False)
     is_trending = models.BooleanField(default=False)
-    has_30_day_return = models.BooleanField(default=False,
-                                            help_text="Enable if product is eligible for 30-day return policy.")
+    has_30_day_return = models.BooleanField(
+        default=False,
+        help_text="Enable if product is eligible for 30-day return policy."
+    )
     free_shipping = models.BooleanField(default=False)
     used = models.BooleanField(default=False)
     sold_count = models.PositiveIntegerField(default=0)
 
-    store = models.ForeignKey('stores.Store', on_delete=models.CASCADE, related_name='products', blank=True, null=True)
+    # Store relationship
+    store = models.ForeignKey(
+        'stores.Store',
+        on_delete=models.CASCADE,
+        related_name='products',
+        blank=True,
+        null=True
+    )
     is_active = models.BooleanField(default=True)
 
+    # ---- B2C / B2B visibility flags ----
+    visible_in_b2c = models.BooleanField(
+        default=True,
+        help_text="Show product on normal EasyMarket (retail) site."
+    )
+    visible_in_b2b = models.BooleanField(
+        default=False,
+        help_text="Show product in B2B marketplace for store-to-store buying."
+    )
+
+    # ---- B2B / wholesale settings ----
+    is_available_b2b = models.BooleanField(
+        default=False,
+        help_text="If true, product can be sold wholesale via B2B."
+    )
+    b2b_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Default wholesale price per unit (if any)."
+    )
+    b2b_min_quantity = models.PositiveIntegerField(
+        default=1,
+        help_text="Minimum quantity for B2B orders."
+    )
+    b2b_tier_price = models.JSONField(
+        null=True,
+        blank=True,
+        help_text=(
+            'Optional tier pricing as a mapping of min_qty -> price. '
+            'Example: {"10": "480.00", "50": "450.00"}'
+        )
+    )
+
+    # Auction fields
     available_for_auction = models.BooleanField(default=True)
-    auction_reserve_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    auction_starting_bid = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    auction_reserve_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True
+    )
+    auction_starting_bid = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        ordering = ['-created_at']
+
     def __str__(self):
         return self.name
+
+    # ---------- AUCTION HELPERS ----------
 
     def create_auction(self, seller, starting_bid, end_date, **kwargs):
         from auction.models import Auction
@@ -216,8 +295,11 @@ class Product(models.Model):
         }
         return Auction.objects.create(**auction_data)
 
+    # ---------- STOCK HELPERS ----------
+
     @property
     def stock(self):
+        # Assumes Stock model has related_name="stock_records"
         return self.stock_records.first()
 
     @property
@@ -228,18 +310,6 @@ class Product(models.Model):
     @property
     def is_in_stock(self):
         return self.stock_quantity > 0
-
-    @property
-    def discount_percentage(self):
-        if self.original_price and self.original_price > self.price:
-            return int(((self.original_price - self.price) / self.original_price) * 100)
-        return None
-
-    @property
-    def is_new(self):
-        from django.utils import timezone
-        two_days_ago = timezone.now() - timezone.timedelta(days=2)
-        return self.created_at >= two_days_ago
 
     def get_stock_status(self):
         quantity = self.stock_quantity
@@ -273,8 +343,12 @@ class Product(models.Model):
             stock_record = Stock.objects.create(product=self, quantity=0)
         return stock_record
 
+    # ---------- URLS / META ----------
+
     def get_absolute_url(self):
         return reverse('product_detail', kwargs={'pk': self.pk})
+
+    # ---------- RATINGS / REVIEWS ----------
 
     @property
     def average_rating(self):
@@ -285,13 +359,58 @@ class Product(models.Model):
     def review_count(self):
         return self.reviews.count()
 
+    # ---------- PRICING HELPERS ----------
+
+    @property
+    def discount_percentage(self):
+        if self.original_price and self.original_price > self.price:
+            return int(((self.original_price - self.price) / self.original_price) * 100)
+        return None
+
     @property
     def amount_saved(self):
         if self.original_price and self.original_price > self.price:
             return self.original_price - self.price
         return Decimal('0.00')
 
+    @property
+    def is_new(self):
+        from django.utils import timezone
+        two_days_ago = timezone.now() - timezone.timedelta(days=2)
+        return self.created_at >= two_days_ago
+
+    def get_b2b_price_for_quantity(self, quantity):
+        """
+        Return the best B2B unit price for a given quantity using tier pricing if present,
+        else fallback to b2b_price, else normal price.
+        """
+        # If no B2B, just return retail price
+        if not self.is_available_b2b:
+            return self.price
+
+        # Use tier pricing if available
+        if self.b2b_tier_price:
+            # keys are min_qty as strings
+            applicable = []
+            for min_qty_str, unit_price in self.b2b_tier_price.items():
+                try:
+                    min_qty = int(min_qty_str)
+                except (TypeError, ValueError):
+                    continue
+                if quantity >= min_qty:
+                    applicable.append((min_qty, Decimal(str(unit_price))))
+            if applicable:
+                # pick highest min_qty <= quantity
+                applicable.sort(key=lambda x: x[0], reverse=True)
+                return applicable[0][1]
+
+        # fallback to default b2b price or retail price
+        return self.b2b_price or self.price
+
+    # ---------- IMAGES / COLORS ----------
+
     def get_image_for_color(self, color=None):
+        from .models import ProductImage  # adjust if ProductImage is in another module
         if color:
             color_image = ProductImage.get_primary_image_for_color(self, color)
             if color_image:
@@ -302,16 +421,18 @@ class Product(models.Model):
         return self.image
 
     def get_images_by_color(self, color=None):
+        from .models import ProductImage
         return ProductImage.get_images_by_color(self, color)
 
     def get_available_image_colors(self):
+        from .models import ProductImage
         return ProductImage.get_available_colors(self)
 
     def has_color_images(self):
+        # assumes ProductImage has related_name="images"
         return self.images.filter(color__isnull=False).exists()
 
-    # products/models.py (your Product model)
-    from django.db import transaction
+    # ---------- SAVE OVERRIDE (NOTIFICATIONS, PRICE HISTORY, WISHLIST) ----------
 
     def save(self, *args, **kwargs):
         is_new = self.pk is None
@@ -322,6 +443,7 @@ class Product(models.Model):
             try:
                 old_instance = self.__class__.objects.get(pk=self.pk)
                 old_price = old_instance.price
+
                 for field in self._meta.fields:
                     name = field.name
                     if name in ['updated_at', 'created_at']:
@@ -335,23 +457,29 @@ class Product(models.Model):
 
         super().save(*args, **kwargs)
 
+        # keep track of changed fields if you need this elsewhere
         self._changed_fields = changed_fields or ['__created__']
 
-        # Existing follower notifications (keep yours as-is) ...
+        # ---- store follower notifications: new product & price changes ----
         if is_new and self.store:
+            # New product notification
             self.store.notify_followers(
                 notification_type='new_product',
                 title=f'New Product: {self.name}',
                 message=f'Check out our latest product "{self.name}" now available for D{self.price}!',
                 product=self
             )
-        elif old_price and old_price != self.price and self.store:
+
+        elif old_price is not None and old_price != self.price and self.store:
+            # Price history
             from stores.models import ProductPriceHistory
             ProductPriceHistory.objects.create(
                 product=self,
                 old_price=old_price,
                 new_price=self.price
             )
+
+            # Store follower notifications on price change
             if self.price < old_price:
                 discount_percent = round(((old_price - self.price) / old_price) * 100, 1)
                 self.store.notify_followers(
@@ -372,15 +500,22 @@ class Product(models.Model):
                     new_price=self.price
                 )
 
-        # ✅ NEW: threaded wishlist price notifications (non-blocking)
+        # ---- Wishlist price change notifications (threaded / background) ----
         if old_price is not None and old_price != self.price:
             from marketplace.background import submit
             from .notifications import notify_wishlist_price_change_threadsafe
-            old_p, new_p, product_id = old_price, self.price, self.pk
-            transaction.on_commit(lambda: submit(
-                notify_wishlist_price_change_threadsafe, product_id, old_p, new_p
-            ))
 
+            old_p, new_p, product_id = old_price, self.price, self.pk
+
+            # Ensure this only runs after the transaction commits successfully
+            transaction.on_commit(
+                lambda: submit(
+                    notify_wishlist_price_change_threadsafe,
+                    product_id,
+                    old_p,
+                    new_p
+                )
+            )
 
 class ProductView(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
