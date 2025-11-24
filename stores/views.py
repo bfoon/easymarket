@@ -3632,14 +3632,50 @@ def b2b_marketplace(request):
     - Only accessible to store owners / managers
     - Shows B2B suppliers (local & international)
     - Shows B2B products with wholesale options
+    - If called via AJAX with ?product_id=XX, returns JSON for the modal
     """
     user = request.user
 
     # Restrict to users who have a store relationship
     if not _user_has_store_access(user):
-        # You can redirect somewhere else or raise 403
-        return redirect("home")  # or use: from django.http import HttpResponseForbidden
+        return redirect("home")
 
+    # ---------- AJAX: Product detail for modal ----------
+    product_id = request.GET.get("product_id")
+    if request.headers.get("x-requested-with") == "XMLHttpRequest" and product_id:
+        product = get_object_or_404(
+            Product,
+            id=product_id,
+            visible_in_b2b=True,
+            is_available_b2b=True,
+            is_active=True,
+            store__allows_b2b=True,
+            store__status="active",
+        )
+
+        # Decide which price to show
+        price = product.b2b_price if getattr(product, "b2b_price", None) else product.price
+
+        # Handle image URL safely
+        image_url = product.image.url if getattr(product, "image", None) else ""
+
+        # Tier pricing – assume it's a dict/JSONField, otherwise send empty
+        tier_price = getattr(product, "b2b_tier_price", None) or {}
+
+        data = {
+            "id": product.id,
+            "name": product.name,
+            "store_name": product.store.name,
+            "store_id": product.store.id,
+            "image": image_url,
+            "price": str(price) if price is not None else "",
+            "moq": product.b2b_min_quantity or "",
+            "description": product.description or "",
+            "tier_price": tier_price,
+        }
+        return JsonResponse(data)
+
+    # ---------- Normal page render ----------
     # --- Filters / search ---
     filter_type = request.GET.get("filter", "all")
     search_query = request.GET.get("q", "").strip()
@@ -3650,26 +3686,25 @@ def b2b_marketplace(request):
         status="active",
     )
 
-    # Apply filter for international / local
+    # Apply filter for international / local / my_country
     if filter_type == "international":
         store_qs = store_qs.filter(is_international_supplier=True)
     elif filter_type == "local":
         store_qs = store_qs.filter(is_international_supplier=False)
-    elif filter_type == "my_country" and user.is_authenticated:
-        # Filter by user's country, if you store it on profile
-        # Fallback: use store.country == 'Gambia'
+    elif filter_type == "my_country":
+        # TODO: use user's real country if you store it
         user_country = "Gambia"
         store_qs = store_qs.filter(country__iexact=user_country)
 
-    # Search across store name and description
+    # Search across store name and description fields
     if search_query:
         store_qs = store_qs.filter(
-            Q(name__icontains=search_query) |
-            Q(short_description__icontains=search_query) |
-            Q(description__icontains=search_query)
+            Q(name__icontains=search_query)
+            | Q(short_description__icontains=search_query)
+            | Q(description__icontains=search_query)
         )
 
-    # Separate for highlighting
+    # Separate for highlighting in template
     international_suppliers = store_qs.filter(is_international_supplier=True)
     local_suppliers = store_qs.filter(is_international_supplier=False)
 
@@ -3682,24 +3717,30 @@ def b2b_marketplace(request):
         store__status="active",
     ).select_related("store", "category")
 
-    # Optional: sync product filtering with store list
-    # (only products from currently-filtered stores)
+    # Only products from the currently-filtered stores
     product_qs = product_qs.filter(store__in=store_qs)
 
+    # Product-level search (name, description, store name)
     if search_query:
         product_qs = product_qs.filter(
-            Q(name__icontains=search_query) |
-            Q(description__icontains=search_query) |
-            Q(store__name__icontains=search_query)
+            Q(name__icontains=search_query)
+            | Q(description__icontains=search_query)
+            | Q(store__name__icontains=search_query)
         )
 
     # Order products by something meaningful for B2B
-    product_qs = product_qs.order_by("-store__is_international_supplier", "-created_at")
+    product_qs = product_qs.order_by(
+        "-store__is_international_supplier",
+        "-created_at",
+    )
 
     # Pagination for products
     paginator = Paginator(product_qs, 24)  # 24 products per page
     page_number = request.GET.get("page")
     products_page = paginator.get_page(page_number)
+
+    # Your store for "Home" link in breadcrumb
+    my_store = Store.objects.filter(owner=user, status="active").first()
 
     context = {
         "filter_type": filter_type,
@@ -3709,5 +3750,6 @@ def b2b_marketplace(request):
         "products_page": products_page,
         "stores_count": store_qs.count(),
         "products_count": product_qs.count(),
+        "my_store": my_store,
     }
     return render(request, "b2b/b2b_marketplace.html", context)

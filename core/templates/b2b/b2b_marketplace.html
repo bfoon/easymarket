@@ -716,7 +716,7 @@
         <nav aria-label="breadcrumb">
             <ol class="breadcrumb">
                 <li class="breadcrumb-item">
-                    <a href="{% url 'marketplace:all_products' %}">
+                    <a href="{% if my_store %}{% url 'stores:store_detail' my_store.slug %}{% else %}{% url 'marketplace:all_products' %}{% endif %}">
                         <i class="fas fa-home me-1"></i>Home
                     </a>
                 </li>
@@ -883,7 +883,7 @@
                 </div>
 
                 <div class="b2b-supplier-footer">
-                    <a href="{% url 'stores:store_detail' store.id %}" class="b2b-supplier-btn b2b-supplier-btn-secondary">
+                    <a href="{% url 'stores:store_detail' store.slug %}" class="b2b-supplier-btn b2b-supplier-btn-secondary">
                         <i class="fas fa-store"></i>View Store
                     </a>
                     <button type="button"
@@ -949,7 +949,7 @@
                 </div>
 
                 <div class="b2b-supplier-footer">
-                    <a href="{% url 'stores:store_detail' store.id %}" class="b2b-supplier-btn b2b-supplier-btn-secondary">
+                    <a href="{% url 'stores:store_detail' store.slug %}" class="b2b-supplier-btn b2b-supplier-btn-secondary">
                         <i class="fas fa-store"></i>View Store
                     </a>
                     <button type="button"
@@ -1009,7 +1009,17 @@
             {% for product in products_page %}
             <div class="b2b-product-card">
                 <div class="b2b-product-image-container">
-                    <a href="{% url 'marketplace:product_detail' product.id %}" title="View {{ product.name }}">
+                    <a href="#"
+                       class="b2b-product-quickview"
+                       data-bs-toggle="modal"
+                       data-bs-target="#productQuickViewModal"
+                       data-product-id="{{ product.id }}"
+                       data-product-name="{{ product.name|escapejs }}"
+                       data-product-store="{{ product.store.name|escapejs }}"
+                       data-product-image="{% if product.image %}{{ product.image.url }}{% endif %}"
+                       data-product-price="{% if product.b2b_price %}{{ product.b2b_price }}{% else %}{{ product.price }}{% endif %}"
+                       data-product-moq="{{ product.b2b_min_quantity }}"
+                       data-product-description="{{ product.description|default_if_none:''|truncatechars:250|escapejs }}">
                         {% if product.image %}
                         <img src="{{ product.image.url }}"
                              class="b2b-product-image"
@@ -1033,7 +1043,17 @@
 
                 <div class="b2b-product-info">
                     <h3 class="b2b-product-name">
-                        <a href="{% url 'marketplace:product_detail' product.id %}">
+                        <a href="#"
+                           class="b2b-product-quickview"
+                           data-bs-toggle="modal"
+                           data-bs-target="#productQuickViewModal"
+                           data-product-id="{{ product.id }}"
+                           data-product-name="{{ product.name|escapejs }}"
+                           data-product-store="{{ product.store.name|escapejs }}"
+                           data-product-image="{% if product.image %}{{ product.image.url }}{% endif %}"
+                           data-product-price="{% if product.b2b_price %}{{ product.b2b_price }}{% else %}{{ product.price }}{% endif %}"
+                           data-product-moq="{{ product.b2b_min_quantity }}"
+                           data-product-description="{{ product.description|default_if_none:''|truncatechars:250|escapejs }}">
                             {{ product.name|truncatechars:45 }}
                         </a>
                     </h3>
@@ -1179,12 +1199,219 @@
     </section>
 </div>
 
-{% endblock %}
+<!-- Product Quick View Modal -->
+<div class="modal fade" id="productQuickViewModal" tabindex="-1" aria-labelledby="productQuickViewLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="productQuickViewLabel">Product Details</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-12 col-md-5">
+            <div class="border rounded p-2 text-center">
+              <img id="b2b-modal-image" src="" alt="" class="img-fluid" style="max-height: 260px; object-fit: contain;">
+            </div>
+          </div>
+          <div class="col-12 col-md-7">
+            <h4 id="b2b-modal-name" class="mb-1"></h4>
+            <div class="text-muted mb-2">
+              <i class="fas fa-store me-1"></i>
+              <span id="b2b-modal-store"></span>
+            </div>
 
-{% block extra_js %}
+            <div class="mb-2">
+              <span class="fw-bold">Price:</span>
+              <span id="b2b-modal-price" class="fs-5 text-primary ms-1"></span>
+            </div>
+            <div class="mb-2" id="b2b-modal-moq-wrapper" style="display:none;">
+              <span class="fw-bold">MOQ:</span>
+              <span id="b2b-modal-moq" class="ms-1"></span>
+            </div>
+
+            <p id="b2b-modal-description" class="small text-muted mt-2"></p>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer justify-content-between">
+        <button type="button"
+                class="btn btn-outline-secondary"
+                id="b2b-modal-add-to-cart-btn"
+                data-action="add-to-b2b-cart"
+                data-product-id="">
+          <i class="fas fa-cart-plus me-1"></i>Add to B2B Cart
+        </button>
+        <button type="button"
+                class="btn btn-primary"
+                id="b2b-modal-negotiate-btn"
+                data-action="open-b2b-chat"
+                data-product-id=""
+                data-store-id="">
+          <i class="fas fa-handshake me-1"></i>Negotiate with Supplier
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- B2B Negotiation / Messaging Modal -->
+<div class="modal fade" id="b2bChatModal" tabindex="-1" aria-labelledby="b2bChatModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="b2bChatModalLabel">
+          <i class="fas fa-comments me-2"></i>Negotiate with Supplier
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="mb-2 small text-muted">
+          <div><strong>Supplier:</strong> <span id="b2b-chat-store-name"></span></div>
+          <div id="b2b-chat-product-wrapper" class="mt-1" style="display:none;">
+            <strong>Product:</strong> <span id="b2b-chat-product-name"></span>
+          </div>
+        </div>
+
+        <div class="alert alert-info py-2 small mb-3">
+          Tip: Briefly introduce your business, mention expected quantity, frequency and target price.
+        </div>
+
+        <textarea
+          id="b2b-chat-message"
+          class="form-control"
+          rows="4"
+          placeholder="Example: Hi, we’re interested in ordering 500 units per month. Please share your best price, lead time and shipping terms.">
+        </textarea>
+
+        <input type="hidden" id="b2b-chat-store-id">
+        <input type="hidden" id="b2b-chat-product-id">
+        <div id="b2b-chat-error" class="text-danger small mt-2 d-none"></div>
+      </div>
+
+      <div class="modal-footer justify-content-between">
+        <small class="text-muted">
+          Your message will be sent as a B2B inquiry. The supplier can reply via your messages inbox.
+        </small>
+        <div>
+          <button type="button" class="btn btn-outline-secondary me-2" data-bs-dismiss="modal">
+            Cancel
+          </button>
+          <button type="button" class="btn btn-primary" id="b2b-chat-send-btn">
+            <i class="fas fa-paper-plane me-1"></i>Send Message
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Handle B2B actions
+    // Bootstrap modal instance for B2B chat
+    const b2bChatModalEl = document.getElementById('b2bChatModal');
+    const b2bChatModal = b2bChatModalEl ? new bootstrap.Modal(b2bChatModalEl) : null;
+
+    function openB2BChatPopup({ storeId, productId = null, storeName = '', productName = '' }) {
+        if (!b2bChatModal) return;
+
+        // Clean product name (remove leading/trailing quotes if any)
+        let safeProductName = (productName || '').trim();
+        safeProductName = safeProductName.replace(/^["']+|["']+$/g, '');
+
+        // Fill supplier name
+        const storeNameEl = document.getElementById('b2b-chat-store-name');
+        if (storeNameEl) storeNameEl.textContent = storeName || '';
+
+        // Fill product name (optional)
+        const productWrapper = document.getElementById('b2b-chat-product-wrapper');
+        const productNameEl = document.getElementById('b2b-chat-product-name');
+        if (safeProductName && productWrapper && productNameEl) {
+            productWrapper.style.display = 'block';
+            productNameEl.textContent = safeProductName;
+        } else if (productWrapper) {
+            productWrapper.style.display = 'none';
+        }
+
+        // Hidden fields
+        document.getElementById('b2b-chat-store-id').value = storeId || '';
+        document.getElementById('b2b-chat-product-id').value = productId || '';
+
+        // Reset message + error
+        const msgEl = document.getElementById('b2b-chat-message');
+        const errEl = document.getElementById('b2b-chat-error');
+        if (msgEl) {
+            let defaultText = 'Hi, we are interested in your products for bulk purchase. Please share your best price and terms.';
+            if (safeProductName) {
+                defaultText = `Hi, we are interested in ${safeProductName} for bulk purchase. Please share your best price, lead time and shipping terms.`;
+            }
+            msgEl.value = defaultText;
+        }
+        if (errEl) {
+            errEl.classList.add('d-none');
+            errEl.textContent = '';
+        }
+
+        b2bChatModal.show();
+    }
+
+    // Quick View modal for products (image + title click) - unchanged logic
+    document.addEventListener('click', function(e) {
+        const quickViewLink = e.target.closest('.b2b-product-quickview');
+        if (!quickViewLink) return;
+
+        e.preventDefault();
+
+        const name = quickViewLink.getAttribute('data-product-name') || '';
+        const store = quickViewLink.getAttribute('data-product-store') || '';
+        const image = quickViewLink.getAttribute('data-product-image') || '';
+        const price = quickViewLink.getAttribute('data-product-price') || '';
+        const moq = quickViewLink.getAttribute('data-product-moq') || '';
+        const description = quickViewLink.getAttribute('data-product-description') || '';
+        const productId = quickViewLink.getAttribute('data-product-id');
+
+        const card = quickViewLink.closest('.b2b-product-card');
+        const chatBtn = card ? card.querySelector('[data-action="open-b2b-chat"]') : null;
+        const storeId = chatBtn ? chatBtn.getAttribute('data-store-id') : null;
+
+        // Fill modal fields
+        document.getElementById('b2b-modal-name').textContent = name;
+        document.getElementById('b2b-modal-store').textContent = store;
+        document.getElementById('b2b-modal-price').textContent = price ? `D${price}` : '';
+
+        const moqWrapper = document.getElementById('b2b-modal-moq-wrapper');
+        if (moq) {
+            moqWrapper.style.display = 'block';
+            document.getElementById('b2b-modal-moq').textContent = `${moq} units`;
+        } else {
+            moqWrapper.style.display = 'none';
+        }
+
+        document.getElementById('b2b-modal-description').textContent = description || '';
+
+        const imgEl = document.getElementById('b2b-modal-image');
+        if (image) {
+            imgEl.src = image;
+            imgEl.style.display = 'block';
+        } else {
+            imgEl.style.display = 'none';
+        }
+
+        // Set data attributes on modal buttons so they reuse [data-action] handler
+        const addBtn = document.getElementById('b2b-modal-add-to-cart-btn');
+        const negBtn = document.getElementById('b2b-modal-negotiate-btn');
+
+        if (addBtn) {
+            addBtn.setAttribute('data-product-id', productId || '');
+        }
+        if (negBtn) {
+            if (productId) negBtn.setAttribute('data-product-id', productId);
+            if (storeId) negBtn.setAttribute('data-store-id', storeId);
+        }
+    });
+
+    // Handle B2B actions (Add to cart, Negotiate) - cards + modal buttons
     document.addEventListener('click', function(e) {
         const target = e.target.closest('[data-action]');
         if (!target) return;
@@ -1194,9 +1421,33 @@ document.addEventListener('DOMContentLoaded', function() {
         const productId = target.getAttribute('data-product-id');
 
         if (action === 'open-b2b-chat') {
-            // TODO: Implement B2B chat integration
-            console.log('Open B2B chat - Store:', storeId, 'Product:', productId);
-            // Example: window.location.href = `/b2b/chat/${storeId}/?product=${productId}`;
+            e.preventDefault();
+
+            // Try to infer names from the card
+            const supplierCard = target.closest('.b2b-supplier-card');
+            const productCard = target.closest('.b2b-product-card');
+
+            let storeName = '';
+            let productName = '';
+
+            if (supplierCard) {
+                const nameEl = supplierCard.querySelector('.b2b-supplier-name');
+                storeName = nameEl ? nameEl.textContent.trim() : '';
+            } else if (productCard) {
+                const storeEl = productCard.querySelector('.b2b-product-store');
+                const productNameEl = productCard.querySelector('.b2b-product-name');
+                storeName = storeEl ? storeEl.textContent.trim() : '';
+                productName = productNameEl ? productNameEl.textContent.trim() : '';
+            }
+
+            openB2BChatPopup({
+                storeId: storeId,
+                productId: productId,
+                storeName: storeName,
+                productName: productName
+            });
+
+            return;
         }
 
         if (action === 'add-to-b2b-cart') {
@@ -1206,7 +1457,7 @@ document.addEventListener('DOMContentLoaded', function() {
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
-            // TODO: Implement B2B cart endpoint
+            // TODO: Replace this with real B2B cart endpoint (AJAX)
             console.log('Add to B2B cart - Product:', productId);
 
             setTimeout(() => {
@@ -1222,7 +1473,49 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Smooth scroll for pagination and interactions
+    // Send button inside B2B chat modal
+    const sendBtn = document.getElementById('b2b-chat-send-btn');
+    if (sendBtn) {
+        sendBtn.addEventListener('click', function() {
+            const messageEl = document.getElementById('b2b-chat-message');
+            const errorEl = document.getElementById('b2b-chat-error');
+            const storeId = document.getElementById('b2b-chat-store-id').value;
+            const productId = document.getElementById('b2b-chat-product-id').value;
+            const message = (messageEl.value || '').trim();
+
+            if (!message) {
+                if (errorEl) {
+                    errorEl.classList.remove('d-none');
+                    errorEl.textContent = 'Please type a message before sending.';
+                }
+                return;
+            }
+
+            if (errorEl) {
+                errorEl.classList.add('d-none');
+                errorEl.textContent = '';
+            }
+
+            const originalHTML = sendBtn.innerHTML;
+            sendBtn.disabled = true;
+            sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Sending...';
+
+            // TODO: Replace this block with a real AJAX call to your B2B chat endpoint
+            console.log('Send B2B message', { storeId, productId, message });
+
+            setTimeout(() => {
+                sendBtn.innerHTML = '<i class="fas fa-check me-1"></i>Sent';
+                if (messageEl) messageEl.value = '';
+                setTimeout(() => {
+                    sendBtn.disabled = false;
+                    sendBtn.innerHTML = originalHTML;
+                    if (b2bChatModal) b2bChatModal.hide();
+                }, 800);
+            }, 900);
+        });
+    }
+
+    // Fade-in animation for cards (unchanged)
     const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
             if (entry.isIntersecting) {
@@ -1240,4 +1533,5 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
+
 {% endblock %}
