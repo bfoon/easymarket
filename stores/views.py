@@ -27,7 +27,7 @@ from .forms import ProductForm, ProductImageForm, ProductVariantForm, ProductFea
 from django.db import transaction
 from accounts.models import AdminLog
 import re
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from accounts.utils import log_admin_action
 from .models import Store, StoreFollow, StoreNotification, StoreFavorite
 from reviews.models import Review
@@ -3753,3 +3753,101 @@ def b2b_marketplace(request):
         "my_store": my_store,
     }
     return render(request, "b2b/b2b_marketplace.html", context)
+
+@login_required
+def b2b_settings(request, slug):
+    """
+    B2B settings view for a specific store:
+    - Store-level B2B config (allows_b2b, is_b2b_only, min amount, etc.)
+    - Product-level B2B config (visible_in_b2b, is_available_b2b, wholesale price, MOQ, tier pricing)
+    Only owner or managers of the store can access.
+    """
+    user = request.user
+
+    store = get_object_or_404(
+        Store.objects.filter(
+            Q(owner=user) | Q(managers=user),
+            status__in=["active", "pending", "suspended"],
+        ),
+        slug=slug,
+    )
+
+    products = Product.objects.filter(store=store).order_by("-created_at")
+
+    if request.method == "POST":
+        # ------------- STORE-LEVEL B2B SETTINGS -------------
+        store.allows_b2b = request.POST.get("allows_b2b") == "on"
+        store.is_b2b_only = request.POST.get("is_b2b_only") == "on"
+        store.is_international_supplier = request.POST.get("is_international_supplier") == "on"
+        store.b2b_description = request.POST.get("b2b_description", "").strip()
+
+        raw_min_amount = request.POST.get("b2b_min_order_amount", "").strip()
+        if raw_min_amount:
+            try:
+                store.b2b_min_order_amount = Decimal(raw_min_amount)
+            except (InvalidOperation, TypeError):
+                store.b2b_min_order_amount = None
+                messages.warning(request, "Invalid B2B minimum order amount – cleared.")
+        else:
+            store.b2b_min_order_amount = None
+
+        store.save()
+
+        # ------------- PRODUCT-LEVEL B2B SETTINGS -------------
+        for product in products:
+            prefix = f"product_{product.id}_"
+
+            # visibility & availability
+            product.visible_in_b2b = request.POST.get(prefix + "visible_in_b2b") == "on"
+            product.is_available_b2b = request.POST.get(prefix + "is_available_b2b") == "on"
+
+            # wholesale price
+            raw_b2b_price = request.POST.get(prefix + "b2b_price", "").strip()
+            if raw_b2b_price:
+                try:
+                    product.b2b_price = Decimal(raw_b2b_price)
+                except (InvalidOperation, TypeError):
+                    product.b2b_price = None
+            else:
+                product.b2b_price = None
+
+            # minimum quantity
+            raw_min_qty = request.POST.get(prefix + "b2b_min_quantity", "").strip()
+            try:
+                product.b2b_min_quantity = int(raw_min_qty) if raw_min_qty else 1
+            except ValueError:
+                product.b2b_min_quantity = 1
+
+            # tier pricing JSON (optional)
+            raw_tier_json = request.POST.get(prefix + "b2b_tier_price", "").strip()
+            if raw_tier_json:
+                try:
+                    parsed = json.loads(raw_tier_json)
+                    # ensure dict of string -> string/number (basic sanity check)
+                    if isinstance(parsed, dict):
+                        product.b2b_tier_price = parsed
+                    else:
+                        product.b2b_tier_price = None
+                        messages.warning(
+                            request,
+                            f"Invalid tier pricing format for {product.name}. Expected JSON object."
+                        )
+                except json.JSONDecodeError:
+                    product.b2b_tier_price = None
+                    messages.warning(
+                        request,
+                        f"Could not parse B2B tier pricing JSON for {product.name}."
+                    )
+            else:
+                product.b2b_tier_price = None
+
+            product.save()
+
+        messages.success(request, "B2B settings updated successfully.")
+        return redirect("stores:b2b_settings", slug=store.slug)
+
+    context = {
+        "store": store,
+        "products": products,
+    }
+    return render(request, "b2b/b2b_settings.html", context)

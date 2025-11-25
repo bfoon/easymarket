@@ -9,6 +9,8 @@ urlpatterns = [
 
     # 🔹 NEW: B2B marketplace URL
     path("b2b/", views.b2b_marketplace, name="b2b_marketplace"),
+    path("<slug:slug>/b2b-settings/", views.b2b_settings, name="b2b_settings"),
+
 
     path('favorites/', views.my_favorite_stores, name='my_favorite_stores'),
     path('create/', views.create_store, name='create_store'),

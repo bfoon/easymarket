@@ -1,0 +1,395 @@
+{# core/templates/b2b/b2b_settings.html #}
+{% extends "base.html" %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}B2B Settings – EasyMarket{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+<style>
+    .settings-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: 0.5rem;
+        margin-bottom: 2rem;
+    }
+    .info-badge {
+        font-size: 0.875rem;
+        padding: 0.5rem 1rem;
+    }
+    .table-header-sticky {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: #f8f9fa;
+    }
+    .form-control:focus, .form-check-input:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+    }
+    .help-text {
+        font-size: 0.813rem;
+        color: #6c757d;
+        margin-top: 0.25rem;
+    }
+    .product-image {
+        width: 50px;
+        height: 50px;
+        object-fit: cover;
+        border-radius: 0.25rem;
+    }
+    .settings-section {
+        transition: all 0.3s ease;
+    }
+    .settings-section:hover {
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1) !important;
+    }
+    .json-input {
+        font-family: 'Courier New', monospace;
+        font-size: 0.813rem;
+    }
+    .alert-info-custom {
+        background-color: #e7f3ff;
+        border-left: 4px solid #667eea;
+        padding: 1rem;
+        border-radius: 0.25rem;
+    }
+</style>
+
+<div class="container-fluid px-4 py-4">
+    <!-- Page Header -->
+    <div class="settings-header shadow-sm">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h2 class="mb-2 fw-bold">B2B Wholesale Settings</h2>
+                <p class="mb-0 opacity-90">
+                    <i class="bi bi-shop me-2"></i>
+                    Configure wholesale pricing and availability for <strong>{{ store.name }}</strong>
+                </p>
+            </div>
+            <div class="col-md-4 text-md-end mt-3 mt-md-0">
+                <a href="{% url 'stores:store_dashboard' store.id %}" class="btn btn-light">
+                    <i class="bi bi-arrow-left me-2"></i>Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <form method="post" id="b2bSettingsForm">
+        {% csrf_token %}
+
+        <!-- Store Configuration Card -->
+        <div class="card settings-section mb-4 shadow-sm border-0">
+            <div class="card-header bg-white border-bottom py-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-1 fw-bold">
+                            <i class="bi bi-gear text-primary me-2"></i>Store Configuration
+                        </h5>
+                        <small class="text-muted">Control overall B2B availability for your store</small>
+                    </div>
+                    <span class="badge info-badge {% if store.allows_b2b %}bg-success{% else %}bg-secondary{% endif %}">
+                        <i class="bi bi-{% if store.allows_b2b %}check-circle{% else %}x-circle{% endif %} me-1"></i>
+                        {% if store.allows_b2b %}B2B Enabled{% else %}B2B Disabled{% endif %}
+                    </span>
+                </div>
+            </div>
+            <div class="card-body p-4">
+                <div class="row">
+                    <div class="col-lg-6">
+                        <!-- B2B Enable Toggle -->
+                        <div class="mb-4">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" role="switch"
+                                       id="allows_b2b" name="allows_b2b"
+                                       {% if store.allows_b2b %}checked{% endif %}>
+                                <label class="form-check-label fw-semibold" for="allows_b2b">
+                                    Enable B2B Wholesale
+                                </label>
+                            </div>
+                            <p class="help-text ms-4 mb-0">
+                                Allow wholesale buyers to purchase products from your store at special pricing
+                            </p>
+                        </div>
+
+                        <!-- B2B Only Toggle -->
+                        <div class="mb-4">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" role="switch"
+                                       id="is_b2b_only" name="is_b2b_only"
+                                       {% if store.is_b2b_only %}checked{% endif %}>
+                                <label class="form-check-label fw-semibold" for="is_b2b_only">
+                                    B2B Exclusive Store
+                                </label>
+                            </div>
+                            <p class="help-text ms-4 mb-0">
+                                Hide this store from retail customers and show only in B2B marketplace
+                            </p>
+                        </div>
+
+                        <!-- International Supplier Toggle -->
+                        <div class="mb-4">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" role="switch"
+                                       id="is_international_supplier" name="is_international_supplier"
+                                       {% if store.is_international_supplier %}checked{% endif %}>
+                                <label class="form-check-label fw-semibold" for="is_international_supplier">
+                                    International Supplier
+                                </label>
+                            </div>
+                            <p class="help-text ms-4 mb-0">
+                                Indicate that your store ships internationally or sources products globally
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-6">
+                        <!-- Minimum Order Amount -->
+                        <div class="mb-4">
+                            <label for="b2b_min_order_amount" class="form-label fw-semibold">
+                                <i class="bi bi-cash-stack text-primary me-2"></i>Minimum Order Amount
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text">GMD</span>
+                                <input type="number" step="0.01" min="0"
+                                       class="form-control"
+                                       id="b2b_min_order_amount"
+                                       name="b2b_min_order_amount"
+                                       value="{{ store.b2b_min_order_amount|default_if_none:'' }}"
+                                       placeholder="0.00">
+                            </div>
+                            <p class="help-text mb-0">
+                                Set the minimum order value required for B2B purchases. Leave empty for no minimum.
+                            </p>
+                        </div>
+
+                        <!-- B2B Description -->
+                        <div class="mb-0">
+                            <label for="b2b_description" class="form-label fw-semibold">
+                                <i class="bi bi-file-text text-primary me-2"></i>B2B Terms & Description
+                            </label>
+                            <textarea class="form-control" id="b2b_description" name="b2b_description"
+                                      rows="5" placeholder="Describe your B2B terms, payment conditions, delivery information, lead times, and any special requirements...">{{ store.b2b_description }}</textarea>
+                            <p class="help-text mb-0">
+                                This information will be visible to potential B2B buyers
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Product Configuration Card -->
+        <div class="card settings-section mb-4 shadow-sm border-0">
+            <div class="card-header bg-white border-bottom py-3">
+                <div class="d-flex justify-content-between align-items-center flex-wrap">
+                    <div class="mb-2 mb-md-0">
+                        <h5 class="mb-1 fw-bold">
+                            <i class="bi bi-box-seam text-primary me-2"></i>Product B2B Configuration
+                        </h5>
+                        <small class="text-muted">Set wholesale pricing, minimum quantities, and tier pricing for each product</small>
+                    </div>
+                    {% if products %}
+                        <span class="badge bg-primary info-badge">{{ products|length }} Product{{ products|length|pluralize }}</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if products %}
+                <div class="alert-info-custom mx-4 mt-3">
+                    <div class="d-flex">
+                        <i class="bi bi-info-circle text-primary me-3 fs-5"></i>
+                        <div>
+                            <strong>Tier Pricing Format:</strong>
+                            <p class="mb-0 small">Enter JSON format: <code>{"10": "480.00", "50": "450.00", "100": "420.00"}</code></p>
+                            <p class="mb-0 small mt-1">This means: 10+ units at 480 GMD each, 50+ units at 450 GMD each, etc.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0 align-middle">
+                        <thead class="table-header-sticky">
+                            <tr>
+                                <th style="width: 25%;">
+                                    <i class="bi bi-box me-1"></i>Product
+                                </th>
+                                <th class="text-center" style="width: 10%;">
+                                    <i class="bi bi-eye me-1"></i>Show in B2B
+                                </th>
+                                <th class="text-center" style="width: 10%;">
+                                    <i class="bi bi-cart-check me-1"></i>Available
+                                </th>
+                                <th style="width: 15%;">
+                                    <i class="bi bi-tag me-1"></i>Wholesale Price
+                                </th>
+                                <th style="width: 10%;">
+                                    <i class="bi bi-123 me-1"></i>Min Qty
+                                </th>
+                                <th style="width: 30%;">
+                                    <i class="bi bi-bar-chart-steps me-1"></i>Tier Pricing
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for product in products %}
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        {% if product.image %}
+                                            <img src="{{ product.image.url }}" alt="{{ product.name }}" class="product-image me-3">
+                                        {% else %}
+                                            <div class="product-image me-3 bg-light d-flex align-items-center justify-content-center">
+                                                <i class="bi bi-image text-muted"></i>
+                                            </div>
+                                        {% endif %}
+                                        <div>
+                                            <div class="fw-semibold">{{ product.name }}</div>
+                                            <small class="text-muted">
+                                                Retail: <span class="fw-semibold">{{ product.price|floatformat:2 }} GMD</span>
+                                                {% if product.original_price %}
+                                                    <span class="text-decoration-line-through ms-2">
+                                                        {{ product.original_price|floatformat:2 }} GMD
+                                                    </span>
+                                                {% endif %}
+                                            </small>
+                                        </div>
+                                    </div>
+                                </td>
+
+                                <!-- Visible in B2B -->
+                                <td class="text-center">
+                                    <div class="form-check form-switch d-inline-block">
+                                        <input class="form-check-input" type="checkbox" role="switch"
+                                               id="product_{{ product.id }}_visible_in_b2b"
+                                               name="product_{{ product.id }}_visible_in_b2b"
+                                               {% if product.visible_in_b2b %}checked{% endif %}>
+                                        <label class="form-check-label visually-hidden" for="product_{{ product.id }}_visible_in_b2b">
+                                            Visible in B2B
+                                        </label>
+                                    </div>
+                                </td>
+
+                                <!-- Available for B2B -->
+                                <td class="text-center">
+                                    <div class="form-check form-switch d-inline-block">
+                                        <input class="form-check-input" type="checkbox" role="switch"
+                                               id="product_{{ product.id }}_is_available_b2b"
+                                               name="product_{{ product.id }}_is_available_b2b"
+                                               {% if product.is_available_b2b %}checked{% endif %}>
+                                        <label class="form-check-label visually-hidden" for="product_{{ product.id }}_is_available_b2b">
+                                            Available for B2B
+                                        </label>
+                                    </div>
+                                </td>
+
+                                <!-- B2B Price -->
+                                <td>
+                                    <div class="input-group input-group-sm">
+                                        <span class="input-group-text">GMD</span>
+                                        <input type="number" step="0.01" min="0"
+                                               class="form-control"
+                                               name="product_{{ product.id }}_b2b_price"
+                                               value="{{ product.b2b_price|default_if_none:'' }}"
+                                               placeholder="Auto">
+                                    </div>
+                                    <small class="help-text">Empty = retail price</small>
+                                </td>
+
+                                <!-- Min Quantity -->
+                                <td>
+                                    <input type="number" step="1" min="1"
+                                           class="form-control form-control-sm"
+                                           name="product_{{ product.id }}_b2b_min_quantity"
+                                           value="{{ product.b2b_min_quantity|default_if_none:'1' }}">
+                                </td>
+
+                                <!-- Tier Pricing -->
+                                <td>
+                                    <textarea class="form-control form-control-sm json-input"
+                                              rows="2"
+                                              name="product_{{ product.id }}_b2b_tier_price"
+                                              placeholder='{"10": "480.00", "50": "450.00"}'>{{ product.b2b_tier_price|default_if_none:'' }}</textarea>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="card-body">
+                    <div class="text-center py-5">
+                        <i class="bi bi-inbox display-1 text-muted"></i>
+                        <h5 class="mt-3 text-muted">No Products Found</h5>
+                        <p class="text-muted mb-0">Add products to your store to configure B2B settings.</p>
+                    </div>
+                </div>
+            {% endif %}
+
+            <div class="card-footer bg-white border-top py-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <button type="button" class="btn btn-outline-secondary" onclick="window.location.reload();">
+                        <i class="bi bi-arrow-clockwise me-2"></i>Reset Changes
+                    </button>
+                    <button type="submit" class="btn btn-primary px-4">
+                        <i class="bi bi-check-circle me-2"></i>Save B2B Settings
+                    </button>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add confirmation before leaving with unsaved changes
+    let formChanged = false;
+    const form = document.getElementById('b2bSettingsForm');
+
+    form.addEventListener('change', function() {
+        formChanged = true;
+    });
+
+    window.addEventListener('beforeunload', function(e) {
+        if (formChanged) {
+            e.preventDefault();
+            e.returnValue = '';
+        }
+    });
+
+    form.addEventListener('submit', function() {
+        formChanged = false;
+    });
+
+    // Validate JSON inputs
+    const jsonInputs = document.querySelectorAll('.json-input');
+    jsonInputs.forEach(input => {
+        input.addEventListener('blur', function() {
+            if (this.value.trim() !== '') {
+                try {
+                    JSON.parse(this.value);
+                    this.classList.remove('is-invalid');
+                    this.classList.add('is-valid');
+                } catch (e) {
+                    this.classList.remove('is-valid');
+                    this.classList.add('is-invalid');
+                }
+            } else {
+                this.classList.remove('is-valid', 'is-invalid');
+            }
+        });
+    });
+});
+</script>
+{% endblock %}
