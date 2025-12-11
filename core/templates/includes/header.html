@@ -37,11 +37,172 @@
                         <i class="fas fa-home me-1"></i>Home
                     </a>
                 </li>
-                <li class="nav-item">
-                    <a class="easymarket-nav-link nav-link {% if request.resolver_match.url_name == 'all_products' %}active{% endif %}" href="{% url 'marketplace:all_products' %}">
-                        <i class="fas fa-th-large me-1"></i>Categories
-                    </a>
+          <li class="nav-item dropdown easymarket-categories-dropdown">
+                  <a class="easymarket-nav-link nav-link easymarket-dropdown-toggle
+                            {% if request.resolver_match.url_name == 'all_products' %}active{% endif %}"
+                     href="#"
+                     id="categoriesDropdown"
+                     role="button"
+                     data-bs-toggle="dropdown"
+                     aria-expanded="false">
+                      <i class="fas fa-th-large me-1"></i>Categories
+                  </a>
+
+                  <!-- Mega menu -->
+                  <div class="dropdown-menu easymarket-categories-menu shadow-lg border-0"
+                       aria-labelledby="categoriesDropdown">
+                    <div class="easymarket-categories-megapanel d-flex">
+
+                      <!-- LEFT: main categories list -->
+                      <div class="easymarket-cat-main-list">
+                        <ul class="list-unstyled mb-0">
+                          <!-- "Featured" pseudo-category -->
+                          <li class="easymarket-cat-main-item active"
+                              data-category-id="featured">
+                            <span class="easymarket-cat-main-label">
+                              <i class="fas fa-star me-2 text-warning"></i> Featured
+                            </span>
+                          </li>
+
+                          {% for cat in nav_categories %}
+                            <li class="easymarket-cat-main-item"
+                                data-category-id="cat-{{ cat.id }}">
+                              <span class="easymarket-cat-main-label text-truncate">
+                                {{ cat.name }}
+                              </span>
+                              <i class="fas fa-chevron-right easymarket-cat-main-arrow"></i>
+                            </li>
+                          {% endfor %}
+                        </ul>
+                      </div>
+
+                      <!-- RIGHT: subcategory panels -->
+                      <div class="easymarket-cat-subpanels flex-grow-1">
+
+                        <!-- Featured panel (uses all root categories) -->
+                        <div class="easymarket-cat-subpanel active"
+                             data-parent-id="featured">
+                          <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="mb-0 fw-semibold">Discover something new</h6>
+                            <a href="{% url 'marketplace:all_products' %}"
+                               class="btn btn-sm btn-outline-primary">
+                              View all <i class="fas fa-arrow-right ms-1"></i>
+                            </a>
+                          </div>
+
+                          <div class="row row-cols-3 row-cols-md-4 row-cols-lg-5 g-3">
+                           {% for cat in nav_categories %}
+                              <div class="col">
+                                <a href="{{ cat.get_absolute_url }}"
+                                   class="easymarket-cat-circle-item text-decoration-none">
+                                  <div class="easymarket-cat-circle-img-wrapper">
+                                    {% with hero=cat.get_latest_product_image_url %}
+                                      {% if hero %}
+                                        <img src="{{ hero }}"
+                                             alt="{{ cat.name }}"
+                                             class="easymarket-cat-circle-img">
+                                      {% else %}
+                                        <div class="easymarket-cat-circle-placeholder">
+                                          <i class="fas fa-image"></i>
+                                        </div>
+                                      {% endif %}
+                                    {% endwith %}
+                                    {% if forloop.counter <= 3 %}
+                                      <span class="easymarket-cat-hot-badge">HOT</span>
+                                    {% endif %}
+                                  </div>
+                                  <div class="easymarket-cat-circle-name text-truncate">
+                                    {{ cat.name }}
+                                  </div>
+                                </a>
+                              </div>
+                            {% endfor %}
+
+                          </div>
+                        </div>
+
+                        <!-- One panel per main category -->
+                        {% for cat in nav_categories %}
+                          <div class="easymarket-cat-subpanel"
+                               data-parent-id="cat-{{ cat.id }}">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                              <div>
+                                <h6 class="mb-0 fw-semibold">{{ cat.name }}</h6>
+                                <small class="text-muted">
+                                  {% if cat.product_count %}
+                                    {{ cat.product_count }} items
+                                  {% else %}
+                                    Explore {{ cat.name }} on EasyMarket
+                                  {% endif %}
+                                </small>
+                              </div>
+                              <a href="{{ cat.get_absolute_url }}"
+                                 class="btn btn-sm btn-outline-primary">
+                                Shop {{ cat.name }}
+                              </a>
+                            </div>
+
+                            <div class="row row-cols-3 row-cols-md-4 row-cols-lg-5 g-3">
+                              {% with children=cat.children.all %}
+                                {% if children %}
+                                  {% for sub in children|slice:":15" %}
+                                  <div class="col">
+                                    <a href="{{ sub.get_absolute_url }}"
+                                       class="easymarket-cat-circle-item text-decoration-none">
+                                      <div class="easymarket-cat-circle-img-wrapper">
+                                        {% with hero=sub.get_latest_product_image_url %}
+                                          {% if hero %}
+                                            <img src="{{ hero }}"
+                                                 alt="{{ sub.name }}"
+                                                 class="easymarket-cat-circle-img">
+                                          {% else %}
+                                            <div class="easymarket-cat-circle-placeholder">
+                                              <i class="fas fa-image"></i>
+                                            </div>
+                                          {% endif %}
+                                        {% endwith %}
+
+                                        {% if forloop.counter <= 3 %}
+                                          <span class="easymarket-cat-hot-badge">HOT</span>
+                                        {% endif %}
+                                      </div>
+                                      <div class="easymarket-cat-circle-name text-truncate">
+                                        {{ sub.name }}
+                                      </div>
+                                    </a>
+                                  </div>
+                                {% endfor %}
+                                {% else %}
+                                  <!-- No children: show just parent as one big tile -->
+                                  <div class="col">
+                                    <a href="{{ cat.get_absolute_url }}"
+                                       class="easymarket-cat-circle-item text-decoration-none">
+                                      <div class="easymarket-cat-circle-img-wrapper">
+                                        {% if cat.image %}
+                                          <img src="{{ cat.image.url }}"
+                                               alt="{{ cat.name }}"
+                                               class="easymarket-cat-circle-img">
+                                        {% else %}
+                                          <div class="easymarket-cat-circle-placeholder">
+                                            <i class="fas fa-box-open"></i>
+                                          </div>
+                                        {% endif %}
+                                      </div>
+                                      <div class="easymarket-cat-circle-name text-truncate">
+                                        {{ cat.name }}
+                                      </div>
+                                    </a>
+                                  </div>
+                                {% endif %}
+                              {% endwith %}
+                            </div>
+                          </div>
+                        {% endfor %}
+                      </div>
+                    </div>
+                  </div>
                 </li>
+
                 <li class="nav-item dropdown">
                     <a class="easymarket-nav-link easymarket-dropdown-toggle nav-link dropdown-toggle {% if 'deals' in request.resolver_match.url_name or 'hot_picks' in request.resolver_match.url_name or 'used_products' in request.resolver_match.url_name or 'stores' in request.resolver_match.url_name %}active{% endif %}" href="#" id="dealsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="fas fa-tags me-1"></i>Deals
@@ -333,6 +494,176 @@
 </div>
 
 <style>
+
+/* ================================
+   Temu-style Categories Mega Menu
+   ================================ */
+
+.easymarket-categories-menu {
+  padding: 0;
+  border-radius: 0.9rem;
+  overflow: hidden;
+  min-width: 720px;
+  max-width: 980px;
+}
+
+.easymarket-categories-megapanel {
+  background: #ffffff;
+  min-height: 260px;
+}
+
+/* LEFT column */
+.easymarket-cat-main-list {
+  width: 230px;
+  background: #f8f9fa;
+  border-right: 1px solid #e5e7eb;
+  padding: 0.75rem 0;
+}
+
+.easymarket-cat-main-list ul {
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.easymarket-cat-main-item {
+  padding: 0.35rem 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+  font-size: 0.9rem;
+  color: #343a40;
+  transition: background-color .15s ease, color .15s ease, padding-left .15s ease;
+}
+
+.easymarket-cat-main-item:hover {
+  background: #e9ecef;
+  padding-left: 1.25rem;
+}
+
+.easymarket-cat-main-item.active {
+  background: #ffffff;
+  color: #ff6600;
+  font-weight: 600;
+  padding-left: 1.25rem;
+}
+
+.easymarket-cat-main-label {
+  display: inline-block;
+  flex: 1;
+}
+
+.easymarket-cat-main-arrow {
+  font-size: 0.7rem;
+  opacity: 0.6;
+}
+
+/* RIGHT side panels */
+.easymarket-cat-subpanels {
+  padding: 1rem 1.25rem;
+  position: relative;
+}
+
+.easymarket-cat-subpanel {
+  display: none;
+}
+
+.easymarket-cat-subpanel.active {
+  display: block;
+}
+
+/* Circle tiles */
+.easymarket-cat-circle-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .35rem;
+  text-align: center;
+}
+
+.easymarket-cat-circle-img-wrapper {
+  width: 78px;
+  height: 78px;
+  border-radius: 50%;
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+
+.easymarket-cat-circle-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.easymarket-cat-circle-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #adb5bd;
+  font-size: 1.4rem;
+}
+
+.easymarket-cat-circle-item:hover .easymarket-cat-circle-img-wrapper {
+  transform: translateY(-2px);
+  border-color: #ff9900;
+  box-shadow: 0 4px 12px rgba(0,0,0,.12);
+}
+
+.easymarket-cat-circle-name {
+  font-size: 0.78rem;
+  color: #343a40;
+  max-width: 110px;
+}
+
+/* HOT badge */
+.easymarket-cat-hot-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  font-size: 0.55rem;
+  font-weight: 700;
+  padding: 0.15rem 0.35rem;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #ff6b00, #ff9900);
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,.35);
+}
+
+/* Desktop: full width mega menu */
+@media (min-width: 992px) {
+  .easymarket-navbar .easymarket-categories-dropdown {
+    position: static;
+  }
+
+  .easymarket-navbar .easymarket-categories-dropdown .dropdown-menu {
+    margin-top: 0.4rem;
+    width: 100%;
+    left: 0;
+    right: 0;
+  }
+}
+
+/* Mobile/tablet: keep it usable */
+@media (max-width: 991.98px) {
+  .easymarket-categories-menu {
+    min-width: 100%;
+    max-width: 100%;
+  }
+  .easymarket-cat-main-list {
+    width: 40%;
+  }
+}
+
+
 /* ==================================================
    EASYMARKET NAVBAR - SCOPED CSS STYLES
    ================================================== */
@@ -570,6 +901,81 @@ function getCookie(name) {
 }
 const csrftoken = getCookie('csrftoken');
 </script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const catWrapper = document.querySelector('.easymarket-categories-dropdown');
+  if (!catWrapper) return;
+
+  const toggle = catWrapper.querySelector('#categoriesDropdown');
+  const dropdownMenu = catWrapper.querySelector('.easymarket-categories-menu');
+  const mainItems = catWrapper.querySelectorAll('.easymarket-cat-main-item');
+  const panels = catWrapper.querySelectorAll('.easymarket-cat-subpanel');
+
+  // Ensure we have one Dropdown instance
+  const dd = bootstrap.Dropdown.getOrCreateInstance(toggle, {
+    autoClose: 'outside'
+  });
+
+  // ---------- panel switching ----------
+  function activatePanel(id) {
+    mainItems.forEach(li => {
+      li.classList.toggle('active', li.dataset.categoryId === id);
+    });
+    panels.forEach(panel => {
+      panel.classList.toggle('active', panel.dataset.parentId === id);
+    });
+  }
+
+  mainItems.forEach(item => {
+    item.addEventListener('mouseenter', function () {
+      const id = this.dataset.categoryId;
+      activatePanel(id);
+    });
+  });
+
+  if (mainItems.length) {
+    activatePanel('featured');
+  }
+
+  // ---------- hover open / delayed close ----------
+  let hideTimeout = null;
+
+  function openMenu() {
+    clearTimeout(hideTimeout);
+    dd.show();
+  }
+
+  function scheduleClose() {
+    clearTimeout(hideTimeout);
+    hideTimeout = setTimeout(() => dd.hide(), 400); // stay a bit before closing
+  }
+
+  // Treat the entire <li> (toggle + mega panel) as the hover zone
+  catWrapper.addEventListener('mouseenter', function () {
+    if (window.innerWidth >= 992) {
+      openMenu();
+    }
+  });
+
+  catWrapper.addEventListener('mouseleave', function (e) {
+    if (window.innerWidth < 992) return;   // mobile = click only
+
+    // If we moved to something still inside the wrapper, don't close
+    const to = e.relatedTarget;
+    if (to && catWrapper.contains(to)) return;
+
+    scheduleClose();
+  });
+
+  // Extra safety: close when clicking anywhere outside
+  document.addEventListener('click', function (e) {
+    if (!catWrapper.contains(e.target)) {
+      clearTimeout(hideTimeout);
+      dd.hide();
+    }
+  });
+});
+</script>
 
 <!-- Cart preview / offcanvas logic with truncation -->
 <script>
@@ -715,7 +1121,9 @@ document.addEventListener('DOMContentLoaded', function () {
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     function refreshCartUI() {
-        fetch('/get-cart-count/', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+       fetch('{% url "marketplace:get_cart_count" %}', {
+    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+})
         .then(res => res.json())
         .then(data => {
             if (data.success) {
@@ -947,10 +1355,16 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // Dropdown behavior
-    const easymarketNavDropdowns = document.querySelectorAll('.easymarket-navbar .easymarket-nav .dropdown');
+   const easymarketNavDropdowns = document.querySelectorAll('.easymarket-navbar .easymarket-nav .dropdown');
     easymarketNavDropdowns.forEach(dropdown => {
+        // ⛔ Skip the categories mega menu – it has its own logic
+        if (dropdown.classList.contains('easymarket-categories-dropdown')) {
+            return;
+        }
+
         const toggle = dropdown.querySelector('.easymarket-dropdown-toggle');
         const menu = dropdown.querySelector('.easymarket-dropdown-menu');
+
         if (menu) {
             menu.style.transition = 'opacity .2s ease, transform .2s ease';
             const dropdownItems = menu.querySelectorAll('.easymarket-dropdown-item');

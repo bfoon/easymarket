@@ -155,6 +155,7 @@ TEMPLATES = [
                 "orders.context_processors.pending_orders_count",
                 "reviews.context_processors.global_review_stats",
                 "auction.context_processors.auction_counts",
+                "marketplace.context_processors.nav_categories",
             ],
         },
     },

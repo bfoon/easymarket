@@ -1,8 +1,5 @@
 from .models import Cart, Wishlist, Product, Category
-from django.db.models import Sum, Q
-
-from django.db.models import Sum
-from .models import Cart, Wishlist
+from django.db.models import Sum, Count, Q
 
 def cart_count(request):
     count = 0
@@ -58,3 +55,21 @@ def search_context(request):
         'categories': categories,
         'search_results_count': search_results.count() if search_results else 0,
     }
+def nav_categories(request):
+    """
+    Provides root categories + their direct children
+    for the Temu-style mega menu.
+    """
+    parents = (
+        Category.objects
+        .filter(parent__isnull=True, is_active=True)
+        .annotate(
+            product_count=Count(
+                "product",
+                filter=Q(product__is_active=True)
+            )
+        )
+        .prefetch_related("children")
+        .order_by("name")
+    )
+    return {"nav_categories": parents}

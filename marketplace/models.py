@@ -126,6 +126,59 @@ class Category(models.Model):
         else:
             return Category.objects.filter(parent=None, is_active=True).exclude(pk=self.pk)
 
+    def get_absolute_url(self):
+        """
+        Default category URL used in menus.
+        Using the pk-based route to avoid needing a slug field.
+        """
+        return reverse('marketplace:category_detail', kwargs={'pk': self.pk})
+
+    def get_latest_product(self, include_descendants=True):
+        """
+        Return the most recently created active product in this category
+        (and optionally in all its subcategories).
+        """
+        from .models import Product  # safe: resolved at runtime
+
+        category_ids = [self.pk]
+        if include_descendants:
+            category_ids.extend(c.pk for c in self.get_all_subcategories())
+
+        return (
+            Product.objects
+            .filter(category_id__in=category_ids, is_active=True)
+            .order_by('-created_at')
+            .first()
+        )
+
+    def get_latest_product_image_url(self, include_descendants=True):
+        """
+        Return the best image URL for the latest product:
+        - primary ProductImage if available
+        - else Product.image
+        - else None
+        """
+        product = self.get_latest_product(include_descendants=include_descendants)
+        if not product:
+            return None
+
+        # Use ProductImage if you have any
+        primary = product.images.filter(is_primary=True).first()
+        if primary and primary.image:
+            try:
+                return primary.image.url
+            except ValueError:
+                pass  # file missing
+
+        # Fallback: the product's main image
+        if product.image:
+            try:
+                return product.image.url
+            except ValueError:
+                pass
+
+        return None
+
     @classmethod
     def get_root_categories(cls):
         """Get all root categories"""
@@ -346,7 +399,7 @@ class Product(models.Model):
     # ---------- URLS / META ----------
 
     def get_absolute_url(self):
-        return reverse('product_detail', kwargs={'pk': self.pk})
+        return reverse('marketplace:product_detail', kwargs={'product_id': self.pk})
 
     # ---------- RATINGS / REVIEWS ----------
 
