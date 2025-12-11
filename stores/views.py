@@ -29,7 +29,7 @@ from accounts.models import AdminLog
 import re
 from decimal import Decimal, InvalidOperation
 from accounts.utils import log_admin_action
-from .models import Store, StoreFollow, StoreNotification, StoreFavorite
+from .models import Store, StoreFollow, StoreNotification, StoreFavorite, B2BInquiry
 from reviews.models import Review
 from marketplace.models import Product, Category, ProductImage
 from orders.models import ChatMessage
@@ -3756,12 +3756,6 @@ def b2b_marketplace(request):
 
 @login_required
 def b2b_settings(request, slug):
-    """
-    B2B settings view for a specific store:
-    - Store-level B2B config (allows_b2b, is_b2b_only, min amount, etc.)
-    - Product-level B2B config (visible_in_b2b, is_available_b2b, wholesale price, MOQ, tier pricing)
-    Only owner or managers of the store can access.
-    """
     user = request.user
 
     store = get_object_or_404(
@@ -3791,17 +3785,20 @@ def b2b_settings(request, slug):
         else:
             store.b2b_min_order_amount = None
 
+        # 🔹 NEW: contact preferences
+        store.b2b_contact_email = request.POST.get("b2b_contact_email", "").strip() or None
+        store.b2b_whatsapp_number = request.POST.get("b2b_whatsapp_number", "").strip()
+        store.b2b_preferred_channel = request.POST.get("b2b_preferred_channel") or "email"
+
         store.save()
 
-        # ------------- PRODUCT-LEVEL B2B SETTINGS -------------
+        # ------------- PRODUCT-LEVEL B2B SETTINGS (unchanged) -------------
         for product in products:
             prefix = f"product_{product.id}_"
 
-            # visibility & availability
             product.visible_in_b2b = request.POST.get(prefix + "visible_in_b2b") == "on"
             product.is_available_b2b = request.POST.get(prefix + "is_available_b2b") == "on"
 
-            # wholesale price
             raw_b2b_price = request.POST.get(prefix + "b2b_price", "").strip()
             if raw_b2b_price:
                 try:
@@ -3811,19 +3808,16 @@ def b2b_settings(request, slug):
             else:
                 product.b2b_price = None
 
-            # minimum quantity
             raw_min_qty = request.POST.get(prefix + "b2b_min_quantity", "").strip()
             try:
                 product.b2b_min_quantity = int(raw_min_qty) if raw_min_qty else 1
             except ValueError:
                 product.b2b_min_quantity = 1
 
-            # tier pricing JSON (optional)
             raw_tier_json = request.POST.get(prefix + "b2b_tier_price", "").strip()
             if raw_tier_json:
                 try:
                     parsed = json.loads(raw_tier_json)
-                    # ensure dict of string -> string/number (basic sanity check)
                     if isinstance(parsed, dict):
                         product.b2b_tier_price = parsed
                     else:
@@ -3851,3 +3845,91 @@ def b2b_settings(request, slug):
         "products": products,
     }
     return render(request, "b2b/b2b_settings.html", context)
+
+@login_required
+@require_POST
+def create_b2b_inquiry(request):
+    store_id = request.POST.get("store_id")
+    product_id = request.POST.get("product_id")  # optional
+    message_text = (request.POST.get("message") or "").strip()
+    preferred_channel = request.POST.get("preferred_channel") or "email"
+
+    if not store_id or not message_text:
+        return JsonResponse(
+            {"ok": False, "error": "Missing store or message."},
+            status=400,
+        )
+
+    try:
+        store = Store.objects.get(id=store_id, allows_b2b=True)
+    except Store.DoesNotExist:
+        return JsonResponse(
+            {"ok": False, "error": "Store not available for B2B."},
+            status=404,
+        )
+
+    product = None
+    if product_id:
+        product = Product.objects.filter(id=product_id, store=store).first()
+
+    inquiry = B2BInquiry.objects.create(
+        store=store,
+        buyer=request.user,
+        product=product,
+        message=message_text,
+        preferred_channel=preferred_channel,
+    )
+
+    # ----------------- EMAIL NOTIFICATION -----------------
+    # Where to send? Use B2B email if set, else store owner email.
+    to_email = store.b2b_contact_email or getattr(store.owner, "email", None)
+    if to_email:
+        subject = f"New B2B inquiry on EasyMarket – {store.name}"
+
+        buyer = request.user
+        buyer_email = getattr(buyer, "email", "")
+        buyer_phone = getattr(getattr(buyer, "profile", None), "phone_number", "")
+
+        lines = [
+            f"Dear {store.name},",
+            "",
+            "You have received a new B2B negotiation request on EasyMarket.",
+            "",
+            f"Store: {store.name}",
+            f"Inquiry ID: #{inquiry.id}",
+            "",
+        ]
+        if product:
+            lines.append(f"Product: {product.name}")
+        lines += [
+            "",
+            "Message from buyer:",
+            message_text,
+            "",
+            "Buyer contact details:",
+            f"Name: {buyer.get_full_name() or buyer.username}",
+            f"Email: {buyer_email or 'N/A'}",
+            f"Phone / WhatsApp: {buyer_phone or 'N/A'}",
+            "",
+            "Preferred negotiation channel:",
+            f"- Buyer selected: {preferred_channel}",
+            f"- Store preference: {store.b2b_preferred_channel}",
+            "",
+            "Please contact the buyer directly to continue the negotiation via email or WhatsApp,",
+            "based on the agreed communication channel.",
+            "",
+            "EasyMarket B2B",
+        ]
+        body = "\n".join(lines)
+
+        send_mail(
+            subject,
+            body,
+            getattr(settings, "DEFAULT_FROM_EMAIL", None),
+            [to_email],
+            fail_silently=True,
+        )
+
+    return JsonResponse(
+        {"ok": True, "message": "Inquiry sent successfully."}
+    )

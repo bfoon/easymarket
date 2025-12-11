@@ -69,6 +69,7 @@ urlpatterns = [
     # API endpoints
     path('api/stores/<uuid:store_id>/metrics/', views.store_metrics_api, name='store_metrics_api'),
     path('api/stores/<uuid:store_id>/inventory/bulk-update/', views.bulk_inventory_update, name='bulk_inventory_update'),
+    path('api/b2b-inquiry/', views.create_b2b_inquiry, name='create_b2b_inquiry'),
 
     # Product detail (public view)
     path('product/<int:product_id>/', views.product_detail, name='product_detail'),

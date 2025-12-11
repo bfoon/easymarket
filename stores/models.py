@@ -246,6 +246,29 @@ class Store(models.Model):
         null=True,
         help_text="Short description for B2B buyers (MOQ, special terms, etc.)."
     )
+    # 🔹 NEW FIELDS
+    b2b_contact_email = models.EmailField(
+        blank=True,
+        null=True,
+        help_text="Email address where B2B inquiries should be sent. Defaults to owner email if empty."
+    )
+    b2b_whatsapp_number = models.CharField(
+        max_length=30,
+        blank=True,
+        help_text="WhatsApp number for B2B negotiations (include country code)."
+    )
+
+    B2B_CHANNEL_CHOICES = [
+        ("email", "Email"),
+        ("whatsapp", "WhatsApp"),
+        ("both", "Email & WhatsApp"),
+    ]
+    b2b_preferred_channel = models.CharField(
+        max_length=10,
+        choices=B2B_CHANNEL_CHOICES,
+        default="email",
+        help_text="Preferred channel for B2B negotiations."
+    )
 
     # Social & marketing
     facebook_url = models.URLField(blank=True, null=True)
@@ -455,6 +478,32 @@ class Store(models.Model):
             if old_store and old_store.status != self.status and self.status == 'active' and not self.approved_at:
                 self.approved_at = timezone.now()
         super().save(*args, **kwargs)
+
+class B2BInquiry(models.Model):
+    CHANNEL_CHOICES = [
+        ("email", "Email"),
+        ("whatsapp", "WhatsApp"),
+        ("both", "Email + WhatsApp"),
+    ]
+
+    STATUS_CHOICES = [
+        ("new", "New"),
+        ("contacted", "Contacted"),
+        ("closed", "Closed"),
+    ]
+
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="b2b_inquiries")
+    buyer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="b2b_inquiries")
+    product = models.ForeignKey("marketplace.Product", on_delete=models.SET_NULL, null=True, blank=True)
+
+    message = models.TextField()
+    preferred_channel = models.CharField(max_length=10, choices=CHANNEL_CHOICES, default="email")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="new")
+
+    def __str__(self):
+        return f"B2B Inquiry #{self.id} – {self.store.name}"
 
 class StoreFavorite(models.Model):
     """
