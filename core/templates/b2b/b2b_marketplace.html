@@ -671,6 +671,20 @@
     flex-wrap: wrap;
 }
 
+  #b2b-modal-thumbs img {
+    width: 50px;
+    height: 50px;
+    object-fit: cover;
+    border-radius: 6px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: transform 0.15s ease, border-color 0.15s ease;
+  }
+  #b2b-modal-thumbs img.active {
+    border-color: var(--b2b-primary);
+    transform: scale(1.05);
+  }
+
 /* Responsive */
 @media (max-width: 768px) {
     .b2b-hero h1 {
@@ -1008,54 +1022,65 @@
         <div class="b2b-products-grid">
             {% for product in products_page %}
             <div class="b2b-product-card">
-                <div class="b2b-product-image-container">
-                    <a href="#"
-                       class="b2b-product-quickview"
-                       data-bs-toggle="modal"
-                       data-bs-target="#productQuickViewModal"
-                       data-product-id="{{ product.id }}"
-                       data-product-name="{{ product.name|escapejs }}"
-                       data-product-store="{{ product.store.name|escapejs }}"
-                       data-product-image="{% if product.image %}{{ product.image.url }}{% endif %}"
-                       data-product-price="{% if product.b2b_price %}{{ product.b2b_price }}{% else %}{{ product.price }}{% endif %}"
-                       data-product-moq="{{ product.b2b_min_quantity }}"
-                       data-product-description="{{ product.description|default_if_none:''|truncatechars:250|escapejs }}">
-                        {% if product.image %}
-                        <img src="{{ product.image.url }}"
-                             class="b2b-product-image"
-                             alt="{{ product.name }}"
-                             loading="lazy">
-                        {% else %}
-                        <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #999;">
-                            <i class="fas fa-image fa-2x"></i>
-                        </div>
-                        {% endif %}
-                    </a>
+     <div class="b2b-product-image-container">
+  {% with first_img=product.images.all|first %}
+  <a href="#"
+     class="b2b-product-quickview"
+     data-bs-toggle="modal"
+     data-bs-target="#productQuickViewModal"
+     data-product-id="{{ product.id }}"
+     data-product-name="{{ product.name|escapejs }}"
+     data-product-store="{{ product.store.name|escapejs }}"
+     data-product-image="{% if first_img %}{{ first_img.image.url }}{% elif product.image %}{{ product.image.url }}{% endif %}"
+     data-product-images='[{% if product.images.all %}{% for img in product.images.all %}"{{ img.image.url }}"{% if not forloop.last %},{% endif %}{% endfor %}{% elif product.image %}"{{ product.image.url }}"{% endif %}]'
+     data-product-price="{% if product.b2b_price %}{{ product.b2b_price }}{% else %}{{ product.price }}{% endif %}"
+     data-product-moq="{{ product.b2b_min_quantity }}"
+     data-product-description="{{ product.description|default_if_none:''|truncatechars:250|escapejs }}">
+    {% if first_img %}
+      <img src="{{ first_img.image.url }}"
+           class="b2b-product-image"
+           alt="{{ product.name }}"
+           loading="lazy">
+    {% elif product.image %}
+      <img src="{{ product.image.url }}"
+           class="b2b-product-image"
+           alt="{{ product.name }}"
+           loading="lazy">
+    {% else %}
+      <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #999;">
+        <i class="fas fa-image fa-2x"></i>
+      </div>
+    {% endif %}
+  </a>
+  {% endwith %}
 
-                    <div class="b2b-product-badges">
-                        {% if product.b2b_min_quantity %}
-                        <span class="b2b-product-badge">
-                            <i class="fas fa-box me-1"></i>MOQ: {{ product.b2b_min_quantity }}
-                        </span>
-                        {% endif %}
-                    </div>
-                </div>
+  <div class="b2b-product-badges">
+    {% if product.b2b_min_quantity %}
+    <span class="b2b-product-badge">
+      <i class="fas fa-box me-1"></i>MOQ: {{ product.b2b_min_quantity }}
+    </span>
+    {% endif %}
+  </div>
+</div>
+
 
                 <div class="b2b-product-info">
                     <h3 class="b2b-product-name">
-                        <a href="#"
-                           class="b2b-product-quickview"
-                           data-bs-toggle="modal"
-                           data-bs-target="#productQuickViewModal"
-                           data-product-id="{{ product.id }}"
-                           data-product-name="{{ product.name|escapejs }}"
-                           data-product-store="{{ product.store.name|escapejs }}"
-                           data-product-image="{% if product.image %}{{ product.image.url }}{% endif %}"
-                           data-product-price="{% if product.b2b_price %}{{ product.b2b_price }}{% else %}{{ product.price }}{% endif %}"
-                           data-product-moq="{{ product.b2b_min_quantity }}"
-                           data-product-description="{{ product.description|default_if_none:''|truncatechars:250|escapejs }}">
-                            {{ product.name|truncatechars:45 }}
-                        </a>
+                       <a href="#"
+   class="b2b-product-quickview"
+   data-bs-toggle="modal"
+   data-bs-target="#productQuickViewModal"
+   data-product-id="{{ product.id }}"
+   data-product-name="{{ product.name|escapejs }}"
+   data-product-store="{{ product.store.name|escapejs }}"
+   data-product-image="{% if product.image %}{{ product.image.url }}{% endif %}"
+   data-product-images='[{% for img in product.images.all %}"{{ img.image.url }}"{% if not forloop.last %},{% endif %}{% empty %}{% if product.image %}"{{ product.image.url }}"{% endif %}{% endfor %}]'
+   data-product-price="{% if product.b2b_price %}{{ product.b2b_price }}{% else %}{{ product.price }}{% endif %}"
+   data-product-moq="{{ product.b2b_min_quantity }}"
+   data-product-description="{{ product.description|default_if_none:''|truncatechars:250|escapejs }}">
+    {{ product.name|truncatechars:45 }}
+</a>
+
                     </h3>
 
                     <div class="b2b-product-store">
@@ -1210,10 +1235,34 @@
       <div class="modal-body">
         <div class="row g-3">
           <div class="col-12 col-md-5">
-            <div class="border rounded p-2 text-center">
-              <img id="b2b-modal-image" src="" alt="" class="img-fluid" style="max-height: 260px; object-fit: contain;">
+            <!-- Main image + arrows -->
+            <div class="border rounded p-2 text-center position-relative">
+              <button type="button"
+                      class="btn btn-sm btn-light position-absolute top-50 start-0 translate-middle-y b2b-modal-img-prev"
+                      style="border-radius: 50%; box-shadow: 0 0 8px rgba(0,0,0,0.15);">
+                <i class="fas fa-chevron-left"></i>
+              </button>
+
+              <img id="b2b-modal-image"
+                   src=""
+                   alt=""
+                   class="img-fluid"
+                   style="max-height: 260px; object-fit: contain;">
+
+              <button type="button"
+                      class="btn btn-sm btn-light position-absolute top-50 end-0 translate-middle-y b2b-modal-img-next"
+                      style="border-radius: 50%; box-shadow: 0 0 8px rgba(0,0,0,0.15);">
+                <i class="fas fa-chevron-right"></i>
+              </button>
+            </div>
+
+            <!-- Thumbnails -->
+            <div id="b2b-modal-thumbs"
+                 class="d-flex flex-wrap gap-2 mt-2 justify-content-center">
+              <!-- Thumbs inserted by JS -->
             </div>
           </div>
+
           <div class="col-12 col-md-7">
             <h4 id="b2b-modal-name" class="mb-1"></h4>
             <div class="text-muted mb-2">
@@ -1254,6 +1303,7 @@
     </div>
   </div>
 </div>
+
 
 <!-- B2B Negotiation / Messaging Modal -->
 <div class="modal fade" id="b2bChatModal" tabindex="-1" aria-labelledby="b2bChatModalLabel" aria-hidden="true">
@@ -1359,7 +1409,6 @@
     </div>
   </div>
 </div>
-
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // -----------------------------
@@ -1374,15 +1423,12 @@ document.addEventListener('DOMContentLoaded', function() {
     function openB2BChatPopup({ storeId, productId = null, storeName = '', productName = '' }) {
         if (!b2bChatModal) return;
 
-        // Clean product name (remove leading/trailing quotes if any)
         let safeProductName = (productName || '').trim();
         safeProductName = safeProductName.replace(/^["']+|["']+$/g, '');
 
-        // Supplier name
         const storeNameEl = document.getElementById('b2b-chat-store-name');
         if (storeNameEl) storeNameEl.textContent = storeName || '';
 
-        // Product name (optional)
         const productWrapper = document.getElementById('b2b-chat-product-wrapper');
         const productNameEl = document.getElementById('b2b-chat-product-name');
         if (safeProductName && productWrapper && productNameEl) {
@@ -1392,11 +1438,9 @@ document.addEventListener('DOMContentLoaded', function() {
             productWrapper.style.display = 'none';
         }
 
-        // Hidden fields
         document.getElementById('b2b-chat-store-id').value = storeId || '';
         document.getElementById('b2b-chat-product-id').value = productId || '';
 
-        // Reset message + error
         const msgEl = document.getElementById('b2b-chat-message');
         const errEl = document.getElementById('b2b-chat-error');
         if (msgEl) {
@@ -1415,7 +1459,68 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // -----------------------------
-    // Product quick view modal
+    // Quick View Gallery State
+    // -----------------------------
+    let modalImages = [];
+    let modalImageIndex = 0;
+
+    function renderModalImage() {
+        const mainImg = document.getElementById('b2b-modal-image');
+        const thumbsContainer = document.getElementById('b2b-modal-thumbs');
+
+        if (!mainImg) return;
+
+        if (!modalImages || modalImages.length === 0) {
+            mainImg.style.display = 'none';
+            if (thumbsContainer) thumbsContainer.innerHTML = '';
+            document.querySelectorAll('.b2b-modal-img-prev, .b2b-modal-img-next')
+                .forEach(btn => btn.style.display = 'none');
+            return;
+        }
+
+        mainImg.style.display = 'block';
+        mainImg.src = modalImages[modalImageIndex];
+
+        const showArrows = modalImages.length > 1;
+        document.querySelectorAll('.b2b-modal-img-prev, .b2b-modal-img-next')
+            .forEach(btn => btn.style.display = showArrows ? 'inline-flex' : 'none');
+
+        if (thumbsContainer) {
+            thumbsContainer.innerHTML = '';
+            modalImages.forEach((url, idx) => {
+                const img = document.createElement('img');
+                img.src = url;
+                if (idx === modalImageIndex) img.classList.add('active');
+                img.addEventListener('click', () => {
+                    modalImageIndex = idx;
+                    renderModalImage();
+                });
+                thumbsContainer.appendChild(img);
+            });
+        }
+    }
+
+    const prevBtn = document.querySelector('.b2b-modal-img-prev');
+    const nextBtn = document.querySelector('.b2b-modal-img-next');
+
+    if (prevBtn) {
+        prevBtn.addEventListener('click', function() {
+            if (!modalImages || modalImages.length <= 1) return;
+            modalImageIndex = (modalImageIndex - 1 + modalImages.length) % modalImages.length;
+            renderModalImage();
+        });
+    }
+
+    if (nextBtn) {
+        nextBtn.addEventListener('click', function() {
+            if (!modalImages || modalImages.length <= 1) return;
+            modalImageIndex = (modalImageIndex + 1) % modalImages.length;
+            renderModalImage();
+        });
+    }
+
+    // -----------------------------
+    // Quick View click handler
     // -----------------------------
     document.addEventListener('click', function(e) {
         const quickViewLink = e.target.closest('.b2b-product-quickview');
@@ -1426,6 +1531,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const name = quickViewLink.getAttribute('data-product-name') || '';
         const store = quickViewLink.getAttribute('data-product-store') || '';
         const image = quickViewLink.getAttribute('data-product-image') || '';
+        const imagesRaw = quickViewLink.getAttribute('data-product-images') || '';
         const price = quickViewLink.getAttribute('data-product-price') || '';
         const moq = quickViewLink.getAttribute('data-product-moq') || '';
         const description = quickViewLink.getAttribute('data-product-description') || '';
@@ -1435,7 +1541,25 @@ document.addEventListener('DOMContentLoaded', function() {
         const chatBtn = card ? card.querySelector('[data-action="open-b2b-chat"]') : null;
         const storeId = chatBtn ? chatBtn.getAttribute('data-store-id') : null;
 
-        // Fill modal fields
+        // Build images array from data-product-images
+        modalImages = [];
+        if (imagesRaw) {
+            try {
+                const parsed = JSON.parse(imagesRaw);
+                if (Array.isArray(parsed)) {
+                    modalImages = parsed.filter(Boolean);
+                }
+            } catch (err) {
+                modalImages = imagesRaw.split(',').map(s => s.trim()).filter(Boolean);
+            }
+        }
+        if (!modalImages.length && image) {
+            modalImages = [image];
+        }
+        modalImageIndex = 0;
+        renderModalImage();
+
+        // Fill text fields
         document.getElementById('b2b-modal-name').textContent = name;
         document.getElementById('b2b-modal-store').textContent = store;
         document.getElementById('b2b-modal-price').textContent = price ? `D${price}` : '';
@@ -1450,15 +1574,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
         document.getElementById('b2b-modal-description').textContent = description || '';
 
-        const imgEl = document.getElementById('b2b-modal-image');
-        if (image) {
-            imgEl.src = image;
-            imgEl.style.display = 'block';
-        } else {
-            imgEl.style.display = 'none';
-        }
-
-        // Set data attributes on modal buttons so they reuse [data-action] handler
         const addBtn = document.getElementById('b2b-modal-add-to-cart-btn');
         const negBtn = document.getElementById('b2b-modal-negotiate-btn');
 
@@ -1485,7 +1600,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (action === 'open-b2b-chat') {
             e.preventDefault();
 
-            // Infer names from card
             const supplierCard = target.closest('.b2b-supplier-card');
             const productCard = target.closest('.b2b-product-card');
 
@@ -1536,7 +1650,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // -----------------------------
-    // CSRF helper (ONE definition)
+    // CSRF helper
     // -----------------------------
     function getCookie(name) {
         let cookieValue = null;
@@ -1554,7 +1668,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // -----------------------------
-    // Send B2B inquiry (modal Send btn)
+    // Send B2B inquiry
     // -----------------------------
     const sendBtn = document.getElementById('b2b-chat-send-btn');
     if (sendBtn) {
@@ -1644,6 +1758,5 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
-
 
 {% endblock %}
