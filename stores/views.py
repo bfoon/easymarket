@@ -49,7 +49,7 @@ from django.apps import apps
 from .models import (
     Store, StoreHours, StoreShippingZone, StoreReturnSettings,
     StoreInventoryTracking, StoreMetrics, StoreReferral, PromotionPlan,
-     PromotionSubscription, PromotionCampaign, PromotionPlacement
+     PromotionSubscription, PromotionCampaign, PromotionPlacement, B2BCart,
 )
 from .forms import (
     StoreSettingsForm, StoreHoursFormSet, StoreShippingZoneFormSet,
@@ -3734,6 +3734,12 @@ def b2b_marketplace(request):
         "-created_at",
     )
 
+    b2b_cart_count = 0
+    if request.user.is_authenticated:
+        cart = B2BCart.objects.filter(buyer=request.user, is_active=True).first()
+        if cart:
+            b2b_cart_count = cart.items.count()
+
     # Pagination for products
     paginator = Paginator(product_qs, 24)  # 24 products per page
     page_number = request.GET.get("page")
@@ -3751,6 +3757,7 @@ def b2b_marketplace(request):
         "stores_count": store_qs.count(),
         "products_count": product_qs.count(),
         "my_store": my_store,
+        "b2b_cart_count": b2b_cart_count,
     }
     return render(request, "b2b/b2b_marketplace.html", context)
 

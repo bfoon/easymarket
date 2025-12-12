@@ -1085,3 +1085,5 @@ class PromotionCampaign(models.Model):
         if invalid:
             from django.core.exceptions import ValidationError
             raise ValidationError(f"Some products do not belong to store {self.store_id}: {invalid}")
+
+from .b2b.models import *  # noqa

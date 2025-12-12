@@ -1,0 +1,326 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% load static %}
+{% block title %}B2B Cart · EasyMarket{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+<style>
+  :root{
+    --b2b-primary:#1a5f9e;
+    --b2b-secondary:#2d8ccc;
+    --b2b-accent:#ff6b35;
+    --b2b-success:#2ed573;
+    --neutral-dark:#2c2c54;
+    --neutral-light:#f8f9fa;
+  }
+
+  .b2b-cart-hero{
+    background: linear-gradient(135deg,var(--b2b-primary),var(--b2b-secondary));
+    color:#fff;
+    border-radius: 14px;
+    padding: 1.6rem;
+    position: relative;
+    overflow:hidden;
+    margin: 1.25rem 0 1rem;
+    border: 1px solid rgba(255,255,255,.18);
+  }
+  .b2b-cart-hero::after{
+    content:"";
+    position:absolute;
+    width:420px;height:420px;
+    right:-140px;top:-160px;
+    background: rgba(255,255,255,.08);
+    border-radius: 50%;
+  }
+  .b2b-cart-hero h1{font-weight:900; letter-spacing:-.4px; margin:0;}
+  .b2b-cart-hero p{margin:.35rem 0 0; opacity:.95}
+
+  .b2b-cart-wrap{
+    background:#fff;
+    border:1px solid #e9ecef;
+    border-radius: 14px;
+    overflow:hidden;
+    box-shadow: 0 10px 28px rgba(0,0,0,.06);
+  }
+
+  .b2b-cart-topbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap: 12px;
+    padding: 1rem 1.25rem;
+    background: #fbfcfe;
+    border-bottom: 1px solid #e9ecef;
+    flex-wrap: wrap;
+  }
+
+  .b2b-cart-badge{
+    display:inline-flex;
+    align-items:center;
+    gap: .5rem;
+    padding: .45rem .8rem;
+    border-radius: 999px;
+    background: rgba(26,95,158,.10);
+    color: var(--b2b-primary);
+    font-weight: 800;
+    font-size: .85rem;
+  }
+  .b2b-cart-badge i{color: var(--b2b-accent);}
+
+  .b2b-cart-table{
+    width: 100%;
+    margin:0;
+  }
+  .b2b-cart-table th{
+    font-size: .82rem;
+    text-transform: uppercase;
+    letter-spacing: .6px;
+    color:#6c757d;
+    padding: .9rem 1.25rem;
+    border-bottom: 1px solid #eef1f4;
+    background: #fff;
+  }
+  .b2b-cart-table td{
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid #f1f3f5;
+    vertical-align: middle;
+  }
+
+  .b2b-item-title{
+    font-weight: 800;
+    color: var(--neutral-dark);
+    margin:0;
+    line-height: 1.15;
+  }
+  .b2b-item-meta{
+    color:#6c757d;
+    font-size: .85rem;
+    margin-top: .35rem;
+  }
+
+  .b2b-price{
+    font-weight: 900;
+    color: var(--b2b-primary);
+  }
+
+  .b2b-qty-pill{
+    display:inline-flex;
+    align-items:center;
+    gap:.5rem;
+    padding:.4rem .7rem;
+    border-radius: 999px;
+    background: var(--neutral-light);
+    border: 1px solid #e9ecef;
+    font-weight: 800;
+  }
+
+  .b2b-cart-footer{
+    padding: 1rem 1.25rem;
+    display:flex;
+    justify-content: space-between;
+    align-items:center;
+    gap: 12px;
+    flex-wrap: wrap;
+    background: #fff;
+  }
+
+  .b2b-subtotal{
+    font-size: 1.1rem;
+    font-weight: 900;
+    color: var(--neutral-dark);
+  }
+  .b2b-subtotal strong{color: var(--b2b-primary);}
+
+  .b2b-note{
+    width: 100%;
+    border-radius: 12px;
+    border: 1px solid #e9ecef;
+    padding: .85rem 1rem;
+    outline: none;
+  }
+
+  .b2b-btn{
+    border:none;
+    border-radius: 10px;
+    padding: .85rem 1.1rem;
+    font-weight: 900;
+    cursor:pointer;
+    transition: transform .15s ease, box-shadow .15s ease;
+  }
+  .b2b-btn-primary{
+    background: var(--b2b-primary);
+    color:#fff;
+    box-shadow: 0 10px 22px rgba(26,95,158,.22);
+  }
+  .b2b-btn-primary:hover{ transform: translateY(-1px); }
+  .b2b-btn-secondary{
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    color: var(--neutral-dark);
+  }
+
+  .b2b-empty{
+    padding: 2.5rem 1.25rem;
+    text-align:center;
+  }
+  .b2b-empty i{font-size: 2.3rem; color:#c7ced6;}
+  .b2b-empty h3{margin: .8rem 0 .3rem; font-weight:900; color: var(--neutral-dark);}
+  .b2b-empty p{color:#6c757d; margin:0 0 1.2rem;}
+
+</style>
+
+<div class="container" style="max-width: 1100px;">
+  <div class="b2b-cart-hero">
+    <div class="d-flex align-items-center gap-2">
+      <i class="fas fa-shopping-basket fa-lg" style="color: var(--b2b-accent);"></i>
+      <h1 class="mb-0">B2B Cart</h1>
+      <span class="b2b-cart-badge ms-2"><i class="fas fa-building"></i> B2B</span>
+    </div>
+    <p>Review your wholesale basket. When you place order, suppliers will receive it for pricing/confirmation.</p>
+  </div>
+
+  <div class="b2b-cart-wrap">
+    <div class="b2b-cart-topbar">
+      <div class="text-muted small fw-semibold">
+        Items: <span class="fw-bold text-dark">{{ items|length }}</span>
+      </div>
+      <a href="{% url 'stores:b2b_marketplace' %}" class="btn btn-sm btn-outline-secondary">
+        <i class="fas fa-arrow-left me-1"></i>Continue Shopping
+      </a>
+    </div>
+
+    {% if items %}
+      <div class="table-responsive">
+        <table class="b2b-cart-table">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th style="width:160px;">Qty</th>
+              <th style="width:220px;">Requested Price</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for it in items %}
+              <tr>
+                <td>
+                  <div class="b2b-item-title">{{ it.product_name|default:it.product.name }}</div>
+                  <div class="b2b-item-meta">
+                    <i class="fas fa-store me-1"></i>
+                    {{ it.store.name|default:it.product.store.name }}
+                    {% if it.variant %}
+                      · <span class="text-muted">Variant:</span> {{ it.variant }}
+                    {% endif %}
+                  </div>
+                </td>
+                <td>
+                  <span class="b2b-qty-pill">
+                    <i class="fas fa-box"></i> {{ it.quantity }}
+                  </span>
+                </td>
+                <td>
+                  {% if it.requested_unit_price %}
+                    <span class="b2b-price">D{{ it.requested_unit_price|floatformat:2 }}</span>
+                    <div class="text-muted small">Buyer request</div>
+                  {% else %}
+                    <span class="text-muted">—</span>
+                    <div class="text-muted small">Default pricing will apply if seller doesn't set price.</div>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="p-3 p-md-4 border-top" style="background:#fbfcfe;">
+        <label class="small fw-bold mb-2">Buyer note (optional)</label>
+        <textarea id="b2bBuyerNote" class="b2b-note" rows="3"
+          placeholder="Example: We need delivery weekly. Please share your best unit price for 500+ units and lead time."></textarea>
+      </div>
+
+      <div class="b2b-cart-footer">
+        <div class="b2b-subtotal">
+          Estimated subtotal: <strong>D{{ subtotal|floatformat:2 }}</strong>
+          <div class="text-muted small">Final prices can be adjusted by suppliers.</div>
+        </div>
+
+        <div class="d-flex gap-2">
+          <button class="b2b-btn b2b-btn-secondary" type="button" onclick="window.location.href='{% url 'stores:b2b_marketplace' %}'">
+            <i class="fas fa-store me-1"></i>Back
+          </button>
+
+          <button class="b2b-btn b2b-btn-primary" type="button" id="b2bPlaceOrderBtn">
+            <i class="fas fa-check-circle me-1"></i>Place B2B Order
+          </button>
+        </div>
+      </div>
+
+    {% else %}
+      <div class="b2b-empty">
+        <i class="fas fa-basket-shopping"></i>
+        <h3>Your B2B basket is empty</h3>
+        <p>Add products from the B2B marketplace to begin.</p>
+        <a href="{% url 'stores:b2b_marketplace' %}" class="btn" style="background: var(--b2b-primary); color:#fff; font-weight:900; border-radius:10px; padding:.85rem 1.1rem;">
+          <i class="fas fa-cubes me-1"></i>Browse B2B Products
+        </a>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+(function(){
+  const btn = document.getElementById('b2bPlaceOrderBtn');
+  if(!btn) return;
+
+  function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== "") {
+      const cookies = document.cookie.split(";");
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, name.length + 1) === (name + "=")) {
+          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+          break;
+        }
+      }
+    }
+    return cookieValue;
+  }
+
+  btn.addEventListener('click', function(){
+    const note = (document.getElementById('b2bBuyerNote')?.value || '').trim();
+    btn.disabled = true;
+    const old = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Placing...';
+
+    const fd = new FormData();
+    fd.append('buyer_note', note);
+
+    fetch("{% url 'stores_b2b:place_order' %}", {
+      method: "POST",
+      headers: { "X-CSRFToken": getCookie("csrftoken") },
+      body: fd
+    })
+    .then(r => r.json())
+    .then(data => {
+      if(!data || !data.success){
+        throw new Error(data?.error || "Could not place order.");
+      }
+      // reset local badge count (if you used localStorage)
+      try { localStorage.setItem('b2b_cart_count', '0'); } catch(e){}
+      btn.innerHTML = '<i class="fas fa-check me-1"></i>Order Sent';
+      setTimeout(()=> window.location.href = "{% url 'stores:b2b_marketplace' %}", 700);
+    })
+    .catch(err => {
+      console.error(err);
+      btn.disabled = false;
+      btn.innerHTML = old;
+      alert(err.message || "Something went wrong.");
+    });
+  });
+})();
+</script>
+
+{% endblock %}

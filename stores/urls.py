@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import path, include
 from . import views
 
 app_name = 'stores'
@@ -7,8 +7,10 @@ urlpatterns = [
     # Store management URLs - Store creation and general management
     path('', views.store_list, name='store_list'),
 
+
     # 🔹 NEW: B2B marketplace URL
     path("b2b/", views.b2b_marketplace, name="b2b_marketplace"),
+
     path("<slug:slug>/b2b-settings/", views.b2b_settings, name="b2b_settings"),
 
 
