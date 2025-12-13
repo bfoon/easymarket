@@ -1,585 +1,651 @@
-{% extends "base.html" %}
-{% load static %}
-{% load humanize %}
+    {% extends "base.html" %}
+    {% load static %}
+    {% load humanize %}
 
-{% block title %}Order {{ order.order_number|default:order.id }} · B2B Order Detail{% endblock %}
+    {% block title %}Order {{ order.order_number|default:order.id }} · B2B Order Detail{% endblock %}
 
-{% block content %}
-<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+    {% block content %}
+    <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
 
-<style>
-  :root{
-    --em-blue:#1a5f9e;
-    --em-blue2:#2d8ccc;
-    --em-orange:#ff6b35;
-    --em-green:#2ed573;
-    --em-red:#ff4757;
-    --em-dark:#1f2330;
-    --em-soft:#f6f7fb;
-    --em-border:#e9edf5;
-    --em-shadow: 0 12px 30px rgba(16,24,40,.10);
-    --em-shadow-soft: 0 6px 18px rgba(16,24,40,.08);
-  }
+    <style>
+      :root{
+        --em-blue:#1a5f9e;
+        --em-blue2:#2d8ccc;
+        --em-orange:#ff6b35;
+        --em-green:#2ed573;
+        --em-red:#ff4757;
+        --em-dark:#1f2330;
+        --em-soft:#f6f7fb;
+        --em-border:#e9edf5;
+        --em-shadow: 0 12px 30px rgba(16,24,40,.10);
+        --em-shadow-soft: 0 6px 18px rgba(16,24,40,.08);
+      }
 
-  /* Layout wrapper */
-  .sod-wrap{ max-width: 1250px; }
+      /* Layout wrapper */
+      .sod-wrap{ max-width: 1250px; }
 
-  /* Header */
-  .sod-hero{
-    background: linear-gradient(135deg, var(--em-blue) 0%, var(--em-blue2) 100%);
-    color:#fff;
-    border-radius:18px;
-    padding: 1.35rem 1.35rem;
-    position:relative;
-    overflow:hidden;
-    box-shadow: var(--em-shadow);
-  }
-  .sod-hero::before{
-    content:'';
-    position:absolute;
-    top:-35%;
-    right:-12%;
-    width:460px;height:460px;
-    border-radius:50%;
-    background: rgba(255,255,255,.09);
-  }
-  .sod-hero::after{
-    content:'';
-    position:absolute;
-    bottom:-20%;
-    left:-10%;
-    width:360px;height:360px;
-    border-radius:50%;
-    background: rgba(255,255,255,.06);
-  }
-  .sod-hero-inner{ position:relative; z-index:2; }
-  .sod-title{
-    font-size: 1.35rem;
-    font-weight: 900;
-    margin:0;
-    letter-spacing: .2px;
-  }
-  .sod-sub{ opacity:.92; margin-top:.35rem; }
-  .sod-sub span{ display:inline-flex; align-items:center; gap:.35rem; }
+      /* Header */
+      .sod-hero{
+        background: linear-gradient(135deg, var(--em-blue) 0%, var(--em-blue2) 100%);
+        color:#fff;
+        border-radius:18px;
+        padding: 1.35rem 1.35rem;
+        position:relative;
+        overflow:hidden;
+        box-shadow: var(--em-shadow);
+      }
+      .sod-hero::before{
+        content:'';
+        position:absolute;
+        top:-35%;
+        right:-12%;
+        width:460px;height:460px;
+        border-radius:50%;
+        background: rgba(255,255,255,.09);
+      }
+      .sod-hero::after{
+        content:'';
+        position:absolute;
+        bottom:-20%;
+        left:-10%;
+        width:360px;height:360px;
+        border-radius:50%;
+        background: rgba(255,255,255,.06);
+      }
+      .sod-hero-inner{ position:relative; z-index:2; }
+      .sod-title{
+        font-size: 1.35rem;
+        font-weight: 900;
+        margin:0;
+        letter-spacing: .2px;
+      }
+      .sod-sub{ opacity:.92; margin-top:.35rem; }
+      .sod-sub span{ display:inline-flex; align-items:center; gap:.35rem; }
 
-  /* Badges */
-  .sod-pill{
-    display:inline-flex; align-items:center; gap:.45rem;
-    padding:.35rem .72rem;
-    border-radius: 999px;
-    background: rgba(255,255,255,.14);
-    border:1px solid rgba(255,255,255,.25);
-    font-weight: 900;
-    font-size: .8rem;
-    white-space:nowrap;
-  }
-  .sod-dot{
-    width:9px;height:9px;border-radius:50%;
-    background: var(--em-orange);
-    box-shadow: 0 0 0 3px rgba(255,107,53,.22);
-  }
-  .sod-badge{
-    display:inline-flex; align-items:center; gap:.45rem;
-    padding:.35rem .7rem;
-    border-radius: 10px;
-    font-weight: 900;
-    font-size: .8rem;
-    white-space:nowrap;
-  }
-  .sod-badge.b2b{ background: rgba(255,107,53,.15); color:#b83f14; border:1px solid rgba(255,107,53,.30); }
-  .sod-badge.retail{ background: rgba(46,213,115,.12); color:#0c7a3d; border:1px solid rgba(46,213,115,.25); }
+      /* Badges */
+      .sod-pill{
+        display:inline-flex; align-items:center; gap:.45rem;
+        padding:.35rem .72rem;
+        border-radius: 999px;
+        background: rgba(255,255,255,.14);
+        border:1px solid rgba(255,255,255,.25);
+        font-weight: 900;
+        font-size: .8rem;
+        white-space:nowrap;
+      }
+      .sod-dot{
+        width:9px;height:9px;border-radius:50%;
+        background: var(--em-orange);
+        box-shadow: 0 0 0 3px rgba(255,107,53,.22);
+      }
+      .sod-badge{
+        display:inline-flex; align-items:center; gap:.45rem;
+        padding:.35rem .7rem;
+        border-radius: 10px;
+        font-weight: 900;
+        font-size: .8rem;
+        white-space:nowrap;
+      }
+      .sod-badge.b2b{ background: rgba(255,107,53,.15); color:#b83f14; border:1px solid rgba(255,107,53,.30); }
+      .sod-badge.retail{ background: rgba(46,213,115,.12); color:#0c7a3d; border:1px solid rgba(46,213,115,.25); }
 
-  /* Buttons */
-  .sod-btn{
-    border-radius: 12px;
-    font-weight: 900;
-    padding: .68rem 1rem;
-    box-shadow: 0 8px 18px rgba(0,0,0,.08);
-  }
-  .sod-btn.btn-outline-light, .sod-btn.btn-light { box-shadow:none; }
+      /* Buttons */
+      .sod-btn{
+        border-radius: 12px;
+        font-weight: 900;
+        padding: .68rem 1rem;
+        box-shadow: 0 8px 18px rgba(0,0,0,.08);
+      }
+      .sod-btn.btn-outline-light, .sod-btn.btn-light { box-shadow:none; }
 
-  /* Cards */
-  .sod-card{
-    background:#fff;
-    border:1px solid var(--em-border);
-    border-radius: 16px;
-    box-shadow: var(--em-shadow-soft);
-    overflow:hidden;
-  }
-  .sod-card-h{
-    padding: 1rem 1.1rem;
-    border-bottom: 1px solid #eef1f5;
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    gap: 1rem;
-    background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
-  }
-  .sod-card-title{
-    margin:0;
-    font-weight: 1000;
-    color: var(--em-dark);
-    font-size: 1rem;
-    letter-spacing: .2px;
-  }
-  .sod-card-b{ padding: 1.1rem; }
+      /* Cards */
+      .sod-card{
+        background:#fff;
+        border:1px solid var(--em-border);
+        border-radius: 16px;
+        box-shadow: var(--em-shadow-soft);
+        overflow:hidden;
+      }
+      .sod-card-h{
+        padding: 1rem 1.1rem;
+        border-bottom: 1px solid #eef1f5;
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap: 1rem;
+        background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
+      }
+      .sod-card-title{
+        margin:0;
+        font-weight: 1000;
+        color: var(--em-dark);
+        font-size: 1rem;
+        letter-spacing: .2px;
+      }
+      .sod-card-b{ padding: 1.1rem; }
 
-  /* Stats */
-  .sod-stat{
-    background: var(--em-soft);
-    border: 1px solid #eef1f5;
-    border-radius: 14px;
-    padding: .9rem .95rem;
-    height:100%;
-  }
-  .sod-stat .k{
-    font-size: .75rem;
-    font-weight: 900;
-    color:#6c757d;
-    text-transform:uppercase;
-    letter-spacing:.06em;
-  }
-  .sod-stat .v{
-    font-size: 1.12rem;
-    font-weight: 1000;
-    color: var(--em-dark);
-    margin-top:.2rem;
-  }
-  .sod-stat .hint{ font-size:.78rem; color:#6c757d; margin-top:.25rem; }
+      /* Stats */
+      .sod-stat{
+        background: var(--em-soft);
+        border: 1px solid #eef1f5;
+        border-radius: 14px;
+        padding: .9rem .95rem;
+        height:100%;
+      }
+      .sod-stat .k{
+        font-size: .75rem;
+        font-weight: 900;
+        color:#6c757d;
+        text-transform:uppercase;
+        letter-spacing:.06em;
+      }
+      .sod-stat .v{
+        font-size: 1.12rem;
+        font-weight: 1000;
+        color: var(--em-dark);
+        margin-top:.2rem;
+      }
+      .sod-stat .hint{ font-size:.78rem; color:#6c757d; margin-top:.25rem; }
 
-  /* Table */
-  .sod-table th{
-    font-size:.75rem;
-    text-transform:uppercase;
-    letter-spacing:.05em;
-    color:#6c757d;
-  }
-  .sod-item-name{ font-weight: 1000; color: var(--em-dark); }
-  .sod-mini{ font-size:.82rem; }
-  .sod-chip{
-    display:inline-flex;
-    align-items:center;
-    gap:.35rem;
-    border-radius:999px;
-    padding:.25rem .6rem;
-    font-weight: 900;
-    font-size:.76rem;
-    border:1px solid #e9ecef;
-    background:#fff;
-    color: var(--em-dark);
-  }
-  .sod-chip.pending{ background: rgba(255,71,87,.08); border-color: rgba(255,71,87,.25); color:#b41829; }
-  .sod-chip.set{ background: rgba(46,213,115,.12); border-color: rgba(46,213,115,.25); color:#0c7a3d; }
+      /* Table */
+      .sod-table th{
+        font-size:.75rem;
+        text-transform:uppercase;
+        letter-spacing:.05em;
+        color:#6c757d;
+      }
+      .sod-item-name{ font-weight: 1000; color: var(--em-dark); }
+      .sod-mini{ font-size:.82rem; }
+      .sod-chip{
+        display:inline-flex;
+        align-items:center;
+        gap:.35rem;
+        border-radius:999px;
+        padding:.25rem .6rem;
+        font-weight: 900;
+        font-size:.76rem;
+        border:1px solid #e9ecef;
+        background:#fff;
+        color: var(--em-dark);
+      }
+      .sod-chip.pending{ background: rgba(255,71,87,.08); border-color: rgba(255,71,87,.25); color:#b41829; }
+      .sod-chip.set{ background: rgba(46,213,115,.12); border-color: rgba(46,213,115,.25); color:#0c7a3d; }
 
-  .sod-thumb{
-    width:54px;height:54px;
-    border-radius:14px;
-    overflow:hidden;
-    background:#f1f3f5;
-    border:1px solid #e9ecef;
-  }
-  .sod-thumb img{ width:100%; height:100%; object-fit:cover; }
-  .sod-thumb .ph{
-    height:100%;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    color:#9aa3af;
-  }
+      .sod-thumb{
+        width:54px;height:54px;
+        border-radius:14px;
+        overflow:hidden;
+        background:#f1f3f5;
+        border:1px solid #e9ecef;
+      }
+      .sod-thumb img{ width:100%; height:100%; object-fit:cover; }
+      .sod-thumb .ph{
+        height:100%;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        color:#9aa3af;
+      }
 
-  /* Chat */
-  .sod-chat-wrap{
-    display:flex;
-    flex-direction:column;
-    gap:.75rem;
-    max-height: 420px;
-    overflow:auto;
-    padding-right:.2rem;
-  }
-  .sod-msg{
-    border-radius: 16px;
-    padding: .75rem .85rem;
-    max-width: 88%;
-    border: 1px solid #eef1f5;
-    background: #fff;
-    box-shadow: 0 2px 10px rgba(0,0,0,.04);
-  }
-  .sod-msg.me{
-    margin-left:auto;
-    background: rgba(26,95,158,.08);
-    border-color: rgba(26,95,158,.18);
-  }
-  .sod-msg .meta{
-    display:flex;
-    justify-content:space-between;
-    gap:1rem;
-    font-size:.75rem;
-    color:#6c757d;
-    font-weight: 800;
-    margin-bottom:.25rem;
-  }
-  .sod-msg .txt{
-    font-size:.92rem;
-    color: var(--em-dark);
-    white-space:pre-wrap;
-  }
+      /* Chat */
+      .sod-chat-wrap{
+        display:flex;
+        flex-direction:column;
+        gap:.75rem;
+        max-height: 420px;
+        overflow:auto;
+        padding-right:.2rem;
+      }
+      .sod-msg{
+        border-radius: 16px;
+        padding: .75rem .85rem;
+        max-width: 88%;
+        border: 1px solid #eef1f5;
+        background: #fff;
+        box-shadow: 0 2px 10px rgba(0,0,0,.04);
+      }
+      .sod-msg.me{
+        margin-left:auto;
+        background: rgba(26,95,158,.08);
+        border-color: rgba(26,95,158,.18);
+      }
+      .sod-msg .meta{
+        display:flex;
+        justify-content:space-between;
+        gap:1rem;
+        font-size:.75rem;
+        color:#6c757d;
+        font-weight: 800;
+        margin-bottom:.25rem;
+      }
+      .sod-msg .txt{
+        font-size:.92rem;
+        color: var(--em-dark);
+        white-space:pre-wrap;
+      }
 
-  /* Toast */
-  .sod-toast{
-    position: fixed;
-    right: 16px;
-    bottom: 16px;
-    z-index: 99999;
-    min-width: 280px;
-    display:none;
-  }
+      /* Toast */
+      .sod-toast{
+        position: fixed;
+        right: 16px;
+        bottom: 16px;
+        z-index: 99999;
+        min-width: 280px;
+        display:none;
+      }
 
-  /* Small screen tweaks */
-  @media (max-width: 576px){
-    .sod-btn{ width:100%; }
-  }
-</style>
+      /* Small screen tweaks */
+      @media (max-width: 576px){
+        .sod-btn{ width:100%; }
+      }
+    </style>
 
-<div class="container py-4 sod-wrap">
+    <div class="container py-4 sod-wrap">
 
-  {# --------------------------- HERO / HEADER --------------------------- #}
-  <div class="sod-hero mb-4">
-    <div class="sod-hero-inner">
-      <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+      {# --------------------------- HERO / HEADER --------------------------- #}
+      <div class="sod-hero mb-4">
+        <div class="sod-hero-inner">
+          <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
 
-        <div>
-          <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
-            <h1 class="sod-title">
-              <i class="fas fa-receipt me-2"></i>
-              Order {{ order.order_number|default:order.id }}
-            </h1>
+            <div>
+              <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                <h1 class="sod-title">
+                  <i class="fas fa-receipt me-2"></i>
+                  Order {{ order.order_number|default:order.id }}
+                </h1>
 
-            {% if order.is_b2b %}
-              <span class="sod-badge b2b"><i class="fas fa-handshake"></i> B2B</span>
-            {% else %}
-              <span class="sod-badge retail"><i class="fas fa-shopping-bag"></i> Retail</span>
-            {% endif %}
-
-            {% if order.status %}
-              <span class="sod-pill">
-                <span class="sod-dot"></span>
-                <span>{{ order.status|title }}</span>
-              </span>
-            {% endif %}
-          </div>
-
-          <div class="sod-sub">
-            <span class="me-3"><i class="fas fa-calendar-alt"></i>{{ order.created_at|date:"M d, Y · H:i" }}</span>
-            <span class="me-3"><i class="fas fa-store"></i>{{ order.store.name|default:"Store" }}</span>
-            {% if order.payment_method %}
-              <span class="me-3"><i class="fas fa-credit-card"></i>{{ order.payment_method|title }}</span>
-            {% endif %}
-          </div>
-        </div>
-
-        <div class="d-flex flex-wrap gap-2 align-items-center">
-
-        <a href="{% url 'stores_b2b:my_orders' %}" class="btn btn-light sod-btn">
-          <i class="fas fa-arrow-left me-1"></i>Back to Orders
-        </a>
-
-          <a href="{% url 'stores:store_dashboard' order.store.id %}" class="btn btn-light sod-btn">
-            <i class="fas fa-store me-1"></i>Back to Dashboard
-          </a>
-
-        <button class="btn btn-outline-light sod-btn" data-bs-toggle="modal" data-bs-target="#statusModal">
-          <i class="fas fa-sync-alt me-1"></i>Update Status
-        </button>
-
-        <a class="btn btn-dark sod-btn" href="{% url 'stores_b2b:invoice' order.id %}">
-          <i class="fas fa-file-invoice me-1"></i>Invoice
-        </a>
-
-      </div>
-
-
-      </div>
-    </div>
-  </div>
-
-  {# --------------------------- STATS --------------------------- #}
-  <div class="row g-3 mb-4">
-    <div class="col-12 col-md-3">
-      <div class="sod-stat">
-        <div class="k">Items</div>
-        <div class="v">{{ items|length|default:0 }}</div>
-        <div class="hint">Products in this order</div>
-      </div>
-    </div>
-
-    <div class="col-12 col-md-3">
-      <div class="sod-stat">
-        <div class="k">Subtotal</div>
-        <div class="v">D{{ order.subtotal|default:0|floatformat:2|intcomma }}</div>
-        <div class="hint">Before shipping & discounts</div>
-      </div>
-    </div>
-
-    <div class="col-12 col-md-3">
-      <div class="sod-stat">
-        <div class="k">Shipping</div>
-        <div class="v">D{{ order.shipping_cost|floatformat:2|intcomma }}</div>
-        <div class="hint">{% if order.shipping_method %}{{ order.shipping_method }}{% else %}Not set{% endif %}</div>
-      </div>
-    </div>
-
-    <div class="col-12 col-md-3">
-      <div class="sod-stat">
-        <div class="k">Grand Total</div>
-        <div class="v">
-          D{{ grand_total|floatformat:2|intcomma }}
-        </div>
-        <div class="hint">
-          {% if order.is_b2b %}Final total depends on your pricing + shipping.{% else %}Automatically computed.{% endif %}
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="row g-4">
-
-    {# --------------------------- LEFT: ITEMS + BUYER + SHIPPING --------------------------- #}
-    <div class="col-12 col-lg-8">
-
-      {# Items #}
-      <div class="sod-card mb-4">
-        <div class="sod-card-h">
-          <h3 class="sod-card-title">
-            <i class="fas fa-box-open me-2" style="color:var(--em-orange)"></i>Order Items
-          </h3>
-
-          <div class="d-flex flex-wrap gap-2 align-items-center">
-            {% if order.is_b2b %}
-              <span class="sod-chip {% if order.status == 'priced' or order.status == 'accepted' or order.status == 'shipped' or order.status == 'delivered' %}set{% else %}pending{% endif %}">
-                <i class="fas {% if order.status == 'priced' or order.status == 'accepted' or order.status == 'shipped' or order.status == 'delivered' %}fa-check-circle{% else %}fa-exclamation-circle{% endif %}"></i>
-                {% if order.status == 'priced' or order.status == 'accepted' or order.status == 'shipped' or order.status == 'delivered' %}
-                  Pricing Ready
+                {% if order.is_b2b %}
+                  <span class="sod-badge b2b"><i class="fas fa-handshake"></i> B2B</span>
                 {% else %}
-                  Pricing Pending
+                  <span class="sod-badge retail"><i class="fas fa-shopping-bag"></i> Retail</span>
                 {% endif %}
-              </span>
-            {% endif %}
-            <button class="btn btn-outline-warning sod-btn" data-bs-toggle="modal" data-bs-target="#unitPriceModal">
-              <i class="fas fa-pen me-1"></i>Update Unit Prices
-            </button>
-            <button class="btn btn-outline-secondary sod-btn" data-bs-toggle="modal" data-bs-target="#shipItemsModal">
-              <i class="fas fa-truck-loading me-1"></i>Mark Items Shipped
-            </button>
-          </div>
-        </div>
 
-        <div class="sod-card-b p-0">
-          <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0 sod-table">
-              <thead class="table-light">
-                <tr>
-                  <th style="min-width:320px;">Item</th>
-                  <th>Qty</th>
-                  <th>Unit Price</th>
-                  <th>Line Total</th>
-                  <th class="text-end">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for item in items %}
-                  <tr>
-                    <td>
-                      <div class="d-flex gap-3">
-                        <div class="sod-thumb">
-                          {% with img=item.product.images.all|first %}
-                            {% if img %}
-                              <img src="{{ img.image.url }}" alt="{{ item.product.name }}">
-                            {% elif item.product.image %}
-                              <img src="{{ item.product.image.url }}" alt="{{ item.product.name }}">
-                            {% else %}
-                              <div class="ph"><i class="fas fa-image"></i></div>
-                            {% endif %}
-                          {% endwith %}
-                        </div>
+                {% if order.status %}
+                  <span class="sod-pill">
+                    <span class="sod-dot"></span>
+                    <span>{{ order.status|title }}</span>
+                  </span>
+                {% endif %}
+              </div>
 
-                        <div>
-                          <div class="sod-item-name">{{ item.product.name }}</div>
-
-                          <div class="sod-mini text-muted">
-                            {% if item.variant %}
-                              <i class="fas fa-layer-group me-1"></i>
-                              {{ item.variant.feature_option.feature.name }}: {{ item.variant.feature_option.value }}
-                            {% endif %}
-
-                            {% if order.is_b2b and item.requested_unit_price %}
-                              <span class="ms-2 sod-chip">
-                                <i class="fas fa-handshake"></i>
-                                Requested: D{{ item.requested_unit_price|floatformat:2|intcomma }}
-                              </span>
-                            {% endif %}
-                          </div>
-
-                          <div class="sod-mini text-muted mt-1">
-                            <i class="fas fa-store me-1"></i>{{ item.product.store.name }}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-
-                    <td class="fw-bold">{{ item.quantity }}</td>
-
-                    <td>
-                      {% if order.is_b2b %}
-                        {% if item.seller_unit_price %}
-                          <span class="fw-bold">D{{ item.seller_unit_price|floatformat:2|intcomma }}</span>
-                          <div class="sod-mini text-muted">Seller price</div>
-                        {% else %}
-                          <span class="sod-chip pending"><i class="fas fa-exclamation-circle"></i>Not set</span>
-                          <div class="sod-mini text-muted">Will fallback to product price</div>
-                        {% endif %}
-                      {% else %}
-                        <span class="fw-bold">
-                          D{{ item.unit_price|default:item.product.price|floatformat:2|intcomma }}
-                        </span>
-                      {% endif %}
-                    </td>
-
-                    <td class="fw-bold">
-                      D{% widthratio item.get_effective_unit_price 1 item.quantity as linetotal %}
-                      {{ linetotal|floatformat:2|intcomma }}
-                    </td>
-
-                    <td class="text-end">
-                      {% if item.status %}
-                        <span class="sod-chip {% if item.status == 'shipped' %}set{% else %}pending{% endif %}">
-                          <i class="fas {% if item.status == 'shipped' %}fa-truck{% else %}fa-clock{% endif %}"></i>
-                          {{ item.status|title }}
-                        </span>
-                      {% else %}
-                        <span class="sod-chip pending"><i class="fas fa-clock"></i>Pending</span>
-                      {% endif %}
-                    </td>
-                  </tr>
-                {% empty %}
-                  <tr>
-                    <td colspan="5" class="text-center text-muted py-4">
-                      <i class="fas fa-box-open me-1"></i> No items found.
-                    </td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      {# Buyer + Shipping row #}
-      <div class="row g-4">
-        <div class="col-12 col-md-6">
-
-          <div class="sod-card">
-            <div class="sod-card-h">
-              <h3 class="sod-card-title">
-                <i class="fas fa-user me-2" style="color:var(--em-blue)"></i>Buyer
-              </h3>
-
-              {% with buyer=order.buyer %}
-                <span class="sod-chip">
-                  <i class="fas fa-id-badge"></i>
-                  {{ buyer.get_full_name|default:buyer.username }}
-                </span>
-              {% endwith %}
+              <div class="sod-sub">
+                <span class="me-3"><i class="fas fa-calendar-alt"></i>{{ order.created_at|date:"M d, Y · H:i" }}</span>
+                <span class="me-3"><i class="fas fa-store"></i>{{ order.store.name|default:"Store" }}</span>
+                {% if order.payment_method %}
+                  <span class="me-3"><i class="fas fa-credit-card"></i>{{ order.payment_method|title }}</span>
+                {% endif %}
+              </div>
             </div>
 
-            <div class="sod-card-b">
-              {% with buyer=order.buyer %}
-                <div class="mb-2">
-                  <strong>Email:</strong>
-                  <span class="text-muted">{{ buyer.email|default:"—" }}</span>
-                </div>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
 
-                <div class="mb-2">
-                  <strong>Phone:</strong>
-                  <span class="text-muted">
-                    {% if order.phone %}
-                      {{ order.phone }}
-                    {% elif buyer.profile and buyer.profile.phone %}
-                      {{ buyer.profile.phone }}
+            <a href="{% url 'stores_b2b:my_orders' %}" class="btn btn-light sod-btn">
+              <i class="fas fa-arrow-left me-1"></i>Back to Orders
+            </a>
+
+              <a href="{% url 'stores:store_dashboard' order.store.id %}" class="btn btn-light sod-btn">
+                <i class="fas fa-store me-1"></i>Back to Dashboard
+              </a>
+
+            <button class="btn btn-outline-light sod-btn" data-bs-toggle="modal" data-bs-target="#statusModal">
+              <i class="fas fa-sync-alt me-1"></i>Update Status
+            </button>
+
+            <a class="btn btn-dark sod-btn" href="{% url 'stores_b2b:invoice' order.id %}">
+              <i class="fas fa-file-invoice me-1"></i>Invoice
+            </a>
+
+          </div>
+
+
+          </div>
+        </div>
+      </div>
+
+      {# --------------------------- STATS --------------------------- #}
+      <div class="row g-3 mb-4">
+        <div class="col-12 col-md-3">
+          <div class="sod-stat">
+            <div class="k">Items</div>
+            <div class="v">{{ items|length|default:0 }}</div>
+            <div class="hint">Products in this order</div>
+          </div>
+        </div>
+
+        <div class="col-12 col-md-3">
+          <div class="sod-stat">
+            <div class="k">Subtotal</div>
+            <div class="v">D{{ order.subtotal|default:0|floatformat:2|intcomma }}</div>
+            <div class="hint">Before shipping & discounts</div>
+          </div>
+        </div>
+
+        <div class="col-12 col-md-3">
+          <div class="sod-stat">
+            <div class="k">Shipping</div>
+            <div class="v">D{{ order.shipping_cost|floatformat:2|intcomma }}</div>
+            <div class="hint">{% if order.shipping_method %}{{ order.shipping_method }}{% else %}Not set{% endif %}</div>
+          </div>
+        </div>
+
+        <div class="col-12 col-md-3">
+          <div class="sod-stat">
+            <div class="k">Grand Total</div>
+            <div class="v">
+              D{{ grand_total|floatformat:2|intcomma }}
+            </div>
+            <div class="hint">
+              {% if order.is_b2b %}Final total depends on your pricing + shipping.{% else %}Automatically computed.{% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row g-4">
+
+        {# --------------------------- LEFT: ITEMS + BUYER + SHIPPING --------------------------- #}
+        <div class="col-12 col-lg-8">
+
+          {# Items #}
+          <div class="sod-card mb-4">
+            <div class="sod-card-h">
+              <h3 class="sod-card-title">
+                <i class="fas fa-box-open me-2" style="color:var(--em-orange)"></i>Order Items
+              </h3>
+
+              <div class="d-flex flex-wrap gap-2 align-items-center">
+                {% if order.is_b2b %}
+                  <span class="sod-chip {% if order.status == 'priced' or order.status == 'accepted' or order.status == 'shipped' or order.status == 'delivered' %}set{% else %}pending{% endif %}">
+                    <i class="fas {% if order.status == 'priced' or order.status == 'accepted' or order.status == 'shipped' or order.status == 'delivered' %}fa-check-circle{% else %}fa-exclamation-circle{% endif %}"></i>
+                    {% if order.status == 'priced' or order.status == 'accepted' or order.status == 'shipped' or order.status == 'delivered' %}
+                      Pricing Ready
                     {% else %}
-                      —
+                      Pricing Pending
                     {% endif %}
                   </span>
-                </div>
-              {% endwith %}
-
-              <div class="alert alert-light border mt-3 mb-0">
-                <div class="small text-muted fw-bold mb-1">Buyer note (optional)</div>
-                <div class="small">{{ order.buyer_note|default:"No note added." }}</div>
-              </div>
-
-              <div class="d-flex flex-wrap gap-2 mt-3">
-                <button class="btn btn-outline-primary sod-btn" data-bs-toggle="modal" data-bs-target="#chatModal">
-                  <i class="fas fa-comments me-1"></i>Message Buyer
+                {% endif %}
+                <button class="btn btn-outline-warning sod-btn" data-bs-toggle="modal" data-bs-target="#unitPriceModal">
+                  <i class="fas fa-pen me-1"></i>Update Unit Prices
                 </button>
-
-                {# Use whatever profile URL exists in your project #}
-                <a class="btn btn-outline-secondary sod-btn" href="{% url 'accounts:user_profile' %}">
-                  <i class="fas fa-user-cog me-1"></i>My Profile
-                </a>
+                <button class="btn btn-outline-secondary sod-btn" data-bs-toggle="modal" data-bs-target="#shipItemsModal">
+                  <i class="fas fa-truck-loading me-1"></i>Mark Items Shipped
+                </button>
               </div>
+            </div>
+
+            <div class="sod-card-b p-0">
+              <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0 sod-table">
+                  <thead class="table-light">
+                    <tr>
+                      <th style="min-width:320px;">Item</th>
+                      <th>Qty</th>
+                      <th>Unit Price</th>
+                      <th>Line Total</th>
+                      <th class="text-end">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for item in items %}
+                      <tr>
+                        <td>
+                          <div class="d-flex gap-3">
+                            <div class="sod-thumb">
+                              {% with img=item.product.images.all|first %}
+                                {% if img %}
+                                  <img src="{{ img.image.url }}" alt="{{ item.product.name }}">
+                                {% elif item.product.image %}
+                                  <img src="{{ item.product.image.url }}" alt="{{ item.product.name }}">
+                                {% else %}
+                                  <div class="ph"><i class="fas fa-image"></i></div>
+                                {% endif %}
+                              {% endwith %}
+                            </div>
+
+                            <div>
+                              <div class="sod-item-name">{{ item.product.name }}</div>
+
+                              <div class="sod-mini text-muted">
+                                {% if item.variant %}
+                                  <i class="fas fa-layer-group me-1"></i>
+                                  {{ item.variant.feature_option.feature.name }}: {{ item.variant.feature_option.value }}
+                                {% endif %}
+
+                                {% if order.is_b2b and item.requested_unit_price %}
+                                  <span class="ms-2 sod-chip">
+                                    <i class="fas fa-handshake"></i>
+                                    Requested: D{{ item.requested_unit_price|floatformat:2|intcomma }}
+                                  </span>
+                                {% endif %}
+                              </div>
+
+                              <div class="sod-mini text-muted mt-1">
+                                <i class="fas fa-store me-1"></i>{{ item.product.store.name }}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td class="fw-bold">{{ item.quantity }}</td>
+
+                        <td>
+                          {% if order.is_b2b %}
+                            {% if item.seller_unit_price %}
+                              <span class="fw-bold">D{{ item.seller_unit_price|floatformat:2|intcomma }}</span>
+                              <div class="sod-mini text-muted">Seller price</div>
+                            {% else %}
+                              <span class="sod-chip pending"><i class="fas fa-exclamation-circle"></i>Not set</span>
+                              <div class="sod-mini text-muted">Will fallback to product price</div>
+                            {% endif %}
+                          {% else %}
+                            <span class="fw-bold">
+                              D{{ item.unit_price|default:item.product.price|floatformat:2|intcomma }}
+                            </span>
+                          {% endif %}
+                        </td>
+
+                        <td class="fw-bold">
+                          D{% widthratio item.get_effective_unit_price 1 item.quantity as linetotal %}
+                          {{ linetotal|floatformat:2|intcomma }}
+                        </td>
+
+                        <td class="text-end">
+                          {% if item.status %}
+                            <span class="sod-chip {% if item.status == 'shipped' %}set{% else %}pending{% endif %}">
+                              <i class="fas {% if item.status == 'shipped' %}fa-truck{% else %}fa-clock{% endif %}"></i>
+                              {{ item.status|title }}
+                            </span>
+                          {% else %}
+                            <span class="sod-chip pending"><i class="fas fa-clock"></i>Pending</span>
+                          {% endif %}
+                        </td>
+                      </tr>
+                    {% empty %}
+                      <tr>
+                        <td colspan="5" class="text-center text-muted py-4">
+                          <i class="fas fa-box-open me-1"></i> No items found.
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {# Buyer + Shipping row #}
+          <div class="row g-4">
+            <div class="col-12 col-md-6">
+
+              <div class="sod-card">
+                <div class="sod-card-h">
+                  <h3 class="sod-card-title">
+                    <i class="fas fa-user me-2" style="color:var(--em-blue)"></i>Buyer
+                  </h3>
+
+                  {% with buyer=order.buyer %}
+                    <span class="sod-chip">
+                      <i class="fas fa-id-badge"></i>
+                      {{ buyer.get_full_name|default:buyer.username }}
+                    </span>
+                  {% endwith %}
+                </div>
+
+                <div class="sod-card-b">
+                  {% with buyer=order.buyer %}
+                    <div class="mb-2">
+                      <strong>Email:</strong>
+                      <span class="text-muted">{{ buyer.email|default:"—" }}</span>
+                    </div>
+
+                    <div class="mb-2">
+                      <strong>Phone:</strong>
+                      <span class="text-muted">
+                        {% if order.phone %}
+                          {{ order.phone }}
+                        {% elif buyer.profile and buyer.profile.phone %}
+                          {{ buyer.profile.phone }}
+                        {% else %}
+                          —
+                        {% endif %}
+                      </span>
+                    </div>
+                  {% endwith %}
+
+                  <div class="alert alert-light border mt-3 mb-0">
+                    <div class="small text-muted fw-bold mb-1">Buyer note (optional)</div>
+                    <div class="small">{{ order.buyer_note|default:"No note added." }}</div>
+                  </div>
+
+                  <div class="d-flex flex-wrap gap-2 mt-3">
+                    <button class="btn btn-outline-primary sod-btn" data-bs-toggle="modal" data-bs-target="#chatModal">
+                      <i class="fas fa-comments me-1"></i>Message Buyer
+                    </button>
+
+                    {# Use whatever profile URL exists in your project #}
+                    <a class="btn btn-outline-secondary sod-btn" href="{% url 'accounts:user_profile' %}">
+                      <i class="fas fa-user-cog me-1"></i>My Profile
+                    </a>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <div class="col-12 col-md-6">
+
+              <div class="sod-card">
+                <div class="sod-card-h">
+                  <h3 class="sod-card-title">
+                    <i class="fas fa-truck me-2" style="color:var(--em-orange)"></i>B2B Shipping
+                  </h3>
+                  <span class="sod-chip"><i class="fas fa-map-marker-alt"></i>Delivery</span>
+                </div>
+
+                <div class="sod-card-b">
+                  {% if order.shipping %}
+                    <div class="fw-bold">{{ order.shipping.full_name|default:order.buyer.get_full_name|default:"—" }}</div>
+                    {% if order.shipping.company_name %}
+                      <div class="text-muted">{{ order.shipping.company_name }}</div>
+                    {% endif %}
+
+                    <div class="mt-2">
+                      {{ order.shipping.address_line }}<br>
+                      {{ order.shipping.city }}{% if order.shipping.region %}, {{ order.shipping.region }}{% endif %}<br>
+                      {{ order.shipping.country }}
+                    </div>
+
+                    <div class="mt-2 small">
+                      <strong>Phone:</strong> {{ order.shipping.phone|default:"—" }}<br>
+                      <strong>Email:</strong> {{ order.shipping.email|default:"—" }}
+                    </div>
+
+                    {% if order.shipping.delivery_instructions %}
+                      <div class="alert alert-light border mt-3 mb-0">
+                        <strong>Delivery note:</strong><br>
+                        {{ order.shipping.delivery_instructions }}
+                      </div>
+                    {% endif %}
+                  {% else %}
+                    <div class="text-muted">No shipping information provided.</div>
+                  {% endif %}
+
+                  <div class="mt-3 d-flex flex-wrap gap-2">
+                    <button class="btn btn-outline-dark sod-btn" data-bs-toggle="modal" data-bs-target="#trackingModal">
+                      <i class="fas fa-barcode me-1"></i>Tracking
+                    </button>
+                    <button class="btn btn-outline-success sod-btn" data-bs-toggle="modal" data-bs-target="#shippingCostModal">
+                      <i class="fas fa-coins me-1"></i>Shipping Cost
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+
             </div>
           </div>
 
         </div>
 
-        <div class="col-12 col-md-6">
+        {# --------------------------- RIGHT: TIMELINE + CHAT PREVIEW --------------------------- #}
+        <div class="col-12 col-lg-4">
+
+          <div class="sod-card mb-4">
+            <div class="sod-card-h">
+              <h3 class="sod-card-title">
+                <i class="fas fa-stream me-2" style="color:var(--em-orange)"></i>Order Timeline
+              </h3>
+              <span class="sod-chip"><i class="fas fa-clock"></i>Live</span>
+            </div>
+
+            <div class="sod-card-b">
+              <div class="small text-muted mb-2">Recent events</div>
+
+              <ul class="list-unstyled mb-0">
+                {% for h in history %}
+                  <li class="d-flex gap-2 mb-3">
+                    <div style="width:10px;height:10px;border-radius:50%; background:var(--em-blue); margin-top:.35rem;"></div>
+                    <div>
+                      <div class="fw-bold">{{ h.title|title }}</div>
+                      <div class="small text-muted">
+                        {{ h.created_at|date:"M d, Y · H:i" }}{% if h.note %} · {{ h.note }}{% endif %}
+                      </div>
+                    </div>
+                  </li>
+                {% empty %}
+                  <li class="text-muted small"><i class="fas fa-info-circle me-1"></i>No history recorded yet.</li>
+                {% endfor %}
+              </ul>
+            </div>
+          </div>
 
           <div class="sod-card">
             <div class="sod-card-h">
               <h3 class="sod-card-title">
-                <i class="fas fa-truck me-2" style="color:var(--em-orange)"></i>B2B Shipping
+                <i class="fas fa-comments me-2" style="color:var(--em-blue)"></i>Buyer Chat
               </h3>
-              <span class="sod-chip"><i class="fas fa-map-marker-alt"></i>Delivery</span>
+              <button class="btn btn-primary sod-btn" data-bs-toggle="modal" data-bs-target="#chatModal">
+                <i class="fas fa-paper-plane me-1"></i>Open
+              </button>
             </div>
 
             <div class="sod-card-b">
-              {% if order.shipping %}
-                <div class="fw-bold">{{ order.shipping.full_name|default:order.buyer.get_full_name|default:"—" }}</div>
-                {% if order.shipping.company_name %}
-                  <div class="text-muted">{{ order.shipping.company_name }}</div>
-                {% endif %}
-
-                <div class="mt-2">
-                  {{ order.shipping.address_line }}<br>
-                  {{ order.shipping.city }}{% if order.shipping.region %}, {{ order.shipping.region }}{% endif %}<br>
-                  {{ order.shipping.country }}
-                </div>
-
-                <div class="mt-2 small">
-                  <strong>Phone:</strong> {{ order.shipping.phone|default:"—" }}<br>
-                  <strong>Email:</strong> {{ order.shipping.email|default:"—" }}
-                </div>
-
-                {% if order.shipping.delivery_instructions %}
-                  <div class="alert alert-light border mt-3 mb-0">
-                    <strong>Delivery note:</strong><br>
-                    {{ order.shipping.delivery_instructions }}
+              <div class="sod-chat-wrap">
+               {% for m in messages %}
+                <div class="sod-msg {% if m.sender_id == request.user.id %}me{% endif %}">
+                  <div class="meta">
+                    <span>{{ m.sender.get_full_name|default:m.sender.username }}</span>
+                    <span>{{ m.created_at|date:"H:i" }}</span>
                   </div>
-                {% endif %}
-              {% else %}
-                <div class="text-muted">No shipping information provided.</div>
-              {% endif %}
-
-              <div class="mt-3 d-flex flex-wrap gap-2">
-                <button class="btn btn-outline-dark sod-btn" data-bs-toggle="modal" data-bs-target="#trackingModal">
-                  <i class="fas fa-barcode me-1"></i>Tracking
-                </button>
-                <button class="btn btn-outline-success sod-btn" data-bs-toggle="modal" data-bs-target="#shippingCostModal">
-                  <i class="fas fa-coins me-1"></i>Shipping Cost
-                </button>
+                  <div class="txt">{{ m.message }}</div>
+                </div>
+              {% empty %}
+                <div class="text-muted small">
+                  <i class="fas fa-comment-dots me-1"></i>No messages yet.
+                </div>
+              {% endfor %}
               </div>
             </div>
-
           </div>
 
         </div>
@@ -587,824 +653,792 @@
 
     </div>
 
-    {# --------------------------- RIGHT: TIMELINE + CHAT PREVIEW --------------------------- #}
-    <div class="col-12 col-lg-4">
-
-      <div class="sod-card mb-4">
-        <div class="sod-card-h">
-          <h3 class="sod-card-title">
-            <i class="fas fa-stream me-2" style="color:var(--em-orange)"></i>Order Timeline
-          </h3>
-          <span class="sod-chip"><i class="fas fa-clock"></i>Live</span>
-        </div>
-
-        <div class="sod-card-b">
-          <div class="small text-muted mb-2">Recent events</div>
-
-          <ul class="list-unstyled mb-0">
-            {% for h in history %}
-              <li class="d-flex gap-2 mb-3">
-                <div style="width:10px;height:10px;border-radius:50%; background:var(--em-blue); margin-top:.35rem;"></div>
-                <div>
-                  <div class="fw-bold">{{ h.title|title }}</div>
-                  <div class="small text-muted">
-                    {{ h.created_at|date:"M d, Y · H:i" }}{% if h.note %} · {{ h.note }}{% endif %}
-                  </div>
-                </div>
-              </li>
-            {% empty %}
-              <li class="text-muted small"><i class="fas fa-info-circle me-1"></i>No history recorded yet.</li>
-            {% endfor %}
-          </ul>
+    {# --------------------------- TOAST --------------------------- #}
+    <div class="sod-toast" id="sodToast">
+      <div class="alert alert-dark shadow-sm mb-0">
+        <div class="d-flex justify-content-between align-items-center gap-2">
+          <div class="small" id="sodToastText">Done.</div>
+          <button class="btn btn-sm btn-light" type="button" id="sodToastClose">OK</button>
         </div>
       </div>
+    </div>
 
-      <div class="sod-card">
-        <div class="sod-card-h">
-          <h3 class="sod-card-title">
-            <i class="fas fa-comments me-2" style="color:var(--em-blue)"></i>Buyer Chat
-          </h3>
-          <button class="btn btn-primary sod-btn" data-bs-toggle="modal" data-bs-target="#chatModal">
-            <i class="fas fa-paper-plane me-1"></i>Open
-          </button>
-        </div>
+    {# --------------------------- MODALS --------------------------- #}
 
-        <div class="sod-card-b">
-          <div class="sod-chat-wrap">
-           {% for m in messages %}
-            <div class="sod-msg {% if m.sender_id == request.user.id %}me{% endif %}">
-              <div class="meta">
-                <span>{{ m.sender.get_full_name|default:m.sender.username }}</span>
-                <span>{{ m.created_at|date:"H:i" }}</span>
+    {# Pricing Modal (B2B) #}
+    <div class="modal fade" id="pricingModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow">
+          <div class="modal-header">
+            <h5 class="modal-title fw-bold">
+              <i class="fas fa-tags me-2" style="color:var(--em-orange)"></i>Set Final Prices (B2B)
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+
+          <div class="modal-body">
+            <div class="alert alert-info small">
+              If you leave a price empty, the system may fall back to <strong>B2B price</strong> (if available) or <strong>retail price</strong>.
+              Use this to lock agreed prices with the buyer.
+            </div>
+
+            <form id="pricingForm">
+              <div class="table-responsive">
+                <table class="table align-middle">
+                  <thead class="table-light">
+                    <tr>
+                      <th>Item</th>
+                      <th style="width:90px;">Qty</th>
+                      <th style="width:180px;">Final Unit Price</th>
+                      <th style="width:240px;" class="text-muted small">Hint</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for item in items %}
+                      <tr>
+                        <td class="fw-bold">{{ item.product.name }}</td>
+                        <td class="fw-bold">{{ item.quantity }}</td>
+                       <td>
+                          <div class="input-group">
+                            <span class="input-group-text">D</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              class="form-control"
+                              name="price_{{ item.id }}"
+                              value="{% if item.seller_unit_price %}{{ item.seller_unit_price }}{% endif %}"
+                              placeholder="e.g. 120.00"
+                              {% if item.status == 'shipped' %}disabled{% endif %}
+                            >
+                          </div>
+
+                          <div class="small mt-1">
+                            {% if item.status == 'shipped' %}
+                              <span class="badge bg-success">
+                                <i class="fas fa-truck me-1"></i>Shipped — price locked
+                              </span>
+                            {% else %}
+                              <span class="text-muted">You can change price</span>
+                            {% endif %}
+                          </div>
+
+                          <div class="small text-muted mt-1">
+                            {% if item.requested_unit_price %}
+                              Buyer requested: <strong>D{{ item.requested_unit_price|floatformat:2|intcomma }}</strong>
+                            {% endif %}
+                          </div>
+                        </td>
+
+                        <td class="small text-muted">
+                          Default:
+                          D{% if item.product.b2b_price %}{{ item.product.b2b_price }} (B2B){% else %}{{ item.product.price }} (Retail){% endif %}
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
               </div>
-              <div class="txt">{{ m.message }}</div>
-            </div>
-          {% empty %}
-            <div class="text-muted small">
-              <i class="fas fa-comment-dots me-1"></i>No messages yet.
-            </div>
-          {% endfor %}
+
+              <div class="border rounded-3 p-3 bg-light">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                  <div class="fw-bold">Confirm pricing & notify buyer</div>
+                  <div class="small text-muted">This updates totals instantly.</div>
+                </div>
+                <div class="form-check mt-2">
+                  <input class="form-check-input" type="checkbox" value="1" id="pricingNotifyBuyer" checked>
+                  <label class="form-check-label small" for="pricingNotifyBuyer">
+                    Notify buyer after saving
+                  </label>
+                </div>
+              </div>
+
+              <div class="text-danger small mt-2 d-none" id="pricingError"></div>
+            </form>
+          </div>
+
+          <div class="modal-footer">
+            <button class="btn btn-outline-secondary sod-btn" data-bs-dismiss="modal">Cancel</button>
+            <button class="btn btn-warning sod-btn" id="pricingSaveBtn">
+              <i class="fas fa-save me-1"></i>Save Prices
+            </button>
           </div>
         </div>
       </div>
-
     </div>
-  </div>
 
-</div>
-
-{# --------------------------- TOAST --------------------------- #}
-<div class="sod-toast" id="sodToast">
-  <div class="alert alert-dark shadow-sm mb-0">
-    <div class="d-flex justify-content-between align-items-center gap-2">
-      <div class="small" id="sodToastText">Done.</div>
-      <button class="btn btn-sm btn-light" type="button" id="sodToastClose">OK</button>
-    </div>
-  </div>
-</div>
-
-{# --------------------------- MODALS --------------------------- #}
-
-{# Pricing Modal (B2B) #}
-<div class="modal fade" id="pricingModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-    <div class="modal-content border-0 shadow">
-      <div class="modal-header">
-        <h5 class="modal-title fw-bold">
-          <i class="fas fa-tags me-2" style="color:var(--em-orange)"></i>Set Final Prices (B2B)
-        </h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-
-      <div class="modal-body">
-        <div class="alert alert-info small">
-          If you leave a price empty, the system may fall back to <strong>B2B price</strong> (if available) or <strong>retail price</strong>.
-          Use this to lock agreed prices with the buyer.
-        </div>
-
-        <form id="pricingForm">
-          <div class="table-responsive">
-            <table class="table align-middle">
-              <thead class="table-light">
-                <tr>
-                  <th>Item</th>
-                  <th style="width:90px;">Qty</th>
-                  <th style="width:180px;">Final Unit Price</th>
-                  <th style="width:240px;" class="text-muted small">Hint</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for item in items %}
-                  <tr>
-                    <td class="fw-bold">{{ item.product.name }}</td>
-                    <td class="fw-bold">{{ item.quantity }}</td>
-                   <td>
-                      <div class="input-group">
-                        <span class="input-group-text">D</span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          class="form-control"
-                          name="price_{{ item.id }}"
-                          value="{% if item.seller_unit_price %}{{ item.seller_unit_price }}{% endif %}"
-                          placeholder="e.g. 120.00"
-                          {% if item.status == 'shipped' %}disabled{% endif %}
-                        >
-                      </div>
-
-                      <div class="small mt-1">
-                        {% if item.status == 'shipped' %}
-                          <span class="badge bg-success">
-                            <i class="fas fa-truck me-1"></i>Shipped — price locked
-                          </span>
-                        {% else %}
-                          <span class="text-muted">You can change price</span>
-                        {% endif %}
-                      </div>
-
-                      <div class="small text-muted mt-1">
-                        {% if item.requested_unit_price %}
-                          Buyer requested: <strong>D{{ item.requested_unit_price|floatformat:2|intcomma }}</strong>
-                        {% endif %}
-                      </div>
-                    </td>
-
-                    <td class="small text-muted">
-                      Default:
-                      D{% if item.product.b2b_price %}{{ item.product.b2b_price }} (B2B){% else %}{{ item.product.price }} (Retail){% endif %}
-                    </td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
+    {# Status Modal #}
+    <div class="modal fade" id="statusModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-md modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+          <div class="modal-header">
+            <h5 class="modal-title fw-bold">
+              <i class="fas fa-sync-alt me-2"></i>Update Order Status
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
 
-          <div class="border rounded-3 p-3 bg-light">
-            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
-              <div class="fw-bold">Confirm pricing & notify buyer</div>
-              <div class="small text-muted">This updates totals instantly.</div>
-            </div>
-            <div class="form-check mt-2">
-              <input class="form-check-input" type="checkbox" value="1" id="pricingNotifyBuyer" checked>
-              <label class="form-check-label small" for="pricingNotifyBuyer">
-                Notify buyer after saving
-              </label>
-            </div>
-          </div>
+          <div class="modal-body">
+            <form id="statusForm">
+              <label class="form-label fw-bold">Select status</label>
 
-          <div class="text-danger small mt-2 d-none" id="pricingError"></div>
-        </form>
-      </div>
+              {% with st=order.status|lower %}
+                <select class="form-select" name="status" id="statusSelect">
 
-      <div class="modal-footer">
-        <button class="btn btn-outline-secondary sod-btn" data-bs-dismiss="modal">Cancel</button>
-        <button class="btn btn-warning sod-btn" id="pricingSaveBtn">
-          <i class="fas fa-save me-1"></i>Save Prices
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
+                  {# -------------------------------
+                     BEFORE buyer accepts (NOT accepted)
+                     Allow only: priced, in_progress, ready, cancelled
+                     ------------------------------- #}
+                  {% if st != "accepted" and st != "shipped" and st != "delivered" and st != "completed" %}
+                    <option value="priced" {% if st == "priced" %}selected{% endif %}>Priced</option>
+                    <option value="in_progress" {% if st == "in_progress" %}selected{% endif %}>In Progress</option>
+                    <option value="ready" {% if st == "ready" %}selected{% endif %}>Ready</option>
+                    <option value="cancelled" {% if st == "cancelled" %}selected{% endif %}>Cancelled</option>
 
-{# Status Modal #}
-<div class="modal fade" id="statusModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-md modal-dialog-centered">
-    <div class="modal-content border-0 shadow">
-      <div class="modal-header">
-        <h5 class="modal-title fw-bold"><i class="fas fa-sync-alt me-2"></i>Update Order Status</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <form id="statusForm">
-          <label class="form-label fw-bold">Select status</label>
-          <select class="form-select" name="status" id="statusSelect">
-<!--            <option value="submitted" {% if order.status == "submitted" %}selected{% endif %}>Submitted</option>-->
-            <option value="priced" {% if order.status == "priced" %}selected{% endif %}>Priced</option>
-<!--            <option value="accepted" {% if order.status == "accepted" %}selected{% endif %}>Accepted</option>-->
-            <option value="in_progress" {% if order.status == "in_progress" %}selected{% endif %}>In Progress</option>
-            <option value="ready" {% if order.status == "ready" %}selected{% endif %}>Ready</option>
-            <option value="shipped" {% if order.status == "shipped" %}selected{% endif %}>Shipped</option>
-            <option value="delivered" {% if order.status == "delivered" %}selected{% endif %}>Delivered</option>
-            <option value="cancelled" {% if order.status == "cancelled" %}selected{% endif %}>Cancelled</option>
-          </select>
+                  {# -------------------------------
+                     AFTER buyer accepts
+                     Allow shipping flow: in_progress, ready, shipped, delivered (+cancelled if you want)
+                     ------------------------------- #}
+                  {% else %}
+                    <option value="in_progress" {% if st == "in_progress" %}selected{% endif %}>In Progress</option>
+                    <option value="ready" {% if st == "ready" %}selected{% endif %}>Ready</option>
+                    <option value="shipped" {% if st == "shipped" %}selected{% endif %}>Shipped</option>
+                    <option value="delivered" {% if st == "delivered" %}selected{% endif %}>Delivered</option>
 
-          <label class="form-label fw-bold mt-3">Note (optional)</label>
-          <textarea class="form-control" rows="3" name="note" placeholder="Short update for the buyer..."></textarea>
+                    {# Optional: only show cancelled if not shipped/delivered #}
+                    {% if st != "shipped" and st != "delivered" %}
+                      <option value="cancelled" {% if st == "cancelled" %}selected{% endif %}>Cancelled</option>
+                    {% endif %}
+                  {% endif %}
 
-          <div class="text-danger small mt-2 d-none" id="statusError"></div>
-        </form>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-outline-secondary sod-btn" data-bs-dismiss="modal">Close</button>
-        <button class="btn btn-primary sod-btn" id="statusSaveBtn"><i class="fas fa-check me-1"></i>Update</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-{# Chat Modal #}
-<div class="modal fade" id="chatModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-    <div class="modal-content border-0 shadow">
-      <div class="modal-header">
-        <h5 class="modal-title fw-bold">
-          <i class="fas fa-comments me-2" style="color:var(--em-blue)"></i>Chat with Buyer
-        </h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <div class="sod-chat-wrap" id="chatWrap">
-          {% for m in messages %}
-          <div class="sod-msg {% if m.sender_id == request.user.id %}me{% endif %}">
-            <div class="meta">
-              <span>{{ m.sender.get_full_name|default:m.sender.username }}</span>
-              <span>{{ m.created_at|date:"H:i" }}</span>
-            </div>
-            <div class="txt">{{ m.message }}</div>
-          </div>
-        {% empty %}
-          <div class="text-muted small">
-            <i class="fas fa-comment-dots me-1"></i>No messages yet.
-          </div>
-        {% endfor %}
-         </div>
-        <hr class="my-3">
-
-        <form id="chatForm" class="d-flex gap-2">
-          <input type="text" class="form-control" name="message" id="chatMessage" placeholder="Type a message..." autocomplete="off">
-          <button class="btn btn-primary sod-btn" type="submit">
-            <i class="fas fa-paper-plane"></i>
-          </button>
-        </form>
-        <div class="text-danger small mt-2 d-none" id="chatError"></div>
-      </div>
-    </div>
-  </div>
-</div>
-
-{# Ship Items Modal #}
-<div class="modal fade" id="shipItemsModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-    <div class="modal-content border-0 shadow">
-
-      <div class="modal-header">
-        <h5 class="modal-title fw-bold">
-          <i class="fas fa-truck-loading me-2"></i>Mark Items Shipped
-        </h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-
-      <div class="modal-body">
-        <div class="alert alert-light border small mb-3">
-          Select the items you shipped (supports partial shipments).
-        </div>
-
-        <div class="d-flex flex-wrap gap-2 mb-3">
-          <button type="button" class="btn btn-sm btn-outline-primary" id="shipSelectAllBtn">
-            <i class="fas fa-check-double me-1"></i>Select all
-          </button>
-          <button type="button" class="btn btn-sm btn-outline-secondary" id="shipClearBtn">
-            <i class="fas fa-eraser me-1"></i>Clear
-          </button>
-        </div>
-
-        <form id="shipItemsForm">
-          <div class="list-group">
-
-            {% for item in items %}
-              {# Give each checkbox a unique id + connect it to the label so clicking row toggles checkbox #}
-              {% with cbid="ship_cb_"|add:item.id|stringformat:"s" %}
-                <label class="list-group-item d-flex align-items-center justify-content-between gap-3"
-                       for="{{ cbid }}"
-                       style="cursor:pointer;">
-
-                  <span class="d-flex align-items-center gap-2">
-                    <input
-                      id="{{ cbid }}"
-                      class="form-check-input m-0"
-                      type="checkbox"
-                      name="item_ids[]"
-                      value="{{ item.id }}"
-                      {% if item.status == 'shipped' %}disabled{% endif %}
-                    >
-
-                    <span>
-                      <span class="fw-bold">{{ item.product.name }}</span>
-                      <span class="text-muted small ms-2">× {{ item.quantity }}</span>
-
-                      {% if item.variant %}
-                        <div class="small text-muted mt-1">
-                          <i class="fas fa-layer-group me-1"></i>
-                          {{ item.variant.feature_option.feature.name }}: {{ item.variant.feature_option.value }}
-                        </div>
-                      {% endif %}
-
-                      <div class="small text-muted mt-1">
-                        <i class="fas fa-store me-1"></i>{{ item.product.store.name }}
-                      </div>
-                    </span>
-                  </span>
-
-                  <span class="sod-chip {% if item.status == 'shipped' %}set{% else %}pending{% endif %}">
-                    <i class="fas {% if item.status == 'shipped' %}fa-truck{% else %}fa-clock{% endif %}"></i>
-                    {{ item.status|default:"pending"|title }}
-                  </span>
-
-                </label>
+                </select>
               {% endwith %}
-            {% empty %}
-              <div class="text-muted small">No items found.</div>
-            {% endfor %}
 
+              <div class="mt-2 small text-muted">
+                <i class="fas fa-info-circle me-1"></i>
+                Shipping statuses appear only after the buyer accepts the offer.
+              </div>
+
+              <label class="form-label fw-bold mt-3">Note (optional)</label>
+              <textarea class="form-control" rows="3" name="note" placeholder="Short update for the buyer..."></textarea>
+
+              <div class="text-danger small mt-2 d-none" id="statusError"></div>
+            </form>
           </div>
 
-          <div class="row g-2 mt-3">
-            <div class="col-12 col-md-6">
-              <label class="form-label fw-bold">Tracking number (optional)</label>
-              <input class="form-control" type="text" name="tracking_number" placeholder="e.g. EM-TRK-2025-00012">
-            </div>
-
-            <div class="col-12 col-md-6">
-              <label class="form-label fw-bold">Note (optional)</label>
-              <input class="form-control" type="text" name="note" placeholder="e.g. Sent via EasyMove rider">
-            </div>
-          </div>
-
-          <div class="text-danger small mt-2 d-none" id="shipError"></div>
-        </form>
-      </div>
-
-      <div class="modal-footer">
-        <button class="btn btn-outline-secondary sod-btn" data-bs-dismiss="modal">Cancel</button>
-        <button class="btn btn-outline-dark sod-btn" id="shipItemsBtn">
-          <i class="fas fa-check me-1"></i>Mark Shipped
-        </button>
-      </div>
-
-    </div>
-  </div>
-</div>
-
-<script>
-(function(){
-  // Select all / clear helpers (optional, but nice UX)
-  const modal = document.getElementById('shipItemsModal');
-  const form  = document.getElementById('shipItemsForm');
-
-  function getCheckboxes(){
-    if (!form) return [];
-    return Array.from(form.querySelectorAll('input[type="checkbox"][name="item_ids[]"]'));
-  }
-
-  document.getElementById('shipSelectAllBtn')?.addEventListener('click', () => {
-    getCheckboxes().forEach(cb => { if (!cb.disabled) cb.checked = true; });
-  });
-
-  document.getElementById('shipClearBtn')?.addEventListener('click', () => {
-    getCheckboxes().forEach(cb => { cb.checked = false; });
-  });
-
-  // Clear error each time modal opens
-  modal?.addEventListener('show.bs.modal', () => {
-    const err = document.getElementById('shipError');
-    if (err){ err.classList.add('d-none'); err.textContent = ''; }
-  });
-})();
-</script>
-
-
-{# Shipping Cost Modal #}
-<div class="modal fade" id="shippingCostModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-md modal-dialog-centered">
-    <div class="modal-content border-0 shadow">
-      <div class="modal-header">
-        <h5 class="modal-title fw-bold"><i class="fas fa-coins me-2"></i>Set Shipping Cost</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <form id="shippingCostForm">
-          <label class="form-label fw-bold">Shipping cost (D)</label>
-          <input type="number" min="0" step="0.01" class="form-control" name="shipping_cost" value="{{ order.shipping_cost|default:0 }}">
-          <div class="form-text">This updates the order total immediately.</div>
-          <div class="text-danger small mt-2 d-none" id="shipCostError"></div>
-        </form>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-outline-secondary sod-btn" data-bs-dismiss="modal">Close</button>
-        <button class="btn btn-success sod-btn" id="shipCostSaveBtn"><i class="fas fa-save me-1"></i>Save</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-{# Tracking Modal #}
-<div class="modal fade" id="trackingModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-md modal-dialog-centered">
-    <div class="modal-content border-0 shadow">
-      <div class="modal-header">
-        <h5 class="modal-title fw-bold"><i class="fas fa-barcode me-2"></i>Tracking</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <div class="small text-muted mb-2">Tracking number</div>
-        <div class="fw-bold">{{ order.tracking_number|default:"Not set" }}</div>
-        <hr>
-        <div class="small text-muted mb-2">Carrier / Notes</div>
-        <div class="small">{{ order.tracking_note|default:"No tracking notes." }}</div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-outline-secondary sod-btn" data-bs-dismiss="modal">Close</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-{# --------------------------- UNIT PRICE MODAL --------------------------- #}
-<div class="modal fade" id="unitPriceModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-    <div class="modal-content border-0 shadow">
-
-      <div class="modal-header">
-        <h5 class="modal-title fw-bold">
-          <i class="fas fa-pen me-2" style="color:var(--em-orange)"></i>
-          Update Unit Prices
-        </h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-
-      <div class="modal-body">
-        <div class="alert alert-light border small">
-          This sets the <strong>locked unit price</strong> used for totals and invoices.
-          {% if order.is_b2b %}
-            For B2B orders, this also syncs the seller price.
-          {% endif %}
-          <div class="mt-2 small text-muted">
-            <i class="fas fa-info-circle me-1"></i>
-            Items marked <strong>Shipped</strong> are locked and cannot be edited.
+          <div class="modal-footer">
+            <button class="btn btn-outline-secondary sod-btn" data-bs-dismiss="modal">Close</button>
+            <button class="btn btn-primary sod-btn" id="statusSaveBtn">
+              <i class="fas fa-check me-1"></i>Update
+            </button>
           </div>
         </div>
+      </div>
+    </div>
 
-        <form id="unitPriceForm">
-          <div class="table-responsive">
-            <table class="table align-middle">
-              <thead class="table-light">
-                <tr>
-                  <th>Item</th>
-                  <th style="width:90px;">Qty</th>
-                  <th style="width:240px;">Unit Price (D)</th>
-                  <th style="width:220px;">Reference</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for item in items %}
-                  <tr class="{% if item.status == 'shipped' %}table-light{% endif %}">
-                    <td class="fw-bold">
-                      {{ item.product.name }}
-                      {% if item.status == 'shipped' %}
-                        <span class="badge bg-success ms-2">
-                          <i class="fas fa-truck me-1"></i>Shipped
-                        </span>
-                      {% endif %}
-                    </td>
 
-                    <td class="fw-bold">{{ item.quantity }}</td>
+    {# Chat Modal #}
+    <div class="modal fade" id="chatModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow">
+          <div class="modal-header">
+            <h5 class="modal-title fw-bold">
+              <i class="fas fa-comments me-2" style="color:var(--em-blue)"></i>Chat with Buyer
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="sod-chat-wrap" id="chatWrap">
+              {% for m in messages %}
+              <div class="sod-msg {% if m.sender_id == request.user.id %}me{% endif %}">
+                <div class="meta">
+                  <span>{{ m.sender.get_full_name|default:m.sender.username }}</span>
+                  <span>{{ m.created_at|date:"H:i" }}</span>
+                </div>
+                <div class="txt">{{ m.message }}</div>
+              </div>
+            {% empty %}
+              <div class="text-muted small">
+                <i class="fas fa-comment-dots me-1"></i>No messages yet.
+              </div>
+            {% endfor %}
+             </div>
+            <hr class="my-3">
 
-                    <td>
-                      <div class="input-group">
-                        <span class="input-group-text">D</span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          class="form-control"
-                          name="unit_price_{{ item.id }}"
-                          value="{% if item.unit_price %}{{ item.unit_price }}{% elif item.seller_unit_price %}{{ item.seller_unit_price }}{% endif %}"
-                          placeholder="e.g. 120.00"
-                          {% if item.status == 'shipped' %}disabled{% endif %}
-                        >
-                      </div>
+            <form id="chatForm" class="d-flex gap-2">
+              <input type="text" class="form-control" name="message" id="chatMessage" placeholder="Type a message..." autocomplete="off">
+              <button class="btn btn-primary sod-btn" type="submit">
+                <i class="fas fa-paper-plane"></i>
+              </button>
+            </form>
+            <div class="text-danger small mt-2 d-none" id="chatError"></div>
+          </div>
+        </div>
+      </div>
+    </div>
 
-                      <div class="small mt-1">
-                        {% if item.status == 'shipped' %}
-                          <span class="badge bg-secondary">
-                            <i class="fas fa-lock me-1"></i>Price locked
-                          </span>
-                        {% else %}
-                          <span class="text-muted">Editable</span>
-                        {% endif %}
-                      </div>
+    {# Ship Items Modal #}
+    <div class="modal fade" id="shipItemsModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow">
 
-                      <div class="small text-muted mt-1">
-                        Effective now:
-                        <strong>D{{ item.get_effective_unit_price|floatformat:2|intcomma }}</strong>
-                      </div>
-                    </td>
-
-                    <td class="small text-muted">
-                      {% if order.is_b2b %}
-                        B2B: D{{ item.product.b2b_price|default:item.product.price|floatformat:2|intcomma }}
-                      {% else %}
-                        Retail: D{{ item.product.price|floatformat:2|intcomma }}
-                      {% endif %}
-                    </td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
+          <div class="modal-header">
+            <h5 class="modal-title fw-bold">
+              <i class="fas fa-truck-loading me-2"></i>Mark Items Shipped
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
 
-          <div class="text-danger small mt-2 d-none" id="unitPriceError"></div>
-        </form>
-      </div>
+          <div class="modal-body">
+            <div class="alert alert-light border small mb-3">
+              Select the items you shipped (supports partial shipments).
+            </div>
 
-      <div class="modal-footer">
-        <button class="btn btn-outline-secondary sod-btn" data-bs-dismiss="modal">
-          Cancel
-        </button>
-        <button class="btn btn-warning sod-btn" id="unitPriceSaveBtn">
-          <i class="fas fa-save me-1"></i>Save Unit Prices
-        </button>
-      </div>
+            <div class="d-flex flex-wrap gap-2 mb-3">
+              <button type="button" class="btn btn-sm btn-outline-primary" id="shipSelectAllBtn">
+                <i class="fas fa-check-double me-1"></i>Select all
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="shipClearBtn">
+                <i class="fas fa-eraser me-1"></i>Clear
+              </button>
+            </div>
 
+            <form id="shipItemsForm">
+              <div class="list-group">
+
+                {% for item in items %}
+                  {# Give each checkbox a unique id + connect it to the label so clicking row toggles checkbox #}
+                  {% with cbid="ship_cb_"|add:item.id|stringformat:"s" %}
+                    <label class="list-group-item d-flex align-items-center justify-content-between gap-3"
+                           for="{{ cbid }}"
+                           style="cursor:pointer;">
+
+                      <span class="d-flex align-items-center gap-2">
+                        <input
+                          id="{{ cbid }}"
+                          class="form-check-input m-0"
+                          type="checkbox"
+                          name="item_ids[]"
+                          value="{{ item.id }}"
+                          {% if item.status == 'shipped' %}disabled{% endif %}
+                        >
+
+                        <span>
+                          <span class="fw-bold">{{ item.product.name }}</span>
+                          <span class="text-muted small ms-2">× {{ item.quantity }}</span>
+
+                          {% if item.variant %}
+                            <div class="small text-muted mt-1">
+                              <i class="fas fa-layer-group me-1"></i>
+                              {{ item.variant.feature_option.feature.name }}: {{ item.variant.feature_option.value }}
+                            </div>
+                          {% endif %}
+
+                          <div class="small text-muted mt-1">
+                            <i class="fas fa-store me-1"></i>{{ item.product.store.name }}
+                          </div>
+                        </span>
+                      </span>
+
+                      <span class="sod-chip {% if item.status == 'shipped' %}set{% else %}pending{% endif %}">
+                        <i class="fas {% if item.status == 'shipped' %}fa-truck{% else %}fa-clock{% endif %}"></i>
+                        {{ item.status|default:"pending"|title }}
+                      </span>
+
+                    </label>
+                  {% endwith %}
+                {% empty %}
+                  <div class="text-muted small">No items found.</div>
+                {% endfor %}
+
+              </div>
+
+              <div class="row g-2 mt-3">
+                <div class="col-12 col-md-6">
+                  <label class="form-label fw-bold">Tracking number (optional)</label>
+                  <input class="form-control" type="text" name="tracking_number" placeholder="e.g. EM-TRK-2025-00012">
+                </div>
+
+                <div class="col-12 col-md-6">
+                  <label class="form-label fw-bold">Note (optional)</label>
+                  <input class="form-control" type="text" name="note" placeholder="e.g. Sent via EasyMove rider">
+                </div>
+              </div>
+
+              <div class="text-danger small mt-2 d-none" id="shipError"></div>
+            </form>
+          </div>
+
+          <div class="modal-footer">
+            <button class="btn btn-outline-secondary sod-btn" data-bs-dismiss="modal">Cancel</button>
+            <button class="btn btn-outline-dark sod-btn" id="shipItemsBtn">
+              <i class="fas fa-check me-1"></i>Mark Shipped
+            </button>
+          </div>
+
+        </div>
+      </div>
     </div>
-  </div>
-</div>
+
+    <script>
+    (function(){
+      // Select all / clear helpers (optional, but nice UX)
+      const modal = document.getElementById('shipItemsModal');
+      const form  = document.getElementById('shipItemsForm');
+
+      function getCheckboxes(){
+        if (!form) return [];
+        return Array.from(form.querySelectorAll('input[type="checkbox"][name="item_ids[]"]'));
+      }
+
+      document.getElementById('shipSelectAllBtn')?.addEventListener('click', () => {
+        getCheckboxes().forEach(cb => { if (!cb.disabled) cb.checked = true; });
+      });
+
+      document.getElementById('shipClearBtn')?.addEventListener('click', () => {
+        getCheckboxes().forEach(cb => { cb.checked = false; });
+      });
+
+      // Clear error each time modal opens
+      modal?.addEventListener('show.bs.modal', () => {
+        const err = document.getElementById('shipError');
+        if (err){ err.classList.add('d-none'); err.textContent = ''; }
+      });
+    })();
+    </script>
+
+
+    {# Shipping Cost Modal #}
+    <div class="modal fade" id="shippingCostModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-md modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+          <div class="modal-header">
+            <h5 class="modal-title fw-bold"><i class="fas fa-coins me-2"></i>Set Shipping Cost</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <form id="shippingCostForm">
+              <label class="form-label fw-bold">Shipping cost (D)</label>
+              <input type="number" min="0" step="0.01" class="form-control" name="shipping_cost" value="{{ order.shipping_cost|default:0 }}">
+              <div class="form-text">This updates the order total immediately.</div>
+              <div class="text-danger small mt-2 d-none" id="shipCostError"></div>
+            </form>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-outline-secondary sod-btn" data-bs-dismiss="modal">Close</button>
+            <button class="btn btn-success sod-btn" id="shipCostSaveBtn"><i class="fas fa-save me-1"></i>Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# Tracking Modal #}
+    <div class="modal fade" id="trackingModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-md modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+          <div class="modal-header">
+            <h5 class="modal-title fw-bold"><i class="fas fa-barcode me-2"></i>Tracking</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="small text-muted mb-2">Tracking number</div>
+            <div class="fw-bold">{{ order.tracking_number|default:"Not set" }}</div>
+            <hr>
+            <div class="small text-muted mb-2">Carrier / Notes</div>
+            <div class="small">{{ order.tracking_note|default:"No tracking notes." }}</div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-outline-secondary sod-btn" data-bs-dismiss="modal">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# --------------------------- UNIT PRICE MODAL --------------------------- #}
+    <div class="modal fade" id="unitPriceModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow">
+
+          <div class="modal-header">
+            <h5 class="modal-title fw-bold">
+              <i class="fas fa-pen me-2" style="color:var(--em-orange)"></i>
+              Update Unit Prices
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+
+          <div class="modal-body">
+            <div class="alert alert-light border small">
+              This sets the <strong>locked unit price</strong> used for totals and invoices.
+              {% if order.is_b2b %}
+                For B2B orders, this also syncs the seller price.
+              {% endif %}
+              <div class="mt-2 small text-muted">
+                <i class="fas fa-info-circle me-1"></i>
+                Items marked <strong>Shipped</strong> are locked and cannot be edited.
+              </div>
+            </div>
+
+            <form id="unitPriceForm">
+              <div class="table-responsive">
+                <table class="table align-middle">
+                  <thead class="table-light">
+                    <tr>
+                      <th>Item</th>
+                      <th style="width:90px;">Qty</th>
+                      <th style="width:240px;">Unit Price (D)</th>
+                      <th style="width:220px;">Reference</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for item in items %}
+                      <tr class="{% if item.status == 'shipped' %}table-light{% endif %}">
+                        <td class="fw-bold">
+                          {{ item.product.name }}
+                          {% if item.status == 'shipped' %}
+                            <span class="badge bg-success ms-2">
+                              <i class="fas fa-truck me-1"></i>Shipped
+                            </span>
+                          {% endif %}
+                        </td>
+
+                        <td class="fw-bold">{{ item.quantity }}</td>
+
+                        <td>
+                          <div class="input-group">
+                            <span class="input-group-text">D</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              class="form-control"
+                              name="unit_price_{{ item.id }}"
+                              value="{% if item.unit_price %}{{ item.unit_price }}{% elif item.seller_unit_price %}{{ item.seller_unit_price }}{% endif %}"
+                              placeholder="e.g. 120.00"
+                              {% if item.status == 'shipped' %}disabled{% endif %}
+                            >
+                          </div>
+
+                          <div class="small mt-1">
+                            {% if item.status == 'shipped' %}
+                              <span class="badge bg-secondary">
+                                <i class="fas fa-lock me-1"></i>Price locked
+                              </span>
+                            {% else %}
+                              <span class="text-muted">Editable</span>
+                            {% endif %}
+                          </div>
+
+                          <div class="small text-muted mt-1">
+                            Effective now:
+                            <strong>D{{ item.get_effective_unit_price|floatformat:2|intcomma }}</strong>
+                          </div>
+                        </td>
+
+                        <td class="small text-muted">
+                          {% if order.is_b2b %}
+                            B2B: D{{ item.product.b2b_price|default:item.product.price|floatformat:2|intcomma }}
+                          {% else %}
+                            Retail: D{{ item.product.price|floatformat:2|intcomma }}
+                          {% endif %}
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="text-danger small mt-2 d-none" id="unitPriceError"></div>
+            </form>
+          </div>
+
+          <div class="modal-footer">
+            <button class="btn btn-outline-secondary sod-btn" data-bs-dismiss="modal">
+              Cancel
+            </button>
+            <button class="btn btn-warning sod-btn" id="unitPriceSaveBtn">
+              <i class="fas fa-save me-1"></i>Save Unit Prices
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </div>
 
 
 
-<script>
-/**
- * Store B2B – Order Detail actions JS
- * Expects JSON responses for all endpoints (even on 403).
- */
-(function () {
-  // ---------------------------
-  // Tiny toast helper
-  // ---------------------------
-  const toastEl = document.getElementById('sodToast');
-  const toastTextEl = document.getElementById('sodToastText');
-  const toastCloseBtn = document.getElementById('sodToastClose');
+    <script>
+    /**
+     * Store B2B – Order Detail actions JS
+     * Expects JSON responses for all endpoints (even on 403).
+     */
+    (function () {
+      // ---------------------------
+      // Tiny toast helper
+      // ---------------------------
+      const toastEl = document.getElementById('sodToast');
+      const toastTextEl = document.getElementById('sodToastText');
+      const toastCloseBtn = document.getElementById('sodToastClose');
 
-  function showToast(msg){
-    if (!toastEl || !toastTextEl) return;
-    toastTextEl.textContent = msg || 'Done.';
-    toastEl.style.display = 'block';
-    if (toastCloseBtn){
-      toastCloseBtn.onclick = () => toastEl.style.display = 'none';
-    }
-    setTimeout(() => { toastEl.style.display = 'none'; }, 2600);
-  }
-
-  // ---------------------------
-  // CSRF helper
-  // ---------------------------
-  function getCookie(name) {
-    let cookieValue = null;
-    if (document.cookie && document.cookie !== "") {
-      const cookies = document.cookie.split(";");
-      for (let i = 0; i < cookies.length; i++) {
-        const cookie = cookies[i].trim();
-        if (cookie.substring(0, name.length + 1) === (name + "=")) {
-          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-          break;
+      function showToast(msg){
+        if (!toastEl || !toastTextEl) return;
+        toastTextEl.textContent = msg || 'Done.';
+        toastEl.style.display = 'block';
+        if (toastCloseBtn){
+          toastCloseBtn.onclick = () => toastEl.style.display = 'none';
         }
+        setTimeout(() => { toastEl.style.display = 'none'; }, 2600);
       }
-    }
-    return cookieValue;
-  }
 
-  // ---------------------------
-  // Safe JSON fetch helper
-  // ---------------------------
-  async function postJSON(url, formData) {
-    const resp = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'X-CSRFToken': getCookie('csrftoken'),
-        'X-Requested-With': 'XMLHttpRequest'
-      },
-      body: formData
-    });
-
-    const ct = (resp.headers.get('content-type') || '').toLowerCase();
-
-    // If server returned HTML (404/403/login redirect), show preview in console
-    if (!ct.includes('application/json')) {
-      const text = await resp.text();
-      console.error('Non-JSON response from:', url);
-      console.error('HTTP status:', resp.status);
-      console.error('Response preview:', text.slice(0, 500));
-      throw new Error('Server returned non-JSON response. Check console (likely URL/403/redirect).');
-    }
-
-    const data = await resp.json();
-
-    if (!resp.ok || !data || data.success !== true) {
-      throw new Error((data && data.error) ? data.error : 'Request failed.');
-    }
-
-    return data;
-  }
-
-  // ---------------------------
-  // Endpoints (MUST exist in urls.py)
-  // ---------------------------
-  const URL_UPDATE_STATUS     = "{% url 'stores_b2b:update_order_status' order.id %}";
-  const URL_SAVE_B2B_PRICES   = "{% url 'stores_b2b:save_prices' order.id %}";
-  const URL_SEND_CHAT         = "{% url 'stores_b2b:send_message' order.id %}";
-  const URL_MARK_ITEMS_SHIP   = "{% url 'stores_b2b:mark_items_shipped' order.id %}";
-  const URL_SET_SHIP_COST     = "{% url 'stores_b2b:set_shipping_cost' order.id %}";
-  const URL_SAVE_UNIT_PRICES  = "{% url 'stores_b2b:save_unit_prices' order.id %}";
-
-  // ---------------------------
-  // Update status
-  // ---------------------------
-  document.getElementById('statusSaveBtn')?.addEventListener('click', async () => {
-    const form = document.getElementById('statusForm');
-    const err  = document.getElementById('statusError');
-    if (!form) return;
-
-    if (err){ err.classList.add('d-none'); err.textContent = ''; }
-
-    const fd = new FormData(form);
-
-    try {
-      await postJSON(URL_UPDATE_STATUS, fd);
-      showToast('Order status updated.');
-      window.location.reload();
-    } catch (e) {
-      if (err){
-        err.classList.remove('d-none');
-        err.textContent = e.message;
+      // ---------------------------
+      // CSRF helper
+      // ---------------------------
+      function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== "") {
+          const cookies = document.cookie.split(";");
+          for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + "=")) {
+              cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+              break;
+            }
+          }
+        }
+        return cookieValue;
       }
-    }
-  });
 
-  // ---------------------------
-  // Save B2B prices
-  // NOTE: Your inputs already use name="price_{{id}}"
-  // So we can submit FormData directly.
-  // ---------------------------
-  document.getElementById('pricingSaveBtn')?.addEventListener('click', async () => {
-    const form = document.getElementById('pricingForm');
-    const err  = document.getElementById('pricingError');
-    if (!form) return;
+      // ---------------------------
+      // Safe JSON fetch helper
+      // ---------------------------
+      async function postJSON(url, formData) {
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'X-CSRFToken': getCookie('csrftoken'),
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          body: formData
+        });
 
-    if (err){ err.classList.add('d-none'); err.textContent = ''; }
+        const ct = (resp.headers.get('content-type') || '').toLowerCase();
 
-    const fd = new FormData(form);
-    fd.append('notify_buyer', document.getElementById('pricingNotifyBuyer')?.checked ? '1' : '0');
+        // If server returned HTML (404/403/login redirect), show preview in console
+        if (!ct.includes('application/json')) {
+          const text = await resp.text();
+          console.error('Non-JSON response from:', url);
+          console.error('HTTP status:', resp.status);
+          console.error('Response preview:', text.slice(0, 500));
+          throw new Error('Server returned non-JSON response. Check console (likely URL/403/redirect).');
+        }
 
-    try {
-      await postJSON(URL_SAVE_B2B_PRICES, fd);
-      showToast('Prices saved. Total updated.');
-      window.location.reload();
-    } catch (e) {
-      if (err){
-        err.classList.remove('d-none');
-        err.textContent = e.message;
+        const data = await resp.json();
+
+        if (!resp.ok || !data || data.success !== true) {
+          throw new Error((data && data.error) ? data.error : 'Request failed.');
+        }
+
+        return data;
       }
-    }
-  });
 
-  // ---------------------------
-  // Save Unit Prices
-  // ---------------------------
-  document.getElementById('unitPriceSaveBtn')?.addEventListener('click', async () => {
-    const form = document.getElementById('unitPriceForm');
-    const err  = document.getElementById('unitPriceError');
-    if (!form) return;
+      // ---------------------------
+      // Endpoints (MUST exist in urls.py)
+      // ---------------------------
+      const URL_UPDATE_STATUS     = "{% url 'stores_b2b:update_order_status' order.id %}";
+      const URL_SAVE_B2B_PRICES   = "{% url 'stores_b2b:save_prices' order.id %}";
+      const URL_SEND_CHAT         = "{% url 'stores_b2b:send_message' order.id %}";
+      const URL_MARK_ITEMS_SHIP   = "{% url 'stores_b2b:mark_items_shipped' order.id %}";
+      const URL_SET_SHIP_COST     = "{% url 'stores_b2b:set_shipping_cost' order.id %}";
+      const URL_SAVE_UNIT_PRICES  = "{% url 'stores_b2b:save_unit_prices' order.id %}";
 
-    if (err){
-      err.classList.add('d-none');
-      err.textContent = '';
-    }
+      // ---------------------------
+      // Update status
+      // ---------------------------
+      document.getElementById('statusSaveBtn')?.addEventListener('click', async () => {
+        const form = document.getElementById('statusForm');
+        const err  = document.getElementById('statusError');
+        if (!form) return;
 
-    const fd = new FormData(form);
+        if (err){ err.classList.add('d-none'); err.textContent = ''; }
 
-    try {
-      await postJSON(URL_SAVE_UNIT_PRICES, fd);
+        const fd = new FormData(form);
 
-      // ✅ CLEAR ONLY EDITABLE FIELDS (NOT SHIPPED)
-      form.querySelectorAll('input[name^="unit_price_"]').forEach(input => {
-        if (!input.disabled) {
-          input.value = '';
+        try {
+          await postJSON(URL_UPDATE_STATUS, fd);
+          showToast('Order status updated.');
+          window.location.reload();
+        } catch (e) {
+          if (err){
+            err.classList.remove('d-none');
+            err.textContent = e.message;
+          }
         }
       });
 
-      // Optional: close modal after save
-      const modalEl = document.getElementById('unitPriceModal');
-      const modal = bootstrap.Modal.getInstance(modalEl);
-      if (modal) modal.hide();
+      // ---------------------------
+      // Save B2B prices
+      // NOTE: Your inputs already use name="price_{{id}}"
+      // So we can submit FormData directly.
+      // ---------------------------
+      document.getElementById('pricingSaveBtn')?.addEventListener('click', async () => {
+        const form = document.getElementById('pricingForm');
+        const err  = document.getElementById('pricingError');
+        if (!form) return;
 
-      showToast('Unit prices updated.');
+        if (err){ err.classList.add('d-none'); err.textContent = ''; }
 
-      // Optional: refresh page to reflect recalculated totals
-      window.location.reload();
+        const fd = new FormData(form);
+        fd.append('notify_buyer', document.getElementById('pricingNotifyBuyer')?.checked ? '1' : '0');
 
-    } catch (e) {
-      if (err){
-        err.classList.remove('d-none');
-        err.textContent = e.message;
-      }
-    }
-  });
-  // ---------------------------
-  // Chat send
-  // ---------------------------
-  document.getElementById('chatForm')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const err   = document.getElementById('chatError');
-    const msgEl = document.getElementById('chatMessage');
+        try {
+          await postJSON(URL_SAVE_B2B_PRICES, fd);
+          showToast('Prices saved. Total updated.');
+          window.location.reload();
+        } catch (e) {
+          if (err){
+            err.classList.remove('d-none');
+            err.textContent = e.message;
+          }
+        }
+      });
 
-    if (err){ err.classList.add('d-none'); err.textContent=''; }
+      // ---------------------------
+      // Save Unit Prices
+      // ---------------------------
+      document.getElementById('unitPriceSaveBtn')?.addEventListener('click', async () => {
+        const form = document.getElementById('unitPriceForm');
+        const err  = document.getElementById('unitPriceError');
+        if (!form) return;
 
-    const msg = (msgEl?.value || '').trim();
-    if (!msg){
-      if (err){
-        err.classList.remove('d-none');
-        err.textContent = 'Type a message first.';
-      }
-      return;
-    }
+        if (err){
+          err.classList.add('d-none');
+          err.textContent = '';
+        }
 
-    const fd = new FormData();
-    fd.append('message', msg);
+        const fd = new FormData(form);
 
-    try {
-      await postJSON(URL_SEND_CHAT, fd);
-      showToast('Message sent.');
-      window.location.reload();
-    } catch (e2) {
-      if (err){
-        err.classList.remove('d-none');
-        err.textContent = e2.message;
-      }
-    }
-  });
+        try {
+          await postJSON(URL_SAVE_UNIT_PRICES, fd);
 
-  // ---------------------------
-  // Mark items shipped
-  // FIX: your checkbox name is item_ids[] so we must read item_ids[]
-  // ---------------------------
-  document.getElementById('shipItemsBtn')?.addEventListener('click', async () => {
-    const form = document.getElementById('shipItemsForm');
-    const err  = document.getElementById('shipError');
-    if (!form) return;
+          // ✅ CLEAR ONLY EDITABLE FIELDS (NOT SHIPPED)
+          form.querySelectorAll('input[name^="unit_price_"]').forEach(input => {
+            if (!input.disabled) {
+              input.value = '';
+            }
+          });
 
-    if (err){ err.classList.add('d-none'); err.textContent = ''; }
+          // Optional: close modal after save
+          const modalEl = document.getElementById('unitPriceModal');
+          const modal = bootstrap.Modal.getInstance(modalEl);
+          if (modal) modal.hide();
 
-    const fd = new FormData(form);
+          showToast('Unit prices updated.');
 
-    // ✅ FIX HERE
-    const selected = fd.getAll('item_ids[]'); // matches HTML name="item_ids[]"
-    if (!selected || selected.length === 0) {
-      if (err){
-        err.classList.remove('d-none');
-        err.textContent = 'Select at least one item.';
-      }
-      return;
-    }
+          // Optional: refresh page to reflect recalculated totals
+          window.location.reload();
 
-    try {
-      await postJSON(URL_MARK_ITEMS_SHIP, fd);
-      showToast('Selected items marked shipped.');
-      window.location.reload();
-    } catch (e) {
-      if (err){
-        err.classList.remove('d-none');
-        err.textContent = e.message;
-      }
-    }
-  });
+        } catch (e) {
+          if (err){
+            err.classList.remove('d-none');
+            err.textContent = e.message;
+          }
+        }
+      });
+      // ---------------------------
+      // Chat send
+      // ---------------------------
+      document.getElementById('chatForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const err   = document.getElementById('chatError');
+        const msgEl = document.getElementById('chatMessage');
 
-  // ---------------------------
-  // Set shipping cost
-  // ---------------------------
-  document.getElementById('shipCostSaveBtn')?.addEventListener('click', async () => {
-    const form = document.getElementById('shippingCostForm');
-    const err  = document.getElementById('shipCostError');
-    if (!form) return;
+        if (err){ err.classList.add('d-none'); err.textContent=''; }
 
-    if (err){ err.classList.add('d-none'); err.textContent = ''; }
+        const msg = (msgEl?.value || '').trim();
+        if (!msg){
+          if (err){
+            err.classList.remove('d-none');
+            err.textContent = 'Type a message first.';
+          }
+          return;
+        }
 
-    const fd = new FormData(form);
+        const fd = new FormData();
+        fd.append('message', msg);
 
-    try {
-      await postJSON(URL_SET_SHIP_COST, fd);
-      showToast('Shipping cost updated.');
-      window.location.reload();
-    } catch (e) {
-      if (err){
-        err.classList.remove('d-none');
-        err.textContent = e.message;
-      }
-    }
-  });
+        try {
+          await postJSON(URL_SEND_CHAT, fd);
+          showToast('Message sent.');
+          window.location.reload();
+        } catch (e2) {
+          if (err){
+            err.classList.remove('d-none');
+            err.textContent = e2.message;
+          }
+        }
+      });
 
-})();
-</script>
+      // ---------------------------
+      // Mark items shipped
+      // FIX: your checkbox name is item_ids[] so we must read item_ids[]
+      // ---------------------------
+      document.getElementById('shipItemsBtn')?.addEventListener('click', async () => {
+        const form = document.getElementById('shipItemsForm');
+        const err  = document.getElementById('shipError');
+        if (!form) return;
+
+        if (err){ err.classList.add('d-none'); err.textContent = ''; }
+
+        const fd = new FormData(form);
+
+        // ✅ FIX HERE
+        const selected = fd.getAll('item_ids[]'); // matches HTML name="item_ids[]"
+        if (!selected || selected.length === 0) {
+          if (err){
+            err.classList.remove('d-none');
+            err.textContent = 'Select at least one item.';
+          }
+          return;
+        }
+
+        try {
+          await postJSON(URL_MARK_ITEMS_SHIP, fd);
+          showToast('Selected items marked shipped.');
+          window.location.reload();
+        } catch (e) {
+          if (err){
+            err.classList.remove('d-none');
+            err.textContent = e.message;
+          }
+        }
+      });
+
+      // ---------------------------
+      // Set shipping cost
+      // ---------------------------
+      document.getElementById('shipCostSaveBtn')?.addEventListener('click', async () => {
+        const form = document.getElementById('shippingCostForm');
+        const err  = document.getElementById('shipCostError');
+        if (!form) return;
+
+        if (err){ err.classList.add('d-none'); err.textContent = ''; }
+
+        const fd = new FormData(form);
+
+        try {
+          await postJSON(URL_SET_SHIP_COST, fd);
+          showToast('Shipping cost updated.');
+          window.location.reload();
+        } catch (e) {
+          if (err){
+            err.classList.remove('d-none');
+            err.textContent = e.message;
+          }
+        }
+      });
+
+    })();
+    </script>
 
 
-{% endblock %}
+    {% endblock %}

@@ -1,0 +1,905 @@
+{% extends "base.html" %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Order {{ order.order_number|default:order.id }} · My B2B Order{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+
+<style>
+  :root{
+    --em-blue:#1a5f9e;
+    --em-blue2:#2d8ccc;
+    --em-orange:#ff6b35;
+    --em-green:#2ed573;
+    --em-red:#ff4757;
+    --em-dark:#1f2330;
+    --em-soft:#f6f7fb;
+    --em-border:#e9edf5;
+    --em-shadow: 0 12px 30px rgba(16,24,40,.10);
+    --em-shadow-soft: 0 6px 18px rgba(16,24,40,.08);
+  }
+
+  .buyer-wrap{ max-width: 1250px; }
+
+  /* Hero header */
+  .buyer-hero{
+    background: linear-gradient(135deg, var(--em-blue) 0%, var(--em-blue2) 100%);
+    color:#fff;
+    border-radius:18px;
+    padding: 1.35rem;
+    position:relative;
+    overflow:hidden;
+    box-shadow: var(--em-shadow);
+  }
+  .buyer-hero::before{
+    content:'';
+    position:absolute;
+    top:-35%;
+    right:-12%;
+    width:460px;height:460px;
+    border-radius:50%;
+    background: rgba(255,255,255,.09);
+  }
+  .buyer-hero-inner{ position:relative; z-index:2; }
+  .buyer-title{
+    font-size: 1.35rem;
+    font-weight: 900;
+    margin:0;
+    letter-spacing: .2px;
+  }
+
+  .buyer-pill{
+    display:inline-flex; align-items:center; gap:.45rem;
+    padding:.35rem .72rem;
+    border-radius: 999px;
+    background: rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);
+    font-weight: 900;
+    font-size: .8rem;
+    white-space:nowrap;
+  }
+  .buyer-dot{
+    width:9px;height:9px;border-radius:50%;
+    background: var(--em-orange);
+    box-shadow: 0 0 0 3px rgba(255,107,53,.22);
+  }
+
+  .buyer-card{
+    background:#fff;
+    border:1px solid var(--em-border);
+    border-radius: 16px;
+    box-shadow: var(--em-shadow-soft);
+    overflow:hidden;
+  }
+  .buyer-card-h{
+    padding: 1rem 1.1rem;
+    border-bottom: 1px solid #eef1f5;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap: 1rem;
+    background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
+  }
+  .buyer-card-title{
+    margin:0;
+    font-weight: 1000;
+    color: var(--em-dark);
+    font-size: 1rem;
+    letter-spacing: .2px;
+  }
+  .buyer-card-b{ padding: 1.1rem; }
+
+  /* Chat specific styles */
+  .buyer-chat-wrap{
+    display:flex;
+    flex-direction:column;
+    gap:.75rem;
+    max-height: 450px;
+    overflow-y:auto;
+    padding-right:.5rem;
+    scroll-behavior: smooth;
+  }
+  .buyer-msg{
+    border-radius: 16px;
+    padding: .75rem .85rem;
+    max-width: 88%;
+    border: 1px solid #eef1f5;
+    background: #fff;
+    box-shadow: 0 2px 10px rgba(0,0,0,.04);
+    animation: fadeIn 0.3s ease-in;
+  }
+  .buyer-msg.me{
+    margin-left:auto;
+    background: rgba(26,95,158,.08);
+    border-color: rgba(26,95,158,.18);
+  }
+  .buyer-msg .meta{
+    display:flex;
+    justify-content:space-between;
+    gap:1rem;
+    font-size:.75rem;
+    color:#6c757d;
+    font-weight: 800;
+    margin-bottom:.25rem;
+  }
+  .buyer-msg .txt{
+    font-size:.92rem;
+    color: var(--em-dark);
+    white-space:pre-wrap;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .buyer-btn{
+    border-radius: 12px;
+    font-weight: 900;
+    padding: .68rem 1rem;
+    box-shadow: 0 8px 18px rgba(0,0,0,.08);
+  }
+
+  .chat-status{
+    font-size: .75rem;
+    color: #6c757d;
+    padding: .25rem .5rem;
+    text-align: center;
+  }
+  .chat-status.active{
+    color: var(--em-green);
+  }
+
+  /* Notification badge */
+  .new-msg-badge{
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: var(--em-red);
+    color: white;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: .75rem;
+    font-weight: 900;
+    animation: pulse 2s infinite;
+  }
+
+  /* ==================== ORDER ITEMS (CREATIVE CARDS) ==================== */
+.buyer-items-grid{
+  display:grid;
+  grid-template-columns: 1fr;
+  gap: .85rem;
+  padding: 1rem;
+}
+
+@media (min-width: 992px){
+  .buyer-items-grid{ grid-template-columns: 1fr 1fr; }
+}
+@media (min-width: 1200px){
+  .buyer-items-grid{ grid-template-columns: 1fr 1fr 1fr; }
+}
+
+.buyer-item-card{
+  background:#fff;
+  border:1px solid var(--em-border);
+  border-radius: 16px;
+  overflow:hidden;
+  box-shadow: var(--em-shadow-soft);
+  transition: transform .18s ease, box-shadow .18s ease;
+  position:relative;
+}
+.buyer-item-card:hover{
+  transform: translateY(-2px);
+  box-shadow: var(--em-shadow);
+}
+
+.buyer-item-top{
+  display:flex;
+  gap:.85rem;
+  padding: .95rem .95rem .75rem .95rem;
+}
+
+.buyer-item-img{
+  width:72px;height:72px;
+  border-radius: 14px;
+  overflow:hidden;
+  border:1px solid #eef1f5;
+  background: linear-gradient(135deg, rgba(26,95,158,.10), rgba(45,140,204,.06));
+  flex: 0 0 auto;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.buyer-item-img img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  display:block;
+}
+.buyer-item-img .ph{
+  font-size: 1.25rem;
+  color: rgba(26,95,158,.55);
+}
+
+.buyer-item-title{
+  margin:0;
+  font-weight: 1000;
+  color: var(--em-dark);
+  font-size: .98rem;
+  line-height: 1.15;
+}
+.buyer-item-sub{
+  margin-top:.25rem;
+  display:flex;
+  flex-wrap:wrap;
+  gap:.4rem;
+  color:#6b7280;
+  font-size:.78rem;
+  font-weight: 800;
+}
+
+.buyer-tag{
+  display:inline-flex;
+  align-items:center;
+  gap:.35rem;
+  padding:.22rem .55rem;
+  border-radius: 999px;
+  border:1px solid #eef1f5;
+  background:#fbfcff;
+}
+.buyer-tag i{ color: var(--em-orange); }
+
+.buyer-item-mid{
+  padding: 0 .95rem .95rem .95rem;
+}
+
+.buyer-metrics{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap:.6rem;
+}
+
+.buyer-metric{
+  border:1px dashed #e9edf5;
+  border-radius: 14px;
+  padding:.65rem .75rem;
+  background: linear-gradient(180deg, #fff 0%, #fbfcff 100%);
+}
+.buyer-metric .k{
+  font-size:.72rem;
+  color:#6b7280;
+  font-weight: 900;
+  display:flex;
+  align-items:center;
+  gap:.4rem;
+}
+.buyer-metric .v{
+  margin-top:.2rem;
+  font-size: .98rem;
+  font-weight: 1100;
+  color: var(--em-dark);
+}
+
+.buyer-line-total{
+  grid-column: 1 / -1;
+  border-style: solid;
+  border-color: rgba(46,213,115,.25);
+  background: rgba(46,213,115,.06);
+}
+.buyer-line-total .k i{ color: var(--em-green); }
+
+.buyer-item-footer{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:.75rem;
+  padding: .75rem .95rem;
+  border-top: 1px solid #eef1f5;
+  background: #fbfcff;
+}
+
+.buyer-chip{
+  display:inline-flex;
+  align-items:center;
+  gap:.45rem;
+  padding:.32rem .65rem;
+  border-radius: 999px;
+  font-weight: 950;
+  font-size:.78rem;
+  border:1px solid rgba(255,107,53,.25);
+  background: rgba(255,107,53,.08);
+  color: #a23b16;
+}
+.buyer-chip .dot{
+  width:8px;height:8px;border-radius:50%;
+  background: var(--em-orange);
+  box-shadow: 0 0 0 3px rgba(255,107,53,.18);
+}
+
+
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+  }
+</style>
+
+<div class="container py-4 buyer-wrap">
+
+  {# Hero Header #}
+  <div class="buyer-hero mb-4">
+    <div class="buyer-hero-inner">
+      <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+        <div>
+          <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+            <h1 class="buyer-title">
+              <i class="fas fa-receipt me-2"></i>
+              Order {{ order.order_number|default:order.id }}
+            </h1>
+            {% if order.status %}
+              <span class="buyer-pill">
+                <span class="buyer-dot"></span>
+                <span>{{ order.status|title }}</span>
+              </span>
+            {% endif %}
+          </div>
+          <div class="text-white-50">
+            <span class="me-3"><i class="fas fa-calendar-alt"></i> {{ order.created_at|date:"M d, Y · H:i" }}</span>
+            <span class="me-3"><i class="fas fa-store"></i> {{ order.store.name|default:"Store" }}</span>
+          </div>
+        </div>
+
+        <div class="d-flex flex-wrap gap-2">
+          <a href="{% url 'stores_b2b:my_personal_orders' %}" class="btn btn-light buyer-btn">
+            <i class="fas fa-arrow-left me-1"></i>Back to Orders
+          </a>
+          <button class="btn btn-outline-light buyer-btn position-relative" data-bs-toggle="modal" data-bs-target="#chatModal">
+            <i class="fas fa-comments me-1"></i>Chat with Seller
+            <span class="new-msg-badge d-none" id="newMsgBadge">0</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+{# Order Items #}
+<div class="buyer-card mb-4">
+  <div class="buyer-card-h">
+    <h3 class="buyer-card-title">
+      <i class="fas fa-box-open me-2" style="color:var(--em-orange)"></i>Order Items
+    </h3>
+    <div class="text-muted small fw-bold">
+      {{ items|length }} item{{ items|length|pluralize }}
+    </div>
+  </div>
+
+  <div class="buyer-items-grid">
+
+    {% for item in items %}
+      {# ---- pick an image safely (adjust these to match your models) ---- #}
+      {% with img=item.product.image|default_if_none:'' %}
+      <div class="buyer-item-card">
+
+        <div class="buyer-item-top">
+          <div class="buyer-item-img">
+            {% if img and img.url %}
+              <img src="{{ img.url }}" alt="{{ item.product.name }}">
+            {% else %}
+              <div class="ph"><i class="fas fa-image"></i></div>
+            {% endif %}
+          </div>
+
+          <div class="flex-grow-1">
+            <h4 class="buyer-item-title">{{ item.product.name }}</h4>
+
+            <div class="buyer-item-sub">
+              <span class="buyer-tag"><i class="fas fa-hashtag"></i> Item</span>
+
+              {# Optional: show variant/feature if you have it #}
+              {% if item.variant_name %}
+                <span class="buyer-tag"><i class="fas fa-tags"></i> {{ item.variant_name }}</span>
+              {% endif %}
+
+              {# Optional: show SKU if exists #}
+              {% if item.product.sku %}
+                <span class="buyer-tag"><i class="fas fa-barcode"></i> {{ item.product.sku }}</span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <div class="buyer-item-mid">
+          <div class="buyer-metrics">
+            <div class="buyer-metric">
+              <div class="k"><i class="fas fa-layer-group"></i> Quantity</div>
+              <div class="v">{{ item.quantity }}</div>
+            </div>
+
+            <div class="buyer-metric">
+              <div class="k"><i class="fas fa-coins"></i> Unit Price</div>
+              <div class="v">D{{ item.get_effective_unit_price|floatformat:2|intcomma }}</div>
+            </div>
+
+            <div class="buyer-metric buyer-line-total">
+              <div class="k"><i class="fas fa-receipt"></i> Line Total</div>
+              <div class="v">D{{ item.line_total|floatformat:2|intcomma }}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="buyer-item-footer">
+          <span class="buyer-chip">
+            <span class="dot"></span>
+            B2B Item
+          </span>
+
+          <span class="text-muted small fw-bold">
+            <i class="fas fa-shield-alt me-1"></i>Verified pricing
+          </span>
+        </div>
+
+      </div>
+      {% endwith %}
+    {% empty %}
+      <div class="text-muted small text-center py-4">
+        <i class="fas fa-box-open me-1"></i>No items found in this order.
+      </div>
+    {% endfor %}
+
+  </div>
+</div>
+  {# Accept/Reject Actions #}
+  {% if can_accept_order %}
+    <div class="alert alert-warning border-0 shadow-sm">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <strong>Action Required:</strong> The seller has priced your order. Review and accept or reject.
+        </div>
+        <div class="d-flex gap-2">
+          <button class="btn btn-success buyer-btn" data-bs-toggle="modal" data-bs-target="#acceptModal">
+            <i class="fas fa-check me-1"></i>Accept Offer
+          </button>
+          <button class="btn btn-danger buyer-btn" data-bs-toggle="modal" data-bs-target="#rejectModal">
+            <i class="fas fa-times me-1"></i>Reject
+          </button>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+</div>
+
+{# ==================== CHAT MODAL ==================== #}
+<div class="modal fade" id="chatModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold">
+          <i class="fas fa-comments me-2" style="color:var(--em-blue)"></i>Chat with {{ order.store.name }}
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="chat-status active" id="chatStatus">
+          <i class="fas fa-circle me-1"></i>Live · Auto-refreshing
+        </div>
+
+        <div class="buyer-chat-wrap" id="chatWrap">
+          {% for m in messages %}
+            <div class="buyer-msg {% if m.sender_id == request.user.id %}me{% endif %}" data-msg-id="{{ m.id }}">
+              <div class="meta">
+                <span>{{ m.sender.get_full_name|default:m.sender.username }}</span>
+                <span>{{ m.created_at|date:"H:i" }}</span>
+              </div>
+              <div class="txt">{{ m.message }}</div>
+            </div>
+          {% empty %}
+            <div class="text-muted small text-center py-3" id="noMsgPlaceholder">
+              <i class="fas fa-comment-dots me-1"></i>No messages yet. Start the conversation!
+            </div>
+          {% endfor %}
+        </div>
+
+        <hr class="my-3">
+
+        <form id="chatForm" class="d-flex gap-2">
+          <input
+            type="text"
+            class="form-control"
+            name="message"
+            id="chatMessage"
+            placeholder="Type your message..."
+            autocomplete="off"
+            required
+          >
+          <button class="btn btn-primary buyer-btn" type="submit" id="chatSendBtn">
+            <i class="fas fa-paper-plane"></i>
+          </button>
+        </form>
+        <div class="text-danger small mt-2 d-none" id="chatError"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Accept Modal #}
+<div class="modal fade" id="acceptModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold"><i class="fas fa-check-circle me-2 text-success"></i>Accept Offer</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="{% url 'stores_b2b:buyer_accept_offer' order.id %}">
+        {% csrf_token %}
+        <div class="modal-body">
+          <p class="lead">Confirm your shipping information to accept this offer:</p>
+
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label fw-bold">Full Name *</label>
+              <input type="text" class="form-control" name="full_name"
+                     value="{{ order.shipping.full_name|default:request.user.get_full_name }}" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-bold">Phone</label>
+              <input type="text" class="form-control" name="phone"
+                     value="{{ order.shipping.phone|default:'' }}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-bold">Email</label>
+              <input type="email" class="form-control" name="email"
+                     value="{{ order.shipping.email|default:request.user.email }}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-bold">Company Name</label>
+              <input type="text" class="form-control" name="company_name"
+                     value="{{ order.shipping.company_name|default:'' }}">
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-bold">Address *</label>
+              <input type="text" class="form-control" name="address_line"
+                     value="{{ order.shipping.address_line|default:'' }}" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-bold">City *</label>
+              <input type="text" class="form-control" name="city"
+                     value="{{ order.shipping.city|default:'' }}" required>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-bold">Region</label>
+              <input type="text" class="form-control" name="region"
+                     value="{{ order.shipping.region|default:'' }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-bold">Country *</label>
+              <input type="text" class="form-control" name="country"
+                     value="{{ order.shipping.country|default:'Gambia' }}" required>
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-bold">Delivery Instructions</label>
+              <textarea class="form-control" name="delivery_instructions" rows="3">{{ order.shipping.delivery_instructions|default:'' }}</textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary buyer-btn" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-success buyer-btn">
+            <i class="fas fa-check me-1"></i>Accept & Confirm
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{# Reject Modal #}
+<div class="modal fade" id="rejectModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold"><i class="fas fa-times-circle me-2 text-danger"></i>Reject Offer</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>Why are you rejecting this offer? (Optional)</p>
+        <form id="rejectForm">
+          <textarea class="form-control" name="note" rows="3" placeholder="e.g., Price too high"></textarea>
+          <div class="text-danger small mt-2 d-none" id="rejectError"></div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary buyer-btn" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-danger buyer-btn" id="rejectBtn">
+          <i class="fas fa-times me-1"></i>Reject Offer
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const POLL_INTERVAL = 3000; // 3 seconds
+  const URL_SEND_MSG = "{% url 'stores_b2b:buyer_send_message_ajax' order.id %}";
+  const URL_FETCH_MSG = "{% url 'stores_b2b:buyer_fetch_messages' order.id %}";
+  const URL_REJECT = "{% url 'stores_b2b:buyer_reject_offer' order.id %}";
+
+  let lastMsgId = 0;
+  let pollTimer = null;
+  let isModalOpen = false;
+  let unreadCount = 0;
+
+  // Get CSRF token
+  function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== "") {
+      const cookies = document.cookie.split(";");
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, name.length + 1) === (name + "=")) {
+          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+          break;
+        }
+      }
+    }
+    return cookieValue;
+  }
+
+  // Initialize last message ID from existing messages
+  function initLastMsgId() {
+    const messages = document.querySelectorAll('.buyer-msg[data-msg-id]');
+    if (messages.length > 0) {
+      const ids = Array.from(messages).map(m => parseInt(m.dataset.msgId) || 0);
+      lastMsgId = Math.max(...ids);
+    }
+  }
+
+  // Render a single message
+  function renderMessage(msg, isMe) {
+    const div = document.createElement('div');
+    div.className = `buyer-msg ${isMe ? 'me' : ''}`;
+    div.dataset.msgId = msg.id;
+
+    div.innerHTML = `
+      <div class="meta">
+        <span>${msg.sender_name}</span>
+        <span>${msg.created_at_human || ''}</span>
+      </div>
+      <div class="txt">${msg.message}</div>
+    `;
+
+    return div;
+  }
+
+  // Fetch new messages
+  async function fetchNewMessages() {
+    try {
+      const resp = await fetch(`${URL_FETCH_MSG}?after=${lastMsgId}`, {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+      });
+
+      if (!resp.ok) return;
+
+      const data = await resp.json();
+      if (!data.success || !data.messages || data.messages.length === 0) return;
+
+      const chatWrap = document.getElementById('chatWrap');
+      const noMsgPlaceholder = document.getElementById('noMsgPlaceholder');
+
+      data.messages.forEach(msg => {
+        // Check if message already exists
+        if (document.querySelector(`[data-msg-id="${msg.id}"]`)) return;
+
+        const isMe = msg.sender_id === {{ request.user.id }};
+        const msgEl = renderMessage(msg, isMe);
+
+        if (noMsgPlaceholder) {
+          noMsgPlaceholder.remove();
+        }
+
+        chatWrap.appendChild(msgEl);
+        lastMsgId = Math.max(lastMsgId, msg.id);
+
+        // Update unread count if modal is closed
+        if (!isModalOpen && !isMe) {
+          unreadCount++;
+          updateBadge();
+        }
+      });
+
+      // Auto-scroll to bottom
+      chatWrap.scrollTop = chatWrap.scrollHeight;
+
+    } catch (e) {
+      console.error('Failed to fetch messages:', e);
+    }
+  }
+
+  // Update notification badge
+  function updateBadge() {
+    const badge = document.getElementById('newMsgBadge');
+    if (!badge) return;
+
+    if (unreadCount > 0) {
+      badge.textContent = unreadCount > 9 ? '9+' : unreadCount;
+      badge.classList.remove('d-none');
+    } else {
+      badge.classList.add('d-none');
+    }
+  }
+
+  // Send message via AJAX
+  async function sendMessage(message) {
+    const formData = new FormData();
+    formData.append('message', message);
+
+    const resp = await fetch(URL_SEND_MSG, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': getCookie('csrftoken'),
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      body: formData
+    });
+
+    if (!resp.ok) throw new Error('Failed to send message');
+
+    const data = await resp.json();
+    if (!data.success) throw new Error(data.error || 'Failed to send message');
+
+    return data;
+  }
+
+  // Start polling
+  function startPolling() {
+    if (pollTimer) return;
+    pollTimer = setInterval(fetchNewMessages, POLL_INTERVAL);
+  }
+
+  // Stop polling
+  function stopPolling() {
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  }
+
+  // Modal event listeners
+  const chatModal = document.getElementById('chatModal');
+  if (chatModal) {
+    chatModal.addEventListener('show.bs.modal', () => {
+      isModalOpen = true;
+      unreadCount = 0;
+      updateBadge();
+      startPolling();
+
+      // Scroll to bottom when opening
+      const chatWrap = document.getElementById('chatWrap');
+      if (chatWrap) {
+        chatWrap.scrollTop = chatWrap.scrollHeight;
+      }
+    });
+
+    chatModal.addEventListener('hide.bs.modal', () => {
+      isModalOpen = false;
+      stopPolling();
+    });
+  }
+
+  // Chat form submission
+  const chatForm = document.getElementById('chatForm');
+  const chatInput = document.getElementById('chatMessage');
+  const chatError = document.getElementById('chatError');
+  const chatSendBtn = document.getElementById('chatSendBtn');
+
+  if (chatForm) {
+    chatForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const message = chatInput.value.trim();
+      if (!message) return;
+
+      // Hide error
+      if (chatError) {
+        chatError.classList.add('d-none');
+        chatError.textContent = '';
+      }
+
+      // Disable button
+      chatSendBtn.disabled = true;
+      chatSendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+      try {
+        const data = await sendMessage(message);
+
+        // Clear input
+        chatInput.value = '';
+
+        // Add message to chat
+        const chatWrap = document.getElementById('chatWrap');
+        const noMsgPlaceholder = document.getElementById('noMsgPlaceholder');
+
+        if (noMsgPlaceholder) {
+          noMsgPlaceholder.remove();
+        }
+
+        const msgEl = renderMessage(data.message, true);
+        chatWrap.appendChild(msgEl);
+
+        lastMsgId = Math.max(lastMsgId, data.message.id);
+
+        // Scroll to bottom
+        chatWrap.scrollTop = chatWrap.scrollHeight;
+
+      } catch (e) {
+        if (chatError) {
+          chatError.classList.remove('d-none');
+          chatError.textContent = e.message;
+        }
+      } finally {
+        // Re-enable button
+        chatSendBtn.disabled = false;
+        chatSendBtn.innerHTML = '<i class="fas fa-paper-plane"></i>';
+        chatInput.focus();
+      }
+    });
+  }
+
+  // Reject offer
+  const rejectBtn = document.getElementById('rejectBtn');
+  const rejectForm = document.getElementById('rejectForm');
+  const rejectError = document.getElementById('rejectError');
+
+  if (rejectBtn && rejectForm) {
+    rejectBtn.addEventListener('click', async () => {
+      if (rejectError) {
+        rejectError.classList.add('d-none');
+        rejectError.textContent = '';
+      }
+
+      const formData = new FormData(rejectForm);
+
+      try {
+        const resp = await fetch(URL_REJECT, {
+          method: 'POST',
+          headers: {
+            'X-CSRFToken': getCookie('csrftoken'),
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          body: formData
+        });
+
+        const data = await resp.json();
+
+        if (!resp.ok || !data.success) {
+          throw new Error(data.error || 'Failed to reject offer');
+        }
+
+        // Redirect or reload
+        window.location.reload();
+
+      } catch (e) {
+        if (rejectError) {
+          rejectError.classList.remove('d-none');
+          rejectError.textContent = e.message;
+        }
+      }
+    });
+  }
+
+  // Initialize
+  initLastMsgId();
+
+  // Poll for new messages in background (even when modal closed)
+  setInterval(fetchNewMessages, POLL_INTERVAL);
+
+})();
+</script>
+
+{% endblock %}

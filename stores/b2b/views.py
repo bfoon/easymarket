@@ -3,11 +3,14 @@ import secrets
 from .utils import _generate_b2b_tracking_number
 
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_POST
+
 from django.db import transaction
 from django.db.models import Sum, Q
 from django.http import JsonResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.urls import reverse
 
 from marketplace.models import Product, ProductVariant
 from stores.models import Store  # adjust if your Store model lives elsewhere
@@ -122,6 +125,9 @@ def _apply_optional_totals(order: B2BOrder, subtotal: Decimal):
         order.total = (subtotal + shipping_cost - discount)
 
     order.updated_at = timezone.now()
+
+def _is_buyer(user, order: B2BOrder) -> bool:
+    return order.buyer_id == user.id
 
 def _notify_buyer_b2b_status(order: B2BOrder):
     pass
@@ -455,7 +461,6 @@ def b2b_update_order_status(request, order_id):
             id=order_id
         )
 
-        # ✅ JSON on forbidden (frontend expects JSON)
         if not _is_store_owner(request.user, order):
             return JsonResponse({"success": False, "error": "Not allowed"}, status=403)
 
@@ -463,22 +468,30 @@ def b2b_update_order_status(request, order_id):
         if not new_status:
             return JsonResponse({"success": False, "error": "status is required"}, status=400)
 
+        # ✅ keep allowed set (but note you had accepted/cancelled timestamps below, so include them if needed)
         allowed = {"priced", "in_progress", "ready", "shipped", "delivered", "rejected"}
         if new_status not in allowed:
-            return JsonResponse(
-                {"success": False, "error": f"Invalid status '{new_status}'"},
-                status=400
-            )
+            return JsonResponse({"success": False, "error": f"Invalid status '{new_status}'"}, status=400)
 
         now = timezone.now()
         current_status = (getattr(order, "status", "") or "").strip().lower()
+
+        # ----------------------------------------------------
+        # ✅ RULE: cannot ship/deliver unless buyer accepted
+        # ----------------------------------------------------
+        if new_status in ("shipped", "delivered") and current_status != "accepted":
+            return JsonResponse({
+                "success": False,
+                "error": "You can’t mark this order as shipped/delivered until the buyer accepts the offer."
+            }, status=400)
 
         # ----------------------------------------------------
         # ✅ HARD LOCK once shipped/delivered
         # BUT: allow generating tracking if already shipped and missing tracking
         # ----------------------------------------------------
         if current_status in ("shipped", "delivered"):
-            # allow only a “no-op” status set (same value) and only to generate tracking when missing
+
+            # allow only a “no-op” set to shipped to generate tracking if missing
             if new_status == current_status == "shipped":
                 if hasattr(order, "tracking_number"):
                     cur_tracking = (getattr(order, "tracking_number", "") or "").strip()
@@ -522,13 +535,11 @@ def b2b_update_order_status(request, order_id):
                             "locked": True,
                         })
 
-                # shipped already + tracking already exists => locked
                 return JsonResponse(
                     {"success": False, "error": "Order is shipped and locked. Status cannot be changed."},
                     status=400
                 )
 
-            # delivered lock or any other attempted change
             return JsonResponse(
                 {"success": False, "error": "Order is shipped and locked. Status cannot be changed."},
                 status=400
@@ -548,10 +559,6 @@ def b2b_update_order_status(request, order_id):
             order.priced_at = now
             update_fields.append("priced_at")
 
-        if new_status == "accepted" and hasattr(order, "accepted_at"):
-            order.accepted_at = now
-            update_fields.append("accepted_at")
-
         if new_status == "shipped" and hasattr(order, "shipped_at"):
             order.shipped_at = now
             update_fields.append("shipped_at")
@@ -559,10 +566,6 @@ def b2b_update_order_status(request, order_id):
         if new_status == "delivered" and hasattr(order, "delivered_at"):
             order.delivered_at = now
             update_fields.append("delivered_at")
-
-        if new_status == "cancelled" and hasattr(order, "cancelled_at"):
-            order.cancelled_at = now
-            update_fields.append("cancelled_at")
 
         # ✅ AUTO TRACKING when moved to shipped AND tracking not set
         generated_tracking = None
@@ -823,8 +826,17 @@ def b2b_mark_items_shipped(request, order_id):
         if not _is_store_owner(request.user, order):
             return JsonResponse({"success": False, "error": "Not allowed"}, status=403)
 
-        # Accept both: item_ids[] OR item_ids csv
-        item_ids = request.POST.getlist("item_ids[]")
+            # ✅ RULE: seller cannot ship until buyer accepts the offer
+            order_status = (getattr(order, "status", "") or "").lower().strip()
+            if order_status != "accepted":
+                return JsonResponse({
+                    "success": False,
+                    "error": "You can’t mark items as shipped until the buyer accepts the offer."
+                }, status=400)
+
+            # Accept both: item_ids[] OR item_ids csv
+            item_ids = request.POST.getlist("item_ids[]")
+
         if not item_ids:
             raw = (request.POST.get("item_ids") or "").strip()
             item_ids = [x.strip() for x in raw.split(",") if x.strip()]
@@ -957,4 +969,248 @@ def b2b_set_shipping_cost(request, order_id):
         "shipping_cost": str(order.shipping_cost),
         "subtotal": str(getattr(order, "subtotal", "")),
         "total": str(getattr(order, "total", getattr(order, "subtotal", ""))),
+    })
+
+
+@login_required
+def b2b_my_personal_orders(request):
+    orders = (
+        B2BOrder.objects
+        .filter(buyer=request.user)
+        .select_related("store", "buyer", "store__owner")
+        .order_by("-created_at")
+    )
+    return render(request, "b2b/my_personal_orders.html", {
+        "orders": orders,
+        "view_as": "buyer",
+    })
+
+
+@login_required
+def b2b_my_personal_order_detail(request, order_id):
+    order = get_object_or_404(
+        B2BOrder.objects.select_related("store", "buyer", "store__owner").prefetch_related("items", "messages"),
+        id=order_id
+    )
+
+    if not _is_buyer(request.user, order):
+        return render(request, "403.html", status=403)
+
+    items = order.items.all()
+
+    can_accept_order = (
+            order.status == "priced"
+            and not items.filter(status="shipped").exists()
+    )
+
+    messages = order.messages.select_related("sender").all()  # ordering already in Meta
+
+    return render(request, "b2b/my_personal_order_detail.html", {
+        "order": order,
+        "items": items,
+        "messages": messages,
+        "view_as": "buyer",
+        "can_accept_order": can_accept_order,
+    })
+
+@login_required
+@require_POST
+def b2b_buyer_send_message(request, order_id):
+    order = get_object_or_404(B2BOrder, id=order_id, buyer=request.user)
+
+    msg = (request.POST.get("message") or "").strip()
+    if not msg:
+        return JsonResponse({"success": False, "error": "Message is required."}, status=400)
+
+    m = B2BOrderMessage.objects.create(
+        order=order,
+        sender=request.user,
+        message=msg,
+        created_at=timezone.now(),
+    )
+
+    redirect_url = reverse(
+        "stores_b2b:my_personal_order_detail",
+        args=[order.id]
+    )
+
+    return redirect(redirect_url)
+
+
+@login_required
+def b2b_buyer_send_message_ajax(request, order_id):
+    """
+    AJAX endpoint for buyer to send messages without page reload.
+    Returns JSON with the new message data.
+    """
+    if request.method != "POST":
+        return JsonResponse({"success": False, "error": "POST required"}, status=405)
+
+    order = get_object_or_404(B2BOrder, id=order_id, buyer=request.user)
+
+    msg = (request.POST.get("message") or "").strip()
+    if not msg:
+        return JsonResponse({"success": False, "error": "Message is required."}, status=400)
+
+    m = B2BOrderMessage.objects.create(
+        order=order,
+        sender=request.user,
+        message=msg,
+        created_at=timezone.now(),
+    )
+
+    return JsonResponse({
+        "success": True,
+        "message": {
+            "id": m.id,
+            "sender_id": m.sender_id,
+            "sender_name": m.sender.get_full_name() or m.sender.username,
+            "message": m.message,
+            "created_at": m.created_at.isoformat() if hasattr(m, "created_at") else "",
+            "created_at_human": m.created_at.strftime("%b %d, %H:%M") if hasattr(m, "created_at") else "",
+            "is_me": True
+        }
+    })
+
+
+@login_required
+@require_POST
+def b2b_buyer_accept_offer(request, order_id):
+    order = get_object_or_404(
+        B2BOrder,
+        id=order_id,
+        buyer=request.user
+    )
+
+    if order.status != "priced":
+        return JsonResponse(
+            {"success": False, "error": "This offer cannot be accepted now."},
+            status=400
+        )
+
+    # -------------------------
+    # Read shipping fields
+    # -------------------------
+    full_name = (request.POST.get("full_name") or "").strip()
+    phone = (request.POST.get("phone") or "").strip()
+    email = (request.POST.get("email") or "").strip()
+    company_name = (request.POST.get("company_name") or "").strip()
+
+    address_line = (request.POST.get("address_line") or "").strip()
+    city = (request.POST.get("city") or "").strip()
+    region = (request.POST.get("region") or "").strip()
+    country = (request.POST.get("country") or "Gambia").strip()
+
+    delivery_instructions = (request.POST.get("delivery_instructions") or "").strip()
+
+    if not full_name or not address_line or not city or not country:
+        return JsonResponse(
+            {"success": False, "error": "Please fill all required shipping fields."},
+            status=400
+        )
+
+    # -------------------------
+    # Atomic save
+    # -------------------------
+    with transaction.atomic():
+        B2BShippingAddress.objects.update_or_create(
+            order=order,
+            defaults={
+                "full_name": full_name,
+                "phone": phone,
+                "email": email,
+                "company_name": company_name,
+                "address_line": address_line,
+                "city": city,
+                "region": region,
+                "country": country,
+                "delivery_instructions": delivery_instructions,
+            }
+        )
+
+        order.status = "accepted"
+        order.save(update_fields=["status"])
+
+    # -------------------------
+    # Redirect target
+    # -------------------------
+    redirect_url = reverse(
+        "stores_b2b:my_personal_order_detail",
+        args=[order.id]
+    )
+
+    return redirect(redirect_url)
+
+@login_required
+@transaction.atomic
+def b2b_buyer_reject_offer(request, order_id):
+    if request.method != "POST":
+        return JsonResponse({"success": False, "error": "POST required"}, status=405)
+
+    order = get_object_or_404(B2BOrder.objects.select_related("store", "buyer"), id=order_id)
+    if not _is_buyer(request.user, order):
+        return JsonResponse({"success": False, "error": "Not allowed"}, status=403)
+
+    status = (order.status or "").lower().strip()
+
+    if status != "priced":
+        return JsonResponse({"success": False, "error": "You can only reject after the seller prices the order."}, status=400)
+
+    if status in ("accepted", "rejected", "cancelled", "processing", "completed"):
+        return JsonResponse({"success": False, "error": "This order is locked and cannot be rejected."}, status=400)
+
+    note = (request.POST.get("note") or "").strip()
+
+    order.status = "rejected"
+    if note:
+        order.buyer_note = note
+    order.updated_at = timezone.now()
+    order.save(update_fields=["status", "buyer_note", "updated_at"])
+
+    B2BOrderMessage.objects.create(
+        order=order,
+        sender=request.user,
+        message=("❌ Buyer rejected the offer." + (f" Note: {note}" if note else ""))
+    )
+
+    return JsonResponse({"success": True, "status": order.status})
+
+@login_required
+def b2b_buyer_fetch_messages(request, order_id):
+    """
+    Poll endpoint for buyer chat: returns messages after a given message id.
+    GET: ?after=<last_id>
+    """
+    order = get_object_or_404(B2BOrder.objects.select_related("buyer", "store"), id=order_id)
+
+    # buyer only
+    if not _is_buyer(request.user, order):
+        return JsonResponse({"success": False, "error": "Not allowed"}, status=403)
+
+    after = request.GET.get("after", "0")
+    try:
+        after_id = int(after)
+    except ValueError:
+        after_id = 0
+
+    qs = (B2BOrderMessage.objects
+          .select_related("sender")
+          .filter(order=order, id__gt=after_id)
+          .order_by("id"))
+
+    messages = []
+    for m in qs[:50]:
+        messages.append({
+            "id": m.id,
+            "sender_id": m.sender_id,
+            "sender_name": m.sender.get_full_name() or m.sender.username,
+            "message": m.message,
+            "created_at": m.created_at.isoformat() if hasattr(m, "created_at") else "",
+            "created_at_human": getattr(m, "created_at", None).strftime("%b %d, %H:%M") if getattr(m, "created_at", None) else "",
+        })
+
+    return JsonResponse({
+        "success": True,
+        "messages": messages,
+        "last_id": messages[-1]["id"] if messages else after_id
     })
