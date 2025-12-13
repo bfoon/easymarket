@@ -417,10 +417,10 @@ class B2BShippingInline(admin.StackedInline):
 
 @admin.register(B2BOrder)
 class B2BOrderAdmin(admin.ModelAdmin):
-    list_display = ("store", "buyer", "status", "subtotal", "created_at", "priced_at")
-    list_filter = ("status", "created_at", "priced_at", "store")
+    list_display = ("store", "buyer", "status", "subtotal", "created_at", "priced_at", "tracking_number")
+    list_filter = ("status", "created_at", "priced_at", "store", "tracking_number")
     search_fields = ("id", "store__name", "buyer__username", "buyer__email")
-    readonly_fields = ("created_at", "updated_at", "priced_at")
+    readonly_fields = ("created_at", "updated_at", "priced_at", "tracking_number")
     autocomplete_fields = ("store", "buyer", "cart_source")
     inlines = [B2BOrderItemInline, B2BShippingInline]
     ordering = ("-created_at",)
@@ -430,6 +430,7 @@ class B2BOrderAdmin(admin.ModelAdmin):
         ("Totals", {"fields": ("subtotal",)}),
         ("Links", {"fields": ("cart_source",)}),
         ("Timestamps", {"fields": ("created_at", "updated_at", "priced_at")}),
+        ("Tracking Number", {"fields": ("tracking_number", "tracking_note")}),
     )
 
 @admin.register(B2BOrderItem)

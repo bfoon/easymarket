@@ -1,4 +1,6 @@
 from decimal import Decimal, InvalidOperation
+import secrets
+from .utils import _generate_b2b_tracking_number
 
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
@@ -41,6 +43,34 @@ def _safe_decimal(val, default=Decimal("0.00")):
         return Decimal(str(val))
     except (InvalidOperation, ValueError, TypeError):
         return default
+
+
+def _gen_tracking_number(order) -> str:
+    """
+    Example format: EM-B2B-20251212-8B2F-7C9A21
+    - date stamp
+    - short order id chunk
+    - random
+    """
+    date_part = timezone.now().strftime("%Y%m%d")
+    short_part = str(order.id).split("-")[0].upper()  # works great for UUID orders
+    rand_part = secrets.token_hex(3).upper()          # 6 chars
+    return f"EM-B2B-{date_part}-{short_part}-{rand_part}"
+
+
+def _ensure_unique_tracking(order) -> str:
+    """
+    Very low collision risk, but we still enforce uniqueness if you have a unique constraint.
+    Tries a few times then falls back.
+    """
+    Model = order.__class__
+    for _ in range(8):
+        candidate = _gen_tracking_number(order)
+        if not hasattr(order, "tracking_number"):
+            return candidate
+        if not Model.objects.filter(tracking_number=candidate).exists():
+            return candidate
+    return _gen_tracking_number(order)
 
 # -------------------------------------------------------------------
 # Small helpers
@@ -380,65 +410,170 @@ def order_invoice(request, order_id):
 # -------------------------------------------------------------------
 # 1) Update B2B order status (store owner only)
 # -------------------------------------------------------------------
+
+
 @login_required
 @transaction.atomic
 def b2b_update_order_status(request, order_id):
     if request.method != "POST":
         return JsonResponse({"success": False, "error": "POST required"}, status=405)
 
-    order = get_object_or_404(B2BOrder.objects.select_related("store", "buyer"), id=order_id)
-
-    if not _is_store_owner(request.user, order):
-        return HttpResponseForbidden("Not allowed")
-
-    new_status = (request.POST.get("status") or "").strip().lower()
-    if not new_status:
-        return JsonResponse({"success": False, "error": "status is required"}, status=400)
-
-    # Allowed statuses for B2B (adjust to your choices)
-    allowed = {
-        "submitted",
-        "priced",
-        "accepted",
-        "in_progress",
-        "ready",
-        "shipped",
-        "delivered",
-        "cancelled",
-        "rejected",
-    }
-    if new_status not in allowed:
-        return JsonResponse(
-            {"success": False, "error": f"Invalid status '{new_status}'"},
-            status=400
+    try:
+        order = get_object_or_404(
+            B2BOrder.objects.select_related("store", "buyer"),
+            id=order_id
         )
 
-    order.status = new_status
+        # ✅ JSON on forbidden (frontend expects JSON)
+        if not _is_store_owner(request.user, order):
+            return JsonResponse({"success": False, "error": "Not allowed"}, status=403)
 
-    # Optional timestamps if your model has them
-    now = timezone.now()
-    if new_status == "priced" and hasattr(order, "priced_at"):
-        order.priced_at = now
-    if new_status == "accepted" and hasattr(order, "accepted_at"):
-        order.accepted_at = now
-    if new_status == "shipped" and hasattr(order, "shipped_at"):
-        order.shipped_at = now
-    if new_status == "delivered" and hasattr(order, "delivered_at"):
-        order.delivered_at = now
-    if new_status == "cancelled" and hasattr(order, "cancelled_at"):
-        order.cancelled_at = now
+        new_status = (request.POST.get("status") or "").strip().lower()
+        if not new_status:
+            return JsonResponse({"success": False, "error": "status is required"}, status=400)
 
-    order.updated_at = now
-    order.save()
+        allowed = {"priced", "in_progress", "ready", "shipped", "delivered", "rejected"}
+        if new_status not in allowed:
+            return JsonResponse(
+                {"success": False, "error": f"Invalid status '{new_status}'"},
+                status=400
+            )
 
-    _notify_buyer_b2b_status(order)
+        now = timezone.now()
+        current_status = (getattr(order, "status", "") or "").strip().lower()
 
-    return JsonResponse({
-        "success": True,
-        "order_id": str(order.id),
-        "status": order.status,
-    })
+        # ----------------------------------------------------
+        # ✅ HARD LOCK once shipped/delivered
+        # BUT: allow generating tracking if already shipped and missing tracking
+        # ----------------------------------------------------
+        if current_status in ("shipped", "delivered"):
+            # allow only a “no-op” status set (same value) and only to generate tracking when missing
+            if new_status == current_status == "shipped":
+                if hasattr(order, "tracking_number"):
+                    cur_tracking = (getattr(order, "tracking_number", "") or "").strip()
+                    if not cur_tracking:
+                        generated_tracking = None
+                        for _ in range(5):
+                            candidate = _generate_b2b_tracking_number(prefix="EM-B2B")
+                            if not B2BOrder.objects.filter(tracking_number=candidate).exists():
+                                generated_tracking = candidate
+                                break
 
+                        if not generated_tracking:
+                            return JsonResponse(
+                                {"success": False, "error": "Could not generate tracking number. Try again."},
+                                status=500
+                            )
+
+                        update_fields = []
+
+                        order.tracking_number = generated_tracking
+                        update_fields.append("tracking_number")
+
+                        if hasattr(order, "tracking_note"):
+                            note = (getattr(order, "tracking_note", "") or "").strip()
+                            if not note:
+                                order.tracking_note = "Auto-generated after order was marked shipped."
+                                update_fields.append("tracking_note")
+
+                        if hasattr(order, "updated_at"):
+                            order.updated_at = now
+                            update_fields.append("updated_at")
+
+                        order.save(update_fields=list(set(update_fields)))
+
+                        return JsonResponse({
+                            "success": True,
+                            "order_id": str(order.id),
+                            "status": getattr(order, "status", ""),
+                            "tracking_number": getattr(order, "tracking_number", ""),
+                            "tracking_generated": True,
+                            "locked": True,
+                        })
+
+                # shipped already + tracking already exists => locked
+                return JsonResponse(
+                    {"success": False, "error": "Order is shipped and locked. Status cannot be changed."},
+                    status=400
+                )
+
+            # delivered lock or any other attempted change
+            return JsonResponse(
+                {"success": False, "error": "Order is shipped and locked. Status cannot be changed."},
+                status=400
+            )
+
+        # ----------------------------------------------------
+        # Normal status update (pre-shipped)
+        # ----------------------------------------------------
+        update_fields = []
+
+        if hasattr(order, "status"):
+            order.status = new_status
+            update_fields.append("status")
+
+        # Optional timestamps (only if fields exist)
+        if new_status == "priced" and hasattr(order, "priced_at"):
+            order.priced_at = now
+            update_fields.append("priced_at")
+
+        if new_status == "accepted" and hasattr(order, "accepted_at"):
+            order.accepted_at = now
+            update_fields.append("accepted_at")
+
+        if new_status == "shipped" and hasattr(order, "shipped_at"):
+            order.shipped_at = now
+            update_fields.append("shipped_at")
+
+        if new_status == "delivered" and hasattr(order, "delivered_at"):
+            order.delivered_at = now
+            update_fields.append("delivered_at")
+
+        if new_status == "cancelled" and hasattr(order, "cancelled_at"):
+            order.cancelled_at = now
+            update_fields.append("cancelled_at")
+
+        # ✅ AUTO TRACKING when moved to shipped AND tracking not set
+        generated_tracking = None
+        if new_status == "shipped" and hasattr(order, "tracking_number"):
+            cur_tracking = (getattr(order, "tracking_number", "") or "").strip()
+            if not cur_tracking:
+                for _ in range(5):
+                    candidate = _generate_b2b_tracking_number(prefix="EM-B2B")
+                    if not B2BOrder.objects.filter(tracking_number=candidate).exists():
+                        order.tracking_number = candidate
+                        generated_tracking = candidate
+                        update_fields.append("tracking_number")
+                        break
+
+                if generated_tracking and hasattr(order, "tracking_note"):
+                    note = (getattr(order, "tracking_note", "") or "").strip()
+                    if not note:
+                        order.tracking_note = "Auto-generated on status update to shipped."
+                        update_fields.append("tracking_note")
+
+        if hasattr(order, "updated_at"):
+            order.updated_at = now
+            update_fields.append("updated_at")
+
+        if update_fields:
+            order.save(update_fields=list(set(update_fields)))
+        else:
+            order.save()
+
+        _notify_buyer_b2b_status(order)
+
+        return JsonResponse({
+            "success": True,
+            "order_id": str(order.id),
+            "status": getattr(order, "status", ""),
+            "tracking_number": getattr(order, "tracking_number", "") if hasattr(order, "tracking_number") else "",
+            "tracking_generated": bool(generated_tracking),
+            "locked": False,
+        })
+
+    except Exception as e:
+        return JsonResponse({"success": False, "error": f"Server error: {str(e)}"}, status=500)
 
 # -------------------------------------------------------------------
 # 2) Save seller prices for items (store owner only)
@@ -641,6 +776,7 @@ def b2b_order_send_message(request, order_id):
 #    If your B2BOrderItem has shipped fields, it sets them.
 #    Otherwise it safely does nothing but can still set order status if requested.
 # -------------------------------------------------------------------
+
 @login_required
 @transaction.atomic
 def b2b_mark_items_shipped(request, order_id):
@@ -649,14 +785,14 @@ def b2b_mark_items_shipped(request, order_id):
 
     try:
         order = get_object_or_404(
-            B2BOrder.objects.select_related("store", "buyer"),
+            B2BOrder.objects.select_related("store", "buyer").prefetch_related("items"),
             id=order_id
         )
 
         if not _is_store_owner(request.user, order):
             return JsonResponse({"success": False, "error": "Not allowed"}, status=403)
 
-        # Accept both forms: item_ids[] list OR item_ids csv
+        # Accept both: item_ids[] OR item_ids csv
         item_ids = request.POST.getlist("item_ids[]")
         if not item_ids:
             raw = (request.POST.get("item_ids") or "").strip()
@@ -667,45 +803,53 @@ def b2b_mark_items_shipped(request, order_id):
 
         now = timezone.now()
 
-        # Only items belonging to THIS order
         qs = order.items.filter(id__in=item_ids)
 
         found_ids = set(str(x) for x in qs.values_list("id", flat=True))
         requested_ids = set(str(x) for x in item_ids)
         missing_ids = sorted(list(requested_ids - found_ids))
 
-        if qs.count() == 0:
+        if not qs.exists():
             return JsonResponse(
                 {"success": False, "error": "No valid items selected for this order.", "missing_ids": missing_ids},
                 status=400
             )
 
+        # ✅ mark selected items shipped
         updated = 0
         for item in qs:
-            # Your model now has these fields
+            # if already shipped, skip (optional)
+            if getattr(item, "status", "") == "shipped":
+                continue
+
             item.status = "shipped"
             item.shipped_at = now
             item.save(update_fields=["status", "shipped_at"])
             updated += 1
 
-        # Optional: attach tracking number/note to order (only if fields exist)
-        tracking_number = (request.POST.get("tracking_number") or "").strip()
-        note = (request.POST.get("note") or "").strip()
-
+        # ✅ auto-generate tracking number on FIRST shipment (only if blank)
         order_fields = []
-        if tracking_number and hasattr(order, "tracking_number"):
-            order.tracking_number = tracking_number
-            order_fields.append("tracking_number")
 
+        if hasattr(order, "tracking_number"):
+            current_tracking = (order.tracking_number or "").strip()
+            if not current_tracking:
+                order.tracking_number = _ensure_unique_tracking(order)
+                order_fields.append("tracking_number")
+
+        # Optional note from request
+        note = (request.POST.get("note") or "").strip()
         if note and hasattr(order, "tracking_note"):
-            order.tracking_note = note
+            # append nicely if note already exists
+            existing = (getattr(order, "tracking_note", "") or "").strip()
+            order.tracking_note = (existing + "\n" if existing else "") + note
             order_fields.append("tracking_note")
 
+        # Always bump updated_at
         if hasattr(order, "updated_at"):
             order.updated_at = now
             order_fields.append("updated_at")
 
-        # ✅ Recommended: auto mark order shipped when ALL items shipped
+        # ✅ auto mark order shipped only when ALL items shipped
         all_shipped = not order.items.exclude(status="shipped").exists()
         if all_shipped:
             if hasattr(order, "status"):
@@ -724,6 +868,7 @@ def b2b_mark_items_shipped(request, order_id):
             "missing_ids": missing_ids,
             "order_status": getattr(order, "status", ""),
             "all_shipped": all_shipped,
+            "tracking_number": getattr(order, "tracking_number", ""),
         })
 
     except Exception as e:

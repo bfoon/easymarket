@@ -97,6 +97,9 @@ class B2BOrder(models.Model):
     shipping_cost = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
     shipping_note = models.TextField(blank=True)
 
+    tracking_number = models.CharField(max_length=64, blank=True, null=True, unique=True)
+    tracking_note = models.TextField(blank=True, null=True)
+
     # Optional totals (you can compute dynamically too)
     subtotal = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
     total = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
