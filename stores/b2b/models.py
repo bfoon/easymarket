@@ -93,41 +93,112 @@ class B2BOrder(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="submitted")
     buyer_note = models.TextField(blank=True)
 
+    # B2B Shipping cost (store sets later)
+    shipping_cost = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
+    shipping_note = models.TextField(blank=True)
+
     # Optional totals (you can compute dynamically too)
     subtotal = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
+    total = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     priced_at = models.DateTimeField(null=True, blank=True)
+
+    @property
+    def items_total(self):
+        return sum((it.line_total() for it in self.items.all()), Decimal("0.00"))
+
+    @property
+    def grand_total(self):
+        return (self.items_total or Decimal("0.00")) + (self.shipping_cost or Decimal("0.00"))
 
     def __str__(self):
         return f"B2BOrder {self.id} ({self.store})"
 
 
 class B2BOrderItem(models.Model):
-    order = models.ForeignKey(B2BOrder, on_delete=models.CASCADE, related_name="items")
-    product = models.ForeignKey("marketplace.Product", on_delete=models.CASCADE)
-    variant = models.ForeignKey("marketplace.ProductVariant", null=True, blank=True, on_delete=models.SET_NULL)
+
+    STATUS_PENDING = "pending"
+    STATUS_SHIPPED = "shipped"
+
+    STATUS_CHOICES = (
+        (STATUS_PENDING, "Pending"),
+        (STATUS_SHIPPED, "Shipped"),
+    )
+
+    order = models.ForeignKey(
+        "B2BOrder",
+        on_delete=models.CASCADE,
+        related_name="items"
+    )
+
+    product = models.ForeignKey(
+        "marketplace.Product",
+        on_delete=models.CASCADE
+    )
+
+    variant = models.ForeignKey(
+        "marketplace.ProductVariant",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL
+    )
 
     quantity = models.PositiveIntegerField(default=1)
 
     # buyer snapshot + request
     product_name = models.CharField(max_length=255, blank=True)
-    requested_unit_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    requested_unit_price = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True
+    )
 
-    # seller sets final price (optional). if null => we fall back to default pricing.
-    seller_unit_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    # seller / locked pricing
+    seller_unit_price = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True
+    )
+
+    unit_price = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Locked unit price used for totals and invoices"
+    )
+
+    # ✅ NEW: item shipping status
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING,
+        db_index=True
+    )
+
+    shipped_at = models.DateTimeField(
+        null=True,
+        blank=True
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.quantity} x {self.product_id}"
+        return f"{self.quantity} × {self.product_name or self.product_id}"
+
+    # ---------------------------
+    # Pricing helpers
+    # ---------------------------
 
     def get_default_unit_price(self) -> Decimal:
         """
         Default price logic:
-        - use product.b2b_price if available
-        - else use product.price (retail)
+        - product.b2b_price if available
+        - else product.price (retail)
         """
         b2b_price = getattr(self.product, "b2b_price", None)
         retail_price = getattr(self.product, "price", None)
@@ -141,11 +212,73 @@ class B2BOrderItem(models.Model):
 
     def get_effective_unit_price(self) -> Decimal:
         """
-        What the buyer will see if seller hasn't priced yet.
+        Price priority:
+        1. locked unit_price
+        2. seller_unit_price
+        3. default product price
         """
+        if self.unit_price is not None:
+            return self.unit_price
         if self.seller_unit_price is not None:
-            return Decimal(self.seller_unit_price)
+            return self.seller_unit_price
         return self.get_default_unit_price()
 
     def line_total(self) -> Decimal:
         return self.get_effective_unit_price() * Decimal(self.quantity)
+
+    # ---------------------------
+    # Shipping helpers
+    # ---------------------------
+
+    def mark_shipped(self, when=None):
+        """
+        Safely mark item as shipped
+        """
+        self.status = self.STATUS_SHIPPED
+        self.shipped_at = when or timezone.now()
+        self.save(update_fields=["status", "shipped_at"])
+
+class B2BShippingAddress(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    order = models.OneToOneField(
+        "B2BOrder",
+        related_name="shipping",
+        on_delete=models.CASCADE
+    )
+
+    # Contact
+    full_name = models.CharField(max_length=255)
+    phone = models.CharField(max_length=50, blank=True)
+    email = models.EmailField(blank=True)
+
+    # Company / warehouse
+    company_name = models.CharField(max_length=255, blank=True)
+
+    # Address
+    address_line = models.CharField(max_length=255)
+    city = models.CharField(max_length=100)
+    region = models.CharField(max_length=100, blank=True)
+    country = models.CharField(max_length=100, default="Gambia")
+
+    # Logistics
+    delivery_instructions = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"B2B Shipping for Order {self.order.id}"
+
+class B2BOrderMessage(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    order = models.ForeignKey("B2BOrder", on_delete=models.CASCADE, related_name="messages")
+    sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="b2b_sent_messages")
+    message = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"B2B msg {self.id} on {self.order_id}"

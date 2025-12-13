@@ -1,0 +1,240 @@
+{% load humanize %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Invoice {{ order.reference|default:order.id }}</title>
+
+  <style>
+    body {
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: #f6f8fb;
+      margin: 0;
+      padding: 30px;
+      color: #1f2937;
+    }
+
+    .invoice {
+      max-width: 900px;
+      margin: auto;
+      background: white;
+      padding: 40px;
+      border-radius: 12px;
+      box-shadow: 0 20px 40px rgba(0,0,0,.08);
+    }
+
+    .inv-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 30px;
+    }
+
+    .inv-title {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: .5px;
+    }
+
+    .inv-meta small {
+      display: block;
+      color: #6b7280;
+      margin-top: 4px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 700;
+      background: #eef2ff;
+      color: #3730a3;
+      margin-top: 6px;
+    }
+
+    .inv-section {
+      display: flex;
+      justify-content: space-between;
+      gap: 30px;
+      margin-bottom: 35px;
+    }
+
+    .inv-box {
+      flex: 1;
+      background: #f9fafb;
+      padding: 18px;
+      border-radius: 10px;
+    }
+
+    .inv-box h4 {
+      margin: 0 0 10px;
+      font-size: 14px;
+      color: #374151;
+      text-transform: uppercase;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 25px;
+    }
+
+    th, td {
+      padding: 14px 10px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    th {
+      background: #f3f4f6;
+      text-align: left;
+      font-size: 13px;
+      text-transform: uppercase;
+    }
+
+    td {
+      font-size: 14px;
+    }
+
+    .text-end { text-align: right; }
+
+    .total-box {
+      margin-top: 30px;
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .total-card {
+      width: 320px;
+      background: #111827;
+      color: white;
+      padding: 20px;
+      border-radius: 12px;
+    }
+
+    .total-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .total-row.final {
+      font-size: 18px;
+      font-weight: 800;
+      border-top: 1px solid rgba(255,255,255,.2);
+      padding-top: 12px;
+    }
+
+    .inv-footer {
+      margin-top: 40px;
+      font-size: 13px;
+      color: #6b7280;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .print-btn {
+      background: #2563eb;
+      color: white;
+      padding: 10px 18px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    @media print {
+      body { background: white; padding: 0; }
+      .invoice { box-shadow: none; border-radius: 0; }
+      .print-btn { display: none; }
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="invoice">
+
+  <!-- Header -->
+  <div class="inv-header">
+    <div>
+      <div class="inv-title">INVOICE</div>
+      <div class="badge">{{ order.status|upper }}</div>
+    </div>
+    <div class="inv-meta text-end">
+      <strong>#{{ order.reference|default:order.id }}</strong>
+      <small>Date: {{ order.created_at|date:"M d, Y" }}</small>
+      <small>Time: {{ order.created_at|date:"H:i" }}</small>
+    </div>
+  </div>
+
+  <!-- Parties -->
+  <div class="inv-section">
+    <div class="inv-box">
+      <h4>Bill From</h4>
+      <strong>{{ order.store.name }}</strong><br>
+      {{ order.store.address|default:"" }}<br>
+      {{ order.store.email|default:"" }}
+    </div>
+
+    <div class="inv-box">
+      <h4>Bill To</h4>
+      <strong>{{ order.buyer.get_full_name|default:order.buyer.username }}</strong><br>
+      {{ order.buyer.email }}
+    </div>
+  </div>
+
+  <!-- Items -->
+  <table>
+    <thead>
+      <tr>
+        <th>Product</th>
+        <th class="text-end">Unit Price</th>
+        <th class="text-end">Qty</th>
+        <th class="text-end">Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      <tr>
+        <td>{{ item.product_name }}</td>
+        <td class="text-end">
+          D{{ item.effective_unit_price|floatformat:2 }}
+        </td>
+        <td class="text-end">{{ item.quantity }}</td>
+        <td class="text-end">
+          D{{ item.line_total|floatformat:2 }}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <!-- Totals -->
+  <div class="total-box">
+    <div class="total-card">
+      <div class="total-row">
+        <span>Subtotal</span>
+        <span>D{{ subtotal|floatformat:2 }}</span>
+      </div>
+      <div class="total-row final">
+        <span>Total</span>
+        <span>D{{ subtotal|floatformat:2 }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="inv-footer">
+    <div>
+      {{ company_name }} · {{ company_email }} · {{ company_phone }}
+    </div>
+    <a href="#" onclick="window.print()" class="print-btn">
+      🖨 Print / Save PDF
+    </a>
+  </div>
+
+</div>
+
+</body>
+</html>

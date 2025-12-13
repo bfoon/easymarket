@@ -793,6 +793,11 @@
   font-weight: 600;
   letter-spacing: .2px;
 }
+.b2b-orders-fab{
+  bottom: 92px; /* cart is usually ~20px, so we stack this above it */
+  opacity: .97;
+}
+.b2b-orders-fab:hover{ opacity: 1; }
 
 /* Cute pulse on add */
 @keyframes b2bPulse {
@@ -923,21 +928,37 @@
   <div class="b2b-cart-fab-inner">
     <div class="b2b-cart-icon-wrap">
       <i class="fas fa-shopping-basket"></i>
-      <span class="b2b-cart-count" id="b2bCartCount">0</span>
+      <span class="b2b-cart-count" id="b2bCartCount">{{ b2b_cart_count|default:0 }}</span>
     </div>
 
     <div class="b2b-cart-label">
       <span class="b2b-cart-pill">
         <span class="b2b-cart-pill-dot"></span>
         <span class="b2b-cart-pill-text">B2B</span>
-        <!-- change to "B" if you prefer -->
-        <!-- <span class="b2b-cart-pill-text">B</span> -->
       </span>
       <small class="b2b-cart-sub">Basket</small>
     </div>
   </div>
 </a>
+<a href="{% url 'stores_b2b:my_orders' %}"
+   class="b2b-cart-fab b2b-orders-fab"
+   id="b2bOrdersFab"
+   aria-label="Open My Orders"
+   title="Open My Orders">
+  <div class="b2b-cart-fab-inner">
+    <div class="b2b-cart-icon-wrap">
+      <i class="fas fa-clipboard-list"></i>
+    </div>
 
+    <div class="b2b-cart-label">
+      <span class="b2b-cart-pill">
+        <span class="b2b-cart-pill-dot"></span>
+        <span class="b2b-cart-pill-text">Orders</span>
+      </span>
+      <small class="b2b-cart-sub">Track</small>
+    </div>
+  </div>
+</a>
 
 <!-- Search & Filter -->
 <div class="container my-4">
@@ -1568,363 +1589,374 @@
 </div>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // -----------------------------
-    // Bootstrap modal instance
-    // -----------------------------
-    const b2bChatModalEl = document.getElementById('b2bChatModal');
-    const b2bChatModal = b2bChatModalEl ? new bootstrap.Modal(b2bChatModalEl) : null;
+  // -------------------------------------------------
+  // Bootstrap modal instance (B2B chat)
+  // -------------------------------------------------
+  const b2bChatModalEl = document.getElementById('b2bChatModal');
+  const b2bChatModal = b2bChatModalEl ? new bootstrap.Modal(b2bChatModalEl) : null;
 
-    // -----------------------------
-    // Helper: Open B2B chat popup
-    // -----------------------------
-    function openB2BChatPopup({ storeId, productId = null, storeName = '', productName = '' }) {
-        if (!b2bChatModal) return;
-
-        let safeProductName = (productName || '').trim();
-        safeProductName = safeProductName.replace(/^["']+|["']+$/g, '');
-
-        const storeNameEl = document.getElementById('b2b-chat-store-name');
-        if (storeNameEl) storeNameEl.textContent = storeName || '';
-
-        const productWrapper = document.getElementById('b2b-chat-product-wrapper');
-        const productNameEl = document.getElementById('b2b-chat-product-name');
-        if (safeProductName && productWrapper && productNameEl) {
-            productWrapper.style.display = 'block';
-            productNameEl.textContent = safeProductName;
-        } else if (productWrapper) {
-            productWrapper.style.display = 'none';
+  // -------------------------------------------------
+  // CSRF helper
+  // -------------------------------------------------
+  function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== "") {
+      const cookies = document.cookie.split(";");
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, name.length + 1) === (name + "=")) {
+          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+          break;
         }
+      }
+    }
+    return cookieValue;
+  }
 
-        document.getElementById('b2b-chat-store-id').value = storeId || '';
-        document.getElementById('b2b-chat-product-id').value = productId || '';
+  // -------------------------------------------------
+  // Floating B2B Cart UI helpers
+  // expects:
+  //   <a id="b2bCartFab" ...>
+  //     <span id="b2bCartCount">0</span>
+  //   </a>
+  // -------------------------------------------------
+  const cartCountEl = document.getElementById('b2bCartCount');
+  const cartFab = document.getElementById('b2bCartFab');
 
-        const msgEl = document.getElementById('b2b-chat-message');
-        const errEl = document.getElementById('b2b-chat-error');
-        if (msgEl) {
-            let defaultText = 'Hi, we are interested in your products for bulk purchase. Please share your best price and terms.';
-            if (safeProductName) {
-                defaultText = `Hi, we are interested in ${safeProductName} for bulk purchase. Please share your best price, lead time and shipping terms.`;
-            }
-            msgEl.value = defaultText;
-        }
-        if (errEl) {
-            errEl.classList.add('d-none');
-            errEl.textContent = '';
-        }
+  function getStoredCount() {
+    const v = parseInt(localStorage.getItem('b2b_cart_count') || '0', 10);
+    return isNaN(v) ? 0 : v;
+  }
 
-        b2bChatModal.show();
+  function setStoredCount(n) {
+    localStorage.setItem('b2b_cart_count', String(Math.max(0, n)));
+  }
+
+  function renderCartCount(n) {
+    if (!cartCountEl) return;
+    const val = Math.max(0, parseInt(n || 0, 10) || 0);
+    cartCountEl.textContent = String(val);
+  }
+
+  function pulseCartFab() {
+    if (!cartFab) return;
+    cartFab.classList.remove('pulse');
+    void cartFab.offsetWidth; // reflow
+    cartFab.classList.add('pulse');
+    setTimeout(() => cartFab.classList.remove('pulse'), 520);
+  }
+
+  // ✅ server-truth apply helper
+  function applyServerCartCount(count) {
+    const n = Math.max(0, parseInt(count || 0, 10) || 0);
+    renderCartCount(n);
+    setStoredCount(n);
+  }
+
+  // Init badge from template or localStorage
+  if (cartCountEl) {
+    const initial = parseInt((cartCountEl.textContent || "").trim(), 10);
+    if (!isNaN(initial)) {
+      applyServerCartCount(initial);
+    } else {
+      renderCartCount(getStoredCount());
+    }
+  }
+
+  // -------------------------------------------------
+  // Helper: Open B2B chat popup
+  // -------------------------------------------------
+  function openB2BChatPopup({ storeId, productId = null, storeName = '', productName = '' }) {
+    if (!b2bChatModal) return;
+
+    let safeProductName = (productName || '').trim();
+    safeProductName = safeProductName.replace(/^["']+|["']+$/g, '');
+
+    const storeNameEl = document.getElementById('b2b-chat-store-name');
+    if (storeNameEl) storeNameEl.textContent = storeName || '';
+
+    const productWrapper = document.getElementById('b2b-chat-product-wrapper');
+    const productNameEl = document.getElementById('b2b-chat-product-name');
+    if (safeProductName && productWrapper && productNameEl) {
+      productWrapper.style.display = 'block';
+      productNameEl.textContent = safeProductName;
+    } else if (productWrapper) {
+      productWrapper.style.display = 'none';
     }
 
-    // -----------------------------
-    // Quick View Gallery State
-    // -----------------------------
-    let modalImages = [];
-    let modalImageIndex = 0;
+    const storeIdEl = document.getElementById('b2b-chat-store-id');
+    const productIdEl = document.getElementById('b2b-chat-product-id');
+    if (storeIdEl) storeIdEl.value = storeId || '';
+    if (productIdEl) productIdEl.value = productId || '';
 
-    function renderModalImage() {
-        const mainImg = document.getElementById('b2b-modal-image');
-        const thumbsContainer = document.getElementById('b2b-modal-thumbs');
-
-        if (!mainImg) return;
-
-        if (!modalImages || modalImages.length === 0) {
-            mainImg.style.display = 'none';
-            if (thumbsContainer) thumbsContainer.innerHTML = '';
-            document.querySelectorAll('.b2b-modal-img-prev, .b2b-modal-img-next')
-                .forEach(btn => btn.style.display = 'none');
-            return;
-        }
-
-        mainImg.style.display = 'block';
-        mainImg.src = modalImages[modalImageIndex];
-
-        const showArrows = modalImages.length > 1;
-        document.querySelectorAll('.b2b-modal-img-prev, .b2b-modal-img-next')
-            .forEach(btn => btn.style.display = showArrows ? 'inline-flex' : 'none');
-
-        if (thumbsContainer) {
-            thumbsContainer.innerHTML = '';
-            modalImages.forEach((url, idx) => {
-                const img = document.createElement('img');
-                img.src = url;
-                if (idx === modalImageIndex) img.classList.add('active');
-                img.addEventListener('click', () => {
-                    modalImageIndex = idx;
-                    renderModalImage();
-                });
-                thumbsContainer.appendChild(img);
-            });
-        }
+    const msgEl = document.getElementById('b2b-chat-message');
+    const errEl = document.getElementById('b2b-chat-error');
+    if (msgEl) {
+      let defaultText = 'Hi, we are interested in your products for bulk purchase. Please share your best price and terms.';
+      if (safeProductName) {
+        defaultText = `Hi, we are interested in ${safeProductName} for bulk purchase. Please share your best price, lead time and shipping terms.`;
+      }
+      msgEl.value = defaultText;
+    }
+    if (errEl) {
+      errEl.classList.add('d-none');
+      errEl.textContent = '';
     }
 
-    const prevBtn = document.querySelector('.b2b-modal-img-prev');
-    const nextBtn = document.querySelector('.b2b-modal-img-next');
+    b2bChatModal.show();
+  }
 
-    if (prevBtn) {
-        prevBtn.addEventListener('click', function() {
-            if (!modalImages || modalImages.length <= 1) return;
-            modalImageIndex = (modalImageIndex - 1 + modalImages.length) % modalImages.length;
-            renderModalImage();
+  // -------------------------------------------------
+  // Quick View Gallery State
+  // -------------------------------------------------
+  let modalImages = [];
+  let modalImageIndex = 0;
+
+  function renderModalImage() {
+    const mainImg = document.getElementById('b2b-modal-image');
+    const thumbsContainer = document.getElementById('b2b-modal-thumbs');
+    if (!mainImg) return;
+
+    if (!modalImages || modalImages.length === 0) {
+      mainImg.style.display = 'none';
+      if (thumbsContainer) thumbsContainer.innerHTML = '';
+      document.querySelectorAll('.b2b-modal-img-prev, .b2b-modal-img-next')
+        .forEach(btn => btn.style.display = 'none');
+      return;
+    }
+
+    mainImg.style.display = 'block';
+    mainImg.src = modalImages[modalImageIndex];
+
+    const showArrows = modalImages.length > 1;
+    document.querySelectorAll('.b2b-modal-img-prev, .b2b-modal-img-next')
+      .forEach(btn => btn.style.display = showArrows ? 'inline-flex' : 'none');
+
+    if (thumbsContainer) {
+      thumbsContainer.innerHTML = '';
+      modalImages.forEach((url, idx) => {
+        const img = document.createElement('img');
+        img.src = url;
+        if (idx === modalImageIndex) img.classList.add('active');
+        img.addEventListener('click', () => {
+          modalImageIndex = idx;
+          renderModalImage();
         });
+        thumbsContainer.appendChild(img);
+      });
+    }
+  }
+
+  const prevBtn = document.querySelector('.b2b-modal-img-prev');
+  const nextBtn = document.querySelector('.b2b-modal-img-next');
+
+  if (prevBtn) {
+    prevBtn.addEventListener('click', function() {
+      if (!modalImages || modalImages.length <= 1) return;
+      modalImageIndex = (modalImageIndex - 1 + modalImages.length) % modalImages.length;
+      renderModalImage();
+    });
+  }
+
+  if (nextBtn) {
+    nextBtn.addEventListener('click', function() {
+      if (!modalImages || modalImages.length <= 1) return;
+      modalImageIndex = (modalImageIndex + 1) % modalImages.length;
+      renderModalImage();
+    });
+  }
+
+  // -------------------------------------------------
+  // Quick View click handler
+  // -------------------------------------------------
+  document.addEventListener('click', function(e) {
+    const quickViewLink = e.target.closest('.b2b-product-quickview');
+    if (!quickViewLink) return;
+
+    e.preventDefault();
+
+    const name = quickViewLink.getAttribute('data-product-name') || '';
+    const store = quickViewLink.getAttribute('data-product-store') || '';
+    const image = quickViewLink.getAttribute('data-product-image') || '';
+    const imagesRaw = quickViewLink.getAttribute('data-product-images') || '';
+    const price = quickViewLink.getAttribute('data-product-price') || '';
+    const moq = quickViewLink.getAttribute('data-product-moq') || '';
+    const description = quickViewLink.getAttribute('data-product-description') || '';
+    const features = quickViewLink.getAttribute('data-product-features') || '';
+    const productId = quickViewLink.getAttribute('data-product-id') || '';
+
+    const card = quickViewLink.closest('.b2b-product-card');
+    const chatBtn = card ? card.querySelector('[data-action="open-b2b-chat"]') : null;
+    const storeId = chatBtn ? (chatBtn.getAttribute('data-store-id') || '') : '';
+
+    // Build images array
+    modalImages = [];
+    if (imagesRaw) {
+      try {
+        const parsed = JSON.parse(imagesRaw);
+        if (Array.isArray(parsed)) modalImages = parsed.filter(Boolean);
+      } catch (err) {
+        modalImages = imagesRaw.split(',').map(s => s.trim()).filter(Boolean);
+      }
+    }
+    if (!modalImages.length && image) modalImages = [image];
+    modalImageIndex = 0;
+    renderModalImage();
+
+    // Fill modal fields
+    document.getElementById('b2b-modal-name').textContent = name;
+    document.getElementById('b2b-modal-store').textContent = store;
+    document.getElementById('b2b-modal-price').textContent = price ? `D${price}` : '';
+    document.getElementById('b2b-modal-description').textContent = description || '';
+
+    const moqWrapper = document.getElementById('b2b-modal-moq-wrapper');
+    if (moq) {
+      moqWrapper.style.display = 'block';
+      document.getElementById('b2b-modal-moq').textContent = `${moq} units`;
+    } else {
+      moqWrapper.style.display = 'none';
     }
 
-    if (nextBtn) {
-        nextBtn.addEventListener('click', function() {
-            if (!modalImages || modalImages.length <= 1) return;
-            modalImageIndex = (modalImageIndex + 1) % modalImages.length;
-            renderModalImage();
-        });
+    const featuresWrapper = document.getElementById('b2b-modal-features-wrapper');
+    const featuresEl = document.getElementById('b2b-modal-features');
+    if (features && featuresWrapper && featuresEl) {
+      featuresWrapper.style.display = 'block';
+      featuresEl.textContent = features;
+    } else if (featuresWrapper) {
+      featuresWrapper.style.display = 'none';
     }
 
-    // -----------------------------
-    // Quick View click handler
-    // -----------------------------
-    document.addEventListener('click', function(e) {
-        const quickViewLink = e.target.closest('.b2b-product-quickview');
-        if (!quickViewLink) return;
+    const addBtn = document.getElementById('b2b-modal-add-to-cart-btn');
+    const negBtn = document.getElementById('b2b-modal-negotiate-btn');
 
-        e.preventDefault();
+    if (addBtn) {
+      addBtn.setAttribute('data-action', 'add-to-b2b-cart');
+      addBtn.setAttribute('data-product-id', productId);
+      addBtn.setAttribute('data-product-moq', moq || '');
+    }
+    if (negBtn) {
+      negBtn.setAttribute('data-action', 'open-b2b-chat');
+      negBtn.setAttribute('data-product-id', productId);
+      negBtn.setAttribute('data-store-id', storeId);
+    }
+  });
 
-        const name = quickViewLink.getAttribute('data-product-name') || '';
-        const store = quickViewLink.getAttribute('data-product-store') || '';
-        const image = quickViewLink.getAttribute('data-product-image') || '';
-        const imagesRaw = quickViewLink.getAttribute('data-product-images') || '';
-        const price = quickViewLink.getAttribute('data-product-price') || '';
-        const moq = quickViewLink.getAttribute('data-product-moq') || '';
-        const description = quickViewLink.getAttribute('data-product-description') || '';
-        const features = quickViewLink.getAttribute('data-product-features') || '';
-        const productId = quickViewLink.getAttribute('data-product-id');
+  // -------------------------------------------------
+  // ✅ Add to B2B cart (uses b2b_cart_add only)
+  // MUST return JSON: {success:true, cart_count:<int>}
+  // -------------------------------------------------
+  async function addToB2BCart({ productId, quantity = 1, requestedUnitPrice = null }) {
+    const fd = new FormData();
+    fd.append('product_id', String(productId));
+    fd.append('quantity', String(quantity));
+    if (requestedUnitPrice !== null && requestedUnitPrice !== undefined && requestedUnitPrice !== '') {
+      fd.append('requested_unit_price', String(requestedUnitPrice));
+    }
 
-        const card = quickViewLink.closest('.b2b-product-card');
-        const chatBtn = card ? card.querySelector('[data-action="open-b2b-chat"]') : null;
-        const storeId = chatBtn ? chatBtn.getAttribute('data-store-id') : null;
-
-        // Build images array from data-product-images
-        modalImages = [];
-        if (imagesRaw) {
-            try {
-                const parsed = JSON.parse(imagesRaw);
-                if (Array.isArray(parsed)) {
-                    modalImages = parsed.filter(Boolean);
-                }
-            } catch (err) {
-                modalImages = imagesRaw.split(',').map(s => s.trim()).filter(Boolean);
-            }
-        }
-        if (!modalImages.length && image) {
-            modalImages = [image];
-        }
-        modalImageIndex = 0;
-        renderModalImage();
-
-        // Fill text fields
-        document.getElementById('b2b-modal-name').textContent = name;
-        document.getElementById('b2b-modal-store').textContent = store;
-        document.getElementById('b2b-modal-price').textContent = price ? `D${price}` : '';
-
-        const moqWrapper = document.getElementById('b2b-modal-moq-wrapper');
-        if (moq) {
-            moqWrapper.style.display = 'block';
-            document.getElementById('b2b-modal-moq').textContent = `${moq} units`;
-        } else {
-            moqWrapper.style.display = 'none';
-        }
-
-        const featuresWrapper = document.getElementById('b2b-modal-features-wrapper');
-        const featuresEl = document.getElementById('b2b-modal-features');
-
-        if (features && featuresWrapper && featuresEl) {
-            featuresWrapper.style.display = 'block';
-            featuresEl.textContent = features;
-        } else if (featuresWrapper) {
-            featuresWrapper.style.display = 'none';
-        }
-
-
-        document.getElementById('b2b-modal-description').textContent = description || '';
-
-        const addBtn = document.getElementById('b2b-modal-add-to-cart-btn');
-        const negBtn = document.getElementById('b2b-modal-negotiate-btn');
-
-        if (addBtn) {
-            addBtn.setAttribute('data-product-id', productId || '');
-        }
-        if (negBtn) {
-            if (productId) negBtn.setAttribute('data-product-id', productId);
-            if (storeId) negBtn.setAttribute('data-store-id', storeId);
-        }
+    const resp = await fetch("{% url 'stores_b2b:cart_add' %}", {
+      method: "POST",
+      headers: {
+        "X-CSRFToken": getCookie("csrftoken"),
+        "X-Requested-With": "XMLHttpRequest"
+      },
+      body: fd
     });
 
-    // -----------------------------
-    // Card actions (Add / Negotiate)
-    // -----------------------------
-    document.addEventListener('click', function(e) {
-        const target = e.target.closest('[data-action]');
-        if (!target) return;
-
-        const action = target.getAttribute('data-action');
-        const storeId = target.getAttribute('data-store-id');
-        const productId = target.getAttribute('data-product-id');
-
-        if (action === 'open-b2b-chat') {
-            e.preventDefault();
-
-            const supplierCard = target.closest('.b2b-supplier-card');
-            const productCard = target.closest('.b2b-product-card');
-
-            let storeName = '';
-            let productName = '';
-
-            if (supplierCard) {
-                const nameEl = supplierCard.querySelector('.b2b-supplier-name');
-                storeName = nameEl ? nameEl.textContent.trim() : '';
-            } else if (productCard) {
-                const storeEl = productCard.querySelector('.b2b-product-store');
-                const productNameEl = productCard.querySelector('.b2b-product-name');
-                storeName = storeEl ? storeEl.textContent.trim() : '';
-                productName = productNameEl ? productNameEl.textContent.trim() : '';
-            }
-
-            openB2BChatPopup({
-                storeId: storeId,
-                productId: productId,
-                storeName: storeName,
-                productName: productName
-            });
-
-            return;
-        }
-
-        if (action === 'add-to-b2b-cart') {
-            const btn = target;
-            const originalHTML = btn.innerHTML;
-
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-
-            // TODO: Replace with real B2B cart endpoint (AJAX)
-            console.log('Add to B2B cart - Product:', productId);
-
-            setTimeout(() => {
-                btn.innerHTML = '<i class="fas fa-check"></i>Added';
-                btn.style.background = 'var(--b2b-success)';
-
-                setTimeout(() => {
-                    btn.innerHTML = originalHTML;
-                    btn.style.background = '';
-                    btn.disabled = false;
-                }, 1500);
-            }, 800);
-        }
-    });
-
-    // -----------------------------
-    // CSRF helper
-    // -----------------------------
-    function getCookie(name) {
-        let cookieValue = null;
-        if (document.cookie && document.cookie !== "") {
-            const cookies = document.cookie.split(";");
-            for (let i = 0; i < cookies.length; i++) {
-                const cookie = cookies[i].trim();
-                if (cookie.substring(0, name.length + 1) === (name + "=")) {
-                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                    break;
-                }
-            }
-        }
-        return cookieValue;
+    const ct = resp.headers.get("content-type") || "";
+    if (!ct.includes("application/json")) {
+      throw new Error("Invalid response. Refresh the page and try again.");
     }
 
-    // -----------------------------
-    // Send B2B inquiry
-    // -----------------------------
-    const sendBtn = document.getElementById('b2b-chat-send-btn');
-    if (sendBtn) {
-        sendBtn.addEventListener('click', function() {
-            const messageEl = document.getElementById('b2b-chat-message');
-            const errorEl = document.getElementById('b2b-chat-error');
-            const storeId = document.getElementById('b2b-chat-store-id').value;
-            const productId = document.getElementById('b2b-chat-product-id').value;
-            const channelEl = document.getElementById('b2b-chat-channel');
+    const data = await resp.json();
+    if (!resp.ok || !data.success) {
+      throw new Error(data.error || "Could not add to B2B cart.");
+    }
+    return data;
+  }
 
-            const message = (messageEl.value || '').trim();
-            const preferredChannel = channelEl ? channelEl.value : 'email';
+  // -------------------------------------------------
+  // Card actions (Add / Negotiate) + Modal Add
+  // -------------------------------------------------
+  document.addEventListener('click', async function(e) {
+    const target = e.target.closest('[data-action]');
+    if (!target) return;
 
-            if (!message) {
-                if (errorEl) {
-                    errorEl.classList.remove('d-none');
-                    errorEl.textContent = 'Please type a message before sending.';
-                }
-                return;
-            }
+    const action = target.getAttribute('data-action');
+    const storeId = target.getAttribute('data-store-id') || '';
+    const productId = target.getAttribute('data-product-id') || '';
 
-            if (errorEl) {
-                errorEl.classList.add('d-none');
-                errorEl.textContent = '';
-            }
+    // Open chat
+    if (action === 'open-b2b-chat') {
+      e.preventDefault();
 
-            const originalHTML = sendBtn.innerHTML;
-            sendBtn.disabled = true;
-            sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Sending...';
+      const supplierCard = target.closest('.b2b-supplier-card');
+      const productCard = target.closest('.b2b-product-card');
 
-            const formData = new FormData();
-            formData.append('store_id', storeId);
-            formData.append('product_id', productId);
-            formData.append('message', message);
-            formData.append('preferred_channel', preferredChannel);
+      let storeName = '';
+      let productName = '';
 
-            fetch("{% url 'stores:create_b2b_inquiry' %}", {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': getCookie('csrftoken'),
-                },
-                body: formData,
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (!data.ok) {
-                    throw new Error(data.error || 'Could not send inquiry.');
-                }
+      if (supplierCard) {
+        storeName = supplierCard.querySelector('.b2b-supplier-name')?.textContent.trim() || '';
+      } else if (productCard) {
+        storeName = productCard.querySelector('.b2b-product-store')?.textContent.trim() || '';
+        productName = productCard.querySelector('.b2b-product-name')?.textContent.trim() || '';
+      }
 
-                sendBtn.innerHTML = '<i class="fas fa-check me-1"></i>Sent';
-                if (messageEl) messageEl.value = '';
-                setTimeout(() => {
-                    sendBtn.disabled = false;
-                    sendBtn.innerHTML = originalHTML;
-                    if (b2bChatModal) b2bChatModal.hide();
-                }, 800);
-            })
-            .catch(err => {
-                console.error(err);
-                if (errorEl) {
-                    errorEl.classList.remove('d-none');
-                    errorEl.textContent = err.message || 'Something went wrong. Please try again.';
-                }
-                sendBtn.disabled = false;
-                sendBtn.innerHTML = originalHTML;
-            });
-        });
+      openB2BChatPopup({ storeId, productId, storeName, productName });
+      return;
     }
 
-    // -----------------------------
-    // Fade-in animation for cards
-    // -----------------------------
-    const observer = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-            if (entry.isIntersecting) {
-                entry.target.style.opacity = '1';
-                entry.target.style.transform = 'translateY(0)';
-            }
-        });
-    }, { threshold: 0.1 });
+    // Add to cart
+    if (action === 'add-to-b2b-cart') {
+      e.preventDefault();
+      if (!productId) return;
 
-    document.querySelectorAll('.b2b-supplier-card, .b2b-product-card').forEach(card => {
-        card.style.opacity = '0';
-        card.style.transform = 'translateY(10px)';
-        card.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
-        observer.observe(card);
-    });
+      const btn = target;
+      const originalHTML = btn.innerHTML;
+
+      // MOQ
+      let moq = 0;
+      const moqAttr = btn.getAttribute('data-product-moq') || '';
+      const parsedMoq = parseInt(String(moqAttr).replace(/[^\d]/g, ''), 10);
+      moq = isNaN(parsedMoq) ? 0 : parsedMoq;
+
+      // quantity defaults: MOQ if exists else 1
+      const qty = moq > 0 ? moq : 1;
+
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+      try {
+        const data = await addToB2BCart({ productId, quantity: qty });
+
+        // ✅ FIXED: cart count always comes from b2b_cart_add
+        applyServerCartCount(data.cart_count);
+        pulseCartFab();
+
+        btn.innerHTML = '<i class="fas fa-check"></i>Added';
+        btn.style.background = 'var(--b2b-success)';
+
+        setTimeout(() => {
+          btn.innerHTML = originalHTML;
+          btn.style.background = '';
+          btn.disabled = false;
+        }, 900);
+
+      } catch (err) {
+        console.error(err);
+        btn.innerHTML = '<i class="fas fa-exclamation-circle"></i>Error';
+        btn.style.background = 'var(--b2b-danger)';
+
+        setTimeout(() => {
+          btn.innerHTML = originalHTML;
+          btn.style.background = '';
+          btn.disabled = false;
+        }, 1300);
+      }
+      return;
+    }
+  });
+
 });
 </script>
 
