@@ -22,6 +22,9 @@ urlpatterns = [
 
     # invoice under stores_b2b (matches your template)
     path("orders/<uuid:order_id>/invoice/", views.order_invoice, name="invoice"),
+    path("invoice/verify/<uuid:order_id>/", views.invoice_verify, name="invoice_verify"),
+    path("invoice/qr/<uuid:order_id>/", views.invoice_qr, name="invoice_qr"),
+
 
     # Buyer views
     path("my/", views.b2b_my_personal_orders, name="my_personal_orders"),

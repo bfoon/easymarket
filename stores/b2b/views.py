@@ -1,3 +1,7 @@
+import io
+import qrcode
+
+from django.http import HttpResponse
 from decimal import Decimal, InvalidOperation
 import secrets
 from .utils import _generate_b2b_tracking_number
@@ -578,6 +582,7 @@ def store_b2b_order_detail(request, order_id):
 # Invoice (IF you keep it inside stores_b2b app)
 # NOTE: If you want {% url 'orders:invoice' %}, move this view + url into orders app instead.
 # -------------------------------------------------------------------
+
 @login_required
 def order_invoice(request, order_id):
     order = get_object_or_404(
@@ -588,20 +593,106 @@ def order_invoice(request, order_id):
     if request.user != order.buyer and request.user != getattr(order.store, "owner", None):
         return render(request, "403.html", status=403)
 
+    # Items
+    items = order.items.all()
+
+    # Subtotal
     subtotal = Decimal("0.00")
-    for item in order.items.all():
+    for item in items:
         subtotal += item.line_total()
+
+    # Shipping (safe)
+    shipping = getattr(order, "shipping_cost", Decimal("0.00")) or Decimal("0.00")
+    grand_total = subtotal + Decimal(str(shipping))
+
+    # ✅ Use ONLY first 8 characters for invoice/pro-forma number
+    raw_no = str(getattr(order, "reference", None) or order.id)
+    short_no = raw_no.replace("-", "")[:8].upper()
+
+    # ✅ Decide invoice type + watermark
+    # Best practice: pass is_proforma from URL/view if you have separate proforma route.
+    is_proforma = (request.GET.get("proforma") == "1")  # optional toggle via ?proforma=1
+
+    # Paid logic (safe fallbacks)
+    is_paid = bool(
+        getattr(order, "is_paid", False)
+        or (getattr(order, "payment_status", "") or "").lower() == "paid"
+        or getattr(order, "paid_at", None)
+    )
+
+    if is_proforma:
+        watermark_text = "PRO-FORMA"
+        doc_title = "PRO-FORMA INVOICE"
+    else:
+        watermark_text = "PAID" if is_paid else "UNPAID"
+        doc_title = "INVOICE"
+
+    # ✅ Verification / tracking URL (for QR)
+    verify_url = request.build_absolute_uri(
+        reverse("stores_b2b:invoice_verify", args=[order.id])
+    )
 
     context = {
         "order": order,
-        "items": order.items.all(),
+        "items": items,
         "subtotal": subtotal,
+        "shipping_cost": shipping,
+        "grand_total": grand_total,
+
+        "short_no": short_no,
+        "doc_title": doc_title,
+        "watermark_text": watermark_text,
+
+        "verify_url": verify_url,
+
+        # Optional: platform logo if you have it (ImageField/FileField)
+        # "company_logo": settings.COMPANY_LOGO_FILE,  # or pass from DB
         "company_name": "EasyMarket B2B",
         "company_address": "Banjul, The Gambia",
         "company_email": "b2b@easymarket.gm",
         "company_phone": "+220 XXX XXX",
     }
     return render(request, "b2b/invoice.html", context)
+
+@login_required
+def invoice_verify(request, order_id):
+    order = get_object_or_404(B2BOrder.objects.select_related("store", "buyer"), id=order_id)
+
+    # Only buyer or store owner
+    if request.user != order.buyer and request.user != getattr(order.store, "owner", None):
+        return render(request, "403.html", status=403)
+
+    return render(request, "b2b/invoice_verify.html", {"order": order})
+
+
+@login_required
+def invoice_qr(request, order_id):
+    order = get_object_or_404(B2BOrder.objects.select_related("store", "buyer"), id=order_id)
+
+    # only buyer or store owner can generate qr
+    if request.user != order.buyer and request.user != getattr(order.store, "owner", None):
+        return HttpResponse("Forbidden", status=403)
+
+    verify_url = request.build_absolute_uri(
+        reverse("stores_b2b:invoice_verify", args=[order.id])
+    )
+
+    qr = qrcode.QRCode(
+        version=2,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=6,
+        border=2,
+    )
+    qr.add_data(verify_url)
+    qr.make(fit=True)
+
+    img = qr.make_image(fill_color="black", back_color="white")
+
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+
+    return HttpResponse(buf.getvalue(), content_type="image/png")
 
 # -------------------------------------------------------------------
 # 1) Update B2B order status (store owner only)
