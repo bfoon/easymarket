@@ -811,6 +811,7 @@ def b2b_order_send_message(request, order_id):
 #    Otherwise it safely does nothing but can still set order status if requested.
 # -------------------------------------------------------------------
 
+
 @login_required
 @transaction.atomic
 def b2b_mark_items_shipped(request, order_id):
@@ -823,20 +824,20 @@ def b2b_mark_items_shipped(request, order_id):
             id=order_id
         )
 
+        # ✅ permission
         if not _is_store_owner(request.user, order):
             return JsonResponse({"success": False, "error": "Not allowed"}, status=403)
 
-            # ✅ RULE: seller cannot ship until buyer accepts the offer
-            order_status = (getattr(order, "status", "") or "").lower().strip()
-            if order_status != "accepted":
-                return JsonResponse({
-                    "success": False,
-                    "error": "You can’t mark items as shipped until the buyer accepts the offer."
-                }, status=400)
+        # ✅ RULE: seller cannot ship until buyer accepts the offer
+        order_status = (getattr(order, "status", "") or "").lower().strip()
+        if order_status != "accepted":
+            return JsonResponse({
+                "success": False,
+                "error": "You can’t mark items as shipped until the buyer accepts the offer."
+            }, status=400)
 
-            # Accept both: item_ids[] OR item_ids csv
-            item_ids = request.POST.getlist("item_ids[]")
-
+        # ✅ Accept both: item_ids[] OR item_ids csv
+        item_ids = request.POST.getlist("item_ids[]")
         if not item_ids:
             raw = (request.POST.get("item_ids") or "").strip()
             item_ids = [x.strip() for x in raw.split(",") if x.strip()]
@@ -858,19 +859,17 @@ def b2b_mark_items_shipped(request, order_id):
                 status=400
             )
 
-        # ✅ mark selected items shipped
+        # mark selected items shipped
         updated = 0
         for item in qs:
-            # if already shipped, skip (optional)
-            if getattr(item, "status", "") == "shipped":
+            if (getattr(item, "status", "") or "").lower() == "shipped":
                 continue
-
             item.status = "shipped"
             item.shipped_at = now
             item.save(update_fields=["status", "shipped_at"])
             updated += 1
 
-        # ✅ auto-generate tracking number on FIRST shipment (only if blank)
+        # auto-generate tracking number on FIRST shipment (only if blank)
         order_fields = []
 
         if hasattr(order, "tracking_number"):
@@ -882,7 +881,6 @@ def b2b_mark_items_shipped(request, order_id):
         # Optional note from request
         note = (request.POST.get("note") or "").strip()
         if note and hasattr(order, "tracking_note"):
-            # append nicely if note already exists
             existing = (getattr(order, "tracking_note", "") or "").strip()
             order.tracking_note = (existing + "\n" if existing else "") + note
             order_fields.append("tracking_note")
@@ -892,7 +890,7 @@ def b2b_mark_items_shipped(request, order_id):
             order.updated_at = now
             order_fields.append("updated_at")
 
-        # ✅ auto mark order shipped only when ALL items shipped
+        # auto mark order shipped only when ALL items shipped
         all_shipped = not order.items.exclude(status="shipped").exists()
         if all_shipped:
             if hasattr(order, "status"):
@@ -937,7 +935,7 @@ def b2b_set_shipping_cost(request, order_id):
     if getattr(order.store, "owner", None) != request.user:
         return JsonResponse({"success": False, "error": "Not allowed"}, status=403)
 
-    # ✅ LOCK: once shipped (or delivered), shipping cost cannot be edited
+    # LOCK: once shipped (or delivered), shipping cost cannot be edited
     status = (getattr(order, "status", "") or "").lower().strip()
     if status in ("shipped", "delivered"):
         return JsonResponse(
