@@ -3853,27 +3853,24 @@ def b2b_settings(request, slug):
     }
     return render(request, "b2b/b2b_settings.html", context)
 
-@login_required
+login_required
 @require_POST
 def create_b2b_inquiry(request):
-    store_id = request.POST.get("store_id")
-    product_id = request.POST.get("product_id")  # optional
+    # ✅ Force JSON response expectation (optional but nice)
+    # if request.headers.get("X-Requested-With") != "XMLHttpRequest":
+    #     return JsonResponse({"success": False, "error": "AJAX required."}, status=400)
+
+    store_id = (request.POST.get("store_id") or "").strip()
+    product_id = (request.POST.get("product_id") or "").strip()  # optional
     message_text = (request.POST.get("message") or "").strip()
-    preferred_channel = request.POST.get("preferred_channel") or "email"
+    preferred_channel = (request.POST.get("preferred_channel") or "email").strip()
 
     if not store_id or not message_text:
-        return JsonResponse(
-            {"ok": False, "error": "Missing store or message."},
-            status=400,
-        )
+        return JsonResponse({"success": False, "error": "Missing store or message."}, status=400)
 
-    try:
-        store = Store.objects.get(id=store_id, allows_b2b=True)
-    except Store.DoesNotExist:
-        return JsonResponse(
-            {"ok": False, "error": "Store not available for B2B."},
-            status=404,
-        )
+    store = Store.objects.filter(id=store_id, allows_b2b=True).select_related("owner").first()
+    if not store:
+        return JsonResponse({"success": False, "error": "Store not available for B2B."}, status=404)
 
     product = None
     if product_id:
@@ -3885,17 +3882,17 @@ def create_b2b_inquiry(request):
         product=product,
         message=message_text,
         preferred_channel=preferred_channel,
+        created_at=timezone.now() if hasattr(B2BInquiry, "created_at") else None,
     )
 
     # ----------------- EMAIL NOTIFICATION -----------------
-    # Where to send? Use B2B email if set, else store owner email.
-    to_email = store.b2b_contact_email or getattr(store.owner, "email", None)
+    to_email = getattr(store, "b2b_contact_email", None) or getattr(store.owner, "email", None)
     if to_email:
-        subject = f"New B2B inquiry on EasyMarket – {store.name}"
-
         buyer = request.user
         buyer_email = getattr(buyer, "email", "")
         buyer_phone = getattr(getattr(buyer, "profile", None), "phone_number", "")
+
+        subject = f"New B2B inquiry on EasyMarket – {store.name}"
 
         lines = [
             f"Dear {store.name},",
@@ -3904,7 +3901,6 @@ def create_b2b_inquiry(request):
             "",
             f"Store: {store.name}",
             f"Inquiry ID: #{inquiry.id}",
-            "",
         ]
         if product:
             lines.append(f"Product: {product.name}")
@@ -3920,10 +3916,7 @@ def create_b2b_inquiry(request):
             "",
             "Preferred negotiation channel:",
             f"- Buyer selected: {preferred_channel}",
-            f"- Store preference: {store.b2b_preferred_channel}",
-            "",
-            "Please contact the buyer directly to continue the negotiation via email or WhatsApp,",
-            "based on the agreed communication channel.",
+            f"- Store preference: {getattr(store, 'b2b_preferred_channel', 'N/A')}",
             "",
             "EasyMarket B2B",
         ]
@@ -3937,6 +3930,4 @@ def create_b2b_inquiry(request):
             fail_silently=True,
         )
 
-    return JsonResponse(
-        {"ok": True, "message": "Inquiry sent successfully."}
-    )
+    return JsonResponse({"success": True, "message": "Inquiry sent successfully."})

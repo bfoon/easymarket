@@ -5,6 +5,12 @@ from .utils import _generate_b2b_tracking_number
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
 
+import threading
+from django.conf import settings
+from marketplace.notifications import send_email, send_whatsapp
+from stores.models import StoreNotification
+
+
 from django.db import transaction
 from django.db.models import Sum, Q
 from django.http import JsonResponse, HttpResponseForbidden
@@ -25,14 +31,6 @@ def _get_or_create_active_cart(user):
     cart = B2BCart.objects.filter(buyer=user, is_active=True).first()
     return cart or B2BCart.objects.create(buyer=user, is_active=True)
 
-
-def _notify_store_new_b2b_order(order: B2BOrder):
-    # Plug into your notifications (DB + websocket + email/whatsapp)
-    pass
-
-
-def _notify_buyer_b2b_priced(order: B2BOrder):
-    pass
 
 
 def _user_has_store_access(user) -> bool:
@@ -126,15 +124,176 @@ def _apply_optional_totals(order: B2BOrder, subtotal: Decimal):
 
     order.updated_at = timezone.now()
 
+def _async(fn, *args, **kwargs):
+    t = threading.Thread(target=fn, args=args, kwargs=kwargs, daemon=True)
+    t.start()
+
+
 def _is_buyer(user, order: B2BOrder) -> bool:
     return order.buyer_id == user.id
 
+def _safe_reverse(name, args=None, kwargs=None, fallback=""):
+    try:
+        return reverse(name, args=args or [], kwargs=kwargs or {})
+    except Exception:
+        return fallback
+
+
+# ------------------------------------------------------------------
+# Notification Helper
+#-------------------------------------------------------------------
+def _make_db_notification(store, recipient, title, message, level="info", link=""):
+    """
+    Saves a notification in DB (StoreNotification).
+    Adjust field names if your model differs.
+    """
+    try:
+        StoreNotification.objects.create(
+            store=store,
+            user=recipient,
+            title=title,
+            message=message,
+            level=level,
+            link=link,
+            is_read=False,
+        )
+    except TypeError:
+        # Fallback if your model uses different field names
+        StoreNotification.objects.create(
+            store=store,
+            user=recipient,
+            title=title,
+            message=message,
+        )
+
+
+def _send_email_safe(subject, message, to_list):
+    try:
+        if to_list:
+            send_email(subject, message, to_list)
+    except Exception:
+        # never crash the request because of notifications
+        pass
+
+
+def _send_whatsapp_safe(phone, message):
+    try:
+        if phone:
+            send_whatsapp(phone, message)
+    except Exception:
+        pass
+
+
+def _buyer_phone(order):
+    """
+    Decide how to get buyer phone.
+    Prefer shipping phone if available.
+    """
+    ship = getattr(order, "shipping", None)
+    if ship and getattr(ship, "phone", ""):
+        return ship.phone
+    # fallback to buyer profile if exists
+    prof = getattr(order.buyer, "profile", None)
+    return getattr(prof, "phone_number", "") if prof else ""
+
+
+def _notify_store_new_b2b_order(order: B2BOrder):
+    store = order.store
+    owner = getattr(store, "owner", None)
+    if not owner:
+        return
+
+    order_ref = getattr(order, "order_number", "") or str(order.id)
+    link = reverse("stores_b2b:order_detail", args=[order.id])
+
+    title = "🧾 New B2B Order"
+    msg = (
+        f"You received a new B2B order from {order.buyer.get_full_name() or order.buyer.username}.\n"
+        f"Order: {order_ref}\n"
+        f"Status: {getattr(order, 'status', '')}\n"
+        f"Time: {timezone.now().strftime('%Y-%m-%d %H:%M')}"
+    )
+
+    # DB notification
+    _make_db_notification(store, owner, title, msg, level="info", link=link)
+
+    # Email / WhatsApp (async)
+    _async(_send_email_safe, f"EasyMarket B2B: New Order {order_ref}", msg, [owner.email])
+    _async(_send_whatsapp_safe, getattr(settings, "STORE_OWNER_WHATSAPP", ""), msg)
+
+
+def _notify_buyer_b2b_priced(order: B2BOrder):
+    buyer = order.buyer
+    store = order.store
+    order_ref = getattr(order, "order_number", "") or str(order.id)
+    link = reverse("stores_b2b:my_personal_order_detail", args=[order.id])
+
+    title = "💰 B2B Offer Priced"
+    msg = (
+        f"Your B2B order at {store.name} has been priced.\n"
+        f"Order: {order_ref}\n"
+        f"Next step: Review and Accept/Reject the offer.\n"
+        f"Time: {timezone.now().strftime('%Y-%m-%d %H:%M')}"
+    )
+
+    _make_db_notification(store, buyer, title, msg, level="warning", link=link)
+
+    _async(_send_email_safe, f"EasyMarket B2B: Offer priced ({order_ref})", msg, [buyer.email])
+    _async(_send_whatsapp_safe, _buyer_phone(order), msg)
+
+
 def _notify_buyer_b2b_status(order: B2BOrder):
-    pass
+    buyer = order.buyer
+    store = order.store
+    status = (getattr(order, "status", "") or "").upper()
+    order_ref = getattr(order, "order_number", "") or str(order.id)
+    link = reverse("stores_b2b:my_personal_order_detail", args=[order.id])
+
+    tracking = getattr(order, "tracking_number", "") or ""
+    extra = f"\nTracking: {tracking}" if tracking else ""
+
+    title = f"📦 B2B Status Update: {status}"
+    msg = (
+        f"Your B2B order status changed.\n"
+        f"Store: {store.name}\n"
+        f"Order: {order_ref}\n"
+        f"Status: {status}{extra}\n"
+        f"Time: {timezone.now().strftime('%Y-%m-%d %H:%M')}"
+    )
+
+    level = "success" if status in ("SHIPPED", "DELIVERED") else "info"
+    _make_db_notification(store, buyer, title, msg, level=level, link=link)
+
+    _async(_send_email_safe, f"EasyMarket B2B: Status {status} ({order_ref})", msg, [buyer.email])
+    _async(_send_whatsapp_safe, _buyer_phone(order), msg)
 
 
 def _notify_store_new_b2b_message(order: B2BOrder, message_obj=None):
-    pass
+    store = order.store
+    owner = getattr(store, "owner", None)
+    if not owner:
+        return
+
+    order_ref = getattr(order, "order_number", "") or str(order.id)
+    link = reverse("stores_b2b:order_detail", args=[order.id])
+
+    preview = ""
+    if message_obj is not None:
+        preview = (getattr(message_obj, "message", "") or "").strip()
+        if len(preview) > 120:
+            preview = preview[:120] + "…"
+
+    title = "💬 New B2B Message"
+    msg = (
+        f"New message on B2B order {order_ref}.\n"
+        f"From: {order.buyer.get_full_name() or order.buyer.username}\n"
+        f"{('Message: ' + preview) if preview else ''}"
+    ).strip()
+
+    _make_db_notification(store, owner, title, msg, level="info", link=link)
+    _async(_send_email_safe, f"EasyMarket B2B: New message ({order_ref})", msg, [owner.email])
+
+
 
 # -------------------------------------------------------------------
 # Cart
@@ -378,7 +537,7 @@ def store_b2b_order_detail(request, order_id):
     )
 
     if getattr(order.store, "owner", None) != request.user:
-        return render(request, "403.html", status=403)
+        return render(request, "b2b/403.html", status=403)
 
     items = order.items.select_related("product", "variant", "product__store").all()
 
@@ -776,14 +935,13 @@ def b2b_save_unit_prices(request, order_id):
 # -------------------------------------------------------------------
 
 @login_required
+@require_POST
 def b2b_order_send_message(request, order_id):
-    if request.method != "POST":
-        return JsonResponse({"success": False, "error": "POST required"}, status=405)
-
     order = get_object_or_404(B2BOrder.objects.select_related("store", "buyer"), id=order_id)
 
     is_owner = (getattr(order.store, "owner", None) == request.user)
-    is_buyer = (order.buyer == request.user)
+    is_buyer = (order.buyer_id == request.user.id)
+
     if not (is_owner or is_buyer):
         return JsonResponse({"success": False, "error": "Not allowed"}, status=403)
 
@@ -793,16 +951,24 @@ def b2b_order_send_message(request, order_id):
 
     msg = B2BOrderMessage.objects.create(order=order, sender=request.user, message=message)
 
+    # optional: notify other side
+    if is_buyer:
+        _notify_store_new_b2b_message(order, msg)
+    else:
+        _notify_buyer_b2b_status(order)  # or create a dedicated "new message" notifier for buyer
+
     return JsonResponse({
         "success": True,
         "message": {
-            "id": str(msg.id),
+            "id": msg.id,
             "sender_id": msg.sender_id,
             "sender_name": msg.sender.get_full_name() or msg.sender.username,
-            "text": msg.message,
+            "message": msg.message,
             "created_at": msg.created_at.isoformat(),
+            "created_at_human": msg.created_at.strftime("%b %d, %H:%M"),
         }
     })
+
 
 # -------------------------------------------------------------------
 # 4) Mark order items shipped (store owner only)
@@ -902,6 +1068,9 @@ def b2b_mark_items_shipped(request, order_id):
 
         if order_fields:
             order.save(update_fields=list(set(order_fields)))
+
+        _notify_buyer_b2b_status(order)
+
 
         return JsonResponse({
             "success": True,

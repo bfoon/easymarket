@@ -1877,6 +1877,109 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   // -------------------------------------------------
+  // ✅ Send B2B Inquiry (NEGOTIATE SEND BUTTON)
+  // -------------------------------------------------
+(() => {
+  const btn = document.getElementById('b2b-chat-send-btn');
+  if (!btn) return;
+
+  const errEl = document.getElementById('b2b-chat-error');
+
+  function setError(msg) {
+    if (!errEl) return;
+    errEl.textContent = msg || '';
+    errEl.classList.toggle('d-none', !msg);
+  }
+
+  function setBusy(isBusy) {
+    btn.disabled = !!isBusy;
+    btn.dataset.busy = isBusy ? "1" : "0";
+  }
+
+  btn.addEventListener('click', async (e) => {
+    // ✅ stop any form submit if button is inside <form>
+    e.preventDefault();
+
+    // ✅ prevent double click
+    if (btn.dataset.busy === "1") return;
+
+    setError('');
+
+    const storeId   = (document.getElementById('b2b-chat-store-id')?.value || '').trim();
+    const productId = (document.getElementById('b2b-chat-product-id')?.value || '').trim();
+    const channel   = (document.getElementById('b2b-chat-channel')?.value || 'email').trim();
+    const msgEl     = document.getElementById('b2b-chat-message');
+    const message   = (msgEl?.value || '').trim();
+
+    if (!storeId || !message) {
+      setError('Please select a supplier and type your message.');
+      return;
+    }
+
+    const fd = new FormData();
+    fd.append('store_id', storeId);
+    if (productId) fd.append('product_id', productId);
+    fd.append('preferred_channel', channel);
+    fd.append('message', message);
+
+    const originalHTML = btn.innerHTML;
+    setBusy(true);
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Sending...';
+
+    try {
+      const resp = await fetch("{% url 'stores:create_b2b_inquiry' %}", {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': getCookie('csrftoken'),
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: fd,
+        redirect: "follow" // default, but explicit helps clarity
+      });
+
+      const ct = (resp.headers.get('content-type') || '').toLowerCase();
+
+      // ✅ If login redirect/403 page/500 debug HTML happens
+      if (!ct.includes('application/json')) {
+        const text = await resp.text();
+        console.error('Non-JSON response:', {
+          url: resp.url,
+          status: resp.status,
+          preview: text.slice(0, 800)
+        });
+
+        if (resp.status === 403) throw new Error('Not allowed (403). Please login again or check permissions.');
+        throw new Error('Server returned non-JSON response. Check console (URL/403/redirect/500).');
+      }
+
+      const data = await resp.json();
+
+      // ✅ Support either {success:true} OR {ok:true}
+      const ok = (data && (data.success === true || data.ok === true));
+
+      if (!resp.ok || !ok) {
+        throw new Error(data?.error || 'Could not send inquiry.');
+      }
+
+      showToast(data.message || 'Inquiry sent ✅', 'success');
+
+      // ✅ clear textarea (nice UX)
+      if (msgEl) msgEl.value = '';
+
+      // ✅ close modal safely
+      const modalEl = document.getElementById('b2bChatModal');
+      bootstrap.Modal.getInstance(modalEl)?.hide();
+
+    } catch (err) {
+      setError(err?.message || 'Something went wrong.');
+    } finally {
+      btn.innerHTML = originalHTML;
+      setBusy(false);
+    }
+  });
+})();
+
+  // -------------------------------------------------
   // ✅ Add to B2B cart (uses b2b_cart_add only)
   // MUST return JSON: {success:true, cart_count:<int>}
   // -------------------------------------------------
