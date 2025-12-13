@@ -4,7 +4,7 @@ from .utils import _generate_b2b_tracking_number
 
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Sum, Q
 from django.http import JsonResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -317,19 +317,50 @@ def b2b_place_order(request):
 # -------------------------------------------------------------------
 # Orders (Store Owner Views)
 # -------------------------------------------------------------------
+
 @login_required
 def b2b_my_orders(request):
     if not _user_has_store_access(request.user):
         return redirect("home")
 
-    my_store_ids = Store.objects.filter(owner=request.user).values_list("id", flat=True)
-    orders = (
-        B2BOrder.objects.filter(store_id__in=my_store_ids)
+    # ✅ All my stores
+    stores = Store.objects.filter(owner=request.user).order_by("name")
+    my_store_ids = list(stores.values_list("id", flat=True))
+
+    # ✅ Pick "current store" (optional via query param ?store=<id>)
+    store_id = (request.GET.get("store") or "").strip()
+    if store_id:
+        store = get_object_or_404(Store, id=store_id, owner=request.user)
+    else:
+        store = stores.first()  # could be None if user has no store
+
+    # ✅ Base: seller orders (all my stores) + buyer orders (me)
+    orders_qs = (
+        B2BOrder.objects.filter(
+            Q(store_id__in=my_store_ids) |
+            Q(buyer=request.user)
+        )
         .select_related("store", "buyer")
         .order_by("-created_at")
+        .distinct()
     )
 
-    return render(request, "b2b/my_orders.html", {"orders": orders})
+    # ✅ Optional: if a store is selected, filter seller side to that store
+    # (buyer orders remain visible)
+    if store:
+        orders_qs = orders_qs.filter(Q(buyer=request.user) | Q(store=store))
+
+    # ✅ attach role for template
+    orders = []
+    for o in orders_qs:
+        view_as = "seller" if o.store_id in my_store_ids else "buyer"
+        orders.append({"order": o, "view_as": view_as})
+
+    return render(request, "b2b/my_orders.html", {
+        "stores": stores,   # ✅ list of stores for dropdown/sidebar
+        "store": store,     # ✅ current selected store
+        "orders": orders,
+    })
 
 @login_required
 @transaction.atomic
@@ -878,16 +909,29 @@ def b2b_mark_items_shipped(request, order_id):
 # 5) Set shipping cost (store owner only)
 #    Expects POST: shipping_cost="50.00"
 # -------------------------------------------------------------------
+
 @login_required
 @transaction.atomic
 def b2b_set_shipping_cost(request, order_id):
     if request.method != "POST":
         return JsonResponse({"success": False, "error": "POST required"}, status=405)
 
-    order = get_object_or_404(B2BOrder.objects.select_related("store", "buyer").prefetch_related("items"), id=order_id)
+    order = get_object_or_404(
+        B2BOrder.objects.select_related("store", "buyer").prefetch_related("items"),
+        id=order_id
+    )
 
+    # Must be store owner
     if getattr(order.store, "owner", None) != request.user:
         return JsonResponse({"success": False, "error": "Not allowed"}, status=403)
+
+    # ✅ LOCK: once shipped (or delivered), shipping cost cannot be edited
+    status = (getattr(order, "status", "") or "").lower().strip()
+    if status in ("shipped", "delivered"):
+        return JsonResponse(
+            {"success": False, "error": "Shipping cost cannot be updated after the order is shipped."},
+            status=400
+        )
 
     cost = _safe_decimal(request.POST.get("shipping_cost"), default=None)
     if cost is None:
@@ -896,12 +940,21 @@ def b2b_set_shipping_cost(request, order_id):
         return JsonResponse({"success": False, "error": "Invalid shipping_cost"}, status=400)
 
     order.shipping_cost = cost
+
+    # Recalc totals (your helper should set subtotal/total)
     _recalc_order_totals(order)
-    order.save(update_fields=["shipping_cost", "subtotal", "total", "updated_at"])
+
+    # Ensure updated_at changes (if field exists)
+    update_fields = ["shipping_cost", "subtotal", "total"]
+    if hasattr(order, "updated_at"):
+        order.updated_at = timezone.now()
+        update_fields.append("updated_at")
+
+    order.save(update_fields=list(set(update_fields)))
 
     return JsonResponse({
         "success": True,
         "shipping_cost": str(order.shipping_cost),
-        "subtotal": str(order.subtotal),
-        "total": str(order.total),
+        "subtotal": str(getattr(order, "subtotal", "")),
+        "total": str(getattr(order, "total", getattr(order, "subtotal", ""))),
     })

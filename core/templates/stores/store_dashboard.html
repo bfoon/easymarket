@@ -6,6 +6,175 @@
 <link rel="stylesheet" type="text/css" href="{% static 'css/store_dashboard.css' %}">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
+<style>
+/* =====================================================
+   B2B Floating Action Button (Cart / Orders)
+   Icon only → Hover reveal pill
+   ===================================================== */
+
+.b2b-cart-fab{
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 1050;
+  text-decoration: none;
+  color: inherit;
+}
+
+/* ---------------------------------
+   INNER CONTAINER
+---------------------------------- */
+.b2b-cart-fab-inner{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(26,95,158,0.95), rgba(45,140,204,0.95));
+  border: 1px solid rgba(255,255,255,0.25);
+  box-shadow: 0 10px 28px rgba(0,0,0,0.22);
+  backdrop-filter: blur(10px);
+  overflow: hidden;
+
+  transition:
+    transform .18s ease,
+    box-shadow .18s ease,
+    filter .18s ease;
+}
+
+.b2b-cart-fab:hover .b2b-cart-fab-inner{
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 14px 34px rgba(0,0,0,0.26);
+  filter: saturate(1.05);
+}
+
+/* ---------------------------------
+   ICON (ALWAYS VISIBLE)
+---------------------------------- */
+.b2b-cart-icon-wrap{
+  position: relative;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.2);
+  flex-shrink: 0;
+}
+
+.b2b-cart-icon-wrap i{
+  font-size: 1.15rem;
+  color: #fff;
+}
+
+/* ---------------------------------
+   COUNT BADGE
+---------------------------------- */
+.b2b-cart-count{
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--b2b-accent);
+  color: #fff;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size: 0.75rem;
+  font-weight: 800;
+  line-height: 1;
+  border: 2px solid rgba(255,255,255,0.9);
+  box-shadow: 0 6px 14px rgba(0,0,0,0.2);
+}
+
+/* ---------------------------------
+   LABEL (HIDDEN BY DEFAULT)
+---------------------------------- */
+.b2b-cart-label{
+  display:flex;
+  flex-direction:column;
+  line-height:1.05;
+  color: #fff;
+
+  max-width: 0;
+  opacity: 0;
+  transform: translateX(-6px);
+  pointer-events: none;
+
+  transition:
+    max-width .28s ease,
+    opacity .22s ease,
+    transform .22s ease;
+}
+
+/* SHOW label on hover */
+.b2b-cart-fab:hover .b2b-cart-label{
+  max-width: 220px;
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+/* ---------------------------------
+   PILL
+---------------------------------- */
+.b2b-cart-pill{
+  display:inline-flex;
+  align-items:center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.18);
+  border: 1px solid rgba(255,255,255,0.2);
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  width: fit-content;
+  white-space: nowrap;
+}
+
+.b2b-cart-pill-dot{
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--b2b-success);
+  box-shadow: 0 0 0 6px rgba(46,213,115,0.18);
+}
+
+.b2b-cart-pill-text{
+  font-size: 0.85rem;
+}
+
+/* ---------------------------------
+   SUB TEXT
+---------------------------------- */
+.b2b-cart-sub{
+  opacity: 0.9;
+  margin-top: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: .2px;
+  white-space: nowrap;
+}
+
+/* ---------------------------------
+   ORDERS FAB POSITION
+---------------------------------- */
+.b2b-orders-fab{
+  bottom: 92px; /* stacked above cart */
+  opacity: .97;
+}
+
+.b2b-orders-fab:hover{
+  opacity: 1;
+}
+
+
+</style>
 
 <div class="container-fluid py-4">
   <!-- Dashboard Header -->
@@ -72,6 +241,26 @@
       </div>
     </div>
   </div>
+
+  <a href="{% url 'stores_b2b:my_orders' %}"
+   class="b2b-cart-fab b2b-orders-fab"
+   id="b2bOrdersFab"
+   aria-label="Open My B2B Orders"
+   title="Open My B2B Orders">
+  <div class="b2b-cart-fab-inner">
+    <div class="b2b-cart-icon-wrap">
+      <i class="fas fa-clipboard-list"></i>
+    </div>
+
+    <div class="b2b-cart-label">
+      <span class="b2b-cart-pill">
+        <span class="b2b-cart-pill-dot"></span>
+        <span class="b2b-cart-pill-text">B2B</span>
+      </span>
+      <small class="b2b-cart-sub">Track Orders</small>
+    </div>
+  </div>
+</a>
 
   <!-- Time Period Filter -->
   <div class="row mb-3">
