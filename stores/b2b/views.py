@@ -830,7 +830,7 @@ def b2b_mark_items_shipped(request, order_id):
 
         # ✅ RULE: seller cannot ship until buyer accepts the offer
         order_status = (getattr(order, "status", "") or "").lower().strip()
-        if order_status != "accepted":
+        if order_status not in ("accepted", "shipped"):
             return JsonResponse({
                 "success": False,
                 "error": "You can’t mark items as shipped until the buyer accepts the offer."
