@@ -7,173 +7,1166 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
 <style>
-/* =====================================================
-   B2B Floating Action Button (Cart / Orders)
-   Icon only → Hover reveal pill
-   ===================================================== */
+  /* =====================================================
+     CREATIVE B2B FLOATING NAV (Orders + Cart + Mini Menu)
+     - Orb style + hover reveal pill
+     - Pulse when counts exist
+     - Mobile safe
+     ===================================================== */
 
-.b2b-cart-fab{
-  position: fixed;
-  right: 18px;
-  bottom: 18px;
-  z-index: 1050;
-  text-decoration: none;
-  color: inherit;
-}
+  :root{
+    --b2b-primary:#1a5f9e;
+    --b2b-secondary:#2d8ccc;
+    --b2b-accent:#ff6b35;
+    --b2b-success:#2ed573;
+    --b2b-danger:#ff4757;
+    --b2b-soft:#f6f8fb;
+    --b2b-dark:#0f172a;
+  }
 
-/* ---------------------------------
-   INNER CONTAINER
----------------------------------- */
-.b2b-cart-fab-inner{
-  display:flex;
-  align-items:center;
-  gap: 10px;
-  padding: 10px;
-  border-radius: 999px;
-  background: linear-gradient(135deg, rgba(26,95,158,0.95), rgba(45,140,204,0.95));
-  border: 1px solid rgba(255,255,255,0.25);
-  box-shadow: 0 10px 28px rgba(0,0,0,0.22);
-  backdrop-filter: blur(10px);
-  overflow: hidden;
+  .b2b-float-wrap{
+    position: fixed;
+    right: 18px;
+    bottom: 18px;
+    z-index: 1050;
+    display:flex;
+    flex-direction:column;
+    gap: 12px;
+    align-items:flex-end;
+  }
 
-  transition:
-    transform .18s ease,
-    box-shadow .18s ease,
-    filter .18s ease;
-}
+  /* main button */
+  .b2b-fab{
+    text-decoration:none;
+    color:inherit;
+    display:flex;
+    align-items:center;
+    justify-content:flex-end;
+    outline:none;
+  }
 
-.b2b-cart-fab:hover .b2b-cart-fab-inner{
-  transform: translateY(-2px) scale(1.02);
-  box-shadow: 0 14px 34px rgba(0,0,0,0.26);
-  filter: saturate(1.05);
-}
+  .b2b-fab-inner{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:10px;
+    border-radius:999px;
+    background: linear-gradient(135deg, rgba(26,95,158,0.96), rgba(45,140,204,0.96));
+    border: 1px solid rgba(255,255,255,0.24);
+    box-shadow: 0 12px 30px rgba(2,6,23,0.28);
+    backdrop-filter: blur(10px);
+    overflow:hidden;
+    transform: translateZ(0);
+    transition: transform .18s ease, box-shadow .18s ease, filter .18s ease;
+  }
 
-/* ---------------------------------
-   ICON (ALWAYS VISIBLE)
----------------------------------- */
-.b2b-cart-icon-wrap{
-  position: relative;
-  width: 44px;
-  height: 44px;
-  border-radius: 999px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  background: rgba(255,255,255,0.12);
-  border: 1px solid rgba(255,255,255,0.2);
-  flex-shrink: 0;
-}
+  .b2b-fab:hover .b2b-fab-inner,
+  .b2b-fab:focus-visible .b2b-fab-inner{
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 18px 40px rgba(2,6,23,0.32);
+    filter:saturate(1.06);
+  }
 
-.b2b-cart-icon-wrap i{
-  font-size: 1.15rem;
-  color: #fff;
-}
+  /* icon orb */
+  .b2b-fab-orb{
+    position:relative;
+    width:46px;height:46px;
+    border-radius:999px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    flex-shrink:0;
+    background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.20), rgba(255,255,255,0.08));
+    border:1px solid rgba(255,255,255,0.22);
+  }
 
-/* ---------------------------------
-   COUNT BADGE
----------------------------------- */
-.b2b-cart-count{
-  position: absolute;
-  top: -7px;
-  right: -7px;
-  min-width: 22px;
-  height: 22px;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: var(--b2b-accent);
-  color: #fff;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  font-size: 0.75rem;
-  font-weight: 800;
-  line-height: 1;
-  border: 2px solid rgba(255,255,255,0.9);
-  box-shadow: 0 6px 14px rgba(0,0,0,0.2);
-}
+  .b2b-fab-orb i{
+    font-size:1.15rem;
+    color:#fff;
+  }
 
-/* ---------------------------------
-   LABEL (HIDDEN BY DEFAULT)
----------------------------------- */
-.b2b-cart-label{
-  display:flex;
-  flex-direction:column;
-  line-height:1.05;
-  color: #fff;
+  /* count badge */
+  .b2b-fab-count{
+    position:absolute;
+    top:-7px; right:-7px;
+    min-width:22px;
+    height:22px;
+    padding:0 6px;
+    border-radius:999px;
+    background: var(--b2b-accent);
+    color:#fff;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:.75rem;
+    font-weight:900;
+    border:2px solid rgba(255,255,255,0.95);
+    box-shadow: 0 8px 18px rgba(0,0,0,0.25);
+  }
 
-  max-width: 0;
-  opacity: 0;
-  transform: translateX(-6px);
-  pointer-events: none;
+  /* hover reveal label */
+  .b2b-fab-label{
+    display:flex;
+    flex-direction:column;
+    line-height:1.05;
+    color:#fff;
+    max-width:0;
+    opacity:0;
+    transform: translateX(-8px);
+    pointer-events:none;
+    transition: max-width .28s ease, opacity .22s ease, transform .22s ease;
+  }
 
-  transition:
-    max-width .28s ease,
-    opacity .22s ease,
-    transform .22s ease;
-}
+  .b2b-fab:hover .b2b-fab-label,
+  .b2b-fab:focus-visible .b2b-fab-label{
+    max-width: 260px;
+    opacity:1;
+    transform: translateX(0);
+    pointer-events:auto;
+  }
 
-/* SHOW label on hover */
-.b2b-cart-fab:hover .b2b-cart-label{
-  max-width: 220px;
-  opacity: 1;
-  transform: translateX(0);
-  pointer-events: auto;
-}
+  .b2b-fab-pill{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding:6px 10px;
+    border-radius:999px;
+    background: rgba(2,6,23,0.20);
+    border:1px solid rgba(255,255,255,0.18);
+    font-weight:900;
+    letter-spacing:.2px;
+    width: fit-content;
+    white-space:nowrap;
+  }
 
-/* ---------------------------------
-   PILL
----------------------------------- */
-.b2b-cart-pill{
-  display:inline-flex;
-  align-items:center;
-  gap: 6px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: rgba(0,0,0,0.18);
-  border: 1px solid rgba(255,255,255,0.2);
-  font-weight: 800;
-  letter-spacing: 0.4px;
-  width: fit-content;
-  white-space: nowrap;
-}
+  .b2b-fab-dot{
+    width:9px;height:9px;border-radius:50%;
+    background: var(--b2b-success);
+    box-shadow: 0 0 0 6px rgba(46,213,115,0.18);
+  }
 
-.b2b-cart-pill-dot{
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--b2b-success);
-  box-shadow: 0 0 0 6px rgba(46,213,115,0.18);
-}
+  .b2b-fab-sub{
+    margin-top:4px;
+    font-size:.72rem;
+    font-weight:700;
+    opacity:.92;
+    letter-spacing:.2px;
+    white-space:nowrap;
+  }
 
-.b2b-cart-pill-text{
-  font-size: 0.85rem;
-}
+  /* special styles per button */
+  .b2b-fab--orders .b2b-fab-inner{
+    background: linear-gradient(135deg, rgba(26,95,158,0.96), rgba(45,140,204,0.96));
+  }
+  .b2b-fab--cart .b2b-fab-inner{
+    background: linear-gradient(135deg, rgba(255,107,53,0.95), rgba(255,160,80,0.92));
+  }
+  .b2b-fab--cart .b2b-fab-orb{
+    background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.22), rgba(255,255,255,0.10));
+  }
+  .b2b-fab--cart .b2b-fab-dot{
+    background: #fff;
+    box-shadow: 0 0 0 6px rgba(255,255,255,0.14);
+  }
 
-/* ---------------------------------
-   SUB TEXT
----------------------------------- */
-.b2b-cart-sub{
-  opacity: 0.9;
-  margin-top: 4px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: .2px;
-  white-space: nowrap;
-}
+  /* pulse when count > 0 */
+  @keyframes b2bPulse {
+    0%   { box-shadow: 0 0 0 0 rgba(255,107,53,.35); }
+    70%  { box-shadow: 0 0 0 14px rgba(255,107,53,0); }
+    100% { box-shadow: 0 0 0 0 rgba(255,107,53,0); }
+  }
+  .b2b-has-count .b2b-fab-orb{
+    animation: b2bPulse 1.8s infinite;
+  }
 
-/* ---------------------------------
-   ORDERS FAB POSITION
----------------------------------- */
-.b2b-orders-fab{
-  bottom: 92px; /* stacked above cart */
-  opacity: .97;
-}
+  /* mini quick menu (popover card) */
+  .b2b-mini-menu{
+    position: absolute;
+    right: 0;
+    bottom: 68px;
+    width: 260px;
+    background: #fff;
+    border:1px solid #e9ecef;
+    border-radius: 16px;
+    box-shadow: 0 18px 40px rgba(2,6,23,0.18);
+    overflow:hidden;
+    display:none;
+  }
+  .b2b-mini-menu.show{ display:block; }
 
-.b2b-orders-fab:hover{
-  opacity: 1;
-}
+  .b2b-mini-head{
+    background: linear-gradient(135deg, var(--b2b-primary), var(--b2b-secondary));
+    color:#fff;
+    padding: 12px 14px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+  }
+  .b2b-mini-head .title{
+    font-weight:900;
+    letter-spacing:-.2px;
+    font-size:.95rem;
+  }
+  .b2b-mini-head button{
+    border:none;
+    background: transparent;
+    color:#fff;
+    font-size:1rem;
+    opacity:.9;
+  }
+  .b2b-mini-body{
+    padding: 12px;
+    display:grid;
+    gap:10px;
+  }
+  .b2b-mini-link{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    border:1px solid #eef2f6;
+    border-radius: 14px;
+    padding:10px 12px;
+    text-decoration:none;
+    color: var(--b2b-dark);
+    font-weight:900;
+    transition:.18s ease;
+    background: #fff;
+  }
+  .b2b-mini-link:hover{
+    transform: translateY(-1px);
+    box-shadow: 0 10px 20px rgba(2,6,23,0.08);
+    border-color: rgba(26,95,158,.25);
+    background: rgba(26,95,158,.04);
+  }
+  .b2b-mini-link small{
+    font-weight:800;
+    color:#64748b;
+  }
+  .b2b-mini-badge{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-width: 26px;
+    height: 26px;
+    padding:0 8px;
+    border-radius:999px;
+    background: rgba(26,95,158,.12);
+    border:1px solid rgba(26,95,158,.18);
+    color: var(--b2b-primary);
+    font-weight:900;
+    font-size:.78rem;
+  }
 
+  /* floating toggle button for mini menu */
+  .b2b-menu-toggle{
+    position: relative;
+    width: 54px;
+    height: 54px;
+    border-radius: 999px;
+    border:none;
+    cursor:pointer;
+    background: linear-gradient(135deg, rgba(15,23,42,0.92), rgba(30,41,59,0.92));
+    box-shadow: 0 14px 34px rgba(2,6,23,0.28);
+    color:#fff;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    transition:.18s ease;
+  }
+  .b2b-menu-toggle:hover{
+    transform: translateY(-2px);
+    box-shadow: 0 18px 44px rgba(2,6,23,0.34);
+  }
+  .b2b-menu-toggle i{ font-size: 1.15rem; }
 
+  .b2b-menu-hint{
+    position:absolute;
+    right: 62px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(2,6,23,0.75);
+    color:#fff;
+    padding: 7px 10px;
+    border-radius: 999px;
+    font-weight:800;
+    font-size:.78rem;
+    display:none;
+    white-space:nowrap;
+    border:1px solid rgba(255,255,255,0.12);
+  }
+  .b2b-menu-toggle:hover .b2b-menu-hint{ display:block; }
+
+  /* mobile */
+  @media (max-width: 576px){
+    .b2b-float-wrap{ right: 12px; bottom: 14px; gap:10px; }
+    .b2b-mini-menu{ width: 240px; }
+  }
+
+    /* ===== Quick Actions (Store Dashboard) ===== */
+  .qa-card{
+    border: 0;
+    border-radius: 18px;
+    overflow: hidden;
+    box-shadow: 0 .85rem 2.2rem rgba(15, 23, 42, .08);
+    background: #fff;
+  }
+  .qa-header{
+    position: relative;
+    padding: 16px 18px;
+    background: linear-gradient(135deg, rgba(26,95,158,.10), rgba(45,140,204,.08));
+    border-bottom: 1px solid rgba(229,231,235,.9);
+  }
+  .qa-header::after{
+    content:"";
+    position:absolute;
+    right:-60px; top:-70px;
+    width:180px; height:180px;
+    border-radius:50%;
+    background: rgba(26,95,158,.10);
+  }
+  .qa-title{
+    font-weight: 900;
+    letter-spacing: -.02rem;
+    margin:0;
+    position: relative;
+    z-index: 2;
+  }
+  .qa-sub{
+    position: relative;
+    z-index: 2;
+    color:#64748b;
+    font-weight: 600;
+    font-size: .85rem;
+    margin-top: 4px;
+  }
+
+  /* Featured actions */
+  .qa-featured{
+    padding: 14px 16px 0 16px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .qa-hero-btn{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: 16px;
+    text-decoration:none;
+    color:#fff;
+    font-weight: 900;
+    box-shadow: 0 .55rem 1.4rem rgba(2,6,23,.18);
+    border: 1px solid rgba(255,255,255,.18);
+    transition: transform .18s ease, box-shadow .18s ease, filter .18s ease;
+  }
+  .qa-hero-btn:hover{
+    transform: translateY(-2px);
+    filter: saturate(1.05);
+    box-shadow: 0 .85rem 1.8rem rgba(2,6,23,.22);
+  }
+  .qa-hero-btn small{
+    display:block;
+    font-weight: 700;
+    opacity: .9;
+    letter-spacing: .2px;
+  }
+  .qa-hero-1{ background: linear-gradient(135deg, #2563eb, #1a5f9e); }
+  .qa-hero-2{ background: linear-gradient(135deg, #10b981, #059669); }
+
+  /* Section labels */
+  .qa-section{
+    padding: 14px 16px 0 16px;
+  }
+  .qa-section-label{
+    font-size: .72rem;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color:#64748b;
+    font-weight: 900;
+    margin: 12px 0 10px;
+  }
+
+  /* Action tiles */
+  .qa-grid{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .qa-tile{
+    position: relative;
+    display:flex;
+    gap: 10px;
+    align-items:flex-start;
+    padding: 12px 12px;
+    border-radius: 16px;
+    border: 1px solid rgba(229,231,235,.95);
+    background: #fff;
+    text-decoration:none;
+    color:#0f172a;
+    transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+  }
+  .qa-tile:hover{
+    transform: translateY(-2px);
+    border-color: rgba(26,95,158,.25);
+    box-shadow: 0 .75rem 1.6rem rgba(15,23,42,.08);
+  }
+  .qa-ico{
+    width: 40px;
+    height: 40px;
+    border-radius: 14px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    flex-shrink:0;
+    border: 1px solid rgba(229,231,235,.95);
+    background: rgba(26,95,158,.06);
+  }
+  .qa-ico i{
+    font-size: 1rem;
+    color:#1a5f9e;
+  }
+  .qa-txt strong{
+    display:block;
+    font-weight: 900;
+    line-height: 1.1;
+  }
+  .qa-txt span{
+    display:block;
+    margin-top: 4px;
+    color:#64748b;
+    font-size: .82rem;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+
+  /* Badges */
+  .qa-badge{
+    position:absolute;
+    top: 10px;
+    right: 10px;
+    font-size: .72rem;
+    font-weight: 900;
+    padding: 5px 10px;
+    border-radius: 999px;
+    background: rgba(2,6,23,.06);
+    border: 1px solid rgba(2,6,23,.08);
+    color:#0f172a;
+  }
+  .qa-badge-danger{
+    background: rgba(239,68,68,.12);
+    border-color: rgba(239,68,68,.25);
+    color:#b91c1c;
+  }
+  .qa-badge-warning{
+    background: rgba(245,158,11,.13);
+    border-color: rgba(245,158,11,.25);
+    color:#92400e;
+  }
+  .qa-badge-success{
+    background: rgba(34,197,94,.12);
+    border-color: rgba(34,197,94,.25);
+    color:#166534;
+  }
+
+  /* Footer micro actions */
+  .qa-footer{
+    padding: 14px 16px 16px 16px;
+    border-top: 1px dashed rgba(229,231,235,.95);
+    margin-top: 14px;
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+  .qa-mini{
+    display:inline-flex;
+    align-items:center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(229,231,235,.95);
+    background:#fff;
+    color:#0f172a;
+    text-decoration:none;
+    font-weight: 900;
+    font-size: .85rem;
+    transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+  }
+  .qa-mini:hover{
+    transform: translateY(-1px);
+    border-color: rgba(26,95,158,.25);
+    box-shadow: 0 .6rem 1.2rem rgba(15,23,42,.07);
+  }
+  .qa-mini i{ color:#64748b; }
+
+  /* ===== Store Profile Card (Creative / Professional) ===== */
+  .sp-card{
+    border:0;
+    border-radius:18px;
+    overflow:hidden;
+    box-shadow: 0 .9rem 2.4rem rgba(15,23,42,.08);
+    background:#fff;
+  }
+
+  .sp-hero{
+    position:relative;
+    padding:18px 18px;
+    color:#fff;
+    background: linear-gradient(135deg, rgba(26,95,158,.98), rgba(45,140,204,.92));
+  }
+  .sp-hero::after{
+    content:"";
+    position:absolute;
+    right:-90px; top:-90px;
+    width:220px; height:220px;
+    border-radius:50%;
+    background: rgba(255,255,255,.10);
+  }
+  .sp-hero::before{
+    content:"";
+    position:absolute;
+    left:-110px; bottom:-140px;
+    width:260px; height:260px;
+    border-radius:50%;
+    background: rgba(255,255,255,.07);
+  }
+
+  .sp-title{
+    position:relative;
+    z-index:2;
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:12px;
+    flex-wrap:wrap;
+  }
+  .sp-title h5{
+    margin:0;
+    font-weight: 950;
+    letter-spacing:-.02rem;
+  }
+  .sp-sub{
+    margin-top:6px;
+    opacity:.92;
+    font-weight:700;
+    font-size:.9rem;
+    position:relative;
+    z-index:2;
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    align-items:center;
+  }
+
+  .sp-chip{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding:7px 10px;
+    border-radius:999px;
+    background: rgba(255,255,255,.14);
+    border: 1px solid rgba(255,255,255,.18);
+    font-weight: 900;
+    font-size:.78rem;
+    white-space:nowrap;
+  }
+  .sp-chip i{ opacity:.95; }
+
+  .sp-actions{
+    position:relative;
+    z-index:2;
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+  }
+  .sp-action-btn{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding:8px 10px;
+    border-radius:12px;
+    font-weight:900;
+    border:1px solid rgba(255,255,255,.22);
+    background: rgba(0,0,0,.15);
+    color:#fff;
+    text-decoration:none;
+    transition: transform .18s ease, filter .18s ease;
+  }
+  .sp-action-btn:hover{
+    transform: translateY(-1px);
+    filter: saturate(1.05);
+    color:#fff;
+  }
+  .sp-action-btn.light{
+    background: rgba(255,255,255,.92);
+    color:#0f172a;
+    border-color: rgba(255,255,255,.85);
+  }
+  .sp-action-btn.light:hover{ color:#0f172a; }
+
+  .sp-body{
+    padding: 16px 18px 18px;
+  }
+
+  .sp-grid{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 14px;
+  }
+  @media (max-width: 768px){
+    .sp-grid{ grid-template-columns: 1fr; }
+  }
+
+  .sp-item{
+    display:flex;
+    gap: 12px;
+    align-items:flex-start;
+    padding: 12px 12px;
+    border-radius: 16px;
+    border: 1px solid rgba(229,231,235,.95);
+    background: #fff;
+  }
+  .sp-icon{
+    width:42px;height:42px;
+    border-radius:14px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background: rgba(26,95,158,.07);
+    border: 1px solid rgba(26,95,158,.12);
+    flex-shrink:0;
+  }
+  .sp-icon i{
+    color:#1a5f9e;
+    font-size: 1.05rem;
+  }
+  .sp-k{
+    font-weight: 900;
+    color:#0f172a;
+    font-size:.86rem;
+    margin:0;
+  }
+  .sp-v{
+    margin:4px 0 0;
+    color:#64748b;
+    font-weight: 700;
+    font-size:.88rem;
+    line-height:1.2;
+    word-break: break-word;
+  }
+
+  /* Health section */
+  .sp-health{
+    margin-top: 14px;
+    border: 1px dashed rgba(229,231,235,.95);
+    border-radius: 16px;
+    padding: 14px 14px;
+    background: linear-gradient(180deg, rgba(248,250,252,1), rgba(255,255,255,1));
+    display:flex;
+    gap: 14px;
+    align-items:center;
+    flex-wrap:wrap;
+  }
+  .sp-ring{
+    --p: 0;
+    width: 86px;
+    height: 86px;
+    border-radius: 50%;
+    background:
+      conic-gradient(#22c55e calc(var(--p)*1%), rgba(148,163,184,.25) 0);
+    display:grid;
+    place-items:center;
+    position:relative;
+  }
+  .sp-ring::after{
+    content:"";
+    width: 68px;
+    height: 68px;
+    border-radius: 50%;
+    background:#fff;
+    position:absolute;
+  }
+  .sp-ring strong{
+    position:relative;
+    z-index:1;
+    font-weight: 950;
+    font-size: 1.05rem;
+    color:#0f172a;
+  }
+  .sp-health-meta{
+    flex:1;
+    min-width: 240px;
+  }
+  .sp-health-meta h6{
+    margin:0;
+    font-weight: 950;
+    letter-spacing:-.01rem;
+  }
+  .sp-health-meta p{
+    margin:6px 0 0;
+    color:#64748b;
+    font-weight: 700;
+    font-size:.88rem;
+  }
+
+  .sp-checklist{
+    display:flex;
+    flex-wrap:wrap;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .sp-tip{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding: 7px 10px;
+    border-radius: 999px;
+    background: rgba(26,95,158,.07);
+    border: 1px solid rgba(26,95,158,.12);
+    font-weight: 900;
+    color:#1a5f9e;
+    font-size:.78rem;
+  }
+  .sp-tip i{ opacity:.9; }
+
+  .sp-url-row{
+    display:flex;
+    gap: 8px;
+    align-items:center;
+    flex-wrap:wrap;
+  }
+  .sp-url{
+    text-decoration:none;
+    font-weight: 900;
+    color:#1a5f9e;
+  }
+  .sp-url:hover{ text-decoration: underline; }
+
+    /* ===============================
+     REVIEWS – Premium split cards
+     =============================== */
+  .rev-card{
+    border: 0;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 14px 34px rgba(2, 8, 23, 0.08);
+    background: #fff;
+    transition: transform .18s ease, box-shadow .18s ease;
+  }
+  .rev-card:hover{
+    transform: translateY(-2px);
+    box-shadow: 0 18px 44px rgba(2, 8, 23, 0.12);
+  }
+
+  .rev-header{
+    padding: 16px 18px;
+    background: linear-gradient(135deg, rgba(26,95,158,0.08), rgba(45,140,204,0.06));
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+    position: relative;
+  }
+
+  .rev-header::after{
+    content:"";
+    position:absolute;
+    right:-80px;
+    top:-60px;
+    width:220px;
+    height:220px;
+    border-radius:50%;
+    background: rgba(26,95,158,0.08);
+  }
+
+  .rev-title{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    position: relative;
+    z-index: 1;
+  }
+  .rev-title h5{
+    margin:0;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+
+  .rev-btn{
+    border-radius: 999px;
+    font-weight: 800;
+    padding: 6px 12px;
+  }
+
+  .rev-body{
+    padding: 18px;
+  }
+
+  .rev-score{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    padding: 14px;
+    border-radius: 14px;
+    background: #f8fafc;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+  }
+
+  .rev-score-left{
+    display:flex;
+    align-items:center;
+    gap:12px;
+  }
+
+  .rev-badge{
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-weight: 900;
+    font-size: 1.15rem;
+    color: #fff;
+    box-shadow: 0 12px 22px rgba(2, 8, 23, 0.12);
+    flex-shrink:0;
+  }
+
+  .rev-badge.store{
+    background: linear-gradient(135deg, #1a5f9e, #2d8ccc);
+  }
+  .rev-badge.product{
+    background: linear-gradient(135deg, #f59e0b, #f97316);
+  }
+
+  .rev-stars{
+    display:flex;
+    align-items:center;
+    gap:2px;
+    line-height: 1;
+  }
+
+  .rev-meta{
+    color:#64748b;
+    font-size: .85rem;
+    font-weight: 700;
+    margin-top: 4px;
+  }
+
+  .rev-pill{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    border-radius: 999px;
+    padding: 6px 10px;
+    font-size: .8rem;
+    font-weight: 800;
+    border: 1px solid rgba(15, 23, 42, 0.10);
+    background: #fff;
+    color: #0f172a;
+    white-space: nowrap;
+  }
+
+  .rev-pill i{ opacity:.9; }
+
+  .rev-divider{
+    border-top: 1px dashed rgba(15, 23, 42, 0.14);
+    margin: 14px 0;
+  }
+
+  .rev-review{
+    display:flex;
+    gap:12px;
+    padding: 14px;
+    border-radius: 14px;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    background: #fff;
+  }
+
+  .rev-avatar{
+    width: 42px;
+    height: 42px;
+    border-radius: 14px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-weight: 900;
+    color: #0f172a;
+    background: rgba(26,95,158,0.08);
+    border: 1px solid rgba(26,95,158,0.18);
+    flex-shrink:0;
+  }
+
+  .rev-review h6{
+    margin:0;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    flex-wrap: wrap;
+  }
+
+  .rev-time{
+    font-size: .78rem;
+    font-weight: 700;
+    color:#64748b;
+  }
+
+  .rev-quote{
+    margin: 8px 0 0;
+    color:#0f172a;
+    opacity:.92;
+    font-weight: 600;
+    font-size: .92rem;
+  }
+
+  .rev-tags{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin-top: 10px;
+  }
+
+  .rev-tag{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-size: .78rem;
+    font-weight: 800;
+    background: rgba(2, 132, 199, 0.08);
+    border: 1px solid rgba(2, 132, 199, 0.18);
+    color: #0f172a;
+  }
+
+  .rev-empty{
+    text-align:center;
+    padding: 34px 14px;
+    color: #64748b;
+  }
+
+  .rev-empty i{
+    opacity:.55;
+  }
+
+  .rev-footnote{
+    margin-top: 12px;
+    font-size: .82rem;
+    color:#64748b;
+    font-weight: 700;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+    /* ==========================================
+     ACTIVITY SPLIT – Premium tables + micro UI
+     ========================================== */
+  .act-card{
+    border: 0;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 14px 34px rgba(2, 8, 23, 0.08);
+    background: #fff;
+    transition: transform .18s ease, box-shadow .18s ease;
+  }
+  .act-card:hover{
+    transform: translateY(-2px);
+    box-shadow: 0 18px 44px rgba(2, 8, 23, 0.12);
+  }
+
+  .act-header{
+    padding: 14px 16px;
+    background: linear-gradient(135deg, rgba(26,95,158,0.10), rgba(45,140,204,0.06));
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+    position: relative;
+  }
+  .act-header.warn{
+    background: linear-gradient(135deg, rgba(245,158,11,0.12), rgba(249,115,22,0.06));
+  }
+
+  .act-header::after{
+    content:"";
+    position:absolute;
+    right:-90px;
+    top:-70px;
+    width:240px;
+    height:240px;
+    border-radius:50%;
+    background: rgba(26,95,158,0.08);
+  }
+  .act-header.warn::after{
+    background: rgba(245,158,11,0.10);
+  }
+
+  .act-title{
+    position: relative;
+    z-index: 1;
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:12px;
+    flex-wrap: wrap;
+  }
+
+  .act-title h5{
+    margin:0;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    display:flex;
+    align-items:center;
+    gap:10px;
+  }
+  .act-sub{
+    font-size: .85rem;
+    color:#64748b;
+    font-weight: 700;
+    margin-top: 2px;
+  }
+
+  .act-tools{
+    position: relative;
+    z-index: 1;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .act-pill{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-size: .78rem;
+    font-weight: 900;
+    border: 1px solid rgba(15, 23, 42, 0.10);
+    background: rgba(255,255,255,0.85);
+    color:#0f172a;
+    white-space: nowrap;
+  }
+
+  .act-search{
+    min-width: 210px;
+    border-radius: 999px;
+    padding-left: 36px;
+    font-weight: 700;
+  }
+  .act-search-wrap{
+    position: relative;
+  }
+  .act-search-wrap i{
+    position:absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color:#64748b;
+    opacity: .9;
+    pointer-events:none;
+  }
+
+  .act-table{
+    margin:0;
+  }
+  .act-table thead th{
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: #f8fafc !important;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+    font-size: .8rem;
+    letter-spacing: .03em;
+    text-transform: uppercase;
+    color:#475569;
+    font-weight: 900;
+  }
+  .act-table tbody td{
+    vertical-align: middle;
+  }
+  .act-row{
+    transition: background .12s ease, transform .12s ease;
+  }
+  .act-row:hover{
+    background: rgba(2, 132, 199, 0.06);
+  }
+
+  .act-chip{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-size: .78rem;
+    font-weight: 900;
+    border: 1px solid rgba(15, 23, 42, 0.10);
+    background: #fff;
+  }
+  .act-dot{
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    display:inline-block;
+  }
+  .dot-success{ background:#22c55e; box-shadow: 0 0 0 4px rgba(34,197,94,.18); }
+  .dot-warning{ background:#f59e0b; box-shadow: 0 0 0 4px rgba(245,158,11,.18); }
+  .dot-info{ background:#0ea5e9; box-shadow: 0 0 0 4px rgba(14,165,233,.18); }
+  .dot-muted{ background:#94a3b8; }
+
+  .act-mini{
+    font-size: .78rem;
+    font-weight: 800;
+    color:#64748b;
+  }
+
+  .act-urg{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: rgba(245,158,11,0.14);
+    border: 1px solid rgba(245,158,11,0.22);
+    color:#7c2d12;
+    font-size: .72rem;
+    font-weight: 900;
+  }
+
+  .act-vip{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: rgba(234,179,8,0.14);
+    border: 1px solid rgba(234,179,8,0.22);
+    color:#713f12;
+    font-size: .72rem;
+    font-weight: 900;
+  }
+
+  .act-btn{
+    border-radius: 10px;
+    font-weight: 800;
+  }
+
+  .act-empty{
+    text-align:center;
+    padding: 36px 14px;
+    color:#64748b;
+    font-weight: 800;
+  }
+  .act-empty i{ opacity:.55; }
+
+  @media (max-width: 576px){
+    .act-search{ min-width: 160px; }
+  }
 </style>
 
 <div class="container-fluid py-4">
@@ -242,25 +1235,95 @@
     </div>
   </div>
 
-  <a href="{% url 'stores_b2b:my_orders' %}"
-   class="b2b-cart-fab b2b-orders-fab"
-   id="b2bOrdersFab"
-   aria-label="Open My B2B Orders"
-   title="Open My B2B Orders">
-  <div class="b2b-cart-fab-inner">
-    <div class="b2b-cart-icon-wrap">
-      <i class="fas fa-clipboard-list"></i>
+<div class="b2b-float-wrap" id="b2bFloatWrap">
+
+    {# Mini menu toggle #}
+    <div style="position:relative;">
+      <button type="button" class="b2b-menu-toggle" id="b2bMenuToggle" aria-label="Open B2B quick menu">
+        <span class="b2b-menu-hint"><i class="fas fa-bolt me-1"></i>Quick B2B</span>
+        <i class="fas fa-layer-group"></i>
+      </button>
+
+      <div class="b2b-mini-menu" id="b2bMiniMenu" role="dialog" aria-label="B2B quick actions">
+        <div class="b2b-mini-head">
+          <div class="title"><i class="fas fa-handshake me-2"></i>B2B Quick Actions</div>
+          <button type="button" id="b2bMiniClose" aria-label="Close">&times;</button>
+        </div>
+
+        <div class="b2b-mini-body">
+          <a class="b2b-mini-link" href="{% url 'stores:b2b_marketplace' %}">
+            <div><i class="fas fa-store me-2 text-primary"></i>Marketplace<br><small>Find wholesale offers</small></div>
+            <span class="b2b-mini-badge"><i class="fas fa-arrow-right"></i></span>
+          </a>
+
+          <a class="b2b-mini-link" href="{% url 'stores_b2b:my_orders' %}">
+            <div><i class="fas fa-clipboard-list me-2 text-primary"></i>My Orders<br><small>Track & price requests</small></div>
+            <span class="b2b-mini-badge" id="b2bOrdersMiniBadge">
+              {{ b2b_orders_count|default:0 }}
+            </span>
+          </a>
+
+          <a class="b2b-mini-link" href="{% url 'stores_b2b:cart' %}">
+            <div><i class="fas fa-shopping-basket me-2 text-primary"></i>My Cart<br><small>Checkout wholesale</small></div>
+            <span class="b2b-mini-badge" id="b2bCartMiniBadge">
+              {{ b2b_cart_count|default:0 }}
+            </span>
+          </a>
+        </div>
+      </div>
     </div>
 
-    <div class="b2b-cart-label">
-      <span class="b2b-cart-pill">
-        <span class="b2b-cart-pill-dot"></span>
-        <span class="b2b-cart-pill-text">B2B</span>
-      </span>
-      <small class="b2b-cart-sub">Track Orders</small>
-    </div>
+    {# Orders FAB #}
+    <a href="{% url 'stores_b2b:my_orders' %}"
+       class="b2b-fab b2b-fab--orders {% if b2b_orders_count and b2b_orders_count|add:'0' > 0 %}b2b-has-count{% endif %}"
+       id="b2bOrdersFab"
+       aria-label="Open My B2B Orders"
+       title="Open My B2B Orders">
+      <div class="b2b-fab-inner">
+        <div class="b2b-fab-orb">
+          <i class="fas fa-clipboard-list"></i>
+          {% if b2b_orders_count and b2b_orders_count|add:'0' > 0 %}
+            <span class="b2b-fab-count" id="b2bOrdersBadge">{{ b2b_orders_count }}</span>
+          {% else %}
+            <span class="b2b-fab-count d-none" id="b2bOrdersBadge">0</span>
+          {% endif %}
+        </div>
+        <div class="b2b-fab-label">
+          <span class="b2b-fab-pill">
+            <span class="b2b-fab-dot"></span>
+            <span>My B2B Orders</span>
+          </span>
+          <small class="b2b-fab-sub">Track • Price • Fulfil</small>
+        </div>
+      </div>
+    </a>
+
+    {# Cart FAB #}
+    <a href="{% url 'stores_b2b:cart' %}"
+       class="b2b-fab b2b-fab--cart {% if b2b_cart_count and b2b_cart_count|add:'0' > 0 %}b2b-has-count{% endif %}"
+       id="b2bCartFab"
+       aria-label="Open B2B Cart"
+       title="Open B2B Cart">
+      <div class="b2b-fab-inner">
+        <div class="b2b-fab-orb">
+          <i class="fas fa-shopping-basket"></i>
+          {% if b2b_cart_count and b2b_cart_count|add:'0' > 0 %}
+            <span class="b2b-fab-count" id="b2bCartBadge">{{ b2b_cart_count }}</span>
+          {% else %}
+            <span class="b2b-fab-count d-none" id="b2bCartBadge">0</span>
+          {% endif %}
+        </div>
+        <div class="b2b-fab-label">
+          <span class="b2b-fab-pill">
+            <span class="b2b-fab-dot"></span>
+            <span>B2B Cart</span>
+          </span>
+          <small class="b2b-fab-sub">Quick checkout • Wholesale</small>
+        </div>
+      </div>
+    </a>
+
   </div>
-</a>
 
   <!-- Time Period Filter -->
   <div class="row mb-3">
@@ -271,13 +1334,10 @@
             <div class="btn-group btn-group-sm" role="group" aria-label="Time period filter">
               <input type="radio" class="btn-check" name="timePeriod" id="period7" value="7" checked>
               <label class="btn btn-outline-primary" for="period7">7 Days</label>
-
               <input type="radio" class="btn-check" name="timePeriod" id="period30" value="30">
               <label class="btn btn-outline-primary" for="period30">30 Days</label>
-
               <input type="radio" class="btn-check" name="timePeriod" id="period90" value="90">
               <label class="btn btn-outline-primary" for="period90">90 Days</label>
-
               <input type="radio" class="btn-check" name="timePeriod" id="period365" value="365">
               <label class="btn btn-outline-primary" for="period365">1 Year</label>
             </div>
@@ -292,7 +1352,7 @@
   </div>
 
   <!-- Key Metrics Row -->
-  <div class="row mb-4">
+<div class="row mb-4">
     <div class="col-lg-3 col-md-6 mb-3">
       <div class="card bg-primary text-white h-100 metric-card" data-bs-toggle="tooltip" data-bs-placement="top" title="Total products in your store">
         <div class="card-body">
@@ -515,198 +1575,301 @@
   </div>
 
   <!-- Recent Activity and Quick Actions -->
-  <div class="row mb-4">
-    <div class="col-lg-6 mb-3">
-      <div class="card h-100">
-        <div class="card-header bg-light d-flex justify-content-between align-items-center">
-          <h5 class="card-title mb-0">
-            <i class="fas fa-clock text-info me-2"></i>Recent Orders
-          </h5>
+<div class="row mb-4">
+
+  <!-- Recent Orders -->
+  <div class="col-lg-6 mb-3">
+    <div class="act-card h-100">
+      <div class="act-header">
+        <div class="act-title">
           <div>
-            <div class="btn-group btn-group-sm me-2" role="group">
+            <h5>
+              <i class="fas fa-clock text-info"></i>
+              Recent Orders
+            </h5>
+            <div class="act-sub">Last 5 orders — filter fast, act faster.</div>
+          </div>
+
+          <div class="act-tools">
+            <span class="act-pill" title="Pending orders needing attention">
+              <i class="fas fa-hourglass-half text-warning"></i>
+              Pending: <strong>{{ pending_orders_count|default:0 }}</strong>
+            </span>
+
+            <div class="btn-group btn-group-sm" role="group" aria-label="Order filter">
               <input type="radio" class="btn-check" name="orderFilter" id="allOrders" value="all" checked>
-              <label class="btn btn-outline-info" for="allOrders">All</label>
+              <label class="btn btn-outline-info act-btn" for="allOrders">All</label>
 
               <input type="radio" class="btn-check" name="orderFilter" id="pendingOrders" value="pending">
-              <label class="btn btn-outline-warning" for="pendingOrders">Pending</label>
+              <label class="btn btn-outline-warning act-btn" for="pendingOrders">Pending</label>
 
               <input type="radio" class="btn-check" name="orderFilter" id="completedOrders" value="completed">
-              <label class="btn btn-outline-success" for="completedOrders">Completed</label>
+              <label class="btn btn-outline-success act-btn" for="completedOrders">Completed</label>
             </div>
-            <a href="{% url 'stores:store_orders' store.id %}" class="btn btn-sm btn-outline-info">View All</a>
-          </div>
-        </div>
-        <div class="card-body p-0">
-          <div class="table-responsive">
-            <table class="table table-hover mb-0">
-              <thead class="bg-light">
-                <tr>
-                  <th>Order #</th>
-                  <th>Customer</th>
-                  <th>Amount</th>
-                  <th>Status</th>
-                  <th>Date</th>
-                  <th class="text-center">Actions</th>
-                </tr>
-              </thead>
-              <tbody id="ordersTableBody">
-                {% for order in recent_orders|slice:":5" %}
-                <tr data-order-status="{{ order.status }}">
-                  <td>
-                <a href="{% url 'stores:store_order_detail' store.id order.id %}" class="text-decoration-none text-dark">
-                  <strong>#{{ order.id|slice:":8" }}</strong>
-                  {% if order.is_urgent %}
-                  <i class="fas fa-exclamation-triangle text-warning ms-1" title="Urgent order"></i>
-                  {% endif %}
-                </a>
-              </td>
-                  <td>
-                    <div>
-                      {{ order.buyer.first_name }} {{ order.buyer.last_name }}
-                      {% if order.buyer.is_vip %}
-                      <i class="fas fa-crown text-warning ms-1" title="VIP Customer"></i>
-                      {% endif %}
-                    </div>
-                    <small class="text-muted">{{ order.buyer.email }}</small>
-                  </td>
-                  <td><strong>D{{ order.get_total}}</strong></td>
-                  <td>
-                    <span class="badge bg-{% if order.status == 'completed' %}success{% elif order.status == 'pending' %}warning{% elif order.status == 'processing' %}info{% else %}secondary{% endif %}">
-                      {{ order.status|title }}
-                    </span>
-                  </td>
-                  <td>
-                    {{ order.created_at|date:"M d" }}
-                    <br><small class="text-muted">{{ order.created_at|time:"H:i" }}</small>
-                  </td>
-                  <td class="text-center">
-                    <div class="btn-group btn-group-sm">
-                      <a href="{% url 'stores:store_order_detail' store.id order.id %}" class="btn btn-outline-info btn-sm" title="View Order">
-                        <i class="fas fa-eye"></i>
-                      </a>
-                      {% if order.status == 'pending' %}
-                      <button class="btn btn-outline-success btn-sm process-order" data-order-id="{{ order.id }}" title="Process Order">
-                        <i class="fas fa-check"></i>
-                      </button>
-                      {% endif %}
-                    </div>
-                  </td>
-                </tr>
-                {% empty %}
-                <tr>
-                  <td colspan="6" class="text-center text-muted py-4">
-                    <i class="fas fa-shopping-cart fa-2x mb-2"></i><br>
-                    No recent orders
-                  </td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
+
+            <a href="{% url 'stores:store_orders' store.id %}" class="btn btn-sm btn-outline-info act-btn">
+              View All <i class="fas fa-arrow-right ms-1"></i>
+            </a>
+
+            <div class="act-search-wrap">
+              <i class="fas fa-magnifying-glass"></i>
+              <input id="ordersSearch" class="form-control form-control-sm act-search"
+                     placeholder="Search order/customer…" autocomplete="off">
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <div class="col-lg-6 mb-3">
-      <div class="card h-100">
-        <div class="card-header bg-light d-flex justify-content-between align-items-center">
-          <h5 class="card-title mb-0">
-            <i class="fas fa-star text-warning me-2"></i>Top Products
-          </h5>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover act-table mb-0">
+            <thead>
+              <tr>
+                <th>Order</th>
+                <th>Customer</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Date</th>
+                <th class="text-center">Actions</th>
+              </tr>
+            </thead>
+
+            <tbody id="ordersTableBody">
+              {% for order in recent_orders|slice:":5" %}
+              <tr class="act-row"
+                  data-order-status="{{ order.status }}"
+                  data-search="{{ order.id }} {{ order.buyer.first_name }} {{ order.buyer.last_name }} {{ order.buyer.email }}">
+
+                <td>
+                  <a href="{% url 'stores:store_order_detail' store.id order.id %}"
+                     class="text-decoration-none text-dark">
+                    <strong>#{{ order.id|slice:":8" }}</strong>
+                  </a>
+
+                  {% if order.is_urgent %}
+                    <span class="act-urg ms-2" title="Urgent order">
+                      <i class="fas fa-triangle-exclamation"></i> URGENT
+                    </span>
+                  {% endif %}
+                </td>
+
+                <td>
+                  <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <div class="fw-semibold">
+                      {{ order.buyer.first_name }} {{ order.buyer.last_name }}
+                    </div>
+
+                    {% if order.buyer.is_vip %}
+                      <span class="act-vip" title="VIP Customer">
+                        <i class="fas fa-crown"></i> VIP
+                      </span>
+                    {% endif %}
+                  </div>
+                  <div class="act-mini">{{ order.buyer.email }}</div>
+                </td>
+
+                <td>
+                  <strong>D{{ order.get_total }}</strong>
+                </td>
+
+                <td>
+                  {% if order.status == 'completed' %}
+                    <span class="act-chip"><span class="act-dot dot-success"></span> Completed</span>
+                  {% elif order.status == 'pending' %}
+                    <span class="act-chip"><span class="act-dot dot-warning"></span> Pending</span>
+                  {% elif order.status == 'processing' %}
+                    <span class="act-chip"><span class="act-dot dot-info"></span> Processing</span>
+                  {% else %}
+                    <span class="act-chip"><span class="act-dot dot-muted"></span> {{ order.status|title }}</span>
+                  {% endif %}
+                </td>
+
+                <td>
+                  {{ order.created_at|date:"M d" }}
+                  <div class="act-mini">{{ order.created_at|time:"H:i" }}</div>
+                </td>
+
+                <td class="text-center">
+                  <div class="btn-group btn-group-sm">
+                    <a href="{% url 'stores:store_order_detail' store.id order.id %}"
+                       class="btn btn-outline-info act-btn" title="View">
+                      <i class="fas fa-eye"></i>
+                    </a>
+
+                    {% if order.status == 'pending' %}
+                    <button class="btn btn-outline-success act-btn process-order"
+                            data-order-id="{{ order.id }}" title="Process">
+                      <i class="fas fa-check"></i>
+                    </button>
+                    {% endif %}
+                  </div>
+                </td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="6" class="act-empty">
+                  <i class="fas fa-shopping-cart fa-2x mb-2"></i><br>
+                  No recent orders yet — once you start selling, they’ll show here.
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Top Products -->
+  <div class="col-lg-6 mb-3">
+    <div class="act-card h-100">
+      <div class="act-header warn">
+        <div class="act-title">
           <div>
-            <select class="form-select form-select-sm me-2" id="productSortBy" style="width: auto; display: inline-block;">
+            <h5>
+              <i class="fas fa-star text-warning"></i>
+              Top Products
+            </h5>
+            <div class="act-sub">Best sellers and winners — keep them in stock.</div>
+          </div>
+
+          <div class="act-tools">
+            {% if low_stock_products %}
+              <span class="act-pill" title="Products running low on stock">
+                <i class="fas fa-triangle-exclamation text-warning"></i>
+                Low stock: <strong>{{ low_stock_products.count }}</strong>
+              </span>
+            {% endif %}
+
+            <select class="form-select form-select-sm act-btn" id="productSortBy" style="width:auto;">
               <option value="sales">By Sales</option>
               <option value="revenue">By Revenue</option>
               <option value="rating">By Rating</option>
               <option value="views">By Views</option>
             </select>
-            <a href="{% url 'stores:manage_store_products' store.id %}" class="btn btn-sm btn-outline-warning">View All</a>
+
+            <a href="{% url 'stores:manage_store_products' store.id %}" class="btn btn-sm btn-outline-warning act-btn">
+              View All <i class="fas fa-arrow-right ms-1"></i>
+            </a>
+
+            <div class="act-search-wrap">
+              <i class="fas fa-magnifying-glass"></i>
+              <input id="productsSearch" class="form-control form-control-sm act-search"
+                     placeholder="Search product…" autocomplete="off">
+            </div>
           </div>
         </div>
-        <div class="card-body p-0">
-          <div class="table-responsive">
-            <table class="table table-hover mb-0">
-              <thead class="bg-light">
-                <tr>
-                  <th>Product</th>
-                  <th>Sold</th>
-                  <th>Revenue</th>
-                  <th>Rating</th>
-                  <th class="text-center">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for product in top_products|slice:":5" %}
-                <tr>
-                  <td>
-                      <a href="{% url 'stores:edit_product' store.id product.id %}" class="text-decoration-none text-dark">
-                        <div class="d-flex align-items-center">
-                          {% if product.image %}
-                          <img src="{{ product.image.url }}" alt="{{ product.name }}" class="rounded me-2" style="width: 40px; height: 40px; object-fit: cover;">
-                          {% else %}
-                          <div class="bg-light rounded me-2 d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
-                            <i class="fas fa-image text-muted"></i>
-                          </div>
-                          {% endif %}
-                          <div>
-                            <strong>{{ product.name|truncatechars:20 }}</strong>
-                          </div>
+      </div>
+
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover act-table mb-0">
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th>Sold</th>
+                <th>Revenue</th>
+                <th>Rating</th>
+                <th class="text-center">Actions</th>
+              </tr>
+            </thead>
+
+            <tbody id="productsTableBody">
+              {% for product in top_products|slice:":5" %}
+              <tr class="act-row"
+                  data-search="{{ product.name }} {{ product.price }} {{ product.stock }}">
+
+                <td>
+                  <a href="{% url 'stores:edit_product' store.id product.id %}"
+                     class="text-decoration-none text-dark">
+                    <div class="d-flex align-items-center">
+                      {% if product.image %}
+                        <img src="{{ product.image.url }}" alt="{{ product.name }}"
+                             class="rounded me-2" style="width:42px;height:42px;object-fit:cover;">
+                      {% else %}
+                        <div class="bg-light rounded me-2 d-flex align-items-center justify-content-center"
+                             style="width:42px;height:42px;">
+                          <i class="fas fa-image text-muted"></i>
                         </div>
-                      </a>
+                      {% endif %}
+
+                      <div>
+                        <strong>{{ product.name|truncatechars:22 }}</strong>
                         {% if product.is_featured %}
-                        <i class="fas fa-star text-warning ms-1" title="Featured Product"></i>
+                          <span class="act-vip ms-2" title="Featured product">
+                            <i class="fas fa-star"></i> Featured
+                          </span>
                         {% endif %}
-                        <br>
-                        <small class="text-muted">D{{ product.price }} • {{ product.stock }} in stock</small>
-                  </td>
-                  <td>
-                    <span class="badge bg-primary">{{ product.total_sold|default:0 }}</span>
-                    {% if product.sales_trend > 0 %}
+                        <div class="act-mini">
+                          D{{ product.price }} •
+                          {% if product.stock|default:0 <= 5 %}
+                            <span class="text-warning fw-bold">{{ product.stock }} left</span>
+                          {% else %}
+                            {{ product.stock }} in stock
+                          {% endif %}
+                        </div>
+                      </div>
+                    </div>
+                  </a>
+                </td>
+
+                <td>
+                  <span class="badge bg-primary">{{ product.total_sold|default:0 }}</span>
+                  {% if product.sales_trend > 0 %}
                     <i class="fas fa-arrow-up text-success ms-1" title="Sales increasing"></i>
-                    {% elif product.sales_trend < 0 %}
+                  {% elif product.sales_trend < 0 %}
                     <i class="fas fa-arrow-down text-danger ms-1" title="Sales decreasing"></i>
-                    {% endif %}
-                  </td>
-                  <td>
-                    <strong>D{{ product.total_revenue|default:0|floatformat:2 }}</strong>
-                  </td>
-                  <td>
-                    {% if product.avg_rating %}
+                  {% endif %}
+                </td>
+
+                <td>
+                  <strong>D{{ product.total_revenue|default:0|floatformat:2 }}</strong>
+                </td>
+
+                <td>
+                  {% if product.avg_rating %}
                     <div class="d-flex align-items-center">
                       <i class="fas fa-star text-warning me-1"></i>
-                      <span>{{ product.avg_rating|floatformat:1 }}</span>
+                      <span class="fw-semibold">{{ product.avg_rating|floatformat:1 }}</span>
                       <small class="text-muted ms-1">({{ product.review_count }})</small>
                     </div>
-                    {% else %}
+                  {% else %}
                     <span class="text-muted">No rating</span>
-                    {% endif %}
-                  </td>
-                  <td class="text-center">
-                    <div class="btn-group btn-group-sm">
-                      <a href="{% url 'stores:product_detail' product.id %}" class="btn btn-outline-info btn-sm" title="View Product">
-                        <i class="fas fa-eye"></i>
-                      </a>
-                      <a href="{% url 'stores:edit_product' store.id product.id %}" class="btn btn-outline-primary btn-sm" title="Edit Product">
-                        <i class="fas fa-edit"></i>
-                      </a>
-                    </div>
-                  </td>
-                </tr>
-                {% empty %}
-                <tr>
-                  <td colspan="5" class="text-center text-muted py-4">
-                    <i class="fas fa-box fa-2x mb-2"></i><br>
-                    No products yet
-                  </td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
+                  {% endif %}
+                </td>
+
+                <td class="text-center">
+                  <div class="btn-group btn-group-sm">
+                    <a href="{% url 'stores:product_detail' product.id %}"
+                       class="btn btn-outline-info act-btn" title="View">
+                      <i class="fas fa-eye"></i>
+                    </a>
+                    <a href="{% url 'stores:edit_product' store.id product.id %}"
+                       class="btn btn-outline-primary act-btn" title="Edit">
+                      <i class="fas fa-edit"></i>
+                    </a>
+                  </div>
+                </td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="5" class="act-empty">
+                  <i class="fas fa-box fa-2x mb-2"></i><br>
+                  No products yet — add products to start tracking top sellers.
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+
+          </table>
         </div>
       </div>
     </div>
   </div>
+
+</div>
+
 
   <!-- Notifications and Alerts -->
 {% if low_stock_products or pending_orders_count > 10 or unread_messages %}
@@ -751,256 +1914,534 @@
 </div>
 {% endif %}
 
+<!-- Store Information and Quick Actions -->
+<div class="row">
+  <!-- LEFT: Store Profile -->
+  <div class="col-lg-8 mb-3">
+    <div class="sp-card">
+      <!-- HERO -->
+      <div class="sp-hero">
+        <div class="sp-title">
+          <div>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+              <h5><i class="fas fa-store me-2"></i>Store Profile</h5>
 
-  <!-- Store Information and Quick Actions -->
-  <div class="row">
-    <div class="col-lg-8 mb-3">
-      <div class="card">
-        <div class="card-header bg-light">
-          <h5 class="card-title mb-0">
-            <i class="fas fa-info-circle text-primary me-2"></i>Store Information
-          </h5>
-        </div>
-        <div class="card-body">
-          <div class="row">
-            <div class="col-md-6">
-              <div class="mb-3">
-                <strong>Store Name:</strong><br>
-                <span class="text-muted">{{ store.name }}</span>
-              </div>
-              <div class="mb-3">
-                <strong>Email:</strong><br>
-                <span class="text-muted">{{ store.email }}</span>
-                {% if store.email_verified %}
-                <i class="fas fa-check-circle text-success ms-1" title="Email verified"></i>
-                {% else %}
-                <i class="fas fa-exclamation-circle text-warning ms-1" title="Email not verified"></i>
-                {% endif %}
-              </div>
-              <div class="mb-3">
-                <strong>Phone:</strong><br>
-                <span class="text-muted">{{ store.phone|default:"Not provided" }}</span>
-              </div>
-              <div class="mb-3">
-                <strong>Business Type:</strong><br>
-                <span class="text-muted">{{ store.business_type|default:"Not specified" }}</span>
-              </div>
+              {% if store.status == 'active' %}
+                <span class="sp-chip"><i class="fas fa-check-circle"></i> ACTIVE</span>
+              {% else %}
+                <span class="sp-chip"><i class="fas fa-pause-circle"></i> {{ store.status|title }}</span>
+              {% endif %}
+
+              {% if store.email_verified %}
+                <span class="sp-chip"><i class="fas fa-shield-check"></i> Email Verified</span>
+              {% else %}
+                <span class="sp-chip"><i class="fas fa-triangle-exclamation"></i> Verify Email</span>
+              {% endif %}
             </div>
-            <div class="col-md-6">
-              <div class="mb-3">
-                <strong>Location:</strong><br>
-                <span class="text-muted">{{ store.city }}, {{ store.country }}</span>
-              </div>
-              <div class="mb-3">
-                <strong>Created:</strong><br>
-                <span class="text-muted">{{ store.created_at|date:"F d, Y" }}</span>
-              </div>
-              <div class="mb-3">
-                <strong>Store URL:</strong><br>
-                <a href="{% url 'stores:store_detail' store.slug %}" target="_blank" class="text-primary">
-                  yoursite.com/store/{{ store.slug }}
-                  <i class="fas fa-external-link-alt ms-1"></i>
-                </a>
-                <button class="btn btn-sm btn-outline-secondary ms-2" onclick="copyToClipboard('{% url 'stores:store_detail' store.slug %}')" title="Copy URL">
-                  <i class="fas fa-copy"></i>
-                </button>
-              </div>
-              <div class="mb-3">
-                <strong>Store Health Score:</strong><br>
-                <div class="progress" style="height: 8px;">
-                  <div class="progress-bar bg-{% if store_health_score >= 80 %}success{% elif store_health_score >= 60 %}warning{% else %}danger{% endif %}"
-                       style="width: {{ store_health_score|default:0 }}%"></div>
-                </div>
-                <small class="text-muted">{{ store_health_score|default:0 }}% - Based on completeness and activity</small>
-              </div>
+
+            <div class="sp-sub">
+              <span class="sp-chip"><i class="fas fa-clock"></i> {{ store.created_at|timesince }} old</span>
+              <span class="sp-chip"><i class="fas fa-layer-group"></i> {{ store.business_type|default:"Business type not set" }}</span>
+              <span class="sp-chip"><i class="fas fa-location-dot"></i> {{ store.city }}, {{ store.country }}</span>
             </div>
+          </div>
+
+          <div class="sp-actions">
+            <a class="sp-action-btn light" href="{% url 'stores:update_store' store.id %}">
+              <i class="fas fa-pen"></i> Edit
+            </a>
+            <a class="sp-action-btn" href="{% url 'stores:store_detail' store.slug %}" target="_blank">
+              <i class="fas fa-arrow-up-right-from-square"></i> Open Live
+            </a>
           </div>
         </div>
       </div>
-    </div>
 
-    <div class="col-lg-4 mb-3">
-      <div class="card">
-        <div class="card-header bg-light">
-          <h5 class="card-title mb-0">
-            <i class="fas fa-bolt text-warning me-2"></i>Quick Actions
-          </h5>
-        </div>
-        <div class="card-body">
-          <div class="d-grid gap-2">
-            <!-- Product Management -->
-            <a href="{% url 'stores:add_product' store.id %}" class="btn btn-outline-primary">
-              <i class="fas fa-plus me-2"></i>Add Product
-            </a>
-            <a href="{% url 'stores:manage_store_products' store.id %}" class="btn btn-outline-success">
-              <i class="fas fa-box me-2"></i>Manage Products
-            </a>
+      <!-- BODY -->
+      <div class="sp-body">
+        <div class="sp-grid">
+          <div class="sp-item">
+            <div class="sp-icon"><i class="fas fa-signature"></i></div>
+            <div>
+              <p class="sp-k">Store Name</p>
+              <p class="sp-v">{{ store.name }}</p>
+            </div>
+          </div>
 
-            <!-- Stock Management -->
-            <a href="{% url 'stores:stock_management' store.id %}" class="btn btn-outline-info">
-              <i class="fas fa-warehouse me-2"></i>Stock Management
-            </a>
+          <div class="sp-item">
+            <div class="sp-icon"><i class="fas fa-envelope"></i></div>
+            <div>
+              <p class="sp-k">Email</p>
+              <p class="sp-v">
+                {{ store.email }}
+                {% if store.email_verified %}
+                  <span class="ms-2 badge bg-success"><i class="fas fa-check"></i> Verified</span>
+                {% else %}
+                  <span class="ms-2 badge bg-warning text-dark"><i class="fas fa-exclamation"></i> Not Verified</span>
+                {% endif %}
+              </p>
+            </div>
+          </div>
 
-            <!-- Manage store auction -->
-           <a href="{% url 'auction:manage_store_auctions' store.slug %}" class="btn btn-outline-primary">
-              <i class="fas fa-gavel me-2"></i>Manage Auctions
-            </a>
+          <div class="sp-item">
+            <div class="sp-icon"><i class="fas fa-phone"></i></div>
+            <div>
+              <p class="sp-k">Phone</p>
+              <p class="sp-v">{{ store.phone|default:"Not provided" }}</p>
+            </div>
+          </div>
 
-            <!-- Order Management -->
-            <a href="{% url 'stores:store_orders' store.id %}" class="btn btn-outline-info">
-              <i class="fas fa-shipping-fast me-2"></i>View Orders
-            </a>
+          <div class="sp-item">
+            <div class="sp-icon"><i class="fas fa-briefcase"></i></div>
+            <div>
+              <p class="sp-k">Business Type</p>
+              <p class="sp-v">{{ store.business_type|default:"Not specified" }}</p>
+            </div>
+          </div>
 
-            <!-- Communication -->
-            <a href="{% url 'stores:store_chat_panel' store.id %}" class="btn btn-outline-warning position-relative" id="openCustomerChat">
-              <i class="fas fa-comments me-2"></i>Customer Chats
-              {% if unread_messages > 0 %}
-              <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
-                {{ unread_messages }}
-              </span>
-              {% endif %}
-            </a>
+          <div class="sp-item">
+            <div class="sp-icon"><i class="fas fa-calendar-day"></i></div>
+            <div>
+              <p class="sp-k">Created</p>
+              <p class="sp-v">{{ store.created_at|date:"F d, Y" }}</p>
+            </div>
+          </div>
 
-            <!-- Analytics & Financial -->
-            <a href="{% url 'stores:financial_dashboard' store.id %}" class="btn btn-outline-primary">
-              <i class="fas fa-chart-bar me-2"></i>Financial Dashboard
-            </a>
-            <a href="{% url 'stores:sales_analytics' store.id %}" class="btn btn-outline-primary">
-              <i class="fas fa-chart-line me-2"></i>Sales Analytics
-            </a>
+          <div class="sp-item">
+            <div class="sp-icon"><i class="fas fa-link"></i></div>
+            <div>
+              <p class="sp-k">Store URL</p>
+              <p class="sp-v sp-url-row">
+                <a class="sp-url" href="{% url 'stores:store_detail' store.slug %}" target="_blank">
+                  yoursite.com/store/{{ store.slug }}
+                </a>
 
-            <hr>
-
-            <!-- Settings & Configuration -->
-            <a href="{% url 'stores:store_settings' store.id %}" class="btn btn-outline-secondary">
-              <i class="fas fa-cog me-2"></i>Store Settings
-            </a>
-            <a href="{% url 'stores:b2b_settings' slug=store.slug %}" class="btn btn-outline-primary btn-sm">
-    B2B Settings
-</a>
-
-            <a href="{% url 'stores:update_store' store.id %}" class="btn btn-outline-secondary">
-              <i class="fas fa-edit me-2"></i>Edit Store Info
-            </a>
-            <a href="{% url 'returns:store_returns' store.id %}" class="btn btn-outline-info">
-              <i class="fas fa-reply me-2"></i> Return Orders
-            </a>
-
-            <a href="{% url 'stores:store_promote' store.slug %}" class="btn btn-outline-success">
-              <i class="fas fa-bullhorn me-2"></i>Promote Store
-            </a>
+                <button
+                  class="btn btn-sm btn-outline-secondary"
+                  type="button"
+                  onclick="copyToClipboard('{% url 'stores:store_detail' store.slug %}')"
+                  title="Copy URL">
+                  <i class="fas fa-copy"></i>
+                </button>
+              </p>
+            </div>
           </div>
         </div>
+
+        <!-- HEALTH SCORE -->
+        <div class="sp-health">
+          <div class="sp-ring" style="--p: {{ store_health_score|default:0 }};">
+            <strong>{{ store_health_score|default:0 }}%</strong>
+          </div>
+
+          <div class="sp-health-meta">
+            <h6><i class="fas fa-heart-pulse text-danger me-1"></i>Store Health Score</h6>
+            <p class="mb-0">
+              Based on completeness and activity. Improve it to boost trust and conversions.
+            </p>
+
+            <div class="sp-checklist">
+              {% if not store.phone %}
+                <span class="sp-tip"><i class="fas fa-circle-plus"></i>Add phone</span>
+              {% endif %}
+              {% if not store.business_type %}
+                <span class="sp-tip"><i class="fas fa-circle-plus"></i>Set business type</span>
+              {% endif %}
+              {% if not store.email_verified %}
+                <span class="sp-tip"><i class="fas fa-shield"></i>Verify email</span>
+              {% endif %}
+              {% if store.phone and store.business_type and store.email_verified %}
+                <span class="sp-tip"><i class="fas fa-check"></i>Profile looks solid</span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <small class="text-muted d-block mt-2">
+          <i class="fas fa-circle-info me-1"></i>
+          Tip: A complete profile helps buyers trust your store and reduces abandoned carts.
+        </small>
       </div>
     </div>
   </div>
 
-  <!-- Customer Reviews Section -->
-  <div class="row mb-4">
+  <!-- RIGHT: Quick Actions -->
+  <div class="col-lg-4 mb-3">
+    <div class="qa-card">
+      <div class="qa-header">
+        <h5 class="qa-title">
+          <i class="fas fa-bolt text-warning me-2"></i>Quick Actions
+        </h5>
+        <div class="qa-sub">Move fast: add, sell, fulfil, engage, and grow.</div>
+      </div>
+
+      <!-- Featured primary actions -->
+      <div class="qa-featured">
+        <a href="{% url 'stores:add_product' store.id %}" class="qa-hero-btn qa-hero-1">
+          <div>
+            Add Product
+            <small>List new items quickly</small>
+          </div>
+          <i class="fas fa-plus"></i>
+        </a>
+
+        <a href="{% url 'stores:store_orders' store.id %}" class="qa-hero-btn qa-hero-2">
+          <div>
+            Orders Hub
+            <small>Process & ship faster</small>
+          </div>
+          <i class="fas fa-shipping-fast"></i>
+        </a>
+      </div>
+
+      <!-- SELL -->
+      <div class="qa-section">
+        <div class="qa-section-label">Sell</div>
+        <div class="qa-grid">
+          <a href="{% url 'stores:manage_store_products' store.id %}" class="qa-tile">
+            <div class="qa-ico"><i class="fas fa-box"></i></div>
+            <div class="qa-txt">
+              <strong>Manage Products</strong>
+              <span>Edit, promos, images, variants</span>
+            </div>
+            {% if low_stock_products %}
+              <span class="qa-badge qa-badge-warning">{{ low_stock_products.count }} Low</span>
+            {% endif %}
+          </a>
+
+          <a href="{% url 'stores:store_promote' store.slug %}" class="qa-tile">
+            <div class="qa-ico"><i class="fas fa-bullhorn"></i></div>
+            <div class="qa-txt">
+              <strong>Promote Store</strong>
+              <span>Boost sales with campaigns</span>
+            </div>
+            <span class="qa-badge qa-badge-success">Boost</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- FULFIL -->
+      <div class="qa-section">
+        <div class="qa-section-label">Fulfil</div>
+        <div class="qa-grid">
+          <a href="{% url 'stores:stock_management' store.id %}" class="qa-tile">
+            <div class="qa-ico"><i class="fas fa-warehouse"></i></div>
+            <div class="qa-txt">
+              <strong>Stock Control</strong>
+              <span>Track inventory & updates</span>
+            </div>
+          </a>
+
+          <a href="{% url 'returns:store_returns' store.id %}" class="qa-tile">
+            <div class="qa-ico"><i class="fas fa-reply"></i></div>
+            <div class="qa-txt">
+              <strong>Returns</strong>
+              <span>Handle returns & refunds</span>
+            </div>
+          </a>
+        </div>
+      </div>
+
+      <!-- ENGAGE -->
+      <div class="qa-section">
+        <div class="qa-section-label">Engage</div>
+        <div class="qa-grid">
+          <a href="{% url 'stores:store_chat_panel' store.id %}" class="qa-tile" id="openCustomerChat">
+            <div class="qa-ico"><i class="fas fa-comments"></i></div>
+            <div class="qa-txt">
+              <strong>Customer Chats</strong>
+              <span>Reply fast, close more deals</span>
+            </div>
+            {% if unread_messages > 0 %}
+              <span class="qa-badge qa-badge-danger">{{ unread_messages }} New</span>
+            {% endif %}
+          </a>
+
+          <a href="{% url 'auction:manage_store_auctions' store.slug %}" class="qa-tile">
+            <div class="qa-ico"><i class="fas fa-gavel"></i></div>
+            <div class="qa-txt">
+              <strong>Auctions</strong>
+              <span>Create, manage live bidding</span>
+            </div>
+          </a>
+        </div>
+      </div>
+
+      <!-- INSIGHTS -->
+      <div class="qa-section">
+        <div class="qa-section-label">Insights</div>
+        <div class="qa-grid">
+          <a href="{% url 'stores:sales_analytics' store.id %}" class="qa-tile">
+            <div class="qa-ico"><i class="fas fa-chart-line"></i></div>
+            <div class="qa-txt">
+              <strong>Sales Analytics</strong>
+              <span>Trends, best sellers, growth</span>
+            </div>
+          </a>
+
+          <a href="{% url 'stores:financial_dashboard' store.id %}" class="qa-tile">
+            <div class="qa-ico"><i class="fas fa-chart-bar"></i></div>
+            <div class="qa-txt">
+              <strong>Finance</strong>
+              <span>Revenue, payouts, breakdowns</span>
+            </div>
+          </a>
+        </div>
+      </div>
+
+      <!-- Settings strip -->
+      <div class="qa-footer">
+        <a href="{% url 'stores:store_settings' store.id %}" class="qa-mini">
+          <i class="fas fa-cog"></i> Settings
+        </a>
+        <a href="{% url 'stores:b2b_settings' slug=store.slug %}" class="qa-mini">
+          <i class="fas fa-handshake"></i> B2B Settings
+        </a>
+        <a href="{% url 'stores:update_store' store.id %}" class="qa-mini">
+          <i class="fas fa-pen"></i> Edit Store
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- Customer Reviews Section -->
+<div class="row mb-4">
+
   <!-- Store Reviews -->
   <div class="col-lg-6 mb-3">
-    <div class="card h-100">
-      <div class="card-header bg-light d-flex justify-content-between align-items-center">
-        <h5 class="card-title mb-0">
-          <i class="fas fa-store text-primary me-2"></i>Store Reviews
-        </h5>
-        <a href="#" class="btn btn-sm btn-outline-primary">View All</a>
+    <div class="rev-card h-100">
+      <div class="rev-header">
+        <div class="rev-title">
+          <h5>
+            <i class="fas fa-store text-primary"></i>
+            Store Reviews
+          </h5>
+          <a href="#" class="btn btn-sm btn-outline-primary rev-btn">
+            View All <i class="fas fa-arrow-right ms-1"></i>
+          </a>
+        </div>
       </div>
-      <div class="card-body">
-        <div class="text-center mb-3">
-          <h2 class="mb-0">{{ store_average_rating|default:"0.0"|floatformat:1 }}</h2>
-          <div>
-            {% for i in "12345" %}
-              {% if forloop.counter <= store_average_rating %}
-                <i class="fas fa-star text-warning"></i>
-              {% else %}
-                <i class="far fa-star text-warning"></i>
-              {% endif %}
-            {% endfor %}
+
+      <div class="rev-body">
+        <!-- Score Row -->
+        <div class="rev-score">
+          <div class="rev-score-left">
+            <div class="rev-badge store">
+              {{ store_average_rating|default:"0.0"|floatformat:1 }}
+            </div>
+
+            <div>
+              <div class="rev-stars">
+                {% for i in "12345" %}
+                  {% if forloop.counter <= store_average_rating %}
+                    <i class="fas fa-star text-warning"></i>
+                  {% else %}
+                    <i class="far fa-star text-warning"></i>
+                  {% endif %}
+                {% endfor %}
+              </div>
+              <div class="rev-meta">
+                Based on {{ store_review_count|default:0 }} store review{{ store_review_count|pluralize }}
+              </div>
+            </div>
           </div>
-          <p class="text-muted mb-0">Based on {{ store_review_count }} store review{{ store_review_count|pluralize }}</p>
+
+          <span class="rev-pill" title="Overall store trust signal">
+            <i class="fas fa-shield-heart text-danger"></i>
+            Trust Score
+            <span class="ms-1">
+              {% if store_average_rating|default:0 >= 4 %}
+                High
+              {% elif store_average_rating|default:0 >= 3 %}
+                Medium
+              {% else %}
+                Needs Work
+              {% endif %}
+            </span>
+          </span>
         </div>
 
+        <div class="rev-divider"></div>
+
         {% if latest_store_review %}
-        <blockquote class="blockquote-sm">
-          <p class="mb-1">{{ latest_store_review.comment|truncatechars:100 }}</p>
-          <footer class="blockquote-footer">
-            {{ latest_store_review.reviewer_name }} •
-            <span class="text-warning">
-              {% for i in "12345" %}
-                {% if forloop.counter <= latest_store_review.rating %}
-                  <i class="fas fa-star"></i>
+          <!-- Latest Review -->
+          <div class="rev-review">
+            <div class="rev-avatar">
+              {{ latest_store_review.reviewer_name|default:"U"|slice:":1"|upper }}
+            </div>
+
+            <div class="w-100">
+              <h6>
+                {{ latest_store_review.reviewer_name|default:"Anonymous" }}
+                <span class="rev-time">
+                  • Latest feedback
+                </span>
+
+                <span class="ms-auto text-warning">
+                  {% for i in "12345" %}
+                    {% if forloop.counter <= latest_store_review.rating %}
+                      <i class="fas fa-star"></i>
+                    {% else %}
+                      <i class="far fa-star"></i>
+                    {% endif %}
+                  {% endfor %}
+                </span>
+              </h6>
+
+              <p class="rev-quote">
+                “{{ latest_store_review.comment|default:"No comment provided"|truncatechars:120 }}”
+              </p>
+
+              <!-- Optional quick tags (pure UI) -->
+              <div class="rev-tags">
+                {% if latest_store_review.rating >= 4 %}
+                  <span class="rev-tag"><i class="fas fa-thumbs-up text-success"></i> Great experience</span>
+                  <span class="rev-tag"><i class="fas fa-truck-fast text-primary"></i> Smooth fulfilment</span>
+                {% elif latest_store_review.rating == 3 %}
+                  <span class="rev-tag"><i class="fas fa-circle-info text-warning"></i> Average</span>
+                  <span class="rev-tag"><i class="fas fa-wand-magic-sparkles text-primary"></i> Improve details</span>
                 {% else %}
-                  <i class="far fa-star"></i>
+                  <span class="rev-tag"><i class="fas fa-triangle-exclamation text-danger"></i> Needs attention</span>
+                  <span class="rev-tag"><i class="fas fa-headset text-primary"></i> Follow up fast</span>
                 {% endif %}
-              {% endfor %}
-            </span>
-          </footer>
-        </blockquote>
+              </div>
+            </div>
+          </div>
+
+          <div class="rev-footnote">
+            <i class="fas fa-lightbulb text-warning"></i>
+            Tip: Reply to reviews to increase buyer confidence and repeat orders.
+          </div>
         {% else %}
-        <div class="text-center text-muted">
-          <i class="fas fa-store-slash fa-2x mb-2"></i>
-          <p class="mb-0">No store reviews yet</p>
-        </div>
+          <!-- Empty -->
+          <div class="rev-empty">
+            <i class="fas fa-store-slash fa-2x mb-2"></i>
+            <div class="fw-bold">No store reviews yet</div>
+            <div class="small">Deliver fast + keep communication clear to earn your first 5★ review.</div>
+          </div>
         {% endif %}
       </div>
     </div>
   </div>
+
 
   <!-- Product Reviews -->
   <div class="col-lg-6 mb-3">
-    <div class="card h-100">
-      <div class="card-header bg-light d-flex justify-content-between align-items-center">
-        <h5 class="card-title mb-0">
-          <i class="fas fa-box-open text-warning me-2"></i>Product Reviews
-        </h5>
-        <a href="#" class="btn btn-sm btn-outline-warning">View All</a>
-      </div>
-      <div class="card-body">
-        <div class="text-center mb-3">
-          <h2 class="mb-0">{{ average_rating|default:"0.0"|floatformat:1 }}</h2>
-          <div>
-            {% for i in "12345" %}
-              {% if forloop.counter <= average_rating|floatformat:0 %}
-                <i class="fas fa-star text-warning"></i>
-              {% else %}
-                <i class="far fa-star text-warning"></i>
-              {% endif %}
-            {% endfor %}
-          </div>
-          <p class="text-muted mb-0">
-            Based on {{ review_count|default:"0" }} product review{{ review_count|pluralize }}
-          </p>
+    <div class="rev-card h-100">
+      <div class="rev-header">
+        <div class="rev-title">
+          <h5>
+            <i class="fas fa-box-open text-warning"></i>
+            Product Reviews
+          </h5>
+          <a href="#" class="btn btn-sm btn-outline-warning rev-btn">
+            View All <i class="fas fa-arrow-right ms-1"></i>
+          </a>
         </div>
+      </div>
+
+      <div class="rev-body">
+        <!-- Score Row -->
+        <div class="rev-score">
+          <div class="rev-score-left">
+            <div class="rev-badge product">
+              {{ average_rating|default:"0.0"|floatformat:1 }}
+            </div>
+
+            <div>
+              <div class="rev-stars">
+                {% for i in "12345" %}
+                  {% if forloop.counter <= average_rating|default:0|floatformat:0 %}
+                    <i class="fas fa-star text-warning"></i>
+                  {% else %}
+                    <i class="far fa-star text-warning"></i>
+                  {% endif %}
+                {% endfor %}
+              </div>
+              <div class="rev-meta">
+                Based on {{ review_count|default:0 }} product review{{ review_count|pluralize }}
+              </div>
+            </div>
+          </div>
+
+          <span class="rev-pill" title="Quality signal based on reviews">
+            <i class="fas fa-gem text-warning"></i>
+            Product Quality
+            <span class="ms-1">
+              {% if average_rating|default:0 >= 4 %}
+                Strong
+              {% elif average_rating|default:0 >= 3 %}
+                Fair
+              {% else %}
+                Weak
+              {% endif %}
+            </span>
+          </span>
+        </div>
+
+        <div class="rev-divider"></div>
 
         {% if product_reviews %}
           {% for review in product_reviews|slice:":1" %}
-          <blockquote class="blockquote-sm">
-            <p class="mb-1">{{ review.comment|truncatechars:100 }}</p>
-            <footer class="blockquote-footer">
-              {{ review.user.username }} •
-              <span class="text-warning">
-                {% for i in "12345" %}
-                  {% if forloop.counter <= review.rating %}
-                    <i class="fas fa-star"></i>
+            <div class="rev-review">
+              <div class="rev-avatar" style="background: rgba(245, 158, 11, 0.10); border-color: rgba(245, 158, 11, 0.22);">
+                {{ review.user.username|default:"U"|slice:":1"|upper }}
+              </div>
+
+              <div class="w-100">
+                <h6>
+                  {{ review.user.username|default:"Anonymous" }}
+                  <span class="rev-time">• Latest product feedback</span>
+
+                  <span class="ms-auto text-warning">
+                    {% for i in "12345" %}
+                      {% if forloop.counter <= review.rating %}
+                        <i class="fas fa-star"></i>
+                      {% else %}
+                        <i class="far fa-star"></i>
+                      {% endif %}
+                    {% endfor %}
+                  </span>
+                </h6>
+
+                <p class="rev-quote">
+                  “{{ review.comment|default:"No comment provided"|truncatechars:120 }}”
+                </p>
+
+                <div class="rev-tags">
+                  {% if review.rating >= 4 %}
+                    <span class="rev-tag"><i class="fas fa-crown text-warning"></i> Highly rated</span>
+                    <span class="rev-tag"><i class="fas fa-bag-shopping text-primary"></i> Good value</span>
+                  {% elif review.rating == 3 %}
+                    <span class="rev-tag"><i class="fas fa-circle-info text-warning"></i> Okay</span>
+                    <span class="rev-tag"><i class="fas fa-wrench text-primary"></i> Needs tweaks</span>
                   {% else %}
-                    <i class="far fa-star"></i>
+                    <span class="rev-tag"><i class="fas fa-triangle-exclamation text-danger"></i> Low rating</span>
+                    <span class="rev-tag"><i class="fas fa-arrows-rotate text-primary"></i> Consider review</span>
                   {% endif %}
-                {% endfor %}
-              </span>
-            </footer>
-          </blockquote>
+                </div>
+              </div>
+            </div>
+
+            <div class="rev-footnote">
+              <i class="fas fa-lightbulb text-warning"></i>
+              Tip: Improve photos + add variants (size/color) to lift product ratings.
+            </div>
           {% endfor %}
         {% else %}
-        <div class="text-center text-muted">
-          <i class="fas fa-box fa-2x mb-2"></i>
-          <p class="mb-0">No product reviews yet</p>
-        </div>
+          <div class="rev-empty">
+            <i class="fas fa-box fa-2x mb-2"></i>
+            <div class="fw-bold">No product reviews yet</div>
+            <div class="small">Encourage buyers to review after delivery — it boosts conversion.</div>
+          </div>
         {% endif %}
       </div>
     </div>
   </div>
 
+</div>
 
 <!-- Loading Modal -->
 <div class="modal fade" id="loadingModal" tabindex="-1" aria-hidden="true">
@@ -1020,24 +2461,170 @@
 <div id="toastContainer" class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1055;"></div>
 
 <script>
-// Chart data - keeping it simple and stable
-window.chartData = {
-    monthlyLabels: {{ monthly_labels|safe }},
-    monthlySalesData: {{ monthly_sales_data|default:"[0,0,0,0,0,0,0,0,0,0,0,0]"|safe }},
-    monthlyOrdersData: {{ monthly_orders_data|default:"[0,0,0,0,0,0,0,0,0,0,0,0]"|safe }},
-    monthlyVisitorsData: {{ monthly_visitors_data|default:"[0,0,0,0,0,0,0,0,0,0,0,0]"|safe }},
-    categoryLabels: {{ category_labels|default:"['No Data']"|safe }},
-    categoryData: {{ category_data|default:"[1]"|safe }}
-};
+    // Chart data - keeping it simple and stable
+    window.chartData = {
+      monthlyLabels: {{ monthly_labels|safe }},
+      monthlySalesData: {{ monthly_sales_data|default:"[0,0,0,0,0,0,0,0,0,0,0,0]"|safe }},
+      monthlyOrdersData: {{ monthly_orders_data|default:"[0,0,0,0,0,0,0,0,0,0,0,0]"|safe }},
+      monthlyVisitorsData: {{ monthly_visitors_data|default:"[0,0,0,0,0,0,0,0,0,0,0,0]"|safe }},
+      categoryLabels: {{ category_labels|default:"['No Data']"|safe }},
+      categoryData: {{ category_data|default:"[1]"|safe }}
+    };
 
-// Fallback data if backend doesn't provide enhanced datasets
-if (!window.chartData.monthlyOrdersData || window.chartData.monthlyOrdersData.length === 0) {
-    window.chartData.monthlyOrdersData = window.chartData.monthlySalesData.map(val => Math.floor(val / 100));
-}
+    if (!window.chartData.monthlyOrdersData || window.chartData.monthlyOrdersData.length === 0) {
+      window.chartData.monthlyOrdersData = window.chartData.monthlySalesData.map(val => Math.floor(val / 100));
+    }
+    if (!window.chartData.monthlyVisitorsData || window.chartData.monthlyVisitorsData.length === 0) {
+      window.chartData.monthlyVisitorsData = window.chartData.monthlySalesData.map(val => Math.floor(val / 50));
+    }
+  </script>
 
-if (!window.chartData.monthlyVisitorsData || window.chartData.monthlyVisitorsData.length === 0) {
-    window.chartData.monthlyVisitorsData = window.chartData.monthlySalesData.map(val => Math.floor(val / 50));
-}
+  <script src="{% static 'js/main.js' %}"></script>
+  <script src="{% static 'js/store_dashboard.js' %}"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+
+  <script>
+    (function(){
+      const toggleBtn = document.getElementById("b2bMenuToggle");
+      const menu = document.getElementById("b2bMiniMenu");
+      const closeBtn = document.getElementById("b2bMiniClose");
+
+      const ordersBadge = document.getElementById("b2bOrdersBadge");
+      const cartBadge = document.getElementById("b2bCartBadge");
+      const ordersMini = document.getElementById("b2bOrdersMiniBadge");
+      const cartMini = document.getElementById("b2bCartMiniBadge");
+
+      const ordersFab = document.getElementById("b2bOrdersFab");
+      const cartFab = document.getElementById("b2bCartFab");
+
+      function showMenu(){ menu.classList.add("show"); }
+      function hideMenu(){ menu.classList.remove("show"); }
+      function toggleMenu(){ menu.classList.toggle("show"); }
+
+      if(toggleBtn){
+        toggleBtn.addEventListener("click", function(e){
+          e.preventDefault();
+          toggleMenu();
+        });
+      }
+      if(closeBtn){
+        closeBtn.addEventListener("click", function(){ hideMenu(); });
+      }
+
+      // close when clicking outside
+      document.addEventListener("click", function(e){
+        if(!menu || !toggleBtn) return;
+        const clickedInside = menu.contains(e.target) || toggleBtn.contains(e.target);
+        if(!clickedInside) hideMenu();
+      });
+
+      function setBadge(el, value){
+        if(!el) return;
+        const n = parseInt(value || 0, 10) || 0;
+        el.textContent = n;
+        if(n > 0){
+          el.classList.remove("d-none");
+        }else{
+          el.classList.add("d-none");
+        }
+      }
+
+      function setPulse(anchorEl, n){
+        if(!anchorEl) return;
+        if(n > 0) anchorEl.classList.add("b2b-has-count");
+        else anchorEl.classList.remove("b2b-has-count");
+      }
+
+      // ========= OPTIONAL: LIVE COUNTS (auto refresh) =========
+      // You need an endpoint that returns JSON like:
+      // { "orders": 3, "cart": 5 }
+      //
+      // If you don't have it yet, create:
+      // path("stores/<uuid:store_id>/api/b2b-counts/", views.b2b_counts, name="b2b_counts")
+      //
+      const liveUrl = "{% url 'stores:b2b_counts' store.id %}";  // <-- create this URL in your stores app
+
+      async function refreshB2BCounts(){
+        try{
+          if(!liveUrl) return;
+          const res = await fetch(liveUrl, { headers: { "X-Requested-With": "XMLHttpRequest" }});
+          if(!res.ok) return;
+          const data = await res.json();
+
+          const o = parseInt(data.orders || 0, 10) || 0;
+          const c = parseInt(data.cart || 0, 10) || 0;
+
+          // main badges
+          setBadge(ordersBadge, o);
+          setBadge(cartBadge, c);
+
+          // mini menu badges
+          if(ordersMini) ordersMini.textContent = o;
+          if(cartMini) cartMini.textContent = c;
+
+          // pulse
+          setPulse(ordersFab, o);
+          setPulse(cartFab, c);
+        }catch(err){
+          // silent fail to avoid annoying dashboard errors
+          // console.log(err);
+        }
+      }
+
+      // refresh every 20 seconds
+      refreshB2BCounts();
+      setInterval(refreshB2BCounts, 20000);
+
+    })();
+  </script>
+  <script>
+  // ============================
+  // Orders: radio filter + search
+  // ============================
+  (function(){
+    const tbody = document.getElementById("ordersTableBody");
+    if(!tbody) return;
+
+    const radios = document.querySelectorAll('input[name="orderFilter"]');
+    const search = document.getElementById("ordersSearch");
+
+    function applyOrdersFilter(){
+      const selected = document.querySelector('input[name="orderFilter"]:checked')?.value || "all";
+      const q = (search?.value || "").trim().toLowerCase();
+
+      tbody.querySelectorAll("tr.act-row").forEach(row=>{
+        const status = (row.getAttribute("data-order-status") || "").toLowerCase();
+        const hay = (row.getAttribute("data-search") || "").toLowerCase();
+
+        const statusOk = (selected === "all") ? true : status === selected;
+        const searchOk = q ? hay.includes(q) : true;
+
+        row.style.display = (statusOk && searchOk) ? "" : "none";
+      });
+    }
+
+    radios.forEach(r => r.addEventListener("change", applyOrdersFilter));
+    if(search) search.addEventListener("input", applyOrdersFilter);
+  })();
+
+  // ==============================
+  // Products: search only (frontend)
+  // ==============================
+  (function(){
+    const tbody = document.getElementById("productsTableBody");
+    const search = document.getElementById("productsSearch");
+    if(!tbody || !search) return;
+
+    function applyProductsSearch(){
+      const q = search.value.trim().toLowerCase();
+      tbody.querySelectorAll("tr.act-row").forEach(row=>{
+        const hay = (row.getAttribute("data-search") || "").toLowerCase();
+        row.style.display = q ? (hay.includes(q) ? "" : "none") : "";
+      });
+    }
+
+    search.addEventListener("input", applyProductsSearch);
+  })();
 </script>
 
 <script src="{% static 'js/main.js' %}"></script>

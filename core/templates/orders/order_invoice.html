@@ -1,278 +1,557 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block content %}
-{% load static %}
 <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+<link rel="stylesheet" type="text/css" href="{% static 'css/order_invoice.css' %}">
+
 <div class="container py-5">
-    <div class="row justify-content-center">
-        <div class="col-lg-10">
-            <!-- Invoice Header -->
-            <div class="card">
-                <div class="card-body">
-                    <!-- Company Header -->
-                    <div class="row mb-4">
-                        <div class="col-md-6">
-                            <h2 class="text-primary mb-0">{{ company_name }}</h2>
-                            <p class="text-muted mb-0">{{ company_address }}</p>
-                            <p class="text-muted mb-0">{{ company_email }}</p>
-                            <p class="text-muted mb-0">{{ company_phone }}</p>
-                        </div>
-                        <div class="col-md-6 text-md-end">
-                            <h1 class="mb-0">INVOICE</h1>
-                            <p class="text-muted mb-1">Invoice #INV-{{ order.id|stringformat:"05d" }}</p>
-                            <p class="text-muted mb-0">Order #{{ order.id }}</p>
-                        </div>
-                    </div>
+  <div class="row justify-content-center">
+    <div class="col-lg-11 col-xl-10">
 
-                    <hr>
+      <!-- INVOICE SHEET -->
+      <div class="invoice-sheet shadow-sm">
 
-                    <!-- Invoice Details -->
-                    <div class="row mb-4">
-                        <div class="col-md-6">
-                            <h5>Bill To:</h5>
-                            <p class="mb-1"><strong>{{ order.buyer.get_full_name|default:order.buyer.username }}</strong></p>
-                            <p class="mb-1">{{ order.buyer.email }}</p>
-                            {% if order.shipping_address %}
-                                <address class="mb-0">
-                                    {{ order.shipping_address.full_name }}<br>
-                                    {{ order.shipping_address.street }}<br>
-                                    {{ order.shipping_address.city }}, {{ order.shipping_address.state }} {{ order.shipping_address.zip_code }}<br>
-                                    {{ order.shipping_address.country }}
-                                    {% if order.shipping_address.phone_number %}
-                                        <br>Phone: {{ order.shipping_address.phone_number }}
-                                    {% endif %}
-                                </address>
-                            {% endif %}
-                        </div>
-                        <div class="col-md-6">
-                            <div class="row">
-                                <div class="col-6">
-                                    <p class="mb-1"><strong>Invoice Date:</strong></p>
-                                    <p class="mb-1"><strong>Order Date:</strong></p>
-                                    <p class="mb-1"><strong>Payment Method:</strong></p>
-                                    <p class="mb-1"><strong>Status:</strong></p>
-                                    {% if order.expected_delivery_date %}
-                                        <p class="mb-1"><strong>Expected Delivery:</strong></p>
-                                    {% endif %}
-                                </div>
-                                <div class="col-6">
-                                    <p class="mb-1">{{ order.shipped_date|date:"F d, Y" }}</p>
-                                    <p class="mb-1">{{ order.created_at|date:"F d, Y" }}</p>
-                                    <p class="mb-1">{{ order.get_payment_method_display|default:"Not specified" }}</p>
-                                    <p class="mb-1">
-                                        <span class="badge badge-{{ order.status|lower }}">
-                                            {{ order.get_status_display }}
-                                        </span>
-                                    </p>
-                                    {% if order.expected_delivery_date %}
-                                        <p class="mb-1">{{ order.expected_delivery_date|date:"F d, Y" }}</p>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+        <!-- TOP HERO -->
+        <div class="invoice-hero">
+          <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+            <div class="invoice-brand">
+              <div class="brand-title">{{ company_name }}</div>
+              <div class="brand-sub text-white-50">
+                {{ company_address }}<span class="mx-2">•</span>{{ company_email }}<span class="mx-2">•</span>{{ company_phone }}
+              </div>
+            </div>
 
-                    <!-- Items Table -->
-                    <div class="table-responsive mb-4">
-                        <table class="table table-bordered">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Item</th>
-                                    <th class="text-center">Qty</th>
-                                    <th class="text-end">Unit Price</th>
-                                    <th class="text-end">Discount</th>
-                                    <th class="text-end">Line Total</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for item in order.items.all %}
-                                {% with base_unit=item.base_unit_price|default_if_none:item.price_at_time|default_if_none:item.product.price per_unit_discount=item.get_unit_discount_amount|default_if_none:0 %}
-                                <tr>
-                                    <td>
-                                        <div class="d-flex align-items-center">
-                                            {% if item.product.image %}
-                                                <img src="{{ item.product.image.url }}"
-                                                     alt="{{ item.product.name }}"
-                                                     class="rounded me-3"
-                                                     style="width: 40px; height: 40px; object-fit: cover;">
-                                            {% endif %}
-                                            <div>
-                                                <h6 class="mb-0">{{ item.product.name }}</h6>
-                                                {% if item.product.description %}
-                                                    <small class="text-muted">{{ item.product.description|truncatewords:10 }}</small>
-                                                {% endif %}
+            <div class="text-end invoice-meta">
+              <div class="invoice-title">INVOICE</div>
 
-                                                {% if item.selected_features %}
-                                                    <ul class="list-unstyled mt-1 mb-0 small text-muted ps-3" style="font-size: 0.8rem;">
-                                                        {% for key, value in item.selected_features.items %}
-                                                            <li><strong>{{ key|title }}:</strong> {{ value }}</li>
-                                                        {% endfor %}
-                                                    </ul>
-                                                {% endif %}
-                                            </div>
-                                        </div>
-                                    </td>
+              <div class="meta-chips mt-2">
+                <span class="chip">
+                  <i class="fas fa-hashtag me-1"></i>INV-{{ order.id|stringformat:"05d" }}
+                </span>
+                <span class="chip">
+                  <i class="fas fa-receipt me-1"></i>Order #{{ order.id }}
+                </span>
+                {% if order.tracking_number %}
+                  <span class="chip">
+                    <i class="fas fa-truck-fast me-1"></i>{{ order.tracking_number }}
+                  </span>
+                {% endif %}
+              </div>
 
-                                    <td class="text-center">{{ item.quantity }}</td>
+              {# Status stamp #}
+              <div class="invoice-stamp mt-3">
+                {% if order.status == 'delivered' %}
+                  <span class="stamp stamp-paid"><i class="fas fa-check-circle me-1"></i>PAID / DELIVERED</span>
+                {% elif order.status == 'shipped' %}
+                  <span class="stamp stamp-intransit"><i class="fas fa-shipping-fast me-1"></i>IN TRANSIT</span>
+                {% elif order.status == 'processing' %}
+                  <span class="stamp stamp-processing"><i class="fas fa-cog me-1"></i>PROCESSING</span>
+                {% elif order.status == 'cancelled' %}
+                  <span class="stamp stamp-cancelled"><i class="fas fa-times-circle me-1"></i>CANCELLED</span>
+                {% else %}
+                  <span class="stamp stamp-pending"><i class="fas fa-clock me-1"></i>PENDING</span>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
 
-                                    <!-- Unit Price (strike-through original when discounted) -->
-                                    <td class="text-end">
-                                        {% if per_unit_discount and per_unit_discount|floatformat:2 != "0.00" %}
-                                            <span class="text-muted text-decoration-line-through">D{{ base_unit|floatformat:2 }}</span><br>
-                                            <span class="fw-semibold">
-                                                D{% if item.discounted_unit_price %}
-                                                    {{ item.discounted_unit_price|floatformat:2 }}
-                                                  {% else %}
-                                                    {{ base_unit|floatformat:2 }}
-                                                  {% endif %}
-                                            </span>
-                                        {% else %}
-                                            D{{ base_unit|floatformat:2 }}
-                                        {% endif %}
-                                    </td>
+        <!-- BODY -->
+        <div class="invoice-body">
 
-                                    <!-- Discount column (per unit) -->
-                                    <td class="text-end">
-                                        {% if per_unit_discount and per_unit_discount|floatformat:2 != "0.00" %}
-                                            {% if item.discount_type == 'percent' %}
-                                                <span class="text-success">-{{ item.discount_value|floatformat:0 }}% /unit</span><br>
-                                                <small class="text-muted">(-D{{ per_unit_discount|floatformat:2 }})</small>
-                                            {% else %}
-                                                <span class="text-success">-D{{ per_unit_discount|floatformat:2 }} /unit</span>
-                                            {% endif %}
-                                        {% else %}
-                                            <span class="text-muted">—</span>
-                                        {% endif %}
-                                    </td>
+          <!-- BILLING / DETAILS -->
+          <div class="row g-4 mb-4">
+            <div class="col-md-6">
+              <div class="section-title">
+                <i class="fas fa-user-tag me-2 text-primary"></i>Bill To
+              </div>
 
-                                    <!-- Line total (already discounted by model helper) -->
-                                    <td class="text-end"><strong>D{{ item.get_total_price|floatformat:2 }}</strong></td>
-                                </tr>
-                                {% endwith %}
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
+              <div class="info-card">
+                <div class="fw-bold">
+                  {{ order.buyer.get_full_name|default:order.buyer.username }}
+                </div>
+                <div class="text-muted small">{{ order.buyer.email }}</div>
 
-                    <!-- Totals -->
-                    <div class="row">
-                        <div class="col-md-6">
-                            <!-- Payment Information -->
-                            {% if order.payment_method %}
-                                <div class="card bg-light">
-                                    <div class="card-body">
-                                        <h6 class="card-title">Payment Information</h6>
-                                        <p class="mb-1"><strong>Method:</strong> {{ order.get_payment_method_display }}</p>
-                                        {% if order.payment_date %}
-                                            <p class="mb-1"><strong>Payment Date:</strong> {{ order.payment_date|date:"F d, Y g:i A" }}</p>
-                                        {% endif %}
-                                        {% if order.tracking_number %}
-                                            <p class="mb-0"><strong>Tracking #:</strong> {{ order.tracking_number }}</p>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                            {% endif %}
-                        </div>
-                        <div class="col-md-6">
-                            <div class="card">
-                                <div class="card-body">
-                                    <table class="table table-borderless mb-0">
-                                        <tr>
-                                            <td>Subtotal (before discounts):</td>
-                                            <td class="text-end">
-                                                D{{ subtotal|default:order.get_subtotal|floatformat:2 }}
-                                            </td>
-                                        </tr>
+                {% if order.shipping_address %}
+                  <div class="mt-3 small">
+                    <div class="text-muted">Delivery Address</div>
+                    <address class="mb-0">
+                      {{ order.shipping_address.full_name }}<br>
+                      {{ order.shipping_address.street }}<br>
+                      {{ order.shipping_address.city }}, {{ order.shipping_address.state }} {{ order.shipping_address.zip_code }}<br>
+                      {{ order.shipping_address.country }}
+                      {% if order.shipping_address.phone_number %}
+                        <br><span class="text-muted">Phone:</span> {{ order.shipping_address.phone_number }}
+                      {% endif %}
+                    </address>
+                  </div>
+                {% endif %}
+              </div>
+            </div>
 
-                                        {# Item + order-level discounts (prefer 'discount' from view, else order.discount_amount) #}
-                                        {% with discount_total=discount|default:order.discount_amount %}
-                                          {% if discount_total and discount_total|floatformat:2 != "0.00" %}
-                                          <tr class="text-success">
-                                              <td>Discounts:</td>
-                                              <td class="text-end">-D{{ discount_total|floatformat:2 }}</td>
-                                          </tr>
-                                          {% endif %}
-                                        {% endwith %}
+            <div class="col-md-6">
+              <div class="section-title">
+                <i class="fas fa-circle-info me-2 text-primary"></i>Invoice Details
+              </div>
 
-                                        {% with ship=shipping|default:order.shipping_cost %}
-                                          {% if ship and ship|floatformat:2 != "0.00" %}
-                                          <tr>
-                                              <td>Shipping:</td>
-                                              <td class="text-end">D{{ ship|floatformat:2 }}</td>
-                                          </tr>
-                                          {% endif %}
-                                        {% endwith %}
+              <div class="info-card">
+                <div class="row g-2 small">
+                  <div class="col-6 text-muted">Invoice Date</div>
+                  <div class="col-6 text-end">
+                    {{ order.shipped_date|date:"F d, Y"|default:order.created_at|date:"F d, Y" }}
+                  </div>
 
-                                        <tr>
-                                            <td>Tax ({{ order.tax_rate|default:0|floatformat:1 }}%):</td>
-                                            <td class="text-end">
-                                                D{{ tax_amount|default:order.get_tax_amount|floatformat:2 }}
-                                            </td>
-                                        </tr>
-                                        <tr class="table-active">
-                                            <td><strong>Total:</strong></td>
-                                            <td class="text-end">
-                                                <strong class="text-primary fs-5">
-                                                    D{{ total|default:order.get_total|floatformat:2 }}
-                                                </strong>
-                                            </td>
-                                        </tr>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                  <div class="col-6 text-muted">Order Date</div>
+                  <div class="col-6 text-end">{{ order.created_at|date:"F d, Y" }}</div>
 
-                    <!-- Footer Notes -->
-                    <div class="mt-4">
-                        {% if order.order_notes %}
-                            <div class="alert alert-info">
-                                <h6>Order Notes:</h6>
-                                <p class="mb-0">{{ order.order_notes }}</p>
-                            </div>
+                  <div class="col-6 text-muted">Payment Method</div>
+                  <div class="col-6 text-end">{{ order.get_payment_method_display|default:"Not specified" }}</div>
+
+                  <div class="col-6 text-muted">Status</div>
+                  <div class="col-6 text-end">
+                    <span class="badge badge-{{ order.status|lower }}">
+                      {{ order.get_status_display }}
+                    </span>
+                  </div>
+
+                  {% if order.expected_delivery_date %}
+                    <div class="col-6 text-muted">Expected Delivery</div>
+                    <div class="col-6 text-end">{{ order.expected_delivery_date|date:"F d, Y" }}</div>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ITEMS -->
+          <div class="section-title mb-2">
+            <i class="fas fa-boxes-stacked me-2 text-primary"></i>Items
+          </div>
+
+          <div class="table-responsive invoice-table-wrap mb-4">
+            <table class="table invoice-table align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th class="text-center" style="width: 70px;">Qty</th>
+                  <th class="text-end" style="width: 140px;">Unit</th>
+                  <th class="text-end" style="width: 150px;">Discount</th>
+                  <th class="text-end" style="width: 150px;">Line Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in order.items.all %}
+                  {% with base_unit=item.base_unit_price|default_if_none:item.price_at_time|default_if_none:item.product.price per_unit_discount=item.get_unit_discount_amount|default_if_none:0 %}
+                  <tr>
+                    <td>
+                      <div class="d-flex align-items-center gap-3">
+                        {% if item.product.image %}
+                          <img src="{{ item.product.image.url }}"
+                               alt="{{ item.product.name }}"
+                               class="inv-thumb">
+                        {% else %}
+                          <div class="inv-thumb placeholder">
+                            <i class="fas fa-image text-muted"></i>
+                          </div>
                         {% endif %}
 
-                        <div class="text-muted small">
-                            <p class="mb-1"><strong>Terms & Conditions:</strong></p>
-                            <p class="mb-1">• All sales are final unless otherwise specified</p>
-                            <p class="mb-1">• Returns must be requested within 30 days of delivery</p>
-                            <p class="mb-1">• Please contact customer service for any questions regarding this invoice</p>
-                            <p class="mb-0">• Thank you for your business!</p>
-                        </div>
-                    </div>
+                        <div class="min-w-0">
+                          <div class="fw-semibold">{{ item.product.name }}</div>
 
-                    <!-- Action Buttons -->
-                    <div class="mt-4 d-print-none">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <button onclick="window.print()" class="btn btn-primary me-2">
-                                    <i class="fas fa-print me-2"></i>Print Invoice
-                                </button>
-                                {% if request.user == order.buyer %}
-                                <a href="{% url 'orders:download_invoice' order.id %}" class="btn btn-outline-primary me-2">
-                                    <i class="fas fa-download me-2"></i>Download PDF
-                                </a>
-                                {% endif %}
+                          {% if item.product.description %}
+                            <div class="text-muted small">
+                              {{ item.product.description|truncatewords:12 }}
                             </div>
-                            <div class="col-md-6 text-md-end">
-                                <a href="{% url 'orders:order_detail' order.id %}" class="btn btn-outline-secondary">
-                                    <i class="fas fa-arrow-left me-2"></i>Back to Order
-                                </a>
-                                <a href="{% url 'orders:order_history' %}" class="btn btn-outline-secondary">
-                                    <i class="fas fa-list me-2"></i>All Orders
-                                </a>
+                          {% endif %}
+
+                          {% if item.selected_features %}
+                            <div class="mt-1 d-flex flex-wrap gap-1">
+                              {% for key, value in item.selected_features.items %}
+                                <span class="badge bg-light text-dark border">
+                                  {{ key|title }}: {{ value }}
+                                </span>
+                              {% endfor %}
                             </div>
+                          {% endif %}
                         </div>
+                      </div>
+                    </td>
+
+                    <td class="text-center">
+                      <span class="qty-pill">{{ item.quantity }}</span>
+                    </td>
+
+                    <td class="text-end">
+                      {% if per_unit_discount and per_unit_discount|floatformat:2 != "0.00" %}
+                        <div class="text-muted text-decoration-line-through small">
+                          D{{ base_unit|floatformat:2 }}
+                        </div>
+                        <div class="fw-semibold">
+                          D{% if item.discounted_unit_price %}
+                              {{ item.discounted_unit_price|floatformat:2 }}
+                            {% else %}
+                              {{ base_unit|floatformat:2 }}
+                            {% endif %}
+                        </div>
+                      {% else %}
+                        D{{ base_unit|floatformat:2 }}
+                      {% endif %}
+                    </td>
+
+                    <td class="text-end">
+                      {% if per_unit_discount and per_unit_discount|floatformat:2 != "0.00" %}
+                        {% if item.discount_type == 'percent' %}
+                          <div class="text-success fw-semibold">-{{ item.discount_value|floatformat:0 }}% /unit</div>
+                          <div class="text-muted small">(-D{{ per_unit_discount|floatformat:2 }})</div>
+                        {% else %}
+                          <div class="text-success fw-semibold">-D{{ per_unit_discount|floatformat:2 }} /unit</div>
+                        {% endif %}
+                      {% else %}
+                        <span class="text-muted">—</span>
+                      {% endif %}
+                    </td>
+
+                    <td class="text-end">
+                      <strong>D{{ item.get_total_price|floatformat:2 }}</strong>
+                    </td>
+                  </tr>
+                  {% endwith %}
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          <!-- TOTALS + PAYMENT -->
+          <div class="row g-4 align-items-start">
+            <div class="col-md-6">
+              {% if order.payment_method or order.tracking_number %}
+                <div class="info-card">
+                  <div class="section-title-sm">
+                    <i class="fas fa-credit-card me-2 text-success"></i>Payment & Shipping
+                  </div>
+
+                  {% if order.payment_method %}
+                    <div class="small mb-2">
+                      <div class="text-muted">Payment Method</div>
+                      <div class="fw-semibold">{{ order.get_payment_method_display }}</div>
                     </div>
+                  {% endif %}
+
+                  {% if order.payment_date %}
+                    <div class="small mb-2">
+                      <div class="text-muted">Payment Date</div>
+                      <div class="fw-semibold">{{ order.payment_date|date:"F d, Y g:i A" }}</div>
+                    </div>
+                  {% endif %}
+
+                  {% if order.tracking_number %}
+                    <div class="small">
+                      <div class="text-muted">Tracking</div>
+                      <div class="d-flex align-items-center justify-content-between gap-2">
+                        <div class="fw-semibold">{{ order.tracking_number }}</div>
+                        <button class="btn btn-sm btn-outline-secondary d-print-none" type="button"
+                                onclick="copyText('{{ order.tracking_number }}')">
+                          <i class="fas fa-copy me-1"></i>Copy
+                        </button>
+                      </div>
+                    </div>
+                  {% endif %}
                 </div>
+              {% endif %}
             </div>
-        </div>
-    </div>
-</div>
 
-<!-- Print Styles -->
-<link rel="stylesheet" type="text/css" href="{% static 'css/order_invoice.css' %}">
+            <div class="col-md-6">
+              <div class="totals-box">
+                <div class="totals-title">
+                  <i class="fas fa-file-invoice-dollar me-2 text-primary"></i>Totals
+                </div>
+
+                <table class="table table-borderless mb-0 small">
+                  <tr>
+                    <td class="text-muted">Subtotal (before discounts)</td>
+                    <td class="text-end">
+                      D{{ subtotal|default:order.get_subtotal|floatformat:2 }}
+                    </td>
+                  </tr>
+
+                  {% with discount_total=discount|default:order.discount_amount %}
+                    {% if discount_total and discount_total|floatformat:2 != "0.00" %}
+                      <tr class="text-success">
+                        <td class="fw-semibold">
+                          <i class="fas fa-tag me-1"></i>Discounts
+                        </td>
+                        <td class="text-end fw-semibold">-D{{ discount_total|floatformat:2 }}</td>
+                      </tr>
+                    {% endif %}
+                  {% endwith %}
+
+                  {% with ship=shipping|default:order.shipping_cost %}
+                    {% if ship and ship|floatformat:2 != "0.00" %}
+                      <tr>
+                        <td class="text-muted">Shipping</td>
+                        <td class="text-end">D{{ ship|floatformat:2 }}</td>
+                      </tr>
+                    {% else %}
+                      <tr>
+                        <td class="text-muted">Shipping</td>
+                        <td class="text-end text-success fw-semibold">Free</td>
+                      </tr>
+                    {% endif %}
+                  {% endwith %}
+
+                  <tr>
+                    <td class="text-muted">Tax ({{ order.tax_rate|default:0|floatformat:1 }}%)</td>
+                    <td class="text-end">
+                      D{{ tax_amount|default:order.get_tax_amount|floatformat:2 }}
+                    </td>
+                  </tr>
+
+                  <tr class="totals-grand">
+                    <td class="fw-bold">Total</td>
+                    <td class="text-end fw-bold text-primary fs-5">
+                      D{{ total|default:order.get_total|floatformat:2 }}
+                    </td>
+                  </tr>
+                </table>
+
+                {% with discount_total=discount|default:order.discount_amount %}
+                  {% if discount_total and discount_total|floatformat:2 != "0.00" %}
+                    <div class="save-pill mt-2">
+                      <i class="fas fa-sparkles me-2"></i>
+                      You saved <strong>D{{ discount_total|floatformat:2 }}</strong> on this order.
+                    </div>
+                  {% endif %}
+                {% endwith %}
+              </div>
+            </div>
+          </div>
+
+          <!-- NOTES / TERMS -->
+          <div class="mt-4">
+            {% if order.order_notes %}
+              <div class="alert alert-info border-0">
+                <h6 class="mb-1"><i class="fas fa-note-sticky me-2"></i>Order Notes</h6>
+                <p class="mb-0">{{ order.order_notes }}</p>
+              </div>
+            {% endif %}
+
+            <div class="terms small text-muted">
+              <div class="fw-semibold mb-1">Terms & Conditions</div>
+              <div>• Returns must be requested within 30 days of delivery (where applicable).</div>
+              <div>• Please contact customer service for any questions regarding this invoice.</div>
+              <div>• Thank you for your business.</div>
+            </div>
+          </div>
+
+          <!-- ACTIONS -->
+          <div class="mt-4 d-print-none">
+            <div class="row g-2 align-items-center">
+              <div class="col-md-6">
+                <button onclick="window.print()" class="btn btn-primary me-2">
+                  <i class="fas fa-print me-2"></i>Print
+                </button>
+
+                {% if request.user == order.buyer %}
+                  <a href="{% url 'orders:download_invoice' order.id %}" class="btn btn-outline-primary">
+                    <i class="fas fa-download me-2"></i>Download PDF
+                  </a>
+                {% endif %}
+              </div>
+              <div class="col-md-6 text-md-end">
+                <a href="{% url 'orders:order_detail' order.id %}" class="btn btn-outline-secondary me-2">
+                  <i class="fas fa-arrow-left me-2"></i>Back to Order
+                </a>
+                <a href="{% url 'orders:order_history' %}" class="btn btn-outline-secondary">
+                  <i class="fas fa-list me-2"></i>All Orders
+                </a>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /invoice-body -->
+      </div><!-- /invoice-sheet -->
+
+    </div>
+  </div>
+</div>
 
 <script src="{% static 'js/main.js' %}"></script>
 <script src="{% static 'js/order_invoice.js' %}"></script>
+
+<script>
+  function copyText(text){
+    if (!text) return;
+    navigator.clipboard?.writeText(text).then(() => {
+      const old = document.title;
+      document.title = "Copied ✅";
+      setTimeout(() => (document.title = old), 700);
+    }).catch(() => alert('Copied: ' + text));
+  }
+</script>
+
+<style>
+  /* ---------- Invoice – Professional, Print-Friendly ---------- */
+  .invoice-sheet{
+    border-radius: 18px;
+    overflow: hidden;
+    background: #fff;
+    border: 1px solid rgba(0,0,0,.06);
+  }
+
+  .invoice-hero{
+    padding: 22px 22px 16px;
+    background: linear-gradient(135deg, #0d6efd, #111827);
+    color: #fff;
+  }
+
+  .brand-title{
+    font-size: 1.35rem;
+    font-weight: 800;
+    letter-spacing: .2px;
+  }
+
+  .invoice-title{
+    font-size: 2rem;
+    font-weight: 900;
+    letter-spacing: .12em;
+  }
+
+  .meta-chips .chip{
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .35rem .6rem;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,.18);
+    background: rgba(255,255,255,.10);
+    color: rgba(255,255,255,.92);
+    font-size: .85rem;
+    margin-left: .35rem;
+  }
+
+  .invoice-stamp .stamp{
+    display: inline-flex;
+    align-items: center;
+    padding: .42rem .7rem;
+    border-radius: 12px;
+    font-weight: 800;
+    letter-spacing: .06em;
+    font-size: .85rem;
+    border: 1px solid rgba(255,255,255,.22);
+  }
+  .stamp-paid{ background: rgba(25,135,84,.20); }
+  .stamp-intransit{ background: rgba(13,110,253,.20); }
+  .stamp-processing{ background: rgba(14,165,233,.22); }
+  .stamp-pending{ background: rgba(245,158,11,.22); }
+  .stamp-cancelled{ background: rgba(220,53,69,.22); }
+
+  .invoice-body{ padding: 22px; }
+
+  .section-title{
+    font-weight: 800;
+    margin-bottom: .6rem;
+  }
+  .section-title-sm{
+    font-weight: 800;
+    margin-bottom: .65rem;
+  }
+
+  .info-card{
+    border: 1px solid rgba(0,0,0,.06);
+    border-radius: 16px;
+    padding: 14px;
+    background: #fff;
+  }
+
+  .invoice-table-wrap{
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1px solid rgba(0,0,0,.06);
+  }
+  .invoice-table thead th{
+    background: #f8fafc;
+    border-bottom: 1px solid rgba(0,0,0,.06);
+    font-weight: 800;
+  }
+  .invoice-table td, .invoice-table th{
+    border-color: rgba(0,0,0,.06);
+  }
+
+  .inv-thumb{
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    object-fit: cover;
+    border: 1px solid rgba(0,0,0,.08);
+    flex-shrink: 0;
+    background: #fff;
+  }
+  .inv-thumb.placeholder{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,.03);
+  }
+
+  .qty-pill{
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 40px;
+    height: 28px;
+    padding: 0 10px;
+    border-radius: 999px;
+    background: rgba(13,110,253,.10);
+    border: 1px solid rgba(13,110,253,.20);
+    font-weight: 800;
+    color: #0d6efd;
+  }
+
+  .totals-box{
+    border-radius: 16px;
+    border: 1px solid rgba(0,0,0,.06);
+    background: linear-gradient(180deg, rgba(13,110,253,.06), rgba(255,255,255,1));
+    padding: 14px;
+  }
+  .totals-title{
+    font-weight: 900;
+    margin-bottom: .6rem;
+  }
+  .totals-grand td{
+    padding-top: .75rem !important;
+    border-top: 1px dashed rgba(0,0,0,.15);
+  }
+
+  .save-pill{
+    border-radius: 999px;
+    padding: .55rem .75rem;
+    background: rgba(25,135,84,.10);
+    border: 1px solid rgba(25,135,84,.18);
+    color: #0f5132;
+    font-weight: 700;
+    font-size: .9rem;
+  }
+
+  .terms{
+    border-top: 1px solid rgba(0,0,0,.06);
+    padding-top: 12px;
+  }
+
+  /* Keep your badge colors */
+  .badge-pending { background-color: #ffc107; color: #000; }
+  .badge-processing { background-color: #17a2b8; color: #fff; }
+  .badge-shipped { background-color: #28a745; color: #fff; }
+  .badge-delivered { background-color: #6f42c1; color: #fff; }
+  .badge-cancelled { background-color: #dc3545; color: #fff; }
+
+  /* ---------- Print polish ---------- */
+  @media print{
+    body{ background: #fff !important; }
+    .invoice-sheet{ box-shadow: none !important; border: none !important; }
+    .invoice-hero{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .save-pill, .totals-box{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    a{ text-decoration: none !important; color: inherit !important; }
+  }
+</style>
 {% endblock %}

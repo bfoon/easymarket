@@ -7,112 +7,443 @@
 <link rel="stylesheet" href="{% static 'css/store_product.css' %}">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
+<style>
+  :root{
+    --mp-bg:#f6f8fc;
+    --mp-card:#ffffff;
+    --mp-border:#e5e7eb;
+    --mp-text:#0f172a;
+    --mp-muted:#64748b;
+    --mp-primary:#2563eb;
+    --mp-primary2:#1e40af;
+    --mp-success:#10b981;
+    --mp-warning:#f59e0b;
+    --mp-danger:#ef4444;
+    --mp-shadow:0 18px 40px rgba(2,6,23,.08);
+    --mp-shadow-soft:0 10px 22px rgba(2,6,23,.06);
+    --mp-radius:18px;
+  }
 
-<div class="container-fluid py-4 glass-container shadow">
-  <!-- Header -->
-  <div class="row mb-4">
-    <div class="col-12">
-      <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
-        <div>
-          <h2 class="mb-1 fw-bold">
-            <i class="fas fa-box text-primary me-2"></i>Manage Products
-          </h2>
-          <p class="text-muted mb-0">
-            <i class="fas fa-store me-1"></i>{{ store.name }} • {{ total_products }} total products
-          </p>
+  body{ background:var(--mp-bg); }
+
+  /* HERO */
+  .mp-hero{
+    border-radius: var(--mp-radius);
+    padding: 20px 20px;
+    background:
+      radial-gradient(1000px 420px at 15% 0%, rgba(37,99,235,.22), transparent 55%),
+      radial-gradient(900px 380px at 85% 10%, rgba(16,185,129,.14), transparent 60%),
+      linear-gradient(135deg,#0b1220 0%, #0f172a 55%, #111827 100%);
+    box-shadow: var(--mp-shadow);
+    color:#fff;
+    position:relative;
+    overflow:hidden;
+  }
+  .mp-hero::after{
+    content:"";
+    position:absolute;
+    inset:-2px;
+    background: radial-gradient(600px 280px at 55% 0%, rgba(255,255,255,.10), transparent 60%);
+    pointer-events:none;
+  }
+  .mp-title{
+    margin:0;
+    font-weight:900;
+    letter-spacing:-.02em;
+    font-size: clamp(1.3rem, 1.1rem + 1vw, 2rem);
+    display:flex;
+    align-items:center;
+    gap:.6rem;
+  }
+  .mp-sub{
+    margin:6px 0 0 0;
+    color: rgba(255,255,255,.75);
+    font-size:.95rem;
+  }
+  .mp-pill{
+    display:inline-flex;
+    align-items:center;
+    gap:.45rem;
+    padding:.35rem .7rem;
+    border-radius: 999px;
+    background: rgba(255,255,255,.10);
+    border: 1px solid rgba(255,255,255,.16);
+    font-weight:700;
+    font-size:.82rem;
+    color: rgba(255,255,255,.92);
+    white-space:nowrap;
+  }
+  .mp-actions .btn{
+    border-radius: 999px;
+    padding:.55rem 1rem;
+    font-weight:800;
+  }
+
+  /* FILTER BAR */
+  .mp-filterbar{
+    border-radius: var(--mp-radius);
+    background: rgba(255,255,255,.85);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(229,231,235,.9);
+    box-shadow: var(--mp-shadow-soft);
+    padding: 12px;
+  }
+  .mp-filterbar .form-control,
+  .mp-filterbar .form-select{
+    border-radius: 14px !important;
+    height: 42px;
+  }
+  .mp-search{
+    position:relative;
+  }
+  .mp-search i{
+    position:absolute;
+    left:12px;
+    top:50%;
+    transform: translateY(-50%);
+    color: var(--mp-muted);
+    z-index: 2;
+  }
+  .mp-search input{ padding-left: 38px; }
+
+  .mp-chips{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+  }
+  .mp-chip{
+    border-radius:999px;
+    border:1px solid #e8eef7;
+    background:#fff;
+    color: var(--mp-text);
+    font-weight:800;
+    font-size:.82rem;
+    padding:.35rem .65rem;
+    cursor:pointer;
+    transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+    user-select:none;
+  }
+  .mp-chip:hover{
+    transform: translateY(-1px);
+    box-shadow: 0 10px 18px rgba(2,6,23,.06);
+    border-color: rgba(37,99,235,.25);
+  }
+  .mp-chip.active{
+    border-color: rgba(37,99,235,.45);
+    background: rgba(37,99,235,.08);
+  }
+
+  /* TABLE CARD */
+  .mp-card{
+    border-radius: var(--mp-radius);
+    background: var(--mp-card);
+    border: 1px solid var(--mp-border);
+    box-shadow: var(--mp-shadow-soft);
+    overflow:hidden;
+  }
+  .mp-card .card-header{
+    background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
+    border-bottom: 1px solid var(--mp-border);
+  }
+
+  /* TABLE */
+  .mp-table thead th{
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: #f8fafc;
+    border-bottom: 1px solid var(--mp-border);
+    font-size: .86rem;
+    font-weight: 900;
+    color: #334155;
+    user-select:none;
+    white-space:nowrap;
+  }
+  .mp-table tbody tr{
+    transition: background .12s ease, transform .12s ease;
+  }
+  .mp-table tbody tr:hover{
+    background: #fbfdff;
+  }
+
+  /* PRODUCT CELL */
+  .mp-product{
+    display:flex;
+    gap:12px;
+    align-items:flex-start;
+    min-width: 260px;
+  }
+  .mp-thumb{
+    width: 52px;
+    height: 52px;
+    border-radius: 14px;
+    overflow:hidden;
+    border: 1px solid #e8eef7;
+    background:#f1f5f9;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    flex: 0 0 auto;
+  }
+  .mp-thumb img{
+    width:100%;
+    height:100%;
+    object-fit:cover;
+  }
+  .mp-pname{
+    font-weight: 900;
+    color: var(--mp-text);
+    line-height:1.1;
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+    align-items:center;
+  }
+  .mp-pdesc{
+    margin-top:4px;
+    color: var(--mp-muted);
+    font-size:.82rem;
+  }
+
+  .mp-badge{
+    border-radius: 999px;
+    font-weight: 900;
+    font-size: .72rem;
+    padding: .32rem .6rem;
+  }
+
+  /* RATING */
+  .mp-rating-pill{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding: .32rem .6rem;
+    border-radius:999px;
+    background:#f8fafc;
+    border: 1px solid #e8eef7;
+    box-shadow: 0 10px 16px rgba(2,6,23,.05);
+    font-size:.82rem;
+    margin-top:8px;
+  }
+
+  /* PRICE */
+  .mp-price{
+    font-weight: 900;
+    color: var(--mp-text);
+  }
+  .mp-strike{
+    color: var(--mp-muted);
+    text-decoration: line-through;
+    font-size:.82rem;
+  }
+  .mp-promo{
+    margin-top:6px;
+    font-size:.82rem;
+    color: #16a34a;
+    font-weight:700;
+  }
+
+  /* STOCK + STATUS */
+  .mp-mini{
+    display:flex;
+    gap:6px;
+    flex-wrap:wrap;
+    margin-top:8px;
+  }
+  .mp-mini .badge{
+    border-radius: 999px;
+    font-weight: 800;
+    font-size: .72rem;
+  }
+
+  /* ACTIONS */
+  .mp-actions-group .btn{
+    border-radius: 999px;
+  }
+  .mp-sort{
+    color: #94a3b8;
+    font-size:.8rem;
+    margin-left:6px;
+  }
+
+  /* Empty state */
+  .mp-empty{
+    padding: 60px 16px;
+    text-align:center;
+  }
+  .mp-empty i{
+    width: 72px;
+    height: 72px;
+    border-radius: 22px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    background: #f1f5f9;
+    border: 1px solid #e8eef7;
+    margin-bottom: 14px;
+  }
+
+  @media (max-width: 992px){
+    .mp-table thead{ display:none; }
+    .mp-table, .mp-table tbody, .mp-table tr, .mp-table td{ display:block; width:100%; }
+    .mp-table tr{ border-bottom: 1px solid var(--mp-border); padding: 14px 12px; }
+    .mp-table td{ border:0 !important; padding: 6px 0 !important; }
+    .mp-table td::before{
+      content: attr(data-label);
+      display:block;
+      font-size:.75rem;
+      color: var(--mp-muted);
+      font-weight:800;
+      text-transform: uppercase;
+      margin-bottom: 2px;
+    }
+    .mp-actions-group{ margin-top: 10px; }
+  }
+</style>
+
+<div class="container-fluid py-4">
+
+  <!-- HERO -->
+  <div class="mp-hero mb-4">
+    <div class="d-flex flex-wrap gap-3 justify-content-between align-items-start">
+      <div>
+        <div class="d-flex flex-wrap gap-2 mb-2">
+          <span class="mp-pill"><i class="fas fa-store"></i> {{ store.name }}</span>
+          <span class="mp-pill"><i class="fas fa-boxes-stacked"></i> {{ total_products }} Products</span>
+          <span class="mp-pill"><i class="fas fa-shield-halved"></i> Store Control Panel</span>
         </div>
-        <div class="btn-group">
-          <a href="{% url 'stores:add_product' store.id %}" class="btn btn-primary shadow-sm">
-            <i class="fas fa-plus"></i> Add New Product
-          </a>
-          <a href="{% url 'stores:store_dashboard' store.id %}" class="btn btn-outline-secondary shadow-sm">
-            <i class="fas fa-arrow-left"></i> Back to Dashboard
-          </a>
+        <h2 class="mp-title"><i class="fas fa-box-open" style="color:#93c5fd"></i>Manage Products</h2>
+        <p class="mp-sub mb-0">Search, filter, sort, and take quick actions—optimized for speed and clarity.</p>
+      </div>
+
+      <div class="mp-actions d-flex gap-2">
+        <a href="{% url 'stores:add_product' store.id %}" class="btn btn-primary">
+          <i class="fas fa-plus me-1"></i> Add Product
+        </a>
+        <a href="{% url 'stores:store_dashboard' store.id %}" class="btn btn-outline-light">
+          <i class="fas fa-arrow-left me-1"></i> Dashboard
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- FILTER BAR -->
+  <div class="mp-filterbar mb-4">
+    <div class="row g-2 align-items-center">
+      <div class="col-md-5">
+        <div class="mp-search">
+          <i class="fas fa-magnifying-glass"></i>
+          <input type="search" id="searchInput" class="form-control shadow-sm"
+                 placeholder="Search by name, description, promo code..." oninput="applyFilters()">
+        </div>
+      </div>
+
+      <div class="col-md-3">
+        <select class="form-select shadow-sm" id="categoryFilter" onchange="applyFilters()">
+          <option value="">All Categories</option>
+          {% for cat in categories %}
+            <option value="{{ cat.name }}">{{ cat.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="col-md-4">
+        <div class="mp-chips">
+          <span class="mp-chip" data-filter="all"><i class="fas fa-layer-group me-1"></i>All</span>
+          <span class="mp-chip" data-filter="active"><i class="fas fa-circle-check me-1"></i>Active</span>
+          <span class="mp-chip" data-filter="inactive"><i class="fas fa-circle-xmark me-1"></i>Inactive</span>
+          <span class="mp-chip" data-filter="low"><i class="fas fa-triangle-exclamation me-1"></i>Low Stock</span>
+          <span class="mp-chip" data-filter="featured"><i class="fas fa-crown me-1"></i>Featured</span>
+          <span class="mp-chip" data-filter="trending"><i class="fas fa-fire me-1"></i>Trending</span>
+          <span class="mp-chip" data-filter="used"><i class="fas fa-recycle me-1"></i>Used</span>
         </div>
       </div>
     </div>
   </div>
 
- <!-- Search -->
-<div class="row mb-3">
-  <div class="col-md-4">
-    <input type="search" id="searchInput" class="form-control form-control-sm shadow-sm"
-           placeholder="Search products..." oninput="applyFilters()">
-  </div>
-</div>
+  <!-- LIST -->
+  <div class="mp-card">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2 p-3">
+      <div class="fw-bold">
+        <i class="fas fa-list me-2 text-primary"></i>Products
+      </div>
+      {% if products.has_other_pages %}
+        <small class="text-muted">
+          Showing {{ products.start_index }}–{{ products.end_index }} of {{ total_products }}
+        </small>
+      {% endif %}
+    </div>
 
-<!-- Category Dropdown -->
-<div class="col-md-4">
-  <select class="form-select form-select-sm shadow-sm" id="categoryFilter" onchange="applyFilters()">
-    <option value="">All Categories</option>
-    {% for cat in categories %}
-      <option value="{{ cat.name }}">{{ cat.name }}</option>
-    {% endfor %}
-  </select>
-</div>
+    <div class="card-body p-0">
+      {% if products %}
+      <div class="table-responsive">
+        <table class="table table-hover mb-0 align-middle mp-table">
+          <thead>
+            <tr>
+              <th style="width:70px;">Image</th>
+              <th onclick="sortTable(1)" role="button">Product <i class="fas fa-sort mp-sort"></i></th>
+              <th onclick="sortTable(2)" role="button">Category <i class="fas fa-sort mp-sort"></i></th>
+              <th onclick="sortTable(3)" role="button">Price <i class="fas fa-sort mp-sort"></i></th>
+              <th onclick="sortTable(4)" role="button">Stock <i class="fas fa-sort mp-sort"></i></th>
+              <th onclick="sortTable(5)" role="button">Status <i class="fas fa-sort mp-sort"></i></th>
+              <th onclick="sortTable(6)" role="button">Condition <i class="fas fa-sort mp-sort"></i></th>
+              <th onclick="sortTable(7)" role="button">Created <i class="fas fa-sort mp-sort"></i></th>
+              <th style="width:140px;">Actions</th>
+            </tr>
+          </thead>
 
-  <!-- Products List -->
-  <div class="row">
-    <div class="col-12">
-      <div class="card border-0 rounded-4 shadow-sm">
-        <div class="card-header bg-light d-flex justify-content-between align-items-center">
-          <h5 class="card-title mb-0">
-            <i class="fas fa-list me-2 text-primary"></i>Products
-          </h5>
-          {% if products.has_other_pages %}
-          <small class="text-muted">
-            Showing {{ products.start_index }}-{{ products.end_index }} of {{ total_products }} products
-          </small>
-          {% endif %}
-        </div>
+          <tbody>
+            {% for product in products %}
+            <tr
+              data-active="{{ product.is_active|yesno:'1,0' }}"
+              data-featured="{{ product.is_featured|yesno:'1,0' }}"
+              data-trending="{{ product.is_trending|yesno:'1,0' }}"
+              data-used="{{ product.used|yesno:'1,0' }}"
+              data-stock="{{ product.stock_quantity|default:0 }}"
+            >
+              <!-- Image -->
+              <td data-label="Image">
+                <a href="{% url 'stores:edit_product' store.id product.id %}" class="text-decoration-none">
+                  <div class="mp-thumb">
+                    {% if product.image %}
+                      <img src="{{ product.image.url }}" alt="{{ product.name }}">
+                    {% else %}
+                      <i class="fas fa-image text-muted"></i>
+                    {% endif %}
+                  </div>
+                </a>
+              </td>
 
-        <div class="card-body p-0">
-          {% if products %}
-          <div class="table-responsive">
-            <table class="table table-hover mb-0 align-middle">
-             <thead class="bg-light">
-              <tr>
-                <th>Image</th>
-                <th onclick="sortTable(1)">Product <i class="fas fa-sort"></i></th>
-                <th onclick="sortTable(2)">Category <i class="fas fa-sort"></i></th>
-                <th onclick="sortTable(3)">Price <i class="fas fa-sort"></i></th>
-                <th onclick="sortTable(4)">Stock <i class="fas fa-sort"></i></th>
-                <th onclick="sortTable(5)">Status <i class="fas fa-sort"></i></th>
-                <th onclick="sortTable(6)">Condition <i class="fas fa-sort"></i></th>
-                <th onclick="sortTable(7)">Created <i class="fas fa-sort"></i></th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-              <tbody>
-                {% for product in products %}
-                <tr>
-                  <td>
-                    <a href="{% url 'stores:edit_product' store.id product.id %}" class="d-inline-block text-decoration-none">
-                      {% if product.image %}
-                      <img src="{{ product.image.url }}" alt="{{ product.name }}" class="rounded" width="50" height="50" style="object-fit: cover;">
-                      {% else %}
-                      <div class="bg-light rounded d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;">
-                        <i class="fas fa-image text-muted"></i>
-                      </div>
-                      {% endif %}
-                    </a>
-                  </td>
-                  <td>
-                    <strong>
+              <!-- Product -->
+              <td data-label="Product">
+                <div class="mp-product">
+                  <div style="flex:1;">
+                    <div class="mp-pname">
                       {{ product.name }}
+
                       {% if not product.is_active %}
-                        <span class="badge bg-danger text-uppercase ms-2">Inactive</span>
+                        <span class="badge mp-badge bg-danger text-uppercase">Inactive</span>
+                      {% else %}
+                        <span class="badge mp-badge bg-success text-uppercase">Live</span>
                       {% endif %}
-                    </strong>
-                    {% if product.is_featured %}
-                    <span class="badge bg-warning bg-opacity-75 ms-1">Featured</span>
-                    {% endif %}
-                    {% if product.is_trending %}
-                    <span class="badge bg-info bg-opacity-75 ms-1">Trending</span>
-                    {% endif %}
-                    <div class="rating-stars mt-2">
+
+                      {% if product.is_featured %}
+                        <span class="badge mp-badge bg-warning text-dark">Featured</span>
+                      {% endif %}
+                      {% if product.is_trending %}
+                        <span class="badge mp-badge bg-info text-dark">Trending</span>
+                      {% endif %}
+                      {% if product.is_new %}
+                        <span class="badge mp-badge bg-primary">NEW</span>
+                      {% endif %}
+                    </div>
+
+                    <div class="mp-pdesc">{{ product.description|truncatechars:65 }}</div>
+
+                    <div class="rating-stars">
                       {% if product.average_rating %}
-                        <span class="d-inline-flex align-items-center gap-1 px-2 py-1 rounded-pill bg-light shadow-sm" style="font-size: 0.85rem;" data-bs-toggle="tooltip" title="{{ product.average_rating|floatformat:2 }} / 5">
+                        <span class="mp-rating-pill" data-bs-toggle="tooltip"
+                              title="{{ product.average_rating|floatformat:2 }} / 5">
                           {% for i in "12345" %}
                             {% if i|add:'0' <= product.average_rating %}
                               <i class="fas fa-star text-warning"></i>
@@ -122,173 +453,198 @@
                               <i class="far fa-star text-muted"></i>
                             {% endif %}
                           {% endfor %}
-                          <span class="ms-2 text-dark fw-semibold">{{ product.average_rating|floatformat:1 }}</span>
+                          <span class="ms-1 fw-bold">{{ product.average_rating|floatformat:1 }}</span>
                           <span class="text-muted">({{ product.review_count }})</span>
                         </span>
                       {% else %}
                         <span class="text-muted small fst-italic">No reviews yet</span>
                       {% endif %}
                     </div>
-                    <div class="text-muted small mt-1">{{ product.description|truncatechars:50 }}</div>
-                  </td>
-                  <td>
-                    {% if product.category %}
-                    <span class="badge bg-secondary">{{ product.category.name }}</span>
-                    {% else %}
-                    <span class="text-muted">No category</span>
-                    {% endif %}
-                  </td>
-                  <td>
-                    <strong>D{{ product.price }}</strong>
-                    {% if product.original_price and product.original_price > product.price %}
-                    <br><small class="text-muted text-decoration-line-through">D{{ product.original_price }}</small>
-                    <span class="badge bg-success">{{ product.discount_percentage }}% OFF</span>
-                    {% endif %}
-                    {% for promo in product.promo_codes.all %}
-                      <div class="small text-success mt-1">
-                        <i class="fas fa-tag me-1"></i>Promo: <strong>{{ promo.code }}</strong> ({{ promo.discount_percentage }}%)
-                      </div>
-                    {% endfor %}
-                  </td>
-                  <td>
-                    {% if product.stock_quantity <= 5 %}
-                    <span class="badge bg-danger">{{ product.stock_quantity }}</span>
-                    {% elif product.stock_quantity <= 20 %}
-                    <span class="badge bg-warning">{{ product.stock_quantity }}</span>
-                    {% else %}
-                    <span class="badge bg-success">{{ product.stock_quantity }}</span>
-                    {% endif %}
-                    {% if product.total_sold %}
-                    <div class="mt-2 small text-muted">
-                      <span class="badge bg-light border text-dark">
-                        <i class="fas fa-calculator me-1 text-primary"></i>Est. {{ product.total_sold }} sold
-                      </span>
-                      <span class="badge bg-light border text-dark">
-                        <i class="fas fa-shopping-bag me-1 text-success"></i>Act. {{ product.sold_count }}
-                      </span>
-                    </div>
-                    {% endif %}
-                  </td>
-                  <td>
-                    {% if product.is_in_stock %}
-                    <span class="badge bg-success"><i class="fas fa-check"></i> In Stock</span>
-                    {% else %}
-                    <span class="badge bg-danger"><i class="fas fa-times"></i> Out of Stock</span>
-                    {% endif %}
-                  </td>
-                  <td>
-                    {% if product.used %}
-                      <span class="badge bg-warning text-dark">
-                        <i class="fas fa-recycle me-1"></i> Used
-                      </span>
-                    {% else %}
-                      <span class="badge bg-success">
-                        <i class="fas fa-box-open me-1"></i> New
-                      </span>
-                    {% endif %}
-                  </td>
-                  <td>
-                    {{ product.created_at|date:"M d, Y" }}
-                    {% if product.is_new %}
-                    <span class="badge bg-primary">NEW</span>
-                    {% endif %}
-                  </td>
-                  <td>
-                    <div class="btn-group">
-                      <a href="{% url 'stores:edit_product' store.id product.id %}" class="btn btn-sm btn-outline-primary" title="Edit">
-                        <i class="fas fa-edit"></i>
-                      </a>
-                      <a class="btn btn-sm btn-outline-success" onclick="quickView({{ product.id }})" title="Quick View">
-                        <i class="fas fa-eye"></i>
-                      </a>
-                      <a class="btn btn-sm btn-outline-danger" onclick="deleteProduct({{ product.id }}, this)" title="Delete">
-                        <i class="fas fa-trash"></i>
-                      </a>
-                    </div>
-                  </td>
-                </tr>
+                  </div>
+                </div>
+              </td>
+
+              <!-- Category -->
+              <td data-label="Category">
+                {% if product.category %}
+                  <span class="badge bg-secondary rounded-pill">{{ product.category.name }}</span>
+                {% else %}
+                  <span class="text-muted">No category</span>
+                {% endif %}
+              </td>
+
+              <!-- Price -->
+              <td data-label="Price">
+                <div class="mp-price">D{{ product.price }}</div>
+                {% if product.original_price and product.original_price > product.price %}
+                  <div class="small">
+                    <span class="mp-strike">D{{ product.original_price }}</span>
+                    <span class="badge bg-success rounded-pill ms-1">{{ product.discount_percentage }}% OFF</span>
+                  </div>
+                {% endif %}
+                {% for promo in product.promo_codes.all %}
+                  <div class="mp-promo">
+                    <i class="fas fa-tag me-1"></i> {{ promo.code }} ({{ promo.discount_percentage }}%)
+                  </div>
                 {% endfor %}
-              </tbody>
-            </table>
-          </div>
-          {% include 'stores/partials/pagination.html' with page_obj=products %}
-          {% else %}
-          <div class="text-center py-5">
-            <i class="fas fa-box fa-4x text-muted mb-3"></i>
-            <h4 class="text-muted">No Products Yet</h4>
-            <p class="text-muted">Start by adding your first product to your store.</p>
-            <a href="{% url 'stores:add_product' store.id %}" class="btn btn-primary">
-              <i class="fas fa-plus"></i> Add Your First Product
-            </a>
-          </div>
-          {% endif %}
-        </div>
+              </td>
+
+              <!-- Stock -->
+              <td data-label="Stock">
+                {% if product.stock_quantity <= 5 %}
+                  <span class="badge bg-danger rounded-pill">{{ product.stock_quantity }}</span>
+                {% elif product.stock_quantity <= 20 %}
+                  <span class="badge bg-warning text-dark rounded-pill">{{ product.stock_quantity }}</span>
+                {% else %}
+                  <span class="badge bg-success rounded-pill">{{ product.stock_quantity }}</span>
+                {% endif %}
+
+                {% if product.total_sold %}
+                  <div class="mp-mini">
+                    <span class="badge bg-light border text-dark">
+                      <i class="fas fa-calculator me-1 text-primary"></i> Est. {{ product.total_sold }}
+                    </span>
+                    <span class="badge bg-light border text-dark">
+                      <i class="fas fa-shopping-bag me-1 text-success"></i> Act. {{ product.sold_count }}
+                    </span>
+                  </div>
+                {% endif %}
+              </td>
+
+              <!-- Status -->
+              <td data-label="Status">
+                {% if product.is_in_stock %}
+                  <span class="badge bg-success rounded-pill"><i class="fas fa-check me-1"></i>In Stock</span>
+                {% else %}
+                  <span class="badge bg-danger rounded-pill"><i class="fas fa-times me-1"></i>Out</span>
+                {% endif %}
+              </td>
+
+              <!-- Condition -->
+              <td data-label="Condition">
+                {% if product.used %}
+                  <span class="badge bg-warning text-dark rounded-pill"><i class="fas fa-recycle me-1"></i>Used</span>
+                {% else %}
+                  <span class="badge bg-success rounded-pill"><i class="fas fa-box-open me-1"></i>New</span>
+                {% endif %}
+              </td>
+
+              <!-- Created -->
+              <td data-label="Created">
+                {{ product.created_at|date:"M d, Y" }}
+              </td>
+
+              <!-- Actions -->
+              <td data-label="Actions">
+                <div class="btn-group mp-actions-group">
+                  <a href="{% url 'stores:edit_product' store.id product.id %}" class="btn btn-sm btn-outline-primary" title="Edit">
+                    <i class="fas fa-edit"></i>
+                  </a>
+                  <button type="button" class="btn btn-sm btn-outline-success" onclick="quickView({{ product.id }})" title="Quick View">
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteProduct({{ product.id }}, this)" title="Delete">
+                    <i class="fas fa-trash"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
+
+      {% include 'stores/partials/pagination.html' with page_obj=products %}
+      {% else %}
+        <div class="mp-empty">
+          <i class="fas fa-box text-muted fa-2x"></i>
+          <h4 class="fw-bold text-muted mb-1">No Products Yet</h4>
+          <p class="text-muted mb-3">Start by adding your first product to your store.</p>
+          <a href="{% url 'stores:add_product' store.id %}" class="btn btn-primary rounded-pill px-4">
+            <i class="fas fa-plus me-1"></i> Add Your First Product
+          </a>
+        </div>
+      {% endif %}
     </div>
   </div>
 </div>
-<script>
-let sortDirection = {};
-
-function sortTable(columnIndex) {
-  const table = document.querySelector("table");
-  const tbody = table.tBodies[0];
-  const rows = Array.from(tbody.querySelectorAll("tr"));
-
-  const isAscending = sortDirection[columnIndex] = !sortDirection[columnIndex];
-
-  rows.sort((a, b) => {
-    const aText = a.children[columnIndex].innerText.trim().toLowerCase();
-    const bText = b.children[columnIndex].innerText.trim().toLowerCase();
-
-    const aNum = parseFloat(aText.replace(/[^0-9.]/g, ''));
-    const bNum = parseFloat(bText.replace(/[^0-9.]/g, ''));
-
-    // If it's a number column (like price or stock)
-    if (!isNaN(aNum) && !isNaN(bNum)) {
-      return isAscending ? aNum - bNum : bNum - aNum;
-    }
-
-    // For text comparison (like product name, category)
-    return isAscending ? aText.localeCompare(bText) : bText.localeCompare(aText);
-  });
-
-  // Re-append rows
-  rows.forEach(row => tbody.appendChild(row));
-}
-</script>
 
 <script>
-function applyFilters() {
-  const query = document.getElementById("searchInput").value.toLowerCase();
-  const category = document.getElementById("categoryFilter").value.toLowerCase();
-  const rows = document.querySelectorAll("tbody tr");
+  // ---------- Sorting ----------
+  let sortDirection = {};
 
-  rows.forEach(row => {
-    const name = row.querySelector("td:nth-child(2)").innerText.toLowerCase();
-    const cat = row.querySelector("td:nth-child(3)").innerText.toLowerCase();
+  function sortTable(columnIndex) {
+    const table = document.querySelector("table");
+    const tbody = table.tBodies[0];
+    const rows = Array.from(tbody.querySelectorAll("tr"));
+    const isAscending = sortDirection[columnIndex] = !sortDirection[columnIndex];
 
-    const matchName = name.includes(query);
-    const matchCategory = !category || cat.includes(category);
+    rows.sort((a, b) => {
+      const aText = (a.children[columnIndex]?.innerText || '').trim().toLowerCase();
+      const bText = (b.children[columnIndex]?.innerText || '').trim().toLowerCase();
 
-    row.style.display = matchName && matchCategory ? '' : 'none';
+      const aNum = parseFloat(aText.replace(/[^0-9.]/g, ''));
+      const bNum = parseFloat(bText.replace(/[^0-9.]/g, ''));
+
+      if (!isNaN(aNum) && !isNaN(bNum)) return isAscending ? aNum - bNum : bNum - aNum;
+      return isAscending ? aText.localeCompare(bText) : bText.localeCompare(aText);
+    });
+
+    rows.forEach(row => tbody.appendChild(row));
+  }
+
+  // ---------- Filters ----------
+  let quickFilter = 'all';
+
+  function applyFilters() {
+    const query = (document.getElementById("searchInput").value || '').toLowerCase().trim();
+    const category = (document.getElementById("categoryFilter").value || '').toLowerCase().trim();
+    const rows = document.querySelectorAll("tbody tr");
+
+    rows.forEach(row => {
+      const name = (row.querySelector("td:nth-child(2)")?.innerText || '').toLowerCase();
+      const cat  = (row.querySelector("td:nth-child(3)")?.innerText || '').toLowerCase();
+
+      const isActive = row.dataset.active === "1";
+      const isFeatured = row.dataset.featured === "1";
+      const isTrending = row.dataset.trending === "1";
+      const isUsed = row.dataset.used === "1";
+      const stock = parseInt(row.dataset.stock || "0", 10);
+
+      const matchName = name.includes(query);
+      const matchCategory = !category || cat.includes(category);
+
+      let matchQuick = true;
+      if (quickFilter === 'active') matchQuick = isActive;
+      if (quickFilter === 'inactive') matchQuick = !isActive;
+      if (quickFilter === 'featured') matchQuick = isFeatured;
+      if (quickFilter === 'trending') matchQuick = isTrending;
+      if (quickFilter === 'used') matchQuick = isUsed;
+      if (quickFilter === 'low') matchQuick = stock <= 5;
+
+      row.style.display = (matchName && matchCategory && matchQuick) ? '' : 'none';
+    });
+  }
+
+  // Chips
+  document.addEventListener('DOMContentLoaded', function () {
+    // Bootstrap tooltips
+    document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootstrap.Tooltip(el));
+
+    // chip click
+    document.querySelectorAll('.mp-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        document.querySelectorAll('.mp-chip').forEach(c => c.classList.remove('active'));
+        chip.classList.add('active');
+        quickFilter = chip.dataset.filter || 'all';
+        applyFilters();
+      });
+    });
+
+    // default active chip
+    const first = document.querySelector('.mp-chip[data-filter="all"]');
+    if (first) first.classList.add('active');
   });
-}
-</script>
-<script>
-function filterProducts(query) {
-  const rows = document.querySelectorAll("tbody tr");
-  rows.forEach(row => {
-    const name = row.querySelector("td:nth-child(2)").textContent.toLowerCase();
-    row.style.display = name.includes(query.toLowerCase()) ? '' : 'none';
-  });
-}
-
-document.addEventListener('DOMContentLoaded', function () {
-  document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
-    new bootstrap.Tooltip(el);
-  });
-});
 </script>
 
 <script src="{% static 'js/main.js' %}"></script>

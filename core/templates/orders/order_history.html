@@ -1,177 +1,449 @@
 {% extends 'base.html' %}
+{% load static %}
+{% load humanize %}
 
 {% block content %}
-{% load static %}
 <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
-<div class="container py-5">
-    <div class="row">
-        <div class="col-12">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <h2>Order History</h2>
-                <a href="{% url 'orders:order_stats' %}" class="btn btn-outline-primary">
-                    <i class="fas fa-chart-bar me-2"></i>View Stats
-                </a>
-            </div>
 
-            <!-- Filters -->
-            <div class="card mb-4">
-                <div class="card-body">
-                    <form method="get" class="row g-3">
-                        <div class="col-md-4">
-                            <label class="form-label">Search Orders</label>
-                            <input type="text" class="form-control" name="search" 
-                                   value="{{ search_query|default:'' }}" 
-                                   placeholder="Search by order ID or product name">
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Filter by Status</label>
-                            <select class="form-select" name="status">
-                                <option value="">All Orders</option>
-                                {% for status_code, status_name in status_choices %}
-                                    <option value="{{ status_code }}" 
-                                            {% if status_code == current_status %}selected{% endif %}>
-                                        {{ status_name }}
-                                    </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">&nbsp;</label>
-                            <div class="d-flex gap-2">
-                                <button type="submit" class="btn btn-primary">Filter</button>
-                                <a href="{% url 'orders:order_history' %}" class="btn btn-outline-secondary">Clear</a>
-                            </div>
-                        </div>
-                    </form>
-                </div>
-            </div>
+<style>
+  /* ===========================
+     ORDER VAULT (History)
+     =========================== */
+  .oh-hero{
+    border-radius: 18px;
+    padding: 18px;
+    color:#fff;
+    background:
+      radial-gradient(circle at 15% 15%, rgba(255,255,255,.20), transparent 55%),
+      linear-gradient(135deg, rgba(13,110,253,.96), rgba(102,16,242,.85));
+    box-shadow: 0 20px 55px rgba(2,8,23,.16);
+    overflow:hidden;
+    position:relative;
+  }
+  .oh-hero:after{
+    content:"";
+    position:absolute;
+    right:-120px; top:-160px;
+    width:420px; height:420px; border-radius:50%;
+    background: rgba(255,255,255,.10);
+  }
+  .oh-hero *{ position:relative; z-index:1; }
 
-            <!-- Orders List -->
-            {% if page_obj.object_list %}
-                <div class="row">
-                    {% for order in page_obj %}
-                        <div class="col-md-6 col-lg-4 mb-4">
-                            <div class="card h-100">
-                                <div class="card-header d-flex justify-content-between align-items-center">
-                                    <h6 class="mb-0">Order #{{ order.id }}</h6>
-                                    <span class="badge badge-{{ order.status|lower }}">
-                                        {{ order.get_status_display }}
-                                    </span>
-                                </div>
-                                <div class="card-body">
-                                    <p class="card-text">
-                                        <small class="text-muted">
-                                            <i class="fas fa-calendar me-1"></i>
-                                            {{ order.created_at|date:"M d, Y" }}
-                                        </small>
-                                    </p>
-                                    <p class="card-text">
-                                        <strong>Total: D{{ order.get_total|floatformat:2 }}</strong>
-                                    </p>
-                                    <p class="card-text">
-                                        <small class="text-muted">
-                                            {{ order.items.count }} item{{ order.items.count|pluralize }}
-                                        </small>
-                                    </p>
-                                    
-                                    <!-- Quick preview of items -->
-                                    {% for item in order.items.all|slice:":2" %}
-                                        <small class="text-muted d-block">
-                                            {{ item.product.name }} ({{ item.quantity }})
-                                        </small>
-                                    {% endfor %}
-                                    {% if order.items.count > 2 %}
-                                        <small class="text-muted">
-                                            ... and {{ order.items.count|add:"-2" }} more
-                                        </small>
-                                    {% endif %}
-                                </div>
-                                <div class="card-footer">
-                                    <div class="d-flex gap-2">
-                                        <a href="{% url 'orders:order_detail' order.id %}" 
-                                           class="btn btn-sm btn-outline-primary">
-                                            View Details
-                                        </a>
-                                        {% if order.status == 'pending' %}
-                                            <a href="{% url 'orders:complete_order' order.id %}" 
-                                               class="btn btn-sm btn-primary">
-                                                Complete
-                                            </a>
-                                        {% elif order.status == 'shipped' %}
-                                            <a href="{% url 'orders:track_order' order.id %}" 
-                                               class="btn btn-sm btn-success">
-                                                Track
-                                            </a>
-                                        {% elif order.status == 'delivered' %}
-                                            <button class="btn btn-sm btn-outline-secondary" 
-                                                    onclick="reorderItems({{ order.id }})">
-                                                Reorder
-                                            </button>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    {% endfor %}
-                </div>
+  .oh-chip{
+    display:inline-flex; align-items:center; gap:8px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    background: rgba(255,255,255,.14);
+    border: 1px solid rgba(255,255,255,.22);
+    font-weight: 800;
+    font-size: .82rem;
+    white-space: nowrap;
+  }
 
-                <!-- Pagination -->
-                {% if page_obj.has_other_pages %}
-                    <nav aria-label="Order pagination">
-                        <ul class="pagination justify-content-center">
-                            {% if page_obj.has_previous %}
-                                <li class="page-item">
-                                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}">
-                                        Previous
-                                    </a>
-                                </li>
-                            {% endif %}
-                            
-                            {% for num in page_obj.paginator.page_range %}
-                                {% if page_obj.number == num %}
-                                    <li class="page-item active">
-                                        <span class="page-link">{{ num }}</span>
-                                    </li>
-                                {% else %}
-                                    <li class="page-item">
-                                        <a class="page-link" href="?page={{ num }}{% if search_query %}&search={{ search_query }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}">
-                                            {{ num }}
-                                        </a>
-                                    </li>
-                                {% endif %}
-                            {% endfor %}
-                            
-                            {% if page_obj.has_next %}
-                                <li class="page-item">
-                                    <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}">
-                                        Next
-                                    </a>
-                                </li>
-                            {% endif %}
-                        </ul>
-                    </nav>
-                {% endif %}
-            {% else %}
-                <div class="text-center py-5">
-                    <i class="fas fa-shopping-bag fa-4x text-muted mb-3"></i>
-                    <h4 class="text-muted">No orders found</h4>
-                    <p class="text-muted">
-                        {% if search_query or current_status %}
-                            Try adjusting your search filters or
-                            <a href="{% url 'orders:order_history' %}">view all orders</a>
-                        {% else %}
-                            You haven't placed any orders yet.
-                        {% endif %}
-                    </p>
-                    <a href="{% url 'marketplace:all_products' %}" class="btn btn-primary">
-                        <i class="fas fa-shopping-cart me-2"></i>Start Shopping
-                    </a>
-                </div>
-            {% endif %}
+  .oh-kpi{
+    background:#fff;
+    border-radius: 16px;
+    box-shadow: 0 16px 42px rgba(2,8,23,.08);
+    border: 1px solid rgba(15,23,42,.06);
+    overflow:hidden;
+  }
+  .oh-kpi .kpi-ico{
+    width:44px;height:44px;border-radius:14px;
+    display:flex;align-items:center;justify-content:center;
+    background: rgba(13,110,253,.10);
+    color:#0d6efd;
+  }
+
+  .oh-filter{
+    border-radius: 16px;
+    border: 1px solid rgba(15,23,42,.08);
+    box-shadow: 0 12px 34px rgba(2,8,23,.06);
+  }
+  .oh-search{
+    position: relative;
+  }
+  .oh-search i{
+    position:absolute; left:12px; top:50%;
+    transform: translateY(-50%);
+    color:#94a3b8;
+  }
+  .oh-search input{
+    padding-left: 38px;
+  }
+  .oh-clear{
+    position:absolute; right:10px; top:50%;
+    transform: translateY(-50%);
+    border: 0; background: transparent;
+    color:#64748b;
+    display:none;
+  }
+  .oh-clear.show{ display:block; }
+
+  .oh-status-pills .btn{
+    border-radius: 999px !important;
+    font-weight: 800;
+  }
+
+  .oh-card{
+    border-radius: 18px;
+    border: 1px solid rgba(15,23,42,.08);
+    box-shadow: 0 16px 42px rgba(2,8,23,.08);
+    transition: .2s ease;
+    overflow:hidden;
+  }
+  .oh-card:hover{
+    transform: translateY(-2px);
+    box-shadow: 0 22px 62px rgba(2,8,23,.12);
+  }
+
+  .oh-header{
+    background: linear-gradient(180deg, rgba(2,8,23,.03), transparent);
+  }
+
+  .oh-badge{
+    border-radius: 999px;
+    padding: 6px 10px;
+    font-weight: 900;
+  }
+
+  .oh-mini{
+    font-size: .85rem;
+    color: #6b7280;
+  }
+
+  .oh-progress{
+    height: 6px;
+    border-radius: 999px;
+    background: rgba(148,163,184,.25);
+    overflow:hidden;
+  }
+  .oh-progress > span{
+    display:block; height:100%;
+    border-radius: 999px;
+  }
+
+  .oh-actions .btn{
+    border-radius: 12px;
+    font-weight: 800;
+  }
+
+  .oh-empty{
+    border-radius: 18px;
+    border: 1px dashed rgba(15,23,42,.18);
+    background: linear-gradient(135deg, rgba(13,110,253,.05), rgba(34,197,94,.04));
+  }
+</style>
+
+<div class="container py-4">
+
+  <!-- HERO -->
+  <div class="oh-hero mb-4">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+      <div>
+        <h2 class="mb-1 fw-bold">Order Vault</h2>
+        <div class="opacity-75">Track payments, deliveries, and reorders — all in one place.</div>
+        <div class="d-flex flex-wrap gap-2 mt-3">
+          <span class="oh-chip">
+            <i class="fas fa-receipt"></i>
+            {% if page_obj %}{{ page_obj.paginator.count }}{% else %}0{% endif %} order{{ page_obj.paginator.count|pluralize }}
+          </span>
+          <span class="oh-chip">
+            <i class="fas fa-search"></i>
+            Tip: Press <strong>/</strong> to focus search
+          </span>
         </div>
+      </div>
+
+      <div class="text-end">
+        <a href="{% url 'orders:order_stats' %}" class="btn btn-light fw-bold">
+          <i class="fas fa-chart-bar me-2"></i>View Stats
+        </a>
+        <div class="small opacity-75 mt-2">
+          Your history is safe — you can always reorder later.
+        </div>
+      </div>
     </div>
+  </div>
+
+  <!-- QUICK KPIs (computed in template using current page, no backend change) -->
+  {% if page_obj.object_list %}
+  <div class="row g-3 mb-4">
+    <div class="col-md-4">
+      <div class="oh-kpi p-3 d-flex align-items-center gap-3">
+        <div class="kpi-ico"><i class="fas fa-shopping-bag"></i></div>
+        <div>
+          <div class="text-muted small">Total Orders</div>
+          <div class="fw-bold fs-5">{% if page_obj %}{{ page_obj.paginator.count }}{% else %}0{% endif %}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="oh-kpi p-3 d-flex align-items-center gap-3">
+        <div class="kpi-ico"><i class="fas fa-filter"></i></div>
+        <div>
+          <div class="text-muted small">Current Filter</div>
+          <div class="fw-bold fs-6">
+            {% if current_status %}{{ current_status|title }}{% else %}All Orders{% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="oh-kpi p-3 d-flex align-items-center gap-3">
+        <div class="kpi-ico"><i class="fas fa-eye"></i></div>
+        <div>
+          <div class="text-muted small">Showing</div>
+          <div class="fw-bold fs-6">
+            {{ page_obj.start_index }}–{{ page_obj.end_index }}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- FILTERS -->
+  <div class="card oh-filter mb-4">
+    <div class="card-body">
+      <form method="get" class="row g-3 align-items-end" id="filterForm">
+        <div class="col-md-5">
+          <label class="form-label fw-semibold">Search orders</label>
+          <div class="oh-search">
+            <i class="fas fa-search"></i>
+            <input id="ohSearch" type="text" class="form-control"
+                   name="search" value="{{ search_query|default:'' }}"
+                   placeholder="Search by order ID or product name">
+            <button type="button" class="oh-clear" id="ohClearBtn" aria-label="Clear search">
+              <i class="fas fa-times-circle"></i>
+            </button>
+          </div>
+          <small class="text-muted">Try: “Sneakers”, “Phone”, or the order number.</small>
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">Status</label>
+          <select class="form-select" name="status" id="ohStatusSelect">
+            <option value="">All Orders</option>
+            {% for status_code, status_name in status_choices %}
+              <option value="{{ status_code }}" {% if status_code == current_status %}selected{% endif %}>
+                {{ status_name }}
+              </option>
+            {% endfor %}
+          </select>
+
+          <!-- Quick pills (optional) -->
+          <div class="btn-group btn-group-sm mt-2 oh-status-pills" role="group" aria-label="Quick status filters">
+            <button type="button" class="btn btn-outline-secondary" data-status="">All</button>
+            <button type="button" class="btn btn-outline-warning" data-status="pending">Pending</button>
+            <button type="button" class="btn btn-outline-info" data-status="processing">Processing</button>
+            <button type="button" class="btn btn-outline-success" data-status="shipped">Shipped</button>
+          </div>
+        </div>
+
+        <div class="col-md-3">
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary w-100">
+              <i class="fas fa-filter me-1"></i>Apply
+            </button>
+            <a href="{% url 'orders:order_history' %}" class="btn btn-outline-secondary">
+              Clear
+            </a>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ORDERS -->
+  {% if page_obj.object_list %}
+    <div class="row g-4">
+      {% for order in page_obj %}
+        <div class="col-md-6 col-lg-4">
+          <div class="card oh-card h-100">
+            <div class="card-header oh-header d-flex justify-content-between align-items-center">
+              <div>
+                <div class="fw-bold">Order #{{ order.id }}</div>
+                <div class="oh-mini">
+                  <i class="fas fa-calendar me-1"></i>{{ order.created_at|date:"M d, Y" }}
+                </div>
+              </div>
+
+              <span class="badge oh-badge badge-{{ order.status|lower }}">
+                {{ order.get_status_display }}
+              </span>
+            </div>
+
+            <div class="card-body">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <div class="text-muted small">Total</div>
+                <div class="fw-bold fs-5 text-primary">D{{ order.get_total|floatformat:2 }}</div>
+              </div>
+
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <div class="text-muted small">
+                  <i class="fas fa-box-open me-1"></i>{{ order.items.count }} item{{ order.items.count|pluralize }}
+                </div>
+                {% if order.tracking_number %}
+                  <small class="text-muted">
+                    <i class="fas fa-route me-1"></i>{{ order.tracking_number }}
+                  </small>
+                {% endif %}
+              </div>
+
+              <!-- Progress bar -->
+              <div class="oh-progress mb-3" title="Order progress">
+                <span style="width:
+                  {% if order.status == 'pending' %}25
+                  {% elif order.status == 'processing' %}50
+                  {% elif order.status == 'shipped' %}75
+                  {% elif order.status == 'delivered' %}100
+                  {% else %}0{% endif %}%;
+                  background:
+                  {% if order.status == 'pending' %}#f59e0b
+                  {% elif order.status == 'processing' %}#0ea5e9
+                  {% elif order.status == 'shipped' %}#22c55e
+                  {% elif order.status == 'delivered' %}#16a34a
+                  {% else %}#94a3b8{% endif %};">
+                </span>
+              </div>
+
+              <!-- Quick preview -->
+              <div class="border rounded-3 p-2 bg-light">
+                {% for item in order.items.all|slice:":2" %}
+                  <small class="text-muted d-block">
+                    • {{ item.product.name|truncatechars:26 }} <span class="fw-semibold">(x{{ item.quantity }})</span>
+                  </small>
+                {% endfor %}
+                {% if order.items.count > 2 %}
+                  <small class="text-muted">… and {{ order.items.count|add:"-2" }} more</small>
+                {% endif %}
+              </div>
+            </div>
+
+            <div class="card-footer bg-white">
+              <div class="d-grid gap-2 oh-actions">
+                <a href="{% url 'orders:order_detail' order.id %}" class="btn btn-outline-primary">
+                  <i class="fas fa-eye me-2"></i>View Details
+                </a>
+
+                {% if order.status == 'pending' %}
+                  <a href="{% url 'orders:complete_order' order.id %}" class="btn btn-primary">
+                    <i class="fas fa-credit-card me-2"></i>Complete Payment
+                  </a>
+                {% elif order.status == 'shipped' %}
+                  <a href="{% url 'orders:track_order' order.id %}" class="btn btn-success">
+                    <i class="fas fa-shipping-fast me-2"></i>Track Package
+                  </a>
+                {% elif order.status == 'delivered' %}
+                  <button class="btn btn-outline-secondary" onclick="reorderItems({{ order.id }})">
+                    <i class="fas fa-redo me-2"></i>Reorder
+                  </button>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+
+    <!-- PAGINATION -->
+    {% if page_obj.has_other_pages %}
+      <nav aria-label="Order pagination" class="mt-4">
+        <ul class="pagination justify-content-center flex-wrap">
+          {% if page_obj.has_previous %}
+            <li class="page-item">
+              <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}">
+                <i class="fas fa-chevron-left me-1"></i>Prev
+              </a>
+            </li>
+          {% endif %}
+
+          {% for num in page_obj.paginator.page_range %}
+            {% if page_obj.number == num %}
+              <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+              <li class="page-item">
+                <a class="page-link" href="?page={{ num }}{% if search_query %}&search={{ search_query }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}">
+                  {{ num }}
+                </a>
+              </li>
+            {% elif num == page_obj.number|add:'-3' or num == page_obj.number|add:'3' %}
+              <li class="page-item disabled"><span class="page-link">…</span></li>
+            {% endif %}
+          {% endfor %}
+
+          {% if page_obj.has_next %}
+            <li class="page-item">
+              <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}">
+                Next<i class="fas fa-chevron-right ms-1"></i>
+              </a>
+            </li>
+          {% endif %}
+        </ul>
+      </nav>
+    {% endif %}
+
+  {% else %}
+    <!-- EMPTY STATE -->
+    <div class="oh-empty text-center py-5 px-3">
+      <i class="fas fa-shopping-bag fa-4x text-muted mb-3"></i>
+      <h4 class="text-muted">No orders found</h4>
+      <p class="text-muted mb-4">
+        {% if search_query or current_status %}
+          Try adjusting your search filters or <a href="{% url 'orders:order_history' %}">view all orders</a>.
+        {% else %}
+          You haven't placed any orders yet.
+        {% endif %}
+      </p>
+      <a href="{% url 'marketplace:all_products' %}" class="btn btn-primary btn-lg">
+        <i class="fas fa-shopping-cart me-2"></i>Start Shopping
+      </a>
+    </div>
+  {% endif %}
 </div>
+
 <script src="{% static 'js/main.js' %}"></script>
 <script src="{% static 'js/order_history.js' %}"></script>
 
+<script>
+  // QoL: "/" focuses search like modern apps
+  document.addEventListener('keydown', function(e){
+    if (e.key === '/' && !e.target.matches('input, textarea, select')) {
+      e.preventDefault();
+      const s = document.getElementById('ohSearch');
+      if (s) s.focus();
+    }
+  });
+
+  // Clear button behavior
+  (function(){
+    const s = document.getElementById('ohSearch');
+    const c = document.getElementById('ohClearBtn');
+    if (!s || !c) return;
+
+    function sync(){
+      c.classList.toggle('show', !!s.value.trim());
+    }
+    sync();
+    s.addEventListener('input', sync);
+    c.addEventListener('click', function(){
+      s.value = '';
+      sync();
+      s.focus();
+    });
+  })();
+
+  // Status pill quick set
+  (function(){
+    const select = document.getElementById('ohStatusSelect');
+    const pills = document.querySelectorAll('.oh-status-pills [data-status]');
+    if (!select || !pills.length) return;
+    pills.forEach(btn => {
+      btn.addEventListener('click', () => {
+        select.value = btn.dataset.status;
+        document.getElementById('filterForm').submit();
+      });
+    });
+  })();
+</script>
 {% endblock %}

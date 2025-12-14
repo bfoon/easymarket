@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load humanize %}
 
 {% block title %}Order #{{ order.id }} - {{ store.name }}{% endblock %}
 
@@ -7,9 +8,222 @@
 <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
 <link rel="stylesheet" type="text/css" href="{% static 'css/store_order_detail.css' %}">
 
-<div class="container py-4">
+<style>
+  /* ===============================
+     ORDER COMMAND CENTER (OCC)
+     =============================== */
+  .occ-wrap { max-width: 1200px; }
+
+  .occ-breadcrumb .breadcrumb-item a { font-weight: 900; text-decoration: none; }
+  .occ-breadcrumb .breadcrumb-item.active { font-weight: 950; }
+
+  .occ-hero{
+    border-radius: 18px;
+    padding: 18px;
+    background: radial-gradient(circle at 15% 10%, rgba(255,255,255,.20), transparent 45%),
+                linear-gradient(135deg, rgba(26,95,158,.96), rgba(45,140,204,.92));
+    color: #fff;
+    box-shadow: 0 20px 55px rgba(2,8,23,.20);
+    position: relative;
+    overflow:hidden;
+  }
+  .occ-hero:after{
+    content:"";
+    position:absolute;
+    right:-100px; top:-140px;
+    width:340px; height:340px;
+    border-radius:50%;
+    background: rgba(255,255,255,.10);
+  }
+  .occ-hero *{ position: relative; z-index: 1; }
+
+  .occ-title{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .occ-title h1{
+    margin:0;
+    font-weight: 950;
+    letter-spacing: -0.03em;
+  }
+
+  .occ-pill{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding: 7px 12px;
+    border-radius: 999px;
+    background: rgba(255,255,255,.14);
+    border: 1px solid rgba(255,255,255,.22);
+    font-weight: 900;
+    font-size: .8rem;
+    white-space: nowrap;
+  }
+
+  .occ-status{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    background: rgba(255,255,255,.16);
+    border: 1px solid rgba(255,255,255,.25);
+    font-weight: 950;
+  }
+  .occ-dot{ width: 9px; height: 9px; border-radius: 999px; display:inline-block; }
+  .dot-pending{ background:#f59e0b; box-shadow: 0 0 0 4px rgba(245,158,11,.18); }
+  .dot-processing{ background:#0ea5e9; box-shadow: 0 0 0 4px rgba(14,165,233,.18); }
+  .dot-shipped{ background:#2563eb; box-shadow: 0 0 0 4px rgba(37,99,235,.18); }
+  .dot-delivered{ background:#22c55e; box-shadow: 0 0 0 4px rgba(34,197,94,.18); }
+  .dot-cancelled{ background:#ef4444; box-shadow: 0 0 0 4px rgba(239,68,68,.18); }
+  .dot-other{ background:#94a3b8; }
+
+  .occ-actions{
+    display:flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content:flex-end;
+  }
+  .occ-actions .btn{ border-radius: 14px; font-weight: 900; }
+
+  .occ-card{
+    border: 0;
+    border-radius: 18px;
+    background: #fff;
+    box-shadow: 0 18px 44px rgba(2,8,23,.10);
+    overflow:hidden;
+  }
+  .occ-card-h{
+    background:#fff;
+    border-bottom: 1px solid rgba(15,23,42,.08);
+    padding: 12px 16px;
+    display:flex;
+    align-items:center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .occ-card-h h5{
+    margin:0;
+    font-weight: 950;
+    letter-spacing:-0.02em;
+  }
+  .occ-card-b{ padding: 16px; }
+
+  .occ-mini{ color:#64748b; font-weight: 800; font-size: .85rem; }
+
+  .occ-grid{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  @media (max-width: 768px){
+    .occ-grid{ grid-template-columns: 1fr; }
+  }
+
+  .occ-info{
+    border: 1px solid rgba(15,23,42,.08);
+    border-radius: 16px;
+    padding: 12px;
+    display:flex;
+    gap: 12px;
+    align-items:flex-start;
+    background: linear-gradient(135deg, rgba(2,132,199,.06), rgba(34,197,94,.04));
+  }
+  .occ-ico{
+    width: 42px; height: 42px;
+    border-radius: 14px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background: rgba(2,132,199,.10);
+    color:#0284c7;
+    flex-shrink: 0;
+  }
+  .occ-info strong{ font-weight: 950; display:block; }
+  .occ-info .occ-mini{ margin-top: 2px; }
+
+  /* Items list */
+  .occ-item{
+    display:flex;
+    gap: 12px;
+    padding: 14px 0;
+    border-bottom: 1px dashed rgba(15,23,42,.12);
+  }
+  .occ-item:last-child{ border-bottom: 0; }
+  .occ-thumb{
+    width: 64px; height: 64px;
+    border-radius: 14px;
+    object-fit: cover;
+    border: 1px solid rgba(15,23,42,.10);
+    background:#f8fafc;
+  }
+  .occ-item-name{ font-weight: 950; }
+  .occ-badges{ display:flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .occ-badge{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-weight: 950;
+    font-size: .78rem;
+    border: 1px solid rgba(15,23,42,.10);
+    background: #fff;
+  }
+  .occ-price{
+    min-width: 120px;
+    text-align:right;
+    font-weight: 950;
+  }
+  .occ-mutedline{ font-size: .85rem; color:#64748b; font-weight: 800; }
+
+  /* Chat box */
+  .floating-chat-box{
+    position: fixed;
+    right: 18px;
+    bottom: 18px;
+    width: 360px;
+    max-width: calc(100vw - 36px);
+    border-radius: 18px;
+    overflow:hidden;
+    box-shadow: 0 20px 60px rgba(2,8,23,.25);
+    background:#fff;
+    z-index: 999;
+    border: 1px solid rgba(15,23,42,.10);
+  }
+  .chat-header{
+    background: linear-gradient(135deg, rgba(26,95,158,.96), rgba(45,140,204,.92));
+    color:#fff;
+    padding: 10px 12px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap: 10px;
+    font-weight: 950;
+  }
+  .close-chat{
+    border:0; background: rgba(255,255,255,.18);
+    color:#fff; width: 34px; height: 34px;
+    border-radius: 12px;
+    font-weight: 950;
+  }
+  .chat-messages{
+    height: 320px;
+    overflow:auto;
+    padding: 12px;
+    background: #f8fafc;
+  }
+  .chat-input{ border-radius: 14px; font-weight: 800; }
+</style>
+
+<div class="container py-4 occ-wrap">
+
   <!-- Breadcrumb -->
-  <nav aria-label="breadcrumb">
+  <nav aria-label="breadcrumb" class="occ-breadcrumb mb-3">
     <ol class="breadcrumb breadcrumb-modern">
       <li class="breadcrumb-item">
         <a href="{% url 'stores:store_dashboard' store.id %}">
@@ -23,118 +237,252 @@
     </ol>
   </nav>
 
-  <!-- Order Header -->
-  <div class="order-header">
-    <h1 class="order-title">Order #{{ order.id }}</h1>
-    <div class="order-status status-{{ order.status|lower }}">
-      <i class="fas fa-circle" style="font-size: 0.5rem;"></i>
-      {{ order.status|title }}
-    </div>
-  </div>
+  <!-- HERO -->
+  <div class="occ-hero mb-4">
+    <div class="occ-title">
+      <div>
+        <h1 class="h4">
+          <i class="fas fa-receipt me-2"></i>
+          Order #{{ order.id }}
+        </h1>
+        <div class="d-flex gap-2 flex-wrap mt-2">
+          <span class="occ-pill">
+            <i class="fas fa-calendar-day"></i>
+            {{ order.created_at|date:"M d, Y" }} • {{ order.created_at|date:"H:i" }}
+          </span>
 
-  <!-- Customer Information -->
-  <div class="modern-card mb-4">
-    <div class="card-header-modern">
-      <i class="fas fa-user me-2"></i>Customer Information
-    </div>
-    <div class="card-body-modern">
-      <div class="customer-info">
-        <div class="info-row">
-          <i class="fas fa-user info-icon"></i>
-          <span class="info-label">Name:</span>
-          <span class="info-value">{{ buyer.get_full_name }}</span>
+          <span class="occ-pill">
+            <i class="fas fa-user"></i>
+            {{ buyer.get_full_name|default:"Buyer" }}
+          </span>
+
+          <span class="occ-pill">
+            <i class="fas fa-coins"></i>
+            Total: <strong class="ms-1">D{{ store_subtotal|floatformat:2 }}</strong>
+          </span>
         </div>
-        <div class="info-row">
-          <i class="fas fa-envelope info-icon"></i>
-          <span class="info-label">Email:</span>
-          <span class="info-value">{{ buyer.email }}</span>
+      </div>
+
+      <div class="d-flex flex-column align-items-end gap-2">
+        <span class="occ-status">
+          {% if order.status == 'pending' %}
+            <span class="occ-dot dot-pending"></span> Pending
+          {% elif order.status == 'processing' %}
+            <span class="occ-dot dot-processing"></span> Processing
+          {% elif order.status == 'shipped' %}
+            <span class="occ-dot dot-shipped"></span> Shipped
+          {% elif order.status == 'delivered' %}
+            <span class="occ-dot dot-delivered"></span> Delivered
+          {% elif order.status == 'cancelled' %}
+            <span class="occ-dot dot-cancelled"></span> Cancelled
+          {% else %}
+            <span class="occ-dot dot-other"></span> {{ order.status|title }}
+          {% endif %}
+        </span>
+
+        <div class="occ-actions">
+          <a href="{% url 'orders:store_order_invoice' store.id order.id %}" class="btn btn-light">
+            <i class="fas fa-file-invoice me-1"></i>Invoice
+          </a>
+          <button type="button" class="btn btn-outline-light" onclick="toggleChatBox()">
+            <i class="fas fa-comment-dots me-1"></i>Chat
+          </button>
+          <button type="button" class="btn btn-outline-light" data-bs-toggle="modal" data-bs-target="#statusModal">
+            <i class="fas fa-pen me-1"></i>Status
+          </button>
         </div>
-        {% if buyer.phone %}
-        <div class="info-row">
-          <i class="fas fa-phone info-icon"></i>
-          <span class="info-label">Phone:</span>
-          <span class="info-value">{{ buyer.phone }}</span>
-        </div>
-        {% endif %}
       </div>
     </div>
   </div>
 
-  <!-- Order Items -->
-  <div class="modern-card mb-4">
-    <div class="card-header-modern">
-      <i class="fas fa-box me-2"></i>Order Items
-    </div>
-    <div class="card-body-modern">
-      {% for item in order_items %}
-      <div class="order-item d-flex align-items-center border-bottom py-3">
+  <!-- TOP GRID: Customer + Timeline + Shipping -->
+  <div class="row g-3 mb-4">
+    <div class="col-lg-6">
+      <div class="occ-card">
+        <div class="occ-card-h">
+          <h5><i class="fas fa-user me-2 text-primary"></i>Customer</h5>
+          <span class="occ-mini">Buyer profile</span>
+        </div>
+        <div class="occ-card-b">
+          <div class="occ-grid">
+            <div class="occ-info">
+              <div class="occ-ico"><i class="fas fa-user"></i></div>
+              <div>
+                <strong>{{ buyer.get_full_name|default:"N/A" }}</strong>
+                <div class="occ-mini">Full name</div>
+              </div>
+            </div>
+            <div class="occ-info">
+              <div class="occ-ico"><i class="fas fa-envelope"></i></div>
+              <div>
+                <strong>{{ buyer.email|default:"N/A" }}</strong>
+                <div class="occ-mini">Email</div>
+              </div>
+            </div>
+            {% if buyer.phone %}
+            <div class="occ-info">
+              <div class="occ-ico"><i class="fas fa-phone"></i></div>
+              <div>
+                <strong>{{ buyer.phone }}</strong>
+                <div class="occ-mini">Phone</div>
+              </div>
+            </div>
+            {% endif %}
+            <div class="occ-info">
+              <div class="occ-ico"><i class="fas fa-shield-heart"></i></div>
+              <div>
+                <strong>Trust Tip</strong>
+                <div class="occ-mini">Fast response increases completion rate.</div>
+              </div>
+            </div>
+          </div>
 
-        <!-- Product Image -->
-        <div class="me-3" style="flex-shrink: 0;">
-          <img src="{{ item.product.image.url }}" alt="{{ item.product.name }}" class="img-thumbnail" style="width: 60px; height: 60px; object-fit: cover;">
+          {% if order.tracking_number %}
+          <div class="mt-3 p-3 rounded-4 border" style="background:#f8fafc;">
+            <div class="fw-bold"><i class="fas fa-route me-1 text-primary"></i> Tracking Number</div>
+            <div class="occ-mini">{{ order.tracking_number }}</div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-6">
+      <div class="occ-card">
+        <div class="occ-card-h">
+          <h5><i class="fas fa-clock-rotate-left me-2 text-primary"></i>Timeline</h5>
+          <span class="occ-mini">Order activity</span>
+        </div>
+        <div class="occ-card-b">
+          <div class="d-flex align-items-start gap-2">
+            <div class="occ-ico"><i class="fas fa-cart-plus"></i></div>
+            <div>
+              <div class="fw-bold">Placed</div>
+              <div class="occ-mini">{{ order.created_at|date:"F d, Y \\a\\t g:i A" }}</div>
+            </div>
+          </div>
+
+          {% if order.updated_at != order.created_at %}
+          <div class="d-flex align-items-start gap-2 mt-3">
+            <div class="occ-ico" style="background: rgba(245,158,11,.12); color:#b45309;"><i class="fas fa-pen"></i></div>
+            <div>
+              <div class="fw-bold">Last Updated</div>
+              <div class="occ-mini">{{ order.updated_at|date:"F d, Y \\a\\t g:i A" }}</div>
+            </div>
+          </div>
+          {% endif %}
+
+          <div class="mt-3 p-3 rounded-4 border" style="background: linear-gradient(135deg, rgba(34,197,94,.08), rgba(2,132,199,.06));">
+            <div class="fw-bold"><i class="fas fa-lightbulb me-1 text-success"></i> Smart suggestion</div>
+            <div class="occ-mini">Set shipping cost early → fewer disputes, faster delivery confirmation.</div>
+          </div>
+
+          <!-- Shipping cost -->
+          <div class="mt-3">
+            <form method="post" action="{% url 'stores:set_shipping_cost' store.id order.id %}">
+              {% csrf_token %}
+              <label class="fw-bold mb-2"><i class="fas fa-truck-fast me-1 text-primary"></i> Shipping Cost (D)</label>
+              <div class="input-group" style="max-width: 340px;">
+                <span class="input-group-text">D</span>
+                <input type="number" step="0.01" min="0" name="shipping_cost"
+                       class="form-control"
+                       value="{{ order.shipping_cost|default_if_none:'' }}"
+                       {% if order.status == 'shipped' or order.status == 'delivered' %}readonly{% endif %}>
+                {% if order.status != 'shipped' and order.status != 'delivered' %}
+                  <button class="btn btn-outline-primary" type="submit">
+                    <i class="fas fa-save me-1"></i>Save
+                  </button>
+                {% endif %}
+              </div>
+              <div class="occ-mini mt-1">Shipping cost affects the buyer’s final payable and delivery coordination.</div>
+            </form>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ORDER ITEMS -->
+  <div class="occ-card mb-4">
+    <div class="occ-card-h">
+      <h5><i class="fas fa-box me-2 text-primary"></i>Items</h5>
+      <span class="occ-mini">{{ order_items|length }} item{{ order_items|length|pluralize }}</span>
+    </div>
+    <div class="occ-card-b">
+
+      {% for item in order_items %}
+      <div class="occ-item">
+        <!-- image safe -->
+        <div>
+          {% if item.product.image %}
+            <img src="{{ item.product.image.url }}" alt="{{ item.product.name }}" class="occ-thumb">
+          {% else %}
+            <div class="occ-thumb d-flex align-items-center justify-content-center">
+              <i class="fas fa-image text-muted"></i>
+            </div>
+          {% endif %}
         </div>
 
-        <!-- Details -->
+        <!-- details -->
         <div class="flex-grow-1">
-          <div class="item-name fw-semibold">{{ item.product.name }}</div>
+          <div class="occ-item-name">{{ item.product.name }}</div>
+          <div class="occ-mutedline">Unit base:
+            {% with base_unit=item.base_unit_price|default_if_none:item.price_at_time|default_if_none:item.product.price %}
+              <strong>D{{ base_unit|floatformat:2 }}</strong>
+            {% endwith %}
+          </div>
 
           <!-- Quantity -->
-          <form class="update-quantity-form d-flex align-items-center mt-1" data-item-id="{{ item.id }}">
+          <form class="update-quantity-form d-flex align-items-center flex-wrap gap-2 mt-2" data-item-id="{{ item.id }}">
             {% csrf_token %}
-            <label class="me-2 mb-0">Qty:</label>
-            <input
-              type="number" name="quantity" min="1" value="{{ item.quantity }}"
-              class="form-control form-control-sm me-2" style="width: 70px;"
-              {% if order.status == 'shipped' or order.status == 'delivered' %}readonly disabled{% endif %}>
-            <button
-              type="submit"
-              class="btn btn-sm btn-outline-primary"
-              {% if order.status == 'shipped' or order.status == 'delivered' %}disabled{% endif %}>
-              Update
+            <span class="fw-bold">Qty</span>
+            <input type="number" name="quantity" min="1" value="{{ item.quantity }}"
+                   class="form-control form-control-sm" style="width: 90px;"
+                   {% if order.status == 'shipped' or order.status == 'delivered' %}readonly disabled{% endif %}>
+            <button type="submit" class="btn btn-sm btn-outline-primary"
+                    {% if order.status == 'shipped' or order.status == 'delivered' %}disabled{% endif %}>
+              <i class="fas fa-rotate me-1"></i>Update
             </button>
           </form>
 
           <!-- Discount -->
-          <form
-            class="update-discount-form d-flex align-items-center flex-wrap gap-2 mt-2"
-            data-url="{% url 'orders:update_item_discount' item.id %}">
+          <form class="update-discount-form d-flex align-items-center flex-wrap gap-2 mt-2"
+                data-url="{% url 'orders:update_item_discount' item.id %}">
             {% csrf_token %}
-            <label class="mb-0 me-1">Discount:</label>
-            <select
-              name="discount_type" class="form-select form-select-sm" style="width: 120px;"
-              {% if order.status == 'shipped' or order.status == 'delivered' %}disabled{% endif %}>
+            <span class="fw-bold">Discount</span>
+
+            <select name="discount_type" class="form-select form-select-sm" style="width: 140px;"
+                    {% if order.status == 'shipped' or order.status == 'delivered' %}disabled{% endif %}>
               <option value="none" {% if item.discount_type == 'none' %}selected{% endif %}>None</option>
               <option value="percent" {% if item.discount_type == 'percent' %}selected{% endif %}>Percent (%)</option>
-              <option value="amount" {% if item.discount_type == 'amount' %}selected{% endif %}>Amount</option>
+              <option value="amount" {% if item.discount_type == 'amount' %}selected{% endif %}>Amount (D)</option>
             </select>
 
-            <input
-              type="number" step="0.01" min="0" name="discount_value"
-              value="{{ item.discount_value|default_if_none:'0' }}"
-              class="form-control form-control-sm" style="width: 120px;"
-              {% if order.status == 'shipped' or order.status == 'delivered' %}readonly disabled{% endif %}>
+            <input type="number" step="0.01" min="0" name="discount_value"
+                   value="{{ item.discount_value|default_if_none:'0' }}"
+                   class="form-control form-control-sm" style="width: 140px;"
+                   {% if order.status == 'shipped' or order.status == 'delivered' %}readonly disabled{% endif %}>
 
-            <button
-              type="submit"
-              class="btn btn-sm btn-outline-secondary"
-              {% if order.status == 'shipped' or order.status == 'delivered' %}disabled{% endif %}>
-              Apply
+            <button type="submit" class="btn btn-sm btn-outline-secondary"
+                    {% if order.status == 'shipped' or order.status == 'delivered' %}disabled{% endif %}>
+              <i class="fas fa-tag me-1"></i>Apply
             </button>
           </form>
 
-          <!-- Visual price: original vs discounted per-unit -->
+          <!-- Visual price -->
           {% with base_unit=item.base_unit_price|default_if_none:item.price_at_time|default_if_none:item.product.price per_unit_discount=item.get_unit_discount_amount|default_if_none:0 %}
-          <div class="small mt-2">
+          <div class="occ-badges">
             {% if item.discount_type != 'none' and item.discount_value|default_if_none:0 > 0 %}
-              <span class="text-muted text-decoration-line-through">D{{ base_unit|floatformat:2 }}</span>
-              <span class="ms-2 fw-semibold">
-                D{% if item.discounted_unit_price %}
-                    {{ item.discounted_unit_price|floatformat:2 }}
-                  {% else %}
-                    {{ base_unit|floatformat:2 }}
-                  {% endif %} per unit
+              <span class="occ-badge">
+                <i class="fas fa-receipt text-muted"></i>
+                <span class="text-decoration-line-through text-muted">D{{ base_unit|floatformat:2 }}</span>
+                <span class="ms-1">→</span>
+                <span class="ms-1 fw-bold">D{{ item.discounted_unit_price|default:base_unit|floatformat:2 }}</span>
+                <span class="ms-1 text-muted">/unit</span>
               </span>
-              <span class="badge bg-danger ms-2">
+              <span class="occ-badge" style="border-color: rgba(239,68,68,.25); background: rgba(239,68,68,.06);">
+                <i class="fas fa-bolt text-danger"></i>
                 {% if item.discount_type == 'percent' %}
                   -{{ item.discount_value|floatformat:0 }}%
                 {% else %}
@@ -142,188 +490,141 @@
                 {% endif %}
               </span>
             {% else %}
-              <span>Unit: D{{ base_unit|floatformat:2 }}</span>
+              <span class="occ-badge">
+                <i class="fas fa-tag text-primary"></i> No discount applied
+              </span>
+            {% endif %}
+
+            {% if item.shipped_to_warehouse %}
+              <span class="occ-badge" style="border-color: rgba(34,197,94,.25); background: rgba(34,197,94,.06);">
+                <i class="fas fa-warehouse text-success"></i> Shipped to Warehouse
+              </span>
             {% endif %}
           </div>
           {% endwith %}
-
-          {% if item.shipped_to_warehouse %}
-          <div class="badge bg-success text-white mt-2">Shipped to Warehouse</div>
-          {% endif %}
         </div>
 
-        <!-- Line total (discounted) -->
-        <div class="item-price text-end fw-bold" style="min-width: 80px;">
+        <!-- line total -->
+        <div class="occ-price">
           D{{ item.get_total_price|floatformat:2 }}
+          <div class="occ-mini">line total</div>
         </div>
-
       </div>
       {% endfor %}
 
-      <!-- Shipping Cost Input (Shown only once) -->
-      <div class="modern-card my-4">
-        <div class="card-header-modern">
-          <i class="fas fa-shipping-fast me-2"></i>Shipping Cost
+      <!-- Total -->
+      <div class="d-flex justify-content-between align-items-center pt-3 mt-3"
+           style="border-top: 1px solid rgba(15,23,42,.10);">
+        <div>
+          <div class="fw-bold">Store Subtotal</div>
+          <div class="occ-mini">Includes item discounts & quantities</div>
         </div>
-        <div class="card-body-modern">
-          <form method="post" action="{% url 'stores:set_shipping_cost' store.id order.id %}">
-            {% csrf_token %}
-            <div class="mb-3" style="max-width: 300px;">
-              <label for="shipping_cost" class="form-label">Enter Shipping Cost (D)</label>
-              <input
-                type="number" step="0.01" min="0" name="shipping_cost" id="shipping_cost"
-                class="form-control"
-                value="{{ order.shipping_cost|default_if_none:'' }}"
-                {% if order.status == 'shipped' or order.status == 'delivered' %}readonly{% endif %}>
-            </div>
-            {% if order.status != 'shipped' and order.status != 'delivered' %}
-            <button type="submit" class="btn btn-outline-primary btn-sm">
-              <i class="fas fa-save me-1"></i> Save Shipping Cost
-            </button>
-            {% endif %}
-          </form>
-        </div>
-      </div>
-
-      <!-- Order Total -->
-      <div class="order-item" style="border-top: 2px solid #e5e7eb; margin-top: 1rem; padding-top: 1rem;">
-        <div class="item-details">
-          <div class="item-name" style="font-size: 1.1rem;">Total Amount</div>
-        </div>
-        <div class="item-price" style="font-size: 1.25rem; color: #059669;">
+        <div class="fw-bold" style="font-size: 1.25rem; color:#059669;">
           D{{ store_subtotal|floatformat:2 }}
         </div>
       </div>
 
-      <!-- Tax Information -->
-      <div class="alert alert-info mt-3" style="font-size: 0.9rem;">
+      <!-- Note -->
+      <div class="alert alert-info mt-3" style="font-size:.9rem;">
         <i class="fas fa-info-circle me-1"></i>
-        <strong>Note:</strong> A VAT rate of <strong>15%</strong> may apply if you're eligible. Ensure your tax settings are correctly configured.
-      </div>
-
-      <!-- Order Actions -->
-      <div class="modern-card mb-4">
-        <div class="card-header-modern">
-          <i class="fas fa-cogs me-2"></i>Order Management
-        </div>
-        <div class="card-body-modern">
-          <div class="d-flex flex-wrap gap-3 mb-3">
-            <a href="{% url 'orders:store_order_invoice' store.id order.id %}" class="action-btn btn-primary-modern">
-              <i class="fas fa-file-invoice"></i>
-              View Invoice
-            </a>
-            <button type="button" class="action-btn btn-secondary-modern" onclick="toggleChatBox()">
-              <i class="fas fa-comment-dots"></i> Chat with Buyer
-            </button>
-            <a href="#" class="action-btn btn-secondary-modern" data-bs-toggle="modal" data-bs-target="#statusModal">
-              <i class="fas fa-edit"></i>
-              Update Status
-            </a>
-            {% if order.status == 'cancelled' %}
-            <div class="alert alert-warning mt-2">
-              <i class="fas fa-info-circle me-1"></i>
-              This order is <strong>cancelled</strong>. You can still mark items as shipped to the warehouse for stock reconciliation.
-            </div>
-            {% endif %}
-          </div>
-
-          {% if order.tracking_number %}
-          <div class="tracking-info">
-            <div class="tracking-label">
-              <i class="fas fa-shipping-fast me-1"></i>
-              Tracking Information
-            </div>
-            <div class="tracking-number">{{ order.tracking_number }}</div>
-          </div>
-          {% endif %}
-        </div>
-      </div>
-
-      <!-- Order Timeline -->
-      <div class="modern-card">
-        <div class="card-header-modern">
-          <i class="fas fa-history me-2"></i>Order Timeline
-        </div>
-        <div class="card-body-modern">
-          <div class="d-flex align-items-center text-muted">
-            <i class="fas fa-clock me-2"></i>
-            <span>Order placed on {{ order.created_at|date:"F d, Y \\a\\t g:i A" }}</span>
-          </div>
-          {% if order.updated_at != order.created_at %}
-          <div class="d-flex align-items-center text-muted mt-2">
-            <i class="fas fa-edit me-2"></i>
-            <span>Last updated on {{ order.updated_at|date:"F d, Y \\a\\t g:i A" }}</span>
-          </div>
-          {% endif %}
-        </div>
+        <strong>Tax note:</strong> VAT rate of <strong>15%</strong> may apply (based on eligibility/config).
       </div>
     </div>
   </div>
+
+  <!-- MANAGEMENT -->
+  <div class="occ-card mb-4">
+    <div class="occ-card-h">
+      <h5><i class="fas fa-gears me-2 text-primary"></i>Management</h5>
+      <span class="occ-mini">Actions that move the order forward</span>
+    </div>
+    <div class="occ-card-b">
+      <div class="d-flex flex-wrap gap-2">
+        <a href="{% url 'orders:store_order_invoice' store.id order.id %}" class="btn btn-primary" style="border-radius: 14px; font-weight: 900;">
+          <i class="fas fa-file-invoice me-1"></i>View Invoice
+        </a>
+        <button type="button" class="btn btn-outline-secondary" style="border-radius: 14px; font-weight: 900;" onclick="toggleChatBox()">
+          <i class="fas fa-comment-dots me-1"></i>Chat with Buyer
+        </button>
+        <button type="button" class="btn btn-outline-primary" style="border-radius: 14px; font-weight: 900;" data-bs-toggle="modal" data-bs-target="#statusModal">
+          <i class="fas fa-pen me-1"></i>Update Status
+        </button>
+      </div>
+
+      {% if order.status == 'cancelled' %}
+      <div class="alert alert-warning mt-3 mb-0">
+        <i class="fas fa-triangle-exclamation me-1"></i>
+        This order is <strong>cancelled</strong>. You can still mark items as shipped to warehouse for reconciliation.
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
 </div>
 
 <!-- Floating Chat Box -->
-<div id="floatingChatBox" class="floating-chat-box d-none">
+<div id="floatingChatBox" class="floating-chat-box d-none" aria-live="polite">
   <div class="chat-header">
     <span><i class="fas fa-comment me-1"></i>Chat with {{ buyer.get_full_name }}</span>
-    <button onclick="toggleChatBox()" class="close-chat">&times;</button>
+    <button onclick="toggleChatBox()" class="close-chat" type="button" aria-label="Close chat">&times;</button>
   </div>
+
   <div id="chatMessages" class="chat-messages"
-     data-fetch-url="{% url 'stores:fetch_chat_messages' order.id %}">
-  {% if chat_messages %}
-    {% for msg in chat_messages %}
-      <div class="mb-2 {% if msg.sender == request.user %}text-end text-primary{% else %}text-start text-dark{% endif %}">
-        <div class="p-2 rounded {% if msg.sender == request.user %}bg-light{% else %}bg-white border{% endif %}">
-          {% if msg.content %}
-            <small>{{ msg.content }}</small><br>
-          {% endif %}
-          {% if msg.image %}
-            <a href="{{ msg.image.url }}" target="_blank" rel="noopener">
-              <img src="{{ msg.image.url }}" alt="attachment" class="img-fluid rounded mt-1" style="max-height:240px;">
-            </a><br>
-          {% endif %}
-          <small class="text-muted">{{ msg.created_at|date:"M d, H:i" }}</small>
+       data-fetch-url="{% url 'stores:fetch_chat_messages' order.id %}">
+    {% if chat_messages %}
+      {% for msg in chat_messages %}
+        <div class="mb-2 {% if msg.sender == request.user %}text-end text-primary{% else %}text-start text-dark{% endif %}">
+          <div class="p-2 rounded {% if msg.sender == request.user %}bg-light{% else %}bg-white border{% endif %}">
+            {% if msg.content %}<small>{{ msg.content }}</small><br>{% endif %}
+            {% if msg.image %}
+              <a href="{{ msg.image.url }}" target="_blank" rel="noopener">
+                <img src="{{ msg.image.url }}" alt="attachment" class="img-fluid rounded mt-1" style="max-height:240px;">
+              </a><br>
+            {% endif %}
+            <small class="text-muted">{{ msg.created_at|date:"M d, H:i" }}</small>
+          </div>
         </div>
-      </div>
-    {% endfor %}
-  {% else %}
-    <div class="text-muted small text-center">No messages yet.</div>
-  {% endif %}
-</div>
-
-<form id="chatForm" method="post" enctype="multipart/form-data"
-      data-send-url="{% url 'orders:send_chat_message' %}">
-  {% csrf_token %}
-  <input type="hidden" name="order_id" value="{{ order.id }}">
-
-  <!-- Attach photo -->
-  <div class="d-flex align-items-center gap-2 mb-1">
-    <label for="chatImage" class="btn btn-sm btn-outline-secondary mb-0">
-      <i class="fas fa-paperclip"></i> Attach photo
-    </label>
-    <input type="file" id="chatImage" name="image" accept="image/*" class="d-none">
+      {% endfor %}
+    {% else %}
+      <div class="text-muted small text-center">No messages yet.</div>
+    {% endif %}
   </div>
 
-  <!-- Optional: preview pill -->
-  <div id="imagePreview" class="d-none mb-2">
-    <div class="d-inline-flex align-items-center gap-2 border rounded-pill px-2 py-1 bg-white">
-      <img id="imagePreviewThumb" src="" alt="preview"
-           style="width:28px;height:28px;object-fit:cover;border-radius:6px;">
-      <small id="imagePreviewName" class="text-muted"></small>
-      <button type="button" class="btn btn-sm btn-link text-danger" id="removeImageBtn" title="Remove">
-        <i class="fas fa-times"></i>
-      </button>
+  <form id="chatForm" method="post" enctype="multipart/form-data"
+        data-send-url="{% url 'orders:send_chat_message' %}" class="p-2">
+    {% csrf_token %}
+    <input type="hidden" name="order_id" value="{{ order.id }}">
+
+    <div class="d-flex align-items-center gap-2 mb-2">
+      <label for="chatImage" class="btn btn-sm btn-outline-secondary mb-0" style="border-radius: 12px; font-weight: 900;">
+        <i class="fas fa-paperclip"></i> Attach
+      </label>
+      <input type="file" id="chatImage" name="image" accept="image/*" class="d-none">
+      <small class="text-muted">Optional</small>
     </div>
-  </div>
 
-  <textarea id="chatMessage" name="message" class="form-control chat-input" rows="2"
-            placeholder="Type a message… (optional if you attach a photo)"></textarea>
+    <div id="imagePreview" class="d-none mb-2">
+      <div class="d-inline-flex align-items-center gap-2 border rounded-pill px-2 py-1 bg-white">
+        <img id="imagePreviewThumb" src="" alt="preview"
+             style="width:28px;height:28px;object-fit:cover;border-radius:6px;">
+        <small id="imagePreviewName" class="text-muted"></small>
+        <button type="button" class="btn btn-sm btn-link text-danger" id="removeImageBtn" title="Remove">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    </div>
 
-  <button id="sendMessageBtn" type="submit" class="btn btn-sm btn-primary w-100 mt-1">
-    <i class="fas fa-paper-plane"></i> Send
-  </button>
-</form>
+    <textarea id="chatMessage" name="message" class="form-control chat-input" rows="2"
+              placeholder="Type a message… (Shift+Enter for new line)"></textarea>
+
+    <button id="sendMessageBtn" type="submit" class="btn btn-sm btn-primary w-100 mt-2"
+            style="border-radius: 14px; font-weight: 950;">
+      <i class="fas fa-paper-plane"></i> Send
+    </button>
+  </form>
 </div>
-<!-- Update Status Modal -->
+
+<!-- Status Modal -->
 <div class="modal fade" id="statusModal" tabindex="-1" aria-labelledby="statusModalLabel" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">
@@ -333,21 +634,23 @@
       </div>
       <div class="modal-body">
         Are you sure you want to mark this order as <strong>Shipped</strong>?
+        <div class="small text-muted mt-2">This will affect buyer tracking and fulfilment timeline.</div>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button type="button" class="btn btn-success" onclick="confirmStatusUpdate()">Yes, Mark as Shipped</button>
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-success" onclick="confirmStatusUpdate()">
+          Yes, Mark as Shipped
+        </button>
       </div>
     </div>
   </div>
 </div>
 
-<!-- JS: Apply Discount -->
+<!-- ===== JS: Discount (same logic) ===== -->
 <script>
 document.querySelectorAll('.update-discount-form').forEach(form => {
   form.addEventListener('submit', function (e) {
     e.preventDefault();
-
     const url = this.getAttribute('data-url');
     const csrfToken = this.querySelector('[name="csrfmiddlewaretoken"]').value;
     const discount_type = this.querySelector('[name="discount_type"]').value;
@@ -355,83 +658,67 @@ document.querySelectorAll('.update-discount-form').forEach(form => {
 
     fetch(url, {
       method: 'POST',
-      headers: {
-        'X-CSRFToken': csrfToken,
-        'X-Requested-With': 'XMLHttpRequest',
-      },
+      headers: { 'X-CSRFToken': csrfToken, 'X-Requested-With': 'XMLHttpRequest' },
       body: new URLSearchParams({ discount_type, discount_value })
     })
     .then(res => res.json())
-    .then(data => {
-      if (data.success) {
-        location.reload();
-      } else {
-        alert(data.message || 'Failed to apply discount.');
-      }
-    })
+    .then(data => data.success ? location.reload() : alert(data.message || 'Failed to apply discount.'))
     .catch(() => alert('Network error.'));
   });
 });
 </script>
 
-<!-- JS: Update Quantity -->
+<!-- ===== JS: Quantity (same endpoint) ===== -->
 <script>
 document.querySelectorAll('.update-quantity-form').forEach(form => {
   form.addEventListener('submit', function (e) {
     e.preventDefault();
-
     const itemId = this.getAttribute('data-item-id');
     const quantity = this.querySelector('input[name="quantity"]').value;
     const csrfToken = this.querySelector('[name="csrfmiddlewaretoken"]').value;
 
     fetch(`/stores/order/item/${itemId}/update-quantity/`, {
       method: 'POST',
-      headers: {
-        'X-CSRFToken': csrfToken,
-        'X-Requested-With': 'XMLHttpRequest'
-      },
+      headers: { 'X-CSRFToken': csrfToken, 'X-Requested-With': 'XMLHttpRequest' },
       body: new URLSearchParams({ quantity })
     })
     .then(res => res.json())
-    .then(data => {
-      if (data.success) {
-        alert('Quantity updated.');
-        location.reload();
-      } else {
-        alert(data.message || 'Failed to update.');
-      }
-    });
+    .then(data => data.success ? location.reload() : alert(data.message || 'Failed to update.'))
+    .catch(() => alert('Network error.'));
   });
 });
 </script>
 
-<!-- JS: Confirm Status Update -->
+<!-- ✅ FIXED: CSRF for status update -->
 <script>
+function getCSRFToken(){
+  const el = document.querySelector('#chatForm input[name="csrfmiddlewaretoken"]') ||
+             document.querySelector('input[name="csrfmiddlewaretoken"]');
+  return el ? el.value : '';
+}
+
 function confirmStatusUpdate() {
   fetch("{% url 'stores:update_order_status' order.id %}", {
     method: 'POST',
     headers: {
-      'X-CSRFToken': '{{ csrf_token }}',
+      'X-CSRFToken': getCSRFToken(),
+      'X-Requested-With': 'XMLHttpRequest',
       'Accept': 'application/json',
     },
   })
   .then(res => res.json())
-  .then(data => {
-    if (data.success) {
-      location.reload();
-    } else {
-      alert(data.message || 'Failed to update status.');
-    }
-  });
+  .then(data => data.success ? location.reload() : alert(data.message || 'Failed to update status.'))
+  .catch(() => alert('Network error.'));
 }
 </script>
+
+<!-- Chat toggle -->
 <script>
 function toggleChatBox() {
   const box = document.getElementById('floatingChatBox');
   if (!box) return;
   box.classList.toggle('d-none');
 
-  // If opened, fetch latest and scroll down
   if (!box.classList.contains('d-none')) {
     if (window.__refreshStoreChat) window.__refreshStoreChat();
     const msgs = document.getElementById('chatMessages');
@@ -439,6 +726,8 @@ function toggleChatBox() {
   }
 }
 </script>
+
+<!-- Chat engine (your improved one kept) -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   const chatForm = document.getElementById('chatForm');
@@ -456,7 +745,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const sendUrl = chatForm.dataset.sendUrl;
   const fetchUrl = chatMessages.dataset.fetchUrl;
 
-  function scrollToBottom() { chatMessages.scrollTop = chatMessages.scrollHeight; }
+  function scrollToBottom(){ chatMessages.scrollTop = chatMessages.scrollHeight; }
   function escapeHtml(s){return (s||'').replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;");}
 
   function buildBubble({ is_self, content, image_url, timestamp }) {
@@ -475,7 +764,6 @@ document.addEventListener('DOMContentLoaded', function() {
     return wrapper;
   }
 
-  // Preview
   if (imageInput) {
     imageInput.addEventListener('change', () => {
       const f = imageInput.files && imageInput.files[0];
@@ -496,26 +784,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  function initialRender(messages) {
-    chatMessages.innerHTML = '';
-    messages.forEach(m => chatMessages.appendChild(buildBubble({
-      is_self: !!m.is_self, content: m.content, image_url: m.image_url, timestamp: m.timestamp
-    })));
-    scrollToBottom();
-  }
-
-  function appendNew(messages, seen) {
-    messages.forEach(m => {
-      if (!seen.has(m.id)) {
-        chatMessages.appendChild(buildBubble({
-          is_self: !!m.is_self, content: m.content, image_url: m.image_url, timestamp: m.timestamp
-        }));
-        seen.add(m.id);
-      }
-    });
-    scrollToBottom();
-  }
-
   const seenIds = new Set();
 
   function refreshChatMessages() {
@@ -524,23 +792,35 @@ document.addEventListener('DOMContentLoaded', function() {
       .then(r => r.json())
       .then(data => {
         if (!data.success || !Array.isArray(data.messages)) return;
+
         if (seenIds.size === 0) {
-          data.messages.forEach(m => seenIds.add(m.id));
-          initialRender(data.messages);
+          chatMessages.innerHTML = '';
+          data.messages.forEach(m => {
+            seenIds.add(m.id);
+            chatMessages.appendChild(buildBubble({
+              is_self: !!m.is_self, content: m.content, image_url: m.image_url, timestamp: m.timestamp
+            }));
+          });
+          scrollToBottom();
         } else {
-          appendNew(data.messages, seenIds);
+          data.messages.forEach(m => {
+            if (!seenIds.has(m.id)) {
+              seenIds.add(m.id);
+              chatMessages.appendChild(buildBubble({
+                is_self: !!m.is_self, content: m.content, image_url: m.image_url, timestamp: m.timestamp
+              }));
+            }
+          });
+          scrollToBottom();
         }
       })
       .catch(() => {});
   }
 
-  window.__refreshStoreChat = refreshChatMessages; // used by toggleChatBox()
-
-  // Load + poll
+  window.__refreshStoreChat = refreshChatMessages;
   refreshChatMessages();
   setInterval(refreshChatMessages, 5000);
 
-  // Submit
   chatForm.addEventListener('submit', function(e) {
     e.preventDefault();
     const text = (chatMessage?.value || '').trim();
@@ -574,18 +854,19 @@ document.addEventListener('DOMContentLoaded', function() {
       if (imagePreview) imagePreview.classList.add('d-none');
       scrollToBottom();
     })
-    .catch(err => { console.error(err); alert('Failed to send message.'); })
+    .catch(() => alert('Failed to send message.'))
     .finally(() => {
       sendMessageBtn.disabled = false;
       sendMessageBtn.innerHTML = original;
     });
   });
 
-  // Enter to send
-  const ta = chatMessage;
-  if (ta) {
-    ta.addEventListener('keypress', function(e) {
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); chatForm.dispatchEvent(new Event('submit')); }
+  if (chatMessage) {
+    chatMessage.addEventListener('keypress', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        chatForm.dispatchEvent(new Event('submit'));
+      }
     });
   }
 });

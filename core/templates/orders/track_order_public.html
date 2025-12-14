@@ -3,228 +3,308 @@
 {% block content %}
 {% load static %}
 <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+
 <div class="container py-5">
-    <div class="row justify-content-center">
-        <div class="col-lg-8">
-            <!-- Header -->
-            <div class="text-center mb-5">
-                <h1 class="display-6 fw-bold text-primary mb-3">
-                    <i class="fas fa-search-location me-3"></i>Track Your Order
-                </h1>
-                <p class="lead text-muted">Enter your tracking number to get real-time updates on your order status</p>
-            </div>
+  <div class="row justify-content-center">
+    <div class="col-lg-8">
 
-            <!-- Tracking Form -->
-            <div class="card shadow-lg border-0 mb-4">
-                <div class="card-body p-4">
-                    <form method="post" id="trackingForm">
-                        {% csrf_token %}
-                        <div class="row align-items-end">
-                            <div class="col-md-8 mb-3">
-                                <label for="tracking_number" class="form-label fw-bold">
-                                    <i class="fas fa-barcode me-2"></i>Tracking Number
-                                </label>
-                                <input type="text" 
-                                       class="form-control form-control-lg" 
-                                       id="tracking_number" 
-                                       name="tracking_number" 
-                                       value="{{ tracking_number|default:'' }}"
-                                       placeholder="Enter your tracking number (e.g., EM12345678)"
-                                       style="border: 2px solid #e9ecef; padding: 12px 16px;"
-                                       required>
-                                <small class="text-muted">
-                                    <i class="fas fa-info-circle me-1"></i>
-                                    Tracking numbers are provided in your order confirmation email
-                                </small>
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <button type="submit" class="btn btn-primary btn-lg w-100" id="trackBtn">
-                                    <i class="fas fa-search me-2"></i>Track Order
-                                </button>
-                            </div>
-                        </div>
-                    </form>
-
-                    <!-- Error Message -->
-                    {% if error_message %}
-                        <div class="alert alert-danger mt-3">
-                            <i class="fas fa-exclamation-triangle me-2"></i>
-                            {{ error_message }}
-                        </div>
-                    {% endif %}
-                </div>
-            </div>
-
-            <!-- Tracking Results -->
-            {% if order %}
-                <div class="card shadow-lg border-0" id="trackingResults">
-                    <div class="card-header bg-primary text-white">
-                        <div class="row align-items-center">
-                            <div class="col-md-6">
-                                <h5 class="mb-0">
-                                    <i class="fas fa-box me-2"></i>
-                                    Order #{{ order.id }}
-                                </h5>
-                            </div>
-                            <div class="col-md-6 text-md-end">
-                                {% if order.status == 'shipped' %}
-                                    <span class="badge bg-info fs-6">
-                                        <i class="fas fa-truck me-1"></i>{{ order.get_status_display }}
-                                    </span>
-                                {% elif order.status == 'in_transit' %}
-                                    <span class="badge bg-warning text-dark fs-6">
-                                        <i class="fas fa-route me-1"></i>{{ order.get_status_display }}
-                                    </span>
-                                {% elif order.status == 'delivered' %}
-                                    <span class="badge bg-success fs-6">
-                                        <i class="fas fa-check-circle me-1"></i>{{ order.get_status_display }}
-                                    </span>
-                                {% else %}
-                                    <span class="badge bg-secondary fs-6">
-                                        <i class="fas fa-question-circle me-1"></i>{{ order.get_status_display }}
-                                    </span>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </div>
-                    <div class="card-body p-4">
-                        <!-- Order Summary -->
-                        <div class="row mb-4">
-                            <div class="col-md-6">
-                                <h6 class="fw-bold text-primary mb-3">Order Information</h6>
-                                <p class="mb-2"><strong>Order Date:</strong> {{ order.created_at|date:"F d, Y" }}</p>
-                                <p class="mb-2"><strong>Total Amount:</strong> D{{ order.get_total|floatformat:2 }}</p>
-                                <p class="mb-2"><strong>Items:</strong> {{ order.get_item_count }} item{{ order.get_item_count|pluralize }}</p>
-                                {% if order.expected_delivery_date %}
-                                    <p class="mb-2"><strong>Expected Delivery:</strong> {{ order.expected_delivery_date|date:"F d, Y" }}</p>
-                                {% endif %}
-                            </div>
-                            <div class="col-md-6">
-                                {% if order.shipping_address %}
-                                    <h6 class="fw-bold text-primary mb-3">Delivery Address</h6>
-                                    <address class="mb-0">
-                                        <strong>{{ order.shipping_address.full_name }}</strong><br>
-                                        {{ order.shipping_address.street }}<br>
-                                        {{ order.shipping_address.city }}, {{ order.shipping_address.state }} {{ order.shipping_address.zip_code }}
-                                        {% if order.shipping_address.phone_number %}
-                                            <br><i class="fas fa-phone me-1"></i>{{ order.shipping_address.phone_number }}
-                                        {% endif %}
-                                    </address>
-                                {% endif %}
-                            </div>
-                        </div>
-
-                        <!-- Tracking Timeline -->
-                        <div class="tracking-timeline">
-                            <h6 class="fw-bold text-primary mb-4">
-                                <i class="fas fa-route me-2"></i>Tracking Progress
-                            </h6>
-
-                            {% for update in tracking_updates %}
-                                <div class="timeline-item {% if update.completed %}completed{% endif %}">
-                                    <div class="timeline-marker bg-{{ update.color }}">
-                                        <i class="{{ update.icon }}"></i>
-                                    </div>
-                                    <div class="timeline-content">
-                                        <div class="d-flex justify-content-between align-items-start">
-                                            <div>
-                                                <h6 class="mb-1 {% if update.completed %}text-{{ update.color }}{% else %}text-muted{% endif %}">
-                                                    {{ update.title }}
-                                                </h6>
-                                                <p class="mb-1 text-muted">{{ update.description }}</p>
-                                            </div>
-                                            <div class="text-end">
-                                                {% if update.date %}
-                                                    <small class="text-muted">
-                                                        {{ update.date|date:"M d, Y" }}<br>
-                                                        {{ update.date }}
-                                                    </small>
-                                                {% endif %}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            {% endfor %}
-                        </div>
-
-                        <!-- Order Items -->
-                        <div class="mt-4">
-                            <h6 class="fw-bold text-primary mb-3">
-                                <i class="fas fa-box me-2"></i>Items in This Order
-                            </h6>
-                            <div class="table-responsive">
-                                <table class="table table-borderless">
-                                    <tbody>
-                                        {% for item in order.items.all %}
-                                            <tr>
-                                                <td style="width: 80px;">
-                                                    {% if item.product.image %}
-                                                        <img src="{{ item.product.image.url }}"
-                                                             alt="{{ item.product.name }}"
-                                                             class="rounded"
-                                                             style="width: 60px; height: 60px; object-fit: cover;">
-                                                    {% endif %}
-                                                </td>
-                                                <td>
-                                                    <h6 class="mb-1">{{ item.product.name }}</h6>
-                                                    <small class="text-muted">Quantity: {{ item.quantity }}</small>
-                                                </td>
-                                                <td class="text-end">
-                                                    <strong>D{{ item.get_total_price|floatformat:2 }}</strong>
-                                                </td>
-                                            </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-
-                        <!-- Action Buttons -->
-                        <div class="mt-4 text-center">
-                            <button onclick="window.print()" class="btn btn-outline-primary me-2">
-                                <i class="fas fa-print me-2"></i>Print Tracking Info
-                            </button>
-                            <button onclick="refreshTracking()" class="btn btn-outline-secondary me-2">
-                                <i class="fas fa-sync-alt me-2"></i>Refresh Status
-                            </button>
-                            {% if order.status == 'delivered' %}
-                                <a href="{% url 'orders:order_invoice' order.id %}" class="btn btn-outline-info">
-                                    <i class="fas fa-file-invoice me-2"></i>Download Invoice
-                                </a>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-            {% endif %}
-
-            <!-- Help Section -->
-            <div class="card border-0 bg-light mt-4">
-                <div class="card-body text-center">
-                    <h6 class="fw-bold mb-3">Need Help?</h6>
-                    <p class="text-muted mb-3">
-                        If you can't find your tracking number or need assistance with your order, we're here to help!
-                    </p>
-                    <div class="row justify-content-center">
-                        <div class="col-md-4 mb-2">
-                            <a href="#" class="btn btn-outline-primary w-100">
-                                <i class="fas fa-envelope me-2"></i>Contact Support
-                            </a>
-                        </div>
-                        <div class="col-md-4 mb-2">
-                            <a href="{% url 'orders:order_history' %}" class="btn btn-outline-secondary w-100">
-                                <i class="fas fa-list me-2"></i>View All Orders
-                            </a>
-                        </div>
-                        <div class="col-md-4 mb-2">
-                            <a href="#" class="btn btn-outline-info w-100">
-                                <i class="fas fa-question-circle me-2"></i>FAQ
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            </div>
+      <!-- Header -->
+      <div class="text-center mb-5">
+        <div class="d-inline-flex align-items-center justify-content-center rounded-circle mb-3"
+             style="width:72px;height:72px;background:rgba(13,110,253,.10);">
+          <i class="fas fa-location-arrow text-primary" style="font-size:28px;"></i>
         </div>
+
+        <h1 class="display-6 fw-bold mb-2" style="letter-spacing:-.02em;">
+          Track Your Order
+        </h1>
+        <p class="lead text-muted mb-0">
+          Paste your tracking number to see live updates — <span class="fw-semibold">no personal details shown.</span>
+        </p>
+
+        <div class="mt-3 d-flex justify-content-center gap-2 flex-wrap">
+          <span class="badge bg-light text-dark border">
+            <i class="fas fa-shield-alt me-1 text-primary"></i> Privacy-first tracking
+          </span>
+          <span class="badge bg-light text-dark border">
+            <i class="fas fa-bolt me-1 text-warning"></i> Fast updates
+          </span>
+          <span class="badge bg-light text-dark border">
+            <i class="fas fa-info-circle me-1 text-info"></i> No pricing displayed
+          </span>
+        </div>
+      </div>
+
+      <!-- Tracking Form -->
+      <div class="card shadow-lg border-0 mb-4" style="border-radius:18px; overflow:hidden;">
+        <div class="card-body p-4">
+
+          <form method="post" id="trackingForm" novalidate>
+            {% csrf_token %}
+
+            <div class="row align-items-end g-3">
+              <div class="col-md-8">
+                <label for="tracking_number" class="form-label fw-bold">
+                  <i class="fas fa-barcode me-2 text-primary"></i>Tracking Number
+                </label>
+
+                <div class="input-group input-group-lg">
+                  <span class="input-group-text bg-white" style="border-right:0;">
+                    <i class="fas fa-hashtag text-muted"></i>
+                  </span>
+                  <input type="text"
+                         class="form-control"
+                         id="tracking_number"
+                         name="tracking_number"
+                         value="{{ tracking_number|default:'' }}"
+                         placeholder="e.g., EM12345678"
+                         style="border-left:0;"
+                         autocomplete="off"
+                         required>
+                </div>
+
+                <small class="text-muted d-block mt-2">
+                  <i class="fas fa-info-circle me-1"></i>
+                  Found in your order confirmation email/SMS.
+                </small>
+
+                <small class="text-muted d-block mt-1">
+                  <i class="fas fa-user-shield me-1"></i>
+                  This page hides delivery address and payment info.
+                </small>
+              </div>
+
+              <div class="col-md-4">
+                <button type="submit" class="btn btn-primary btn-lg w-100" id="trackBtn">
+                  <i class="fas fa-search me-2"></i>Track
+                </button>
+              </div>
+            </div>
+          </form>
+
+          {% if error_message %}
+            <div class="alert alert-danger mt-3 mb-0">
+              <i class="fas fa-exclamation-triangle me-2"></i>{{ error_message }}
+            </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Tracking Results -->
+      {% if order %}
+      <div class="card shadow-lg border-0" id="trackingResults" style="border-radius:18px; overflow:hidden;">
+        <div class="card-header text-white" style="background:linear-gradient(135deg,#0d6efd,#111827);">
+          <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+              <h5 class="mb-0">
+                <i class="fas fa-box me-2"></i>Order #{{ order.id }}
+              </h5>
+              <small style="opacity:.85;">
+                <i class="fas fa-lock me-1"></i>Public tracking view
+              </small>
+            </div>
+
+            <div class="text-end">
+              {% if order.status == 'shipped' %}
+                <span class="badge bg-info fs-6">
+                  <i class="fas fa-truck me-1"></i>{{ order.get_status_display }}
+                </span>
+              {% elif order.status == 'in_transit' %}
+                <span class="badge bg-warning text-dark fs-6">
+                  <i class="fas fa-route me-1"></i>{{ order.get_status_display }}
+                </span>
+              {% elif order.status == 'delivered' %}
+                <span class="badge bg-success fs-6">
+                  <i class="fas fa-check-circle me-1"></i>{{ order.get_status_display }}
+                </span>
+              {% elif order.status == 'processing' %}
+                <span class="badge bg-primary fs-6">
+                  <i class="fas fa-cog me-1"></i>{{ order.get_status_display }}
+                </span>
+              {% elif order.status == 'cancelled' %}
+                <span class="badge bg-danger fs-6">
+                  <i class="fas fa-times-circle me-1"></i>{{ order.get_status_display }}
+                </span>
+              {% else %}
+                <span class="badge bg-secondary fs-6">
+                  <i class="fas fa-question-circle me-1"></i>{{ order.get_status_display }}
+                </span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <div class="card-body p-4">
+
+          <!-- Order Summary (PII-SAFE: no prices, no address) -->
+          <div class="row g-3 mb-4">
+            <div class="col-md-6">
+              <div class="p-3 rounded-3 border bg-light">
+                <h6 class="fw-bold text-primary mb-2">
+                  <i class="fas fa-receipt me-2"></i>Order Info
+                </h6>
+                <div class="d-flex justify-content-between">
+                  <span class="text-muted">Order Date</span>
+                  <span class="fw-semibold">{{ order.created_at|date:"F d, Y" }}</span>
+                </div>
+                <div class="d-flex justify-content-between mt-2">
+                  <span class="text-muted">Items</span>
+                  <span class="fw-semibold">{{ order.get_item_count }} item{{ order.get_item_count|pluralize }}</span>
+                </div>
+                {% if order.expected_delivery_date %}
+                <div class="d-flex justify-content-between mt-2">
+                  <span class="text-muted">Expected Delivery</span>
+                  <span class="fw-semibold">{{ order.expected_delivery_date|date:"F d, Y" }}</span>
+                </div>
+                {% endif %}
+              </div>
+            </div>
+
+            <div class="col-md-6">
+              <div class="p-3 rounded-3 border bg-white">
+                <h6 class="fw-bold text-primary mb-2">
+                  <i class="fas fa-shield-alt me-2"></i>Privacy Notice
+                </h6>
+                <p class="text-muted mb-0">
+                  For security reasons, this tracking page does <strong>not</strong> display delivery address,
+                  customer identity, phone, payment method, or order cost.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tracking Timeline -->
+          <div class="tracking-timeline">
+            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+              <h6 class="fw-bold text-primary mb-0">
+                <i class="fas fa-route me-2"></i>Tracking Progress
+              </h6>
+              <span class="badge bg-light text-dark border">
+                <i class="fas fa-sync-alt me-1 text-muted"></i>Auto-updates supported
+              </span>
+            </div>
+
+            {% for update in tracking_updates %}
+              <div class="timeline-item {% if update.completed %}completed{% endif %}">
+                <div class="timeline-marker bg-{{ update.color }}">
+                  <i class="{{ update.icon }}"></i>
+                </div>
+
+                <div class="timeline-content">
+                  <div class="d-flex justify-content-between align-items-start gap-2">
+                    <div>
+                      <h6 class="mb-1 {% if update.completed %}text-{{ update.color }}{% else %}text-muted{% endif %}">
+                        {{ update.title }}
+                      </h6>
+                      <p class="mb-0 text-muted">{{ update.description }}</p>
+                    </div>
+
+                    {% if update.date %}
+  <div class="text-end">
+    <small class="text-muted d-block">{{ update.date|date:"M d, Y" }}</small>
+
+    {# show time only if update.date is a datetime #}
+    {% if update.date.hour is not None %}
+      <small class="text-muted d-block">{{ update.date|date:"g:i A" }}</small>
+    {% endif %}
+  </div>
+{% endif %}
+
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+
+          <!-- Order Items (PII-SAFE: no prices/totals) -->
+          <div class="mt-4">
+            <h6 class="fw-bold text-primary mb-3">
+              <i class="fas fa-box-open me-2"></i>Items in This Order
+              <small class="text-muted fw-normal">(names + quantities only)</small>
+            </h6>
+
+            <div class="table-responsive">
+              <table class="table align-middle">
+                <tbody>
+                  {% for item in order.items.all %}
+                    <tr>
+                      <td style="width:80px;">
+                        {% if item.product.image %}
+                          <img src="{{ item.product.image.url }}"
+                               alt="{{ item.product.name }}"
+                               class="rounded"
+                               style="width:60px;height:60px;object-fit:cover;">
+                        {% else %}
+                          <div class="rounded bg-light d-flex align-items-center justify-content-center"
+                               style="width:60px;height:60px;">
+                            <i class="fas fa-image text-muted"></i>
+                          </div>
+                        {% endif %}
+                      </td>
+                      <td>
+                        <div class="fw-semibold">{{ item.product.name }}</div>
+                        <small class="text-muted">Quantity: {{ item.quantity }}</small>
+                      </td>
+                      <td class="text-end">
+                        <span class="badge bg-light text-dark border">
+                          x{{ item.quantity }}
+                        </span>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div class="mt-4 text-center d-print-none">
+            <button onclick="window.print()" class="btn btn-outline-primary me-2">
+              <i class="fas fa-print me-2"></i>Print
+            </button>
+            <button onclick="refreshTracking()" class="btn btn-outline-secondary me-2">
+              <i class="fas fa-sync-alt me-2"></i>Refresh
+            </button>
+            <a href="{% url 'orders:order_history' %}" class="btn btn-outline-dark">
+              <i class="fas fa-list me-2"></i>My Orders
+            </a>
+          </div>
+
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Help Section -->
+      <div class="card border-0 bg-light mt-4" style="border-radius:18px;">
+        <div class="card-body text-center p-4">
+          <h6 class="fw-bold mb-2">Need help?</h6>
+          <p class="text-muted mb-3">
+            If you can’t find your tracking number, check your email/SMS confirmation.
+            Still stuck? Our team can help verify safely.
+          </p>
+
+          <div class="row justify-content-center g-2">
+            <div class="col-md-4">
+              <a href="#" class="btn btn-outline-primary w-100">
+                <i class="fas fa-envelope me-2"></i>Contact Support
+              </a>
+            </div>
+            <div class="col-md-4">
+              <a href="{% url 'orders:order_history' %}" class="btn btn-outline-secondary w-100">
+                <i class="fas fa-list me-2"></i>Order History
+              </a>
+            </div>
+            <div class="col-md-4">
+              <a href="#" class="btn btn-outline-info w-100">
+                <i class="fas fa-question-circle me-2"></i>FAQ
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
+  </div>
 </div>
 
 <!-- Styles -->
@@ -232,4 +312,19 @@
 
 <!-- JavaScript -->
 <script src="{% static 'js/track_order_public.js' %}"></script>
+
+<style>
+  /* small polish without fighting your css file */
+  .timeline-item{ display:flex; gap:12px; padding:14px 0; border-bottom:1px solid rgba(0,0,0,.06); }
+  .timeline-item:last-child{ border-bottom:none; }
+  .timeline-marker{
+    width:42px;height:42px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    color:#fff;flex-shrink:0;
+    box-shadow: 0 10px 20px rgba(0,0,0,.08);
+  }
+  .timeline-content{ flex:1; }
+  .tracking-timeline{ margin-top: 8px; }
+</style>
+
 {% endblock %}

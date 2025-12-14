@@ -1,242 +1,474 @@
 {% extends 'base.html' %}
+{% load static %}
+{% load humanize %}
 
 {% block content %}
-{% load static %}
 <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
-<div class="container py-5">
-    <div class="row">
-        <div class="col-12">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <h2>Order Statistics</h2>
-                <a href="{% url 'orders:order_history' %}" class="btn btn-outline-primary">
-                    <i class="fas fa-list me-2"></i>View All Orders
-                </a>
-            </div>
-
-            <!-- Summary Cards -->
-            <div class="row mb-4">
-                <div class="col-md-6 col-lg-3 mb-3">
-                    <div class="card bg-primary text-white h-100">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between">
-                                <div>
-                                    <h4 class="mb-0">{{ stats.total_orders }}</h4>
-                                    <p class="mb-0">Total Orders</p>
-                                </div>
-                                <div class="align-self-center">
-                                    <i class="fas fa-shopping-bag fa-2x"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="col-md-6 col-lg-3 mb-3">
-                    <div class="card bg-success text-white h-100">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between">
-                                <div>
-                                    <h4 class="mb-0">D{{ stats.total_spent|floatformat:2 }}</h4>
-                                    <p class="mb-0">Total Spent</p>
-                                </div>
-                                <div class="align-self-center">
-                                    <i class="fas fa-dollar-sign fa-2x"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="col-md-6 col-lg-3 mb-3">
-                    <div class="card bg-info text-white h-100">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between">
-                                <div>
-                                    <h4 class="mb-0">{{ stats.delivered_orders }}</h4>
-                                    <p class="mb-0">Delivered</p>
-                                </div>
-                                <div class="align-self-center">
-                                    <i class="fas fa-check-circle fa-2x"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="col-md-6 col-lg-3 mb-3">
-                    <div class="card bg-warning text-dark h-100">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between">
-                                <div>
-                                    <h4 class="mb-0">{{ stats.pending_orders }}</h4>
-                                    <p class="mb-0">Pending</p>
-                                </div>
-                                <div class="align-self-center">
-                                    <i class="fas fa-clock fa-2x"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Order Status Breakdown -->
-            <div class="row mb-4">
-                <div class="col-lg-6">
-                    <div class="card h-100">
-                        <div class="card-header">
-                            <h5 class="mb-0">Order Status Breakdown</h5>
-                        </div>
-                        <div class="card-body">
-                            <div class="list-group list-group-flush">
-                                <div class="list-group-item d-flex justify-content-between align-items-center px-0">
-                                    <span>
-                                        <span class="badge badge-pending me-2">●</span>
-                                        Pending Orders
-                                    </span>
-                                    <span class="badge bg-secondary">{{ stats.pending_orders }}</span>
-                                </div>
-                                <div class="list-group-item d-flex justify-content-between align-items-center px-0">
-                                    <span>
-                                        <span class="badge badge-processing me-2">●</span>
-                                        Processing Orders
-                                    </span>
-                                    <span class="badge bg-secondary">{{ stats.processing_orders }}</span>
-                                </div>
-                                <div class="list-group-item d-flex justify-content-between align-items-center px-0">
-                                    <span>
-                                        <span class="badge badge-shipped me-2">●</span>
-                                        Shipped Orders
-                                    </span>
-                                    <span class="badge bg-secondary">{{ stats.shipped_orders }}</span>
-                                </div>
-                                <div class="list-group-item d-flex justify-content-between align-items-center px-0">
-                                    <span>
-                                        <span class="badge badge-delivered me-2">●</span>
-                                        Delivered Orders
-                                    </span>
-                                    <span class="badge bg-secondary">{{ stats.delivered_orders }}</span>
-                                </div>
-                                <div class="list-group-item d-flex justify-content-between align-items-center px-0">
-                                    <span>
-                                        <span class="badge badge-cancelled me-2">●</span>
-                                        Cancelled Orders
-                                    </span>
-                                    <span class="badge bg-secondary">{{ stats.cancelled_orders }}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Recent Orders -->
-                <div class="col-lg-6">
-                    <div class="card h-100">
-                        <div class="card-header">
-                            <h5 class="mb-0">Recent Orders</h5>
-                        </div>
-                        <div class="card-body">
-                            {% if stats.recent_orders %}
-                                <div class="list-group list-group-flush">
-                                    {% for order in stats.recent_orders %}
-                                        <div class="list-group-item px-0">
-                                            <div class="d-flex justify-content-between align-items-center">
-                                                <div>
-                                                    <h6 class="mb-1">
-                                                        <a href="{% url 'orders:order_detail' order.id %}" 
-                                                           class="text-decoration-none">
-                                                            Order #{{ order.id }}
-                                                        </a>
-                                                    </h6>
-                                                    <small class="text-muted">
-                                                        {{ order.created_at|date:"M d, Y" }}
-                                                    </small>
-                                                </div>
-                                                <div class="text-end">
-                                                    <span class="badge badge-{{ order.status|lower }} mb-1">
-                                                        {{ order.get_status_display }}
-                                                    </span>
-                                                    <br>
-                                                    <small class="text-muted">
-                                                        D{{ order.get_total|floatformat:2 }}
-                                                    </small>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    {% endfor %}
-                                </div>
-                                <div class="mt-3">
-                                    <a href="{% url 'orders:order_history' %}" class="btn btn-sm btn-outline-primary w-100">
-                                        View All Orders
-                                    </a>
-                                </div>
-                            {% else %}
-                                <div class="text-center py-3">
-                                    <i class="fas fa-shopping-bag fa-3x text-muted mb-3"></i>
-                                    <p class="text-muted">No recent orders found.</p>
-                                </div>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Quick Actions -->
-            <div class="row">
-                <div class="col-12">
-                    <div class="card">
-                        <div class="card-header">
-                            <h5 class="mb-0">Quick Actions</h5>
-                        </div>
-                        <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-3 mb-3">
-                                    <a href="{% url 'marketplace:all_products' %}" class="btn btn-primary w-100">
-                                        <i class="fas fa-shopping-cart me-2"></i>
-                                        Continue Shopping
-                                    </a>
-                                </div>
-                                <div class="col-md-3 mb-3">
-                                    <a href="{% url 'orders:order_history' %}?status=pending" class="btn btn-warning w-100">
-                                        <i class="fas fa-clock me-2"></i>
-                                        View Pending Orders
-                                    </a>
-                                </div>
-                                <div class="col-md-3 mb-3">
-                                    <a href="{% url 'orders:order_history' %}?status=shipped" class="btn btn-success w-100">
-                                        <i class="fas fa-truck me-2"></i>
-                                        Track Shipments
-                                    </a>
-                                </div>
-                                <div class="col-md-3 mb-3">
-                                    <a href="{% url 'marketplace:cart_view' %}" class="btn btn-outline-primary w-100">
-                                        <i class="fas fa-shopping-bag me-2"></i>
-                                        View Cart
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
 
 <style>
-.badge-pending { background-color: #ffc107; color: #000; }
-.badge-processing { background-color: #17a2b8; color: #fff; }
-.badge-shipped { background-color: #28a745; color: #fff; }
-.badge-delivered { background-color: #6f42c1; color: #fff; }
-.badge-cancelled { background-color: #dc3545; color: #fff; }
+  /* ===========================
+     ORDER STATS – FUN MODE 😄
+     =========================== */
+  .os-hero{
+    border-radius: 18px;
+    padding: 18px;
+    color:#fff;
+    background:
+      radial-gradient(circle at 12% 18%, rgba(255,255,255,.18), transparent 55%),
+      radial-gradient(circle at 88% 30%, rgba(255,255,255,.12), transparent 55%),
+      linear-gradient(135deg, rgba(13,110,253,.95), rgba(102,16,242,.85));
+    box-shadow: 0 22px 70px rgba(2,8,23,.18);
+    position:relative;
+    overflow:hidden;
+  }
+  .os-hero::after{
+    content:"";
+    position:absolute;
+    right:-140px; top:-180px;
+    width:480px; height:480px; border-radius:50%;
+    background: rgba(255,255,255,.10);
+  }
+  .os-hero *{ position:relative; z-index:1; }
 
-.card {
-    transition: transform 0.2s;
-}
+  .os-chip{
+    display:inline-flex; align-items:center; gap:8px;
+    padding: 7px 12px; border-radius:999px;
+    background: rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.22);
+    font-weight: 800;
+    font-size: .85rem;
+    white-space: nowrap;
+  }
 
-.card:hover {
-    transform: translateY(-2px);
-}
+  .os-card{
+    border-radius: 18px;
+    border: 1px solid rgba(15,23,42,.08);
+    box-shadow: 0 16px 44px rgba(2,8,23,.08);
+    overflow:hidden;
+    transition: .2s ease;
+  }
+  .os-card:hover{ transform: translateY(-2px); box-shadow: 0 22px 70px rgba(2,8,23,.12); }
+
+  .os-stat{
+    border-radius: 18px;
+    color:#fff;
+    position:relative;
+    overflow:hidden;
+    border: 0;
+  }
+  .os-stat::before{
+    content:"";
+    position:absolute; inset:-2px;
+    background: radial-gradient(circle at 20% 20%, rgba(255,255,255,.22), transparent 55%);
+    opacity:.9;
+  }
+  .os-stat .card-body{ position:relative; z-index:1; }
+
+  .os-icon{
+    width:48px; height:48px; border-radius:16px;
+    display:flex; align-items:center; justify-content:center;
+    background: rgba(255,255,255,.18);
+    border: 1px solid rgba(255,255,255,.22);
+  }
+
+  .os-title{
+    font-weight: 900;
+    letter-spacing: -.02em;
+  }
+  .os-muted{ opacity:.82; }
+
+  .os-xp{
+    background: rgba(255,255,255,.16);
+    border: 1px solid rgba(255,255,255,.22);
+    border-radius: 999px;
+    height: 10px;
+    overflow:hidden;
+  }
+  .os-xp > span{
+    display:block; height:100%;
+    border-radius:999px;
+    background: linear-gradient(90deg, rgba(34,197,94,.95), rgba(251,191,36,.95));
+  }
+
+  .os-stack .os-row{
+    padding: 10px 0;
+    border-bottom: 1px dashed rgba(15,23,42,.12);
+  }
+  .os-stack .os-row:last-child{ border-bottom: 0; }
+  .os-dot{
+    width:10px; height:10px; border-radius:999px; display:inline-block;
+  }
+
+  .os-progress{
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(148,163,184,.25);
+    overflow:hidden;
+  }
+  .os-progress > span{ display:block; height:100%; border-radius:999px; }
+
+  .os-recent a{ font-weight: 800; }
+  .os-receipt{
+    border-radius: 16px;
+    border: 1px solid rgba(15,23,42,.08);
+    background: linear-gradient(180deg, rgba(2,8,23,.02), transparent);
+    padding: 12px;
+  }
+  .os-badge{
+    border-radius: 999px;
+    padding: 6px 10px;
+    font-weight: 900;
+  }
+
+  .os-actions .btn{
+    border-radius: 16px;
+    font-weight: 900;
+    padding: 12px 14px;
+  }
+
+  /* Confetti bits (subtle) */
+  .os-confetti{
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    overflow:hidden;
+    z-index: 9999;
+    display:none;
+  }
+  .os-confetti.show{ display:block; }
+  .os-confetti i{
+    position:absolute;
+    top: -10px;
+    animation: os-fall 1.8s linear forwards;
+    opacity:.9;
+  }
+  @keyframes os-fall{
+    to{ transform: translateY(110vh) rotate(720deg); opacity:0; }
+  }
+
+  /* Status colors (your existing class names still used) */
+  .badge-pending { background-color: #ffc107; color: #000; }
+  .badge-processing { background-color: #17a2b8; color: #fff; }
+  .badge-shipped { background-color: #28a745; color: #fff; }
+  .badge-delivered { background-color: #6f42c1; color: #fff; }
+  .badge-cancelled { background-color: #dc3545; color: #fff; }
 </style>
+
+<div class="container py-4">
+
+  <!-- HERO -->
+  <div class="os-hero mb-4">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+      <div>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <h2 class="mb-0 os-title">Order Statistics 🎮</h2>
+          <span class="os-chip"><i class="fas fa-satellite-dish"></i>Mission Control</span>
+        </div>
+        <div class="os-muted mt-1">Your shopping journey — now with vibes, progress bars, and tiny victories.</div>
+
+        {% with total=stats.total_orders|default:0 delivered=stats.delivered_orders|default:0 %}
+          {% if total > 0 %}
+            {% widthratio delivered total 100 as delivered_pct %}
+            <div class="mt-3">
+              <div class="d-flex justify-content-between small mb-1">
+                <span class="os-chip"><i class="fas fa-bolt"></i>Delivery XP</span>
+                <span class="os-chip">Level: {% if delivered_pct >= 80 %}Legend{% elif delivered_pct >= 50 %}Pro{% elif delivered_pct >= 20 %}Rookie{% else %}Starter{% endif %}</span>
+              </div>
+              <div class="os-xp">
+                <span style="width: {{ delivered_pct }}%;"></span>
+              </div>
+              <div class="small os-muted mt-2">
+                Delivered: <strong>{{ delivered }}</strong> / {{ total }} ({{ delivered_pct }}%)
+              </div>
+            </div>
+          {% else %}
+            <div class="mt-3 os-chip"><i class="fas fa-info-circle"></i>Place your first order to unlock stats ✨</div>
+          {% endif %}
+        {% endwith %}
+      </div>
+
+      <div class="text-end">
+        <a href="{% url 'orders:order_history' %}" class="btn btn-light fw-bold">
+          <i class="fas fa-list me-2"></i>View All Orders
+        </a>
+        <div class="small os-muted mt-2">Tip: Delivered orders = happy ending ✅</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SUMMARY CARDS (fun labels) -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-6 col-lg-3">
+      <div class="card os-stat h-100" style="background: linear-gradient(135deg,#0d6efd,#2563eb);">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <div class="os-muted fw-semibold">📦 Total Orders</div>
+              <div class="display-6 fw-bold mb-0">{{ stats.total_orders|default:0 }}</div>
+              <div class="small os-muted">All time, all vibes.</div>
+            </div>
+            <div class="os-icon"><i class="fas fa-shopping-bag fa-lg"></i></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-6 col-lg-3">
+      <div class="card os-stat h-100" style="background: linear-gradient(135deg,#22c55e,#16a34a);">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <div class="os-muted fw-semibold">💸 Total Spent</div>
+              <div class="h2 fw-bold mb-0">D{{ stats.total_spent|default:0|floatformat:2 }}</div>
+              <div class="small os-muted">Wallet says: “we move.”</div>
+            </div>
+            <div class="os-icon"><i class="fas fa-coins fa-lg"></i></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-6 col-lg-3">
+      <div class="card os-stat h-100" style="background: linear-gradient(135deg,#06b6d4,#0ea5e9);">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <div class="os-muted fw-semibold">✅ Delivered</div>
+              <div class="display-6 fw-bold mb-0">{{ stats.delivered_orders|default:0 }}</div>
+              <div class="small os-muted">Success stories ✨</div>
+            </div>
+            <div class="os-icon"><i class="fas fa-check-circle fa-lg"></i></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-6 col-lg-3">
+      <div class="card os-stat h-100" style="background: linear-gradient(135deg,#fbbf24,#f59e0b); color:#111827;">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <div class="fw-semibold">⏳ Pending</div>
+              <div class="display-6 fw-bold mb-0">{{ stats.pending_orders|default:0 }}</div>
+              <div class="small">Still cooking… 🍳</div>
+            </div>
+            <div class="os-icon" style="background: rgba(255,255,255,.35); border-color: rgba(255,255,255,.35);">
+              <i class="fas fa-clock fa-lg"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BREAKDOWN + RECENT -->
+  <div class="row g-3 mb-4">
+    <!-- Status Breakdown (progress stack) -->
+    <div class="col-lg-6">
+      <div class="card os-card h-100">
+        <div class="card-header bg-white border-bottom">
+          <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-0 fw-bold"><i class="fas fa-layer-group me-2 text-primary"></i>Status Breakdown</h5>
+            <span class="badge bg-light text-dark border">How your orders are behaving 😄</span>
+          </div>
+        </div>
+        <div class="card-body">
+
+         <div class="card-body">
+          {% with total=stats.total_orders|default:0 %}
+
+            <!-- Pending -->
+            {% widthratio stats.pending_orders|default:0 total 100 as p1 %}
+            <div class="os-row">
+              <div class="d-flex justify-content-between align-items-center">
+                <span class="fw-semibold"><span class="os-dot me-2" style="background:#f59e0b;"></span>Pending</span>
+                <span class="badge bg-secondary">{{ stats.pending_orders|default:0 }}</span>
+              </div>
+              <div class="os-progress mt-2">
+                <span style="width:{% if total > 0 %}{{ p1 }}{% else %}0{% endif %}%; background:#f59e0b;"></span>
+              </div>
+            </div>
+
+            <!-- Processing -->
+            {% widthratio stats.processing_orders|default:0 total 100 as p2 %}
+            <div class="os-row">
+              <div class="d-flex justify-content-between align-items-center">
+                <span class="fw-semibold"><span class="os-dot me-2" style="background:#0ea5e9;"></span>Processing</span>
+                <span class="badge bg-secondary">{{ stats.processing_orders|default:0 }}</span>
+              </div>
+              <div class="os-progress mt-2">
+                <span style="width:{% if total > 0 %}{{ p2 }}{% else %}0{% endif %}%; background:#0ea5e9;"></span>
+              </div>
+            </div>
+
+            <!-- Shipped -->
+            {% widthratio stats.shipped_orders|default:0 total 100 as p3 %}
+            <div class="os-row">
+              <div class="d-flex justify-content-between align-items-center">
+                <span class="fw-semibold"><span class="os-dot me-2" style="background:#22c55e;"></span>Shipped</span>
+                <span class="badge bg-secondary">{{ stats.shipped_orders|default:0 }}</span>
+              </div>
+              <div class="os-progress mt-2">
+                <span style="width:{% if total > 0 %}{{ p3 }}{% else %}0{% endif %}%; background:#22c55e;"></span>
+              </div>
+            </div>
+
+            <!-- Delivered -->
+            {% widthratio stats.delivered_orders|default:0 total 100 as p4 %}
+            <div class="os-row">
+              <div class="d-flex justify-content-between align-items-center">
+                <span class="fw-semibold"><span class="os-dot me-2" style="background:#6f42c1;"></span>Delivered</span>
+                <span class="badge bg-secondary">{{ stats.delivered_orders|default:0 }}</span>
+              </div>
+              <div class="os-progress mt-2">
+                <span style="width:{% if total > 0 %}{{ p4 }}{% else %}0{% endif %}%; background:#6f42c1;"></span>
+              </div>
+            </div>
+
+            <!-- Cancelled -->
+            {% widthratio stats.cancelled_orders|default:0 total 100 as p5 %}
+            <div class="os-row">
+              <div class="d-flex justify-content-between align-items-center">
+                <span class="fw-semibold"><span class="os-dot me-2" style="background:#ef4444;"></span>Cancelled</span>
+                <span class="badge bg-secondary">{{ stats.cancelled_orders|default:0 }}</span>
+              </div>
+              <div class="os-progress mt-2">
+                <span style="width:{% if total > 0 %}{{ p5 }}{% else %}0{% endif %}%; background:#ef4444;"></span>
+              </div>
+            </div>
+
+            <div class="mt-3 small text-muted">
+              <i class="fas fa-lightbulb me-1"></i>
+              Pro tip: Keep pending low — and you’re basically a shopping ninja 🥷
+            </div>
+
+          {% endwith %}
+        </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent Orders (mini receipts) -->
+    <div class="col-lg-6">
+      <div class="card os-card h-100 os-recent">
+        <div class="card-header bg-white border-bottom">
+          <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-0 fw-bold"><i class="fas fa-clock me-2 text-primary"></i>Recent Orders</h5>
+            <a href="{% url 'orders:order_history' %}" class="btn btn-sm btn-outline-primary">
+              View All
+            </a>
+          </div>
+        </div>
+        <div class="card-body">
+          {% if stats.recent_orders %}
+            <div class="d-grid gap-2">
+              {% for order in stats.recent_orders %}
+                <div class="os-receipt">
+                  <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                      <div class="fw-bold">
+                        <a href="{% url 'orders:order_detail' order.id %}" class="text-decoration-none">
+                          Order #{{ order.id }}
+                        </a>
+                      </div>
+                      <div class="small text-muted">
+                        <i class="fas fa-calendar me-1"></i>{{ order.created_at|date:"M d, Y" }}
+                      </div>
+                    </div>
+                    <div class="text-end">
+                      <span class="badge os-badge badge-{{ order.status|lower }}">{{ order.get_status_display }}</span>
+                      <div class="fw-bold text-primary mt-1">D{{ order.get_total|floatformat:2 }}</div>
+                    </div>
+                  </div>
+
+                  <div class="mt-2 small text-muted">
+                    {% if order.items.count %}
+                      <i class="fas fa-box-open me-1"></i>{{ order.items.count }} item{{ order.items.count|pluralize }}
+                    {% endif %}
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="text-center py-4">
+              <i class="fas fa-shopping-bag fa-3x text-muted mb-3"></i>
+              <p class="text-muted mb-0">No recent orders found.</p>
+              <small class="text-muted">Time to create some history 😄</small>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- QUICK ACTIONS (arcade buttons) -->
+  <div class="card os-card">
+    <div class="card-header bg-white border-bottom">
+      <h5 class="mb-0 fw-bold"><i class="fas fa-bolt me-2 text-primary"></i>Quick Actions</h5>
+    </div>
+    <div class="card-body">
+      <div class="row g-3 os-actions">
+        <div class="col-md-3">
+          <a href="{% url 'marketplace:all_products' %}" class="btn btn-primary w-100">
+            <i class="fas fa-shopping-cart me-2"></i>Continue Shopping 🛒
+          </a>
+        </div>
+        <div class="col-md-3">
+          <a href="{% url 'orders:order_history' %}?status=pending" class="btn btn-warning w-100">
+            <i class="fas fa-clock me-2"></i>Pending Zone ⏳
+          </a>
+        </div>
+        <div class="col-md-3">
+          <a href="{% url 'orders:order_history' %}?status=shipped" class="btn btn-success w-100">
+            <i class="fas fa-truck me-2"></i>Track Shipments 🚚
+          </a>
+        </div>
+        <div class="col-md-3">
+          <a href="{% url 'marketplace:cart_view' %}" class="btn btn-outline-primary w-100">
+            <i class="fas fa-shopping-bag me-2"></i>View Cart 🧺
+          </a>
+        </div>
+      </div>
+
+      <div class="mt-3 small text-muted">
+        <i class="fas fa-shield-alt me-1"></i>
+        Stats are read-only — your money is still protected. 😉
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Confetti layer -->
+<div class="os-confetti" id="osConfetti" aria-hidden="true"></div>
+
 <script src="{% static 'js/main.js' %}"></script>
+<script>
+  // Tiny celebratory confetti if delivered is solid 🎉
+  (function(){
+    const delivered = Number("{{ stats.delivered_orders|default:0 }}");
+    const total = Number("{{ stats.total_orders|default:0 }}");
+    if (!total) return;
+
+    const pct = Math.round((delivered / total) * 100);
+    if (pct < 70) return; // only celebrate when it's really good 😄
+
+    const layer = document.getElementById('osConfetti');
+    if (!layer) return;
+    layer.classList.add('show');
+
+    const pieces = 24;
+    for (let i=0; i<pieces; i++){
+      const el = document.createElement('i');
+      el.textContent = ['✨','🎉','💫','🟣','🟡','🟢'][Math.floor(Math.random()*6)];
+      el.style.left = Math.random()*100 + 'vw';
+      el.style.fontSize = (12 + Math.random()*18) + 'px';
+      el.style.animationDelay = (Math.random()*0.25) + 's';
+      layer.appendChild(el);
+      setTimeout(()=> el.remove(), 2200);
+    }
+    setTimeout(()=> layer.classList.remove('show'), 2300);
+  })();
+</script>
 {% endblock %}

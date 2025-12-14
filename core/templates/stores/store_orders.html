@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load humanize %}
 
 {% block title %}Orders - {{ store.name }}{% endblock %}
 
@@ -7,115 +8,368 @@
 <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
 <link rel="stylesheet" type="text/css" href="{% static 'css/store_orders.css' %}">
 
+<style>
+  /* ===========================
+     ORDERS HUB (Pro UI layer)
+     =========================== */
+  .oh-hero{
+    border-radius: 18px;
+    padding: 18px 18px;
+    background: radial-gradient(circle at 15% 10%, rgba(255,255,255,.22), transparent 45%),
+                linear-gradient(135deg, rgba(26,95,158,.95), rgba(45,140,204,.92));
+    color:#fff;
+    box-shadow: 0 20px 50px rgba(2, 8, 23, 0.20);
+    position: relative;
+    overflow: hidden;
+  }
+  .oh-hero:after{
+    content:"";
+    position:absolute;
+    right:-90px; top:-120px;
+    width:320px; height:320px;
+    border-radius:50%;
+    background: rgba(255,255,255,.10);
+    filter: blur(0px);
+  }
+  .oh-hero *{ position: relative; z-index: 1; }
+
+  .oh-breadcrumb .breadcrumb-item a{
+    color:#0f172a;
+    font-weight: 800;
+  }
+  .oh-breadcrumb .breadcrumb-item.active{ font-weight:900; }
+
+  .oh-title{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .oh-title h1{
+    font-weight: 950;
+    letter-spacing: -0.03em;
+    margin:0;
+  }
+  .oh-sub{
+    margin-top: 6px;
+    opacity: .92;
+    font-weight: 700;
+  }
+
+  .oh-pill{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding: 7px 12px;
+    border-radius: 999px;
+    background: rgba(255,255,255,.14);
+    border: 1px solid rgba(255,255,255,.22);
+    font-weight: 900;
+    font-size: .8rem;
+    white-space: nowrap;
+  }
+
+  .oh-toolbar{
+    margin-top: 14px;
+    background: rgba(255,255,255,.95);
+    border: 1px solid rgba(15,23,42,.10);
+    border-radius: 16px;
+    padding: 10px;
+    box-shadow: 0 12px 30px rgba(2,8,23,.12);
+    display:flex;
+    align-items:center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .oh-search{
+    position: relative;
+    flex: 1;
+    min-width: 240px;
+  }
+  .oh-search i{
+    position:absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color:#64748b;
+  }
+  .oh-search input{
+    padding-left: 36px;
+    border-radius: 999px;
+    font-weight: 800;
+  }
+
+  .oh-chipbar{
+    display:flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items:center;
+  }
+  .oh-chipbtn{
+    border-radius: 999px;
+    padding: 8px 12px;
+    font-weight: 900;
+    border: 1px solid rgba(15,23,42,.12);
+    background: #fff;
+    color:#0f172a;
+  }
+  .oh-chipbtn.active{
+    background: rgba(26,95,158,.12);
+    border-color: rgba(26,95,158,.24);
+    color: #0b3b66;
+  }
+
+  .oh-actions{
+    display:flex;
+    gap: 8px;
+    align-items:center;
+    flex-wrap: wrap;
+  }
+
+  .oh-stat{
+    border-radius: 16px;
+    border: 1px solid rgba(15,23,42,.08);
+    background: #fff;
+    box-shadow: 0 14px 34px rgba(2,8,23,.08);
+    overflow: hidden;
+  }
+  .oh-stat .oh-stat-body{
+    padding: 14px;
+    display:flex;
+    gap: 12px;
+    align-items:center;
+  }
+  .oh-stat .oh-stat-ico{
+    width: 44px; height: 44px;
+    border-radius: 14px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background: rgba(2,132,199,.10);
+    color:#0284c7;
+  }
+  .oh-stat .oh-stat-num{
+    font-weight: 950;
+    font-size: 1.1rem;
+    margin:0;
+  }
+  .oh-stat .oh-stat-lbl{
+    margin:0;
+    color:#64748b;
+    font-weight: 800;
+    font-size: .85rem;
+  }
+
+  .oh-card{
+    border: 0;
+    border-radius: 18px;
+    overflow: hidden;
+    box-shadow: 0 18px 44px rgba(2,8,23,.10);
+    background: #fff;
+  }
+  .oh-card-header{
+    background: #fff;
+    border-bottom: 1px solid rgba(15,23,42,.08);
+    padding: 12px 16px;
+    display:flex;
+    align-items:center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .oh-card-header h6{
+    margin:0;
+    font-weight: 950;
+    letter-spacing: -0.02em;
+  }
+
+  .oh-table thead th{
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: #f8fafc !important;
+    font-weight: 950;
+    font-size: .78rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color:#475569;
+    border-bottom: 1px solid rgba(15,23,42,.10) !important;
+  }
+  .oh-row{
+    transition: background .12s ease, transform .12s ease;
+  }
+  .oh-row:hover{
+    background: rgba(2,132,199,.06);
+  }
+
+  .oh-badge{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-weight: 950;
+    font-size: .78rem;
+    border: 1px solid rgba(15,23,42,.10);
+    background: #fff;
+  }
+  .oh-dot{
+    width: 8px; height: 8px;
+    border-radius: 999px;
+    display:inline-block;
+  }
+  .dot-pending{ background:#f59e0b; box-shadow: 0 0 0 4px rgba(245,158,11,.18); }
+  .dot-processing{ background:#0ea5e9; box-shadow: 0 0 0 4px rgba(14,165,233,.18); }
+  .dot-shipped{ background:#2563eb; box-shadow: 0 0 0 4px rgba(37,99,235,.18); }
+  .dot-completed{ background:#22c55e; box-shadow: 0 0 0 4px rgba(34,197,94,.18); }
+  .dot-cancelled{ background:#ef4444; box-shadow: 0 0 0 4px rgba(239,68,68,.18); }
+  .dot-other{ background:#94a3b8; }
+
+  .oh-mini{
+    color:#64748b;
+    font-weight: 800;
+    font-size: .8rem;
+  }
+
+  /* Bulk action tray */
+  .oh-bulkbar{
+    position: sticky;
+    bottom: 14px;
+    z-index: 50;
+    display:none;
+  }
+  .oh-bulkbar-inner{
+    border-radius: 18px;
+    padding: 12px;
+    background: rgba(15,23,42,.94);
+    color:#fff;
+    box-shadow: 0 20px 50px rgba(2,8,23,.30);
+    display:flex;
+    align-items:center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .oh-bulkbar .btn{
+    border-radius: 12px;
+    font-weight: 900;
+  }
+
+  /* Mobile cards */
+  .oh-mcard{
+    border: 0;
+    border-radius: 18px;
+    box-shadow: 0 16px 40px rgba(2,8,23,.10);
+    overflow:hidden;
+  }
+  .oh-mtop{
+    background: linear-gradient(135deg, rgba(2,132,199,.10), rgba(34,197,94,.06));
+    border-bottom: 1px solid rgba(15,23,42,.08);
+    padding: 12px 14px;
+    display:flex;
+    align-items:flex-start;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .oh-mtop h6{ margin:0; font-weight: 950; }
+  .oh-mbody{ padding: 12px 14px; }
+</style>
+
 <div class="container-fluid py-4">
+
   <!-- Breadcrumb -->
-  <nav aria-label="breadcrumb" class="mb-3">
+  <nav aria-label="breadcrumb" class="mb-3 oh-breadcrumb">
     <ol class="breadcrumb bg-transparent p-0 m-0 fw-semibold" style="--bs-breadcrumb-divider: '>';">
       <li class="breadcrumb-item">
-        <a href="{% url 'stores:store_dashboard' store.id %}" class="text-decoration-none text-dark">
-          <i class="fas fa-home me-1 text-muted" aria-hidden="true"></i>Dashboard
+        <a href="{% url 'stores:store_dashboard' store.id %}" class="text-decoration-none">
+          <i class="fas fa-home me-1 text-muted"></i>Dashboard
         </a>
       </li>
-      <li class="breadcrumb-item active text-primary" aria-current="page">
-        Orders
-      </li>
+      <li class="breadcrumb-item active text-primary" aria-current="page">Orders</li>
     </ol>
   </nav>
 
-  <!-- Header Section -->
-  <div class="row mb-4">
-    <div class="col-lg-8">
-      <h1 class="h3 mb-2">
-        <i class="fas fa-shopping-cart me-2 text-primary" aria-hidden="true"></i>
-        Orders Management
-      </h1>
-      <p class="text-muted mb-0">
-        {{ store.name }} -
-        <span id="orderCount" aria-live="polite">{{ page_obj.paginator.count }}</span>
-        order{{ page_obj.paginator.count|pluralize }}
-        {% if page_obj.paginator.count > 0 %}
-          <span class="ms-2 small">
-            (Showing {{ page_obj.start_index }}-{{ page_obj.end_index }})
-          </span>
-        {% endif %}
-      </p>
+  <!-- HERO -->
+  <div class="oh-hero mb-4">
+    <div class="oh-title">
+      <div>
+        <h1 class="h3">
+          <i class="fas fa-shopping-cart me-2"></i>Orders Hub
+        </h1>
+        <div class="oh-sub">
+          {{ store.name }} •
+          <span id="orderCount">{{ page_obj.paginator.count }}</span>
+          order{{ page_obj.paginator.count|pluralize }}
+          {% if page_obj.paginator.count > 0 %}
+            <span class="ms-1">— showing {{ page_obj.start_index }}-{{ page_obj.end_index }}</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="d-flex gap-2 flex-wrap justify-content-end">
+        <span class="oh-pill">
+          <i class="fas fa-bolt"></i>
+          Fast tip: press <span class="px-2 py-1 rounded bg-light text-dark">/</span> to search
+        </span>
+        <a href="{% url 'stores:store_dashboard' store.id %}" class="btn btn-light fw-bold" style="border-radius: 14px;">
+          <i class="fas fa-arrow-left me-1"></i>Back
+        </a>
+      </div>
     </div>
-    <div class="col-lg-4">
-      <div class="d-flex justify-content-end align-items-center gap-2 flex-wrap">
-        <!-- Search -->
-        <div class="search-container-order" role="search">
-          <label for="orderSearch" class="visually-hidden">Search orders</label>
-          <i class="fas fa-search" aria-hidden="true"></i>
-          <input
-            type="text"
-            class="form-control search-input-order"
-            placeholder="Search orders, customers..."
-            id="orderSearch"
-            onkeyup="performSearch()"
-            autocomplete="off"
-            aria-describedby="searchHelp">
-          <small id="searchHelp" class="visually-hidden">Search by order ID, customer name, or amount</small>
-        </div>
 
-        <!-- Status Filter -->
-        <div class="dropdown">
-          <button
-            class="btn btn-outline-secondary dropdown-toggle"
-            type="button"
-            data-bs-toggle="dropdown"
-            id="filterButton"
-            aria-expanded="false"
-            aria-haspopup="true">
-            <i class="fas fa-filter me-1" aria-hidden="true"></i>
-            <span id="filterText">All Orders</span>
-          </button>
-          <ul class="dropdown-menu" aria-labelledby="filterButton">
-            <li><a class="dropdown-item" href="#" onclick="applyFilter('all', 'All Orders')" role="button">
-              <i class="fas fa-list me-2" aria-hidden="true"></i>All Orders
-            </a></li>
-            <li><hr class="dropdown-divider"></li>
-            <li><a class="dropdown-item" href="#" onclick="applyFilter('pending', 'Pending')" role="button">
-              <i class="fas fa-clock me-2 text-warning" aria-hidden="true"></i>Pending
-            </a></li>
-            <li><a class="dropdown-item" href="#" onclick="applyFilter('processing', 'Processing')" role="button">
-              <i class="fas fa-cog me-2 text-info" aria-hidden="true"></i>Processing
-            </a></li>
-            <li><a class="dropdown-item" href="#" onclick="applyFilter('shipped', 'Shipped')" role="button">
-              <i class="fas fa-truck me-2 text-primary" aria-hidden="true"></i>Shipped
-            </a></li>
-            <li><a class="dropdown-item" href="#" onclick="applyFilter('completed', 'Completed')" role="button">
-              <i class="fas fa-check-circle me-2 text-success" aria-hidden="true"></i>Completed
-            </a></li>
-            <li><a class="dropdown-item" href="#" onclick="applyFilter('cancelled', 'Cancelled')" role="button">
-              <i class="fas fa-times-circle me-2 text-danger" aria-hidden="true"></i>Cancelled
-            </a></li>
-          </ul>
-        </div>
+    <!-- Toolbar -->
+    <div class="oh-toolbar">
+      <div class="oh-search" role="search">
+        <i class="fas fa-magnifying-glass"></i>
+        <input
+          type="text"
+          class="form-control"
+          placeholder="Search order ID, customer, amount…"
+          id="orderSearch"
+          onkeyup="performSearch()"
+          autocomplete="off">
+      </div>
 
-        <!-- Clear Filters -->
-        <button
-          class="btn btn-outline-secondary"
-          onclick="clearAllFilters()"
-          title="Clear all filters"
-          aria-label="Clear all filters">
-          <i class="fas fa-times" aria-hidden="true"></i>
+      <!-- Status chips -->
+      <div class="oh-chipbar" aria-label="Quick filters">
+        <button type="button" class="oh-chipbtn active" data-filter="all" onclick="applyFilter('all','All Orders')">
+          <i class="fas fa-layer-group me-1"></i>All
+        </button>
+        <button type="button" class="oh-chipbtn" data-filter="pending" onclick="applyFilter('pending','Pending')">
+          <i class="fas fa-clock me-1 text-warning"></i>Pending
+        </button>
+        <button type="button" class="oh-chipbtn" data-filter="processing" onclick="applyFilter('processing','Processing')">
+          <i class="fas fa-gear me-1 text-info"></i>Processing
+        </button>
+        <button type="button" class="oh-chipbtn" data-filter="shipped" onclick="applyFilter('shipped','Shipped')">
+          <i class="fas fa-truck me-1 text-primary"></i>Shipped
+        </button>
+        <button type="button" class="oh-chipbtn" data-filter="completed" onclick="applyFilter('completed','Completed')">
+          <i class="fas fa-check-circle me-1 text-success"></i>Completed
+        </button>
+        <button type="button" class="oh-chipbtn" data-filter="cancelled" onclick="applyFilter('cancelled','Cancelled')">
+          <i class="fas fa-times-circle me-1 text-danger"></i>Cancelled
+        </button>
+      </div>
+
+      <div class="oh-actions">
+        <button class="btn btn-outline-secondary" onclick="clearAllFilters()" title="Clear filters" style="border-radius: 14px;">
+          <i class="fas fa-broom"></i>
         </button>
 
-        <!-- Export Button -->
         <div class="dropdown">
-          <button
-            class="btn btn-outline-success dropdown-toggle"
-            type="button"
-            data-bs-toggle="dropdown"
-            aria-expanded="false">
-            <i class="fas fa-download me-1" aria-hidden="true"></i>Export
+          <button class="btn btn-outline-success dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" style="border-radius: 14px;">
+            <i class="fas fa-download me-1"></i>Export
           </button>
-          <ul class="dropdown-menu">
+          <ul class="dropdown-menu dropdown-menu-end">
             <li><a class="dropdown-item" href="#" onclick="exportOrders('csv')">
-              <i class="fas fa-file-csv me-2" aria-hidden="true"></i>Export as CSV
+              <i class="fas fa-file-csv me-2"></i>CSV
             </a></li>
             <li><a class="dropdown-item" href="#" onclick="exportOrders('pdf')">
-              <i class="fas fa-file-pdf me-2" aria-hidden="true"></i>Export as PDF
+              <i class="fas fa-file-pdf me-2"></i>PDF
             </a></li>
           </ul>
         </div>
@@ -124,311 +378,313 @@
   </div>
 
   {% if page_obj %}
-    <!-- Quick Stats -->
-    <div class="row mb-4">
-      <div class="col-md-3 col-6 mb-2">
-        <div class="card border-0 bg-light">
-          <div class="card-body text-center py-3">
-            <i class="fas fa-shopping-cart text-primary fa-2x mb-2" aria-hidden="true"></i>
-            <h5 class="mb-1">{{ page_obj.paginator.count }}</h5>
-            <small class="text-muted">Total Orders</small>
-          </div>
-        </div>
-      </div>
-      <div class="col-md-3 col-6 mb-2">
-        <div class="card border-0 bg-light">
-          <div class="card-body text-center py-3">
-            <i class="fas fa-clock text-warning fa-2x mb-2" aria-hidden="true"></i>
-            <h5 class="mb-1" id="pendingCount">-</h5>
-            <small class="text-muted">Pending</small>
-          </div>
-        </div>
-      </div>
-      <div class="col-md-3 col-6 mb-2">
-        <div class="card border-0 bg-light">
-          <div class="card-body text-center py-3">
-            <i class="fas fa-truck text-info fa-2x mb-2" aria-hidden="true"></i>
-            <h5 class="mb-1" id="shippedCount">-</h5>
-            <small class="text-muted">Shipped</small>
-          </div>
-        </div>
-      </div>
-      <div class="col-md-3 col-6 mb-2">
-        <div class="card border-0 bg-light">
-          <div class="card-body text-center py-3">
-            <i class="fas fa-check-circle text-success fa-2x mb-2" aria-hidden="true"></i>
-            <h5 class="mb-1" id="completedCount">-</h5>
-            <small class="text-muted">Completed</small>
+
+  <!-- Quick Stats -->
+  <div class="row mb-4">
+    <div class="col-md-3 col-6 mb-2">
+      <div class="oh-stat">
+        <div class="oh-stat-body">
+          <div class="oh-stat-ico"><i class="fas fa-list-check"></i></div>
+          <div>
+            <p class="oh-stat-num">{{ page_obj.paginator.count }}</p>
+            <p class="oh-stat-lbl">Total Orders</p>
           </div>
         </div>
       </div>
     </div>
-
-    <!-- Loading State -->
-    <div id="loadingState" class="text-center py-5" style="display: none;">
-      <div class="spinner-border text-primary" role="status">
-        <span class="visually-hidden">Loading orders...</span>
-      </div>
-      <p class="mt-2 text-muted">Loading orders...</p>
-    </div>
-
-    <!-- Desktop Table View -->
-    <div class="card shadow-sm d-none d-lg-block" id="ordersCard">
-      <div class="card-header bg-white border-bottom">
-        <div class="row align-items-center">
-          <div class="col">
-            <h6 class="mb-0">Order Details</h6>
+    <div class="col-md-3 col-6 mb-2">
+      <div class="oh-stat">
+        <div class="oh-stat-body">
+          <div class="oh-stat-ico" style="background: rgba(245,158,11,.12); color:#b45309;">
+            <i class="fas fa-clock"></i>
           </div>
-          <div class="col-auto">
-            <button class="btn btn-sm btn-outline-secondary" onclick="toggleSelectAll()" id="selectAllBtn">
-              <i class="fas fa-check-square me-1" aria-hidden="true"></i>Select All
-            </button>
-            <button class="btn btn-sm btn-outline-primary ms-2" onclick="bulkAction()" id="bulkActionBtn" disabled>
-              <i class="fas fa-cogs me-1" aria-hidden="true"></i>Bulk Action
-            </button>
+          <div>
+            <p class="oh-stat-num" id="pendingCount">-</p>
+            <p class="oh-stat-lbl">Pending</p>
           </div>
         </div>
       </div>
-      <div class="card-body p-0">
-        <div class="table-responsive">
-          <table class="table table-hover mb-0" id="ordersTable" role="table">
-            <thead class="table-light">
-              <tr role="row">
-                <th scope="col" class="px-4 py-3">
-                  <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll()" aria-label="Select all orders">
-                </th>
-                <th scope="col"># Order</th>
-                <th scope="col">Customer</th>
-                <th scope="col">Amount</th>
-                <th scope="col">Status</th>
-                <th scope="col">Warehouse</th>
-                <th scope="col">Date</th>
-                <th scope="col">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for order in page_obj %}
-                {% with order_items=order.items.all|dictsort:'id' %}
-                <tr class="order-row"
-                    data-status="{{ order.status|lower }}"
-                    data-order-id="{{ order.id }}"
-                    data-customer="{{ order.buyer.get_full_name|lower }}"
-                    data-amount="{{ order.get_total|floatformat:2 }}"
-                    data-date="{{ order.created_at|date:'M d, Y H:i'|lower }}"
-                    role="row">
-                  <td class="px-4 py-3">
-                    <input type="checkbox" class="order-checkbox" value="{{ order.id }}" onchange="updateBulkActionButton()" aria-label="Select order #{{ order.id }}">
-                  </td>
-                  <td>
-                    <strong class="text-primary">#{{ order.id }}</strong>
-                    {% if order.is_urgent %}
-                      <span class="badge bg-danger ms-1" title="Urgent order">
-                        <i class="fas fa-exclamation" aria-hidden="true"></i>
-                      </span>
-                    {% endif %}
-                  </td>
-                  <td>
-                    <div>
-                      <strong>{{ order.buyer.get_full_name|default:"N/A" }}</strong>
-                      {% if order.buyer.email %}
-                        <div class="small text-muted">{{ order.buyer.email }}</div>
-                      {% endif %}
-                    </div>
-                  </td>
-                  <td>
-                    <strong>D{{ order.get_total|floatformat:2 }}</strong>
-                    {% if order_items|length > 0 %}
-                      <div class="small text-muted">{{ order_items|length }} item{{ order_items|length|pluralize }}</div>
-                    {% endif %}
-                  </td>
-                  <td>
-                    {% if order.status == 'completed' %}
-                      <span class="badge bg-success">
-                        <i class="fas fa-check me-1" aria-hidden="true"></i>{{ order.status|title }}
-                      </span>
-                    {% elif order.status == 'pending' %}
-                      <span class="badge bg-warning text-dark">
-                        <i class="fas fa-clock me-1" aria-hidden="true"></i>{{ order.status|title }}
-                      </span>
-                    {% elif order.status == 'processing' %}
-                      <span class="badge bg-info">
-                        <i class="fas fa-cog me-1" aria-hidden="true"></i>{{ order.status|title }}
-                      </span>
-                    {% elif order.status == 'shipped' %}
-                      <span class="badge bg-primary">
-                        <i class="fas fa-truck me-1" aria-hidden="true"></i>{{ order.status|title }}
-                      </span>
-                    {% elif order.status == 'cancelled' %}
-                      <span class="badge bg-danger">
-                        <i class="fas fa-times me-1" aria-hidden="true"></i>{{ order.status|title }}
-                      </span>
+    </div>
+    <div class="col-md-3 col-6 mb-2">
+      <div class="oh-stat">
+        <div class="oh-stat-body">
+          <div class="oh-stat-ico" style="background: rgba(37,99,235,.12); color:#1d4ed8;">
+            <i class="fas fa-truck"></i>
+          </div>
+          <div>
+            <p class="oh-stat-num" id="shippedCount">-</p>
+            <p class="oh-stat-lbl">Shipped</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3 col-6 mb-2">
+      <div class="oh-stat">
+        <div class="oh-stat-body">
+          <div class="oh-stat-ico" style="background: rgba(34,197,94,.12); color:#15803d;">
+            <i class="fas fa-check-circle"></i>
+          </div>
+          <div>
+            <p class="oh-stat-num" id="completedCount">-</p>
+            <p class="oh-stat-lbl">Completed</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Desktop table -->
+  <div class="oh-card d-none d-lg-block" id="ordersCard">
+    <div class="oh-card-header">
+      <h6><i class="fas fa-receipt me-2 text-primary"></i>Order Details</h6>
+      <div class="d-flex gap-2 flex-wrap">
+        <button class="btn btn-sm btn-outline-secondary" onclick="toggleSelectAll()" id="selectAllBtn" style="border-radius: 12px;">
+          <i class="fas fa-check-square me-1"></i>Select All
+        </button>
+        <button class="btn btn-sm btn-outline-primary" onclick="bulkAction()" id="bulkActionBtn" disabled style="border-radius: 12px;">
+          <i class="fas fa-wand-magic-sparkles me-1"></i>Bulk Action
+        </button>
+      </div>
+    </div>
+
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0 oh-table" id="ordersTable">
+          <thead>
+            <tr>
+              <th class="px-4 py-3"><input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll()" aria-label="Select all orders"></th>
+              <th># Order</th>
+              <th>Customer</th>
+              <th>Amount</th>
+              <th>Status</th>
+              <th>Warehouse</th>
+              <th>Date</th>
+              <th class="text-end pe-3">Actions</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {% for order in page_obj %}
+              {% with order_items=order.items.all|dictsort:'id' %}
+              <tr class="order-row oh-row"
+                  data-status="{{ order.status|lower }}"
+                  data-order-id="{{ order.id }}"
+                  data-customer="{{ order.buyer.get_full_name|lower }}"
+                  data-amount="{{ order.get_total|floatformat:2 }}"
+                  data-date="{{ order.created_at|date:'M d, Y H:i'|lower }}">
+
+                <td class="px-4 py-3">
+                  <input type="checkbox" class="order-checkbox" value="{{ order.id }}"
+                         onchange="updateBulkActionButton()" aria-label="Select order #{{ order.id }}">
+                </td>
+
+                <td>
+                  <strong class="text-primary">#{{ order.id }}</strong>
+                  {% if order.is_urgent %}
+                    <span class="ms-2 badge bg-danger" title="Urgent">
+                      <i class="fas fa-exclamation"></i>
+                    </span>
+                  {% endif %}
+                </td>
+
+                <td>
+                  <div class="fw-bold">{{ order.buyer.get_full_name|default:"N/A" }}</div>
+                  {% if order.buyer.email %}
+                    <div class="oh-mini">{{ order.buyer.email }}</div>
+                  {% endif %}
+                </td>
+
+                <td>
+                  <div class="fw-bold">D{{ order.get_total|floatformat:2 }}</div>
+                  {% if order_items|length > 0 %}
+                    <div class="oh-mini">{{ order_items|length }} item{{ order_items|length|pluralize }}</div>
+                  {% endif %}
+                </td>
+
+                <td>
+                  {% if order.status == 'pending' %}
+                    <span class="oh-badge"><span class="oh-dot dot-pending"></span> Pending</span>
+                  {% elif order.status == 'processing' %}
+                    <span class="oh-badge"><span class="oh-dot dot-processing"></span> Processing</span>
+                  {% elif order.status == 'shipped' %}
+                    <span class="oh-badge"><span class="oh-dot dot-shipped"></span> Shipped</span>
+                  {% elif order.status == 'completed' %}
+                    <span class="oh-badge"><span class="oh-dot dot-completed"></span> Completed</span>
+                  {% elif order.status == 'cancelled' %}
+                    <span class="oh-badge"><span class="oh-dot dot-cancelled"></span> Cancelled</span>
+                  {% else %}
+                    <span class="oh-badge"><span class="oh-dot dot-other"></span> {{ order.status|title }}</span>
+                  {% endif %}
+                </td>
+
+                <td>
+                  {% if order_items|length == 0 %}
+                    <span class="badge bg-secondary"><i class="fas fa-box me-1"></i>No Items</span>
+                  {% else %}
+                    {% if order_items.0.shipped_to_warehouse %}
+                      <span class="badge bg-success"><i class="fas fa-warehouse me-1"></i>Shipped</span>
                     {% else %}
-                      <span class="badge bg-secondary">{{ order.status|title }}</span>
+                      <span class="badge bg-secondary"><i class="fas fa-clock me-1"></i>Not Shipped</span>
                     {% endif %}
-                  </td>
-                  <td>
-                    {% if order_items|length == 0 %}
-                      <span class="badge bg-secondary">
-                        <i class="fas fa-box me-1" aria-hidden="true"></i>No Items
-                      </span>
-                    {% else %}
-                      {% if order_items.0.shipped_to_warehouse %}
-                        <span class="badge bg-success">
-                          <i class="fas fa-warehouse me-1" aria-hidden="true"></i>Shipped
-                        </span>
-                      {% else %}
-                        <span class="badge bg-secondary">
-                          <i class="fas fa-clock me-1" aria-hidden="true"></i>Not Shipped
-                        </span>
-                      {% endif %}
-                    {% endif %}
-                  </td>
-                  <td>
-                    <div>
-                      <strong>{{ order.created_at|date:"M d, Y" }}</strong>
-                      <div class="small text-muted">{{ order.created_at|date:"H:i" }}</div>
-                    </div>
-                  </td>
-                  <td>
-                    <div class="btn-group" role="group" aria-label="Order actions">
-                      <a href="{% url 'stores:store_order_detail' store.id order.id %}"
-                         class="btn btn-sm btn-outline-primary"
-                         title="View order details"
-                         aria-label="View details for order #{{ order.id }}">
-                        <i class="fas fa-eye" aria-hidden="true"></i>
-                      </a>
-                      {% if order.status == 'pending' %}
-                        <button class="btn btn-sm btn-outline-success"
-                                onclick="updateOrderStatus({{ order.id }}, 'processing')"
-                                title="Mark as processing"
-                                aria-label="Mark order #{{ order.id }} as processing">
-                          <i class="fas fa-play" aria-hidden="true"></i>
-                        </button>
-                      {% endif %}
-                      <button class="btn btn-sm btn-outline-secondary dropdown-toggle"
-                              type="button"
-                              data-bs-toggle="dropdown"
-                              aria-expanded="false"
-                              aria-label="More actions for order #{{ order.id }}">
-                        <i class="fas fa-ellipsis-v" aria-hidden="true"></i>
+                  {% endif %}
+                </td>
+
+                <td>
+                  <div class="fw-bold">{{ order.created_at|date:"M d, Y" }}</div>
+                  <div class="oh-mini">{{ order.created_at|date:"H:i" }}</div>
+                </td>
+
+                <td class="text-end pe-3">
+                  <div class="btn-group" role="group" aria-label="Order actions">
+                    <a href="{% url 'stores:store_order_detail' store.id order.id %}"
+                       class="btn btn-sm btn-outline-primary" style="border-radius: 12px;" title="View">
+                      <i class="fas fa-eye"></i>
+                    </a>
+
+                    {% if order.status == 'pending' %}
+                      <button class="btn btn-sm btn-outline-success"
+                              style="border-radius: 12px;"
+                              onclick="updateOrderStatus({{ order.id }}, 'processing')"
+                              title="Start processing">
+                        <i class="fas fa-play"></i>
                       </button>
-                      <ul class="dropdown-menu">
-                        <li><a class="dropdown-item" href="{% url 'orders:store_order_invoice' store.id order.id %}">
-                          <i class="fas fa-print me-2" aria-hidden="true"></i>Print
-                        </a></li>
-                        <li><a class="dropdown-item" href="#" onclick="duplicateOrder({{ order.id }})">
-                          <i class="fas fa-copy me-2" aria-hidden="true"></i>Duplicate
-                        </a></li>
-                        {% if order.status != 'cancelled' %}
-                          <li><hr class="dropdown-divider"></li>
-                          <li><a class="dropdown-item text-danger" href="#" onclick="cancelOrder({{ order.id }})">
-                            <i class="fas fa-times me-2" aria-hidden="true"></i>Cancel Order
-                          </a></li>
-                        {% endif %}
-                      </ul>
-                    </div>
-                  </td>
-                </tr>
-                {% endwith %}
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
+                    {% endif %}
+
+                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle"
+                            style="border-radius: 12px;"
+                            type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                      <i class="fas fa-ellipsis-v"></i>
+                    </button>
+
+                    <ul class="dropdown-menu dropdown-menu-end">
+                      <li>
+                        <a class="dropdown-item" href="{% url 'orders:store_order_invoice' store.id order.id %}">
+                          <i class="fas fa-print me-2"></i>Print Invoice
+                        </a>
+                      </li>
+                      <li>
+                        <a class="dropdown-item" href="#" onclick="duplicateOrder({{ order.id }})">
+                          <i class="fas fa-copy me-2"></i>Duplicate
+                        </a>
+                      </li>
+                      {% if order.status != 'cancelled' %}
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                          <a class="dropdown-item text-danger" href="#" onclick="cancelOrder({{ order.id }})">
+                            <i class="fas fa-times me-2"></i>Cancel Order
+                          </a>
+                        </li>
+                      {% endif %}
+                    </ul>
+                  </div>
+                </td>
+
+              </tr>
+              {% endwith %}
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
     </div>
+  </div>
 
-    <!-- Mobile Card View -->
-    <div class="d-lg-none" id="mobileOrdersContainer">
-      {% for order in page_obj %}
-        {% with order_items=order.items.all|dictsort:'id' %}
-        <div class="card mb-3 order-row"
-             data-status="{{ order.status|lower }}"
-             data-order-id="{{ order.id }}"
-             data-customer="{{ order.buyer.get_full_name|lower }}"
-             data-amount="{{ order.get_total|floatformat:2 }}"
-             data-date="{{ order.created_at|date:'M d, Y H:i'|lower }}">
-          <div class="card-body">
-            <div class="d-flex justify-content-between align-items-start mb-2">
-              <h6 class="card-title mb-0">
-                <strong class="text-primary">#{{ order.id }}</strong>
-                {% if order.is_urgent %}
-                  <span class="badge bg-danger ms-1">Urgent</span>
-                {% endif %}
-              </h6>
-              {% if order.status == 'completed' %}
-                <span class="badge bg-success">{{ order.status|title }}</span>
-              {% elif order.status == 'pending' %}
-                <span class="badge bg-warning text-dark">{{ order.status|title }}</span>
-              {% elif order.status == 'processing' %}
-                <span class="badge bg-info">{{ order.status|title }}</span>
+  <!-- Mobile cards -->
+  <div class="d-lg-none" id="mobileOrdersContainer">
+    {% for order in page_obj %}
+      {% with order_items=order.items.all|dictsort:'id' %}
+      <div class="card mb-3 oh-mcard order-row"
+           data-status="{{ order.status|lower }}"
+           data-order-id="{{ order.id }}"
+           data-customer="{{ order.buyer.get_full_name|lower }}"
+           data-amount="{{ order.get_total|floatformat:2 }}"
+           data-date="{{ order.created_at|date:'M d, Y H:i'|lower }}">
+
+        <div class="oh-mtop">
+          <div>
+            <h6 class="mb-1"><span class="text-primary">#{{ order.id }}</span></h6>
+            <div class="oh-mini">
+              {{ order.created_at|date:"M d, Y" }} • {{ order.created_at|date:"H:i" }}
+            </div>
+          </div>
+
+          <div class="text-end">
+            {% if order.status == 'pending' %}
+              <span class="oh-badge"><span class="oh-dot dot-pending"></span> Pending</span>
+            {% elif order.status == 'processing' %}
+              <span class="oh-badge"><span class="oh-dot dot-processing"></span> Processing</span>
+            {% elif order.status == 'shipped' %}
+              <span class="oh-badge"><span class="oh-dot dot-shipped"></span> Shipped</span>
+            {% elif order.status == 'completed' %}
+              <span class="oh-badge"><span class="oh-dot dot-completed"></span> Completed</span>
+            {% elif order.status == 'cancelled' %}
+              <span class="oh-badge"><span class="oh-dot dot-cancelled"></span> Cancelled</span>
+            {% else %}
+              <span class="oh-badge"><span class="oh-dot dot-other"></span> {{ order.status|title }}</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="oh-mbody">
+          <div class="row g-2">
+            <div class="col-6">
+              <div class="oh-mini">Customer</div>
+              <div class="fw-bold">{{ order.buyer.get_full_name|default:"N/A" }}</div>
+            </div>
+            <div class="col-6 text-end">
+              <div class="oh-mini">Amount</div>
+              <div class="fw-bold">D{{ order.get_total|floatformat:2 }}</div>
+            </div>
+
+            <div class="col-6">
+              <div class="oh-mini">Warehouse</div>
+              {% if order_items|length == 0 %}
+                <span class="badge bg-secondary">No Items</span>
+              {% elif order_items.0.shipped_to_warehouse %}
+                <span class="badge bg-success">Shipped</span>
               {% else %}
-                <span class="badge bg-secondary">{{ order.status|title }}</span>
+                <span class="badge bg-secondary">Not Shipped</span>
               {% endif %}
             </div>
 
-            <div class="row">
-              <div class="col-6">
-                <small class="text-muted d-block">Customer</small>
-                <strong>{{ order.buyer.get_full_name|default:"N/A" }}</strong>
-              </div>
-              <div class="col-6">
-                <small class="text-muted d-block">Amount</small>
-                <strong>D{{ order.get_total|floatformat:2 }}</strong>
-              </div>
-            </div>
-
-            <div class="row mt-2">
-              <div class="col-6">
-                <small class="text-muted d-block">Date</small>
-                {{ order.created_at|date:"M d, Y H:i" }}
-              </div>
-              <div class="col-6">
-                <small class="text-muted d-block">Warehouse</small>
-                {% if order_items|length == 0 %}
-                  <span class="badge bg-secondary">No Items</span>
-                {% elif order_items.0.shipped_to_warehouse %}
-                  <span class="badge bg-success">Shipped</span>
-                {% else %}
-                  <span class="badge bg-secondary">Not Shipped</span>
-                {% endif %}
-              </div>
-            </div>
-
-            <div class="mt-3">
-              <a href="{% url 'stores:store_order_detail' store.id order.id %}" class="btn btn-sm btn-outline-primary">
-                <i class="fas fa-eye me-1" aria-hidden="true"></i>View Details
+            <div class="col-6 text-end">
+              <div class="oh-mini">Actions</div>
+              <a href="{% url 'stores:store_order_detail' store.id order.id %}" class="btn btn-sm btn-outline-primary" style="border-radius: 12px;">
+                <i class="fas fa-eye me-1"></i>View
               </a>
               {% if order.status == 'pending' %}
-                <button class="btn btn-sm btn-outline-success ms-2" onclick="updateOrderStatus({{ order.id }}, 'processing')">
-                  <i class="fas fa-play me-1" aria-hidden="true"></i>Process
+                <button class="btn btn-sm btn-outline-success ms-1" style="border-radius: 12px;"
+                        onclick="updateOrderStatus({{ order.id }}, 'processing')">
+                  <i class="fas fa-play me-1"></i>Process
                 </button>
               {% endif %}
             </div>
           </div>
         </div>
-        {% endwith %}
-      {% endfor %}
-    </div>
+
+      </div>
+      {% endwith %}
+    {% endfor %}
+  </div>
 
   {% else %}
     <!-- Empty State -->
     <div class="text-center py-5">
-      <i class="fas fa-shopping-cart fa-4x text-muted mb-4" aria-hidden="true"></i>
+      <i class="fas fa-shopping-cart fa-4x text-muted mb-4"></i>
       <h4 class="text-muted">No orders yet</h4>
       <p class="text-muted">Orders will appear here once customers start purchasing from your store.</p>
       <a href="{% url 'stores:store_dashboard' store.id %}" class="btn btn-primary">
-        <i class="fas fa-arrow-left me-1" aria-hidden="true"></i>Back to Dashboard
+        <i class="fas fa-arrow-left me-1"></i>Back to Dashboard
       </a>
     </div>
   {% endif %}
 
-  <!-- No Results Message -->
-  <div id="noResults" class="text-center py-5" style="display: none;">
-    <i class="fas fa-search fa-3x text-muted mb-3" aria-hidden="true"></i>
+  <!-- No Results -->
+  <div id="noResults" class="text-center py-5" style="display:none;">
+    <i class="fas fa-search fa-3x text-muted mb-3"></i>
     <h4 class="text-muted">No orders found</h4>
     <p class="text-muted">Try adjusting your search or filter criteria</p>
     <button class="btn btn-outline-primary" onclick="clearAllFilters()">
-      <i class="fas fa-times me-1" aria-hidden="true"></i>Clear Filters
+      <i class="fas fa-times me-1"></i>Clear Filters
     </button>
   </div>
 
@@ -438,56 +694,65 @@
     <ul class="pagination justify-content-center">
       {% if page_obj.has_previous %}
       <li class="page-item">
-        <a class="page-link" href="?page={{ page_obj.previous_page_number }}" aria-label="Previous page">
-          <i class="fas fa-chevron-left" aria-hidden="true"></i>
+        <a class="page-link" href="?page={{ page_obj.previous_page_number }}" aria-label="Previous">
+          <i class="fas fa-chevron-left"></i>
         </a>
       </li>
       {% endif %}
 
       {% for num in page_obj.paginator.page_range %}
         {% if page_obj.number == num %}
-          <li class="page-item active" aria-current="page">
-            <span class="page-link">{{ num }}</span>
-          </li>
+          <li class="page-item active" aria-current="page"><span class="page-link">{{ num }}</span></li>
         {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
-          <li class="page-item">
-            <a class="page-link" href="?page={{ num }}">{{ num }}</a>
-          </li>
-        {% elif num == page_obj.paginator.page_range.0 or num == page_obj.paginator.page_range.1 %}
-          <li class="page-item">
-            <a class="page-link" href="?page={{ num }}">{{ num }}</a>
-          </li>
-        {% elif num == page_obj.paginator.num_pages or num == page_obj.paginator.num_pages|add:'-1' %}
-          <li class="page-item">
-            <a class="page-link" href="?page={{ num }}">{{ num }}</a>
-          </li>
+          <li class="page-item"><a class="page-link" href="?page={{ num }}">{{ num }}</a></li>
         {% elif num == page_obj.number|add:'-4' or num == page_obj.number|add:'4' %}
-          <li class="page-item disabled">
-            <span class="page-link">...</span>
-          </li>
+          <li class="page-item disabled"><span class="page-link">…</span></li>
         {% endif %}
       {% endfor %}
 
       {% if page_obj.has_next %}
       <li class="page-item">
-        <a class="page-link" href="?page={{ page_obj.next_page_number }}" aria-label="Next page">
-          <i class="fas fa-chevron-right" aria-hidden="true"></i>
+        <a class="page-link" href="?page={{ page_obj.next_page_number }}" aria-label="Next">
+          <i class="fas fa-chevron-right"></i>
         </a>
       </li>
       {% endif %}
     </ul>
   </nav>
   {% endif %}
+
+  <!-- Bulk action tray (shows only when you select items) -->
+  <div class="oh-bulkbar" id="bulkBar">
+    <div class="oh-bulkbar-inner">
+      <div>
+        <strong id="bulkCountText">0 selected</strong>
+        <div class="oh-mini text-white-50">Tip: bulk actions save serious time.</div>
+      </div>
+      <div class="d-flex gap-2 flex-wrap">
+        <button class="btn btn-outline-light" onclick="toggleSelectAll()">Select all</button>
+        <button class="btn btn-primary" onclick="bulkAction()" id="bulkActionBtn2">
+          <i class="fas fa-wand-magic-sparkles me-1"></i>Bulk Action
+        </button>
+        <button class="btn btn-danger" onclick="clearSelection()">
+          <i class="fas fa-xmark me-1"></i>Clear
+        </button>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script src="{% static 'js/orders-filter.js' %}"></script>
+
 <script>
-  // Enhanced functionality
   document.addEventListener('DOMContentLoaded', function() {
     updateStatsCounts();
     initializeKeyboardNavigation();
+    syncChipActiveState();
+    updateBulkUI();
   });
 
+  // ✅ Keep your existing hooks compatible
   function updateStatsCounts() {
     const rows = document.querySelectorAll('.order-row');
     let pending = 0, shipped = 0, completed = 0;
@@ -499,74 +764,119 @@
       else if (status === 'completed') completed++;
     });
 
-    document.getElementById('pendingCount').textContent = pending;
-    document.getElementById('shippedCount').textContent = shipped;
-    document.getElementById('completedCount').textContent = completed;
-  }
-
-  function toggleSelectAll() {
-    const selectAllCheckbox = document.getElementById('selectAllCheckbox');
-    const orderCheckboxes = document.querySelectorAll('.order-checkbox');
-
-    orderCheckboxes.forEach(checkbox => {
-      checkbox.checked = selectAllCheckbox.checked;
-    });
-
-    updateBulkActionButton();
-  }
-
-  function updateBulkActionButton() {
-    const selectedCheckboxes = document.querySelectorAll('.order-checkbox:checked');
-    const bulkActionBtn = document.getElementById('bulkActionBtn');
-
-    bulkActionBtn.disabled = selectedCheckboxes.length === 0;
-    bulkActionBtn.innerHTML = selectedCheckboxes.length > 0
-      ? `<i class="fas fa-cogs me-1"></i>Actions (${selectedCheckboxes.length})`
-      : '<i class="fas fa-cogs me-1"></i>Bulk Action';
+    const p = document.getElementById('pendingCount');
+    const s = document.getElementById('shippedCount');
+    const c = document.getElementById('completedCount');
+    if (p) p.textContent = pending;
+    if (s) s.textContent = shipped;
+    if (c) c.textContent = completed;
   }
 
   function initializeKeyboardNavigation() {
     document.addEventListener('keydown', function(e) {
       if (e.key === '/' && !e.target.matches('input, textarea')) {
         e.preventDefault();
-        document.getElementById('orderSearch').focus();
+        const input = document.getElementById('orderSearch');
+        if (input) input.focus();
       }
     });
   }
 
-  function updateOrderStatus(orderId, newStatus) {
-    // Add your AJAX call here
-    console.log(`Updating order ${orderId} to ${newStatus}`);
+  // Chip active state (UI only)
+  function syncChipActiveState(activeFilter){
+    document.querySelectorAll('.oh-chipbtn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.filter === (activeFilter || 'all'));
+    });
   }
 
-  function exportOrders(format) {
-    // Add your export functionality here
-    console.log(`Exporting orders as ${format}`);
+  // Wrap your applyFilter to also update chips
+  const _applyFilter = window.applyFilter;
+  window.applyFilter = function(status, label){
+    if (typeof _applyFilter === 'function') _applyFilter(status, label);
+    syncChipActiveState(status);
+    updateStatsCounts();
+  };
+
+  const _clearAllFilters = window.clearAllFilters;
+  window.clearAllFilters = function(){
+    if (typeof _clearAllFilters === 'function') _clearAllFilters();
+    syncChipActiveState('all');
+    updateStatsCounts();
+  };
+
+  function toggleSelectAll() {
+    const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+    const orderCheckboxes = document.querySelectorAll('.order-checkbox');
+
+    // If selectAllCheckbox exists, use it; else toggle based on current state
+    let target = selectAllCheckbox ? selectAllCheckbox.checked : null;
+
+    if (selectAllCheckbox && target === false) {
+      // if user clicked button, invert based on first checkbox
+      const first = orderCheckboxes[0];
+      target = first ? !first.checked : false;
+      selectAllCheckbox.checked = target;
+    } else if (!selectAllCheckbox) {
+      const first = orderCheckboxes[0];
+      target = first ? !first.checked : false;
+    }
+
+    orderCheckboxes.forEach(cb => cb.checked = target);
+    updateBulkActionButton();
+    updateBulkUI();
   }
 
-  function printOrder(orderId) {
-    // Add print functionality
-    console.log(`Printing order ${orderId}`);
+  function updateBulkActionButton() {
+    const selected = document.querySelectorAll('.order-checkbox:checked');
+    const btn = document.getElementById('bulkActionBtn');
+    if (!btn) return;
+
+    btn.disabled = selected.length === 0;
+    btn.innerHTML = selected.length
+      ? `<i class="fas fa-wand-magic-sparkles me-1"></i>Actions (${selected.length})`
+      : `<i class="fas fa-wand-magic-sparkles me-1"></i>Bulk Action`;
   }
 
-  function duplicateOrder(orderId) {
-    // Add duplicate functionality
-    console.log(`Duplicating order ${orderId}`);
-  }
+  function updateBulkUI(){
+    const selected = document.querySelectorAll('.order-checkbox:checked').length;
+    const bulkBar = document.getElementById('bulkBar');
+    const bulkText = document.getElementById('bulkCountText');
+    const btn2 = document.getElementById('bulkActionBtn2');
 
-  function cancelOrder(orderId) {
-    if (confirm('Are you sure you want to cancel this order?')) {
-      // Add cancel functionality
-      console.log(`Cancelling order ${orderId}`);
+    if (bulkText) bulkText.textContent = `${selected} selected`;
+    if (btn2) btn2.disabled = selected === 0;
+
+    if (bulkBar){
+      bulkBar.style.display = selected > 0 ? 'block' : 'none';
     }
   }
 
-  function bulkAction() {
+  function clearSelection(){
+    document.querySelectorAll('.order-checkbox').forEach(cb => cb.checked = false);
+    const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+    if (selectAllCheckbox) selectAllCheckbox.checked = false;
+    updateBulkActionButton();
+    updateBulkUI();
+  }
+
+  // keep bulk UI synced when user clicks any checkbox
+  document.addEventListener('change', function(e){
+    if (e.target && e.target.classList.contains('order-checkbox')){
+      updateBulkActionButton();
+      updateBulkUI();
+    }
+  });
+
+  // placeholders (your AJAX)
+  function updateOrderStatus(orderId, newStatus){ console.log('Update', orderId, newStatus); }
+  function exportOrders(format){ console.log('Export', format); }
+  function duplicateOrder(orderId){ console.log('Duplicate', orderId); }
+  function cancelOrder(orderId){
+    if (confirm('Are you sure you want to cancel this order?')) console.log('Cancel', orderId);
+  }
+  function bulkAction(){
     const selectedOrders = Array.from(document.querySelectorAll('.order-checkbox:checked')).map(cb => cb.value);
-    if (selectedOrders.length > 0) {
-      // Show bulk action modal or dropdown
-      console.log('Bulk action for orders:', selectedOrders);
-    }
+    console.log('Bulk for:', selectedOrders);
   }
 </script>
 

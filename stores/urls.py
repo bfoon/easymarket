@@ -10,6 +10,7 @@ urlpatterns = [
 
     # 🔹 NEW: B2B marketplace URL
     path("b2b/", views.b2b_marketplace, name="b2b_marketplace"),
+    path("stores/<uuid:store_id>/api/b2b-counts/", views.b2b_counts, name="b2b_counts"),
 
     path("<slug:slug>/b2b-settings/", views.b2b_settings, name="b2b_settings"),
 

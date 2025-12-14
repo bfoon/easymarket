@@ -49,7 +49,7 @@ from django.apps import apps
 from .models import (
     Store, StoreHours, StoreShippingZone, StoreReturnSettings,
     StoreInventoryTracking, StoreMetrics, StoreReferral, PromotionPlan,
-     PromotionSubscription, PromotionCampaign, PromotionPlacement, B2BCart,
+     PromotionSubscription, PromotionCampaign, PromotionPlacement, B2BCart, B2BOrder,
 )
 from .forms import (
     StoreSettingsForm, StoreHoursFormSet, StoreShippingZoneFormSet,
@@ -3853,7 +3853,7 @@ def b2b_settings(request, slug):
     }
     return render(request, "b2b/b2b_settings.html", context)
 
-login_required
+@login_required
 @require_POST
 def create_b2b_inquiry(request):
     # ✅ Force JSON response expectation (optional but nice)
@@ -3931,3 +3931,20 @@ def create_b2b_inquiry(request):
         )
 
     return JsonResponse({"success": True, "message": "Inquiry sent successfully."})
+
+
+@login_required
+def b2b_counts(request, store_id):
+    store = get_object_or_404(Store, id=store_id)
+
+    # orders count (exclude cancelled)
+    orders_count = B2BOrder.objects.filter(store=store).exclude(Q(status="cancelled") | Q(status="shipped") | Q(status="delivered")).count()
+
+    # cart count (active cart items for this user)
+    cart = B2BCart.objects.filter(buyer=request.user, is_active=True).first()
+    cart_count = cart.items.count() if cart else 0
+
+    return JsonResponse({
+        "orders": orders_count,
+        "cart": cart_count,
+    })
