@@ -4,7 +4,7 @@
 {% load humanize %}
 {% load marketplace_extras %}
 
-{% block extra_head %}
+{% block content %}
 <!-- SEO and Performance Optimizations -->
 <meta name="description" content="{{ product.name }} - {{ product.description|truncatechars:160 }}">
 <meta property="og:title" content="{{ product.name }} - EasyMarket">
@@ -44,8 +44,8 @@
 <!-- Preload critical resources -->
 <link rel="preload" href="{{ product.image.url }}" as="image">
 
-<!-- Extra CSS needed by hover zoom & availability (safe if duplicated by JS) -->
 <style>
+  /* Your existing safe helpers */
   .main-image-container { position: relative; overflow: hidden; cursor: zoom-in; }
   #mainProductImage { display:block; width:100%; height:100%; object-fit: cover; transition: transform .08s ease-out; }
   #mainProductImage.contain-mode { object-fit: contain; }
@@ -57,824 +57,1013 @@
   .image-overlay { position:absolute; inset:0; display:flex; align-items:flex-end; justify-content:space-between; pointer-events:none; padding:.5rem; }
   .image-controls button { pointer-events:auto; }
   .image-info { pointer-events:none; }
-</style>
-{% endblock %}
 
-{% block content %}
+  /* ---------------------------------------
+     Creative + Professional Enhancements
+  ---------------------------------------- */
+
+  /* Trust chips */
+  .em-trust-chips{ display:flex; flex-wrap:wrap; gap:.5rem; }
+  .em-chip{
+    display:inline-flex; align-items:center; gap:.4rem;
+    padding:.4rem .65rem;
+    border-radius:999px;
+    background:#f8fafc;
+    border:1px solid rgba(0,0,0,.06);
+    font-size:.85rem;
+    color:#334155;
+  }
+  .em-chip i{ opacity:.8; }
+
+  /* Deal banner */
+  .em-banner{
+    display:flex; align-items:center; gap:.6rem;
+    padding:.75rem .9rem;
+    border-radius: 14px;
+    border:1px solid rgba(0,0,0,.06);
+    box-shadow: 0 10px 24px rgba(0,0,0,.04);
+    font-weight:700;
+  }
+  .em-banner i{ opacity:.9; }
+  .em-banner-pill{
+    margin-left:auto;
+    font-size:.8rem;
+    padding:.25rem .6rem;
+    border-radius:999px;
+    background: rgba(255,255,255,.7);
+    border:1px solid rgba(0,0,0,.06);
+  }
+  .em-banner-deal{ background: #ecfeff; color:#0f766e; }
+  .em-banner-stock{ background: #eff6ff; color:#1d4ed8; }
+  .em-banner-out{ background: #fef2f2; color:#b91c1c; }
+
+  /* Thumbnails feel premium */
+  .thumbnail-item{ scroll-snap-align: start; }
+  .thumbnail-gallery{ padding-bottom:.25rem; }
+  .thumbnail-item img{ transition: transform .15s ease, outline-color .15s ease; }
+  .thumbnail-item:hover img{ transform: translateY(-2px); }
+
+  /* Mobile sticky buy bar */
+  .em-sticky-buy{
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    z-index: 1080;
+    background: rgba(255,255,255,.92);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid rgba(0,0,0,.06);
+    padding: .75rem .9rem;
+    box-shadow: 0 -10px 30px rgba(0,0,0,.08);
+  }
+  .em-sticky-inner{
+    display:flex; align-items:center; justify-content:space-between; gap:.75rem;
+  }
+  .em-sticky-title{ font-weight:800; font-size:.95rem; line-height:1.1; }
+  .em-sticky-price{ font-weight:900; color: var(--bs-primary,#0d6efd); }
+  .em-sticky-actions{ display:flex; gap:.5rem; }
+  .em-sticky-btn{
+    border:0; border-radius: 999px;
+    padding: .72rem 1rem;
+    font-weight:800;
+    display:inline-flex; align-items:center; gap:.5rem;
+  }
+  .em-sticky-cart{
+    width: 44px; justify-content:center;
+    background: #f3f4f6;
+  }
+  .em-sticky-buy{
+    background: var(--bs-primary,#0d6efd);
+    color:#fff;
+  }
+  .em-sticky-btn:disabled{ opacity:.55; pointer-events:none; }
+
+ /* --- Image-driven feature mode (Premium UI) --- */
+  .em-feature-lock {
+    display:flex; align-items:center; gap:.5rem;
+    padding:.55rem .75rem;
+    border-radius: 14px;
+    border: 1px solid rgba(0,0,0,.06);
+    background: linear-gradient(180deg, rgba(59,130,246,.10), rgba(59,130,246,.04));
+    color:#1e40af;
+    font-weight: 800;
+    margin: .75rem 0 1rem;
+  }
+  .em-feature-lock i{ opacity:.85; }
+
+  .em-feature-hint{
+    font-size:.85rem;
+    color:#64748b;
+    margin-top:-.25rem;
+    margin-bottom: .5rem;
+  }
+
+  /* When locked by image, hide unrelated options (smooth) */
+  .feature-group.em-locked .feature-options label {
+    display:none;
+  }
+  .feature-group.em-locked .feature-options label.em-keep {
+    display:inline-flex;
+  }
+
+  /* Nice pulse when selection changes from image */
+  .feature-group.em-pulse {
+    animation: emPulse .35s ease-in-out;
+  }
+  @keyframes emPulse{
+    0%{ transform: scale(1); }
+    50%{ transform: scale(1.01); }
+    100%{ transform: scale(1); }
+  }
+
+  /* Tiny toast */
+  .em-mini-toast{
+    position: fixed;
+    left: 50%;
+    bottom: 92px;
+    transform: translateX(-50%);
+    z-index: 2000;
+    background: rgba(17,24,39,.92);
+    color:#fff;
+    padding:.55rem .75rem;
+    border-radius: 999px;
+    font-weight: 800;
+    font-size:.85rem;
+    box-shadow: 0 12px 30px rgba(0,0,0,.18);
+    opacity: 0;
+    pointer-events:none;
+    transition: opacity .18s ease, transform .18s ease;
+  }
+  .em-mini-toast.show{
+    opacity:1;
+    transform: translateX(-50%) translateY(-4px);
+  }
+
+  /* Avoid sticky bar overlapping footer content */
+  @media (max-width: 991.98px){
+    body{ padding-bottom: 80px; }
+  }
+</style>
+
 <link rel="stylesheet" href="{% static 'css/main.css' %}">
 <link rel="stylesheet" href="{% static 'css/product_detail.css' %}">
 <link rel="stylesheet" href="{% static 'css/message.css' %}">
 
 <!-- Enhanced Breadcrumb with structured data -->
 <nav class="breadcrumb-section" aria-label="Breadcrumb navigation">
-    <div class="container">
-        <ol class="breadcrumb mb-0" itemscope itemtype="https://schema.org/BreadcrumbList">
-            <!-- Home -->
-            <li class="breadcrumb-item" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
-                <a href="{% url 'marketplace:product_list' %}" itemprop="item">
-                    <span itemprop="name"><i class="fas fa-home me-1" aria-hidden="true"></i> Home</span>
-                </a>
-                <meta itemprop="position" content="1" />
-            </li>
+  <div class="container">
+    <ol class="breadcrumb mb-0" itemscope itemtype="https://schema.org/BreadcrumbList">
+      <li class="breadcrumb-item" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+        <a href="{% url 'marketplace:product_list' %}" itemprop="item">
+          <span itemprop="name"><i class="fas fa-home me-1" aria-hidden="true"></i> Home</span>
+        </a>
+        <meta itemprop="position" content="1" />
+      </li>
 
-            <!-- Parent Category -->
-            {% if product.category and product.category.parent %}
-            <li class="breadcrumb-item" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
-                <a href="{% url 'marketplace:category_detail' product.category.parent.id %}" itemprop="item">
-                    <span itemprop="name">{{ product.category.parent.name }}</span>
-                </a>
-                <meta itemprop="position" content="2" />
-            </li>
-            {% endif %}
+      {% if product.category and product.category.parent %}
+      <li class="breadcrumb-item" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+        <a href="{% url 'marketplace:category_detail' product.category.parent.id %}" itemprop="item">
+          <span itemprop="name">{{ product.category.parent.name }}</span>
+        </a>
+        <meta itemprop="position" content="2" />
+      </li>
+      {% endif %}
 
-            <!-- Current Category -->
-            {% if product.category %}
-            <li class="breadcrumb-item" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
-                <a href="{% url 'marketplace:category_detail' product.category.id %}" itemprop="item">
-                    <span itemprop="name">{{ product.category.name }}</span>
-                </a>
-                <meta itemprop="position" content="{% if product.category.parent %}3{% else %}2{% endif %}" />
-            </li>
-            {% endif %}
+      {% if product.category %}
+      <li class="breadcrumb-item" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+        <a href="{% url 'marketplace:category_detail' product.category.id %}" itemprop="item">
+          <span itemprop="name">{{ product.category.name }}</span>
+        </a>
+        <meta itemprop="position" content="{% if product.category.parent %}3{% else %}2{% endif %}" />
+      </li>
+      {% endif %}
 
-            <!-- Brand -->
-            {% if product.brand %}
-            <li class="breadcrumb-item" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
-                <a href="{% url 'marketplace:brand_detail' product.brand.id %}" itemprop="item">
-                    <span itemprop="name">{{ product.brand.name }}</span>
-                </a>
-                <meta itemprop="position" content="{% if product.category %}{% if product.category.parent %}4{% else %}3{% endif %}{% else %}2{% endif %}" />
-            </li>
-            {% endif %}
+      {% if product.brand %}
+      <li class="breadcrumb-item" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+        <a href="{% url 'marketplace:brand_detail' product.brand.id %}" itemprop="item">
+          <span itemprop="name">{{ product.brand.name }}</span>
+        </a>
+        <meta itemprop="position" content="{% if product.category %}{% if product.category.parent %}4{% else %}3{% endif %}{% else %}2{% endif %}" />
+      </li>
+      {% endif %}
 
-            <!-- Current Product -->
-            <li class="breadcrumb-item active" aria-current="page">
-                {{ product.name|truncatechars:40 }}
-            </li>
-        </ol>
-    </div>
+      <li class="breadcrumb-item active" aria-current="page">
+        {{ product.name|truncatechars:40 }}
+      </li>
+    </ol>
+  </div>
 </nav>
 
 <!-- Main Product Section -->
 <main class="product-container">
-    <div class="container">
-        <div class="row g-4">
-            <!-- Product Gallery -->
-            <section class="col-lg-5" aria-label="Product images">
-                <div class="product-gallery">
-                    <!-- Main Image Container -->
-                    <div class="main-image-container">
-                        <div class="image-wrapper">
-                            <img src="{{ product.image.url }}"
-                                 alt="{{ product.name }}"
-                                 class="main-product-image"
-                                 id="mainProductImage"
-                                 loading="eager"
-                                 width="500"
-                                 height="500"
-                                 onerror="this.closest('.image-wrapper').innerHTML='<div class=&quot;image-error&quot;><i class=&quot;fas fa-image&quot;></i><div>Image not available</div></div>'">
-                        </div>
-                        <!-- overlay populated by JS; keep empty node for a11y -->
-                        <div class="image-overlay" aria-hidden="true"></div>
-                    </div>
+  <div class="container">
+    <div class="row g-4">
 
-                    <!-- Thumbnail Gallery -->
-                    <div class="thumbnail-gallery-container mt-3">
-                        <div class="thumbnail-gallery d-flex gap-2 overflow-auto" role="tablist" aria-label="Product image thumbnails">
-                            <!-- Main Product Image Thumbnail -->
-                            <button class="thumbnail-item active"
-                                    data-image="{{ product.image.url }}"
-                                    data-features="{}"
-                                    role="tab"
-                                    aria-selected="true"
-                                    aria-label="Main product image"
-                                    tabindex="0">
-                                <img src="{{ product.image.url }}"
-                                     alt="Main image"
-                                     loading="lazy"
-                                     onerror="this.style.display='none'; this.parentElement.innerHTML='<div style=&quot;display:flex;align-items:center;justify-content:center;height:100%;background:#f8f9fa;color:#999;&quot;><i class=&quot;fas fa-image&quot;></i></div>'">
-                            </button>
+      <!-- Product Gallery -->
+      <section class="col-lg-5" aria-label="Product images">
+        <div class="product-gallery">
 
-                            <!-- Additional Product Images with Feature Data -->
-                            {% for img in product.images.all %}
-                            <button class="thumbnail-item"
-                                    data-image="{{ img.image.url }}"
-                                    data-features='{% if img.variants.exists %}{
-                                      {% for variant in img.variants.all %}
-                                        "{{ variant.feature.name|lower|slugify }}": "{{ variant.value }}"
-                                        {% if not forloop.last %},{% endif %}
-                                      {% endfor %}
-                                    }{% else %}{}{% endif %}'
-                                    role="tab"
-                                    aria-selected="false"
-                                    aria-label="Product image {{ forloop.counter }}"
-                                    tabindex="0">
-                                <img src="{{ img.image.url }}"
-                                     alt="Product image {{ forloop.counter }}"
-                                     loading="lazy"
-                                     onerror="this.style.display='none'; this.parentElement.innerHTML='<div style=&quot;display:flex;align-items:center;justify-content:center;height:100%;background:#f8f9fa;color:#999;&quot;><i class=&quot;fas fa-image&quot;></i></div>'">
-                                {% if img.variants.exists %}
-                                <div class="thumbnail-badge">
-                                    {% for variant in img.variants.all %}
-                                        {{ variant.value|first|upper }}
-                                    {% endfor %}
-                                </div>
-                                {% endif %}
-                            </button>
-                            {% endfor %}
-                        </div>
-                    </div>
+          <!-- Main Image Container -->
+          <div class="main-image-container">
+            <div class="image-wrapper">
+              <img src="{{ product.image.url }}"
+                   alt="{{ product.name }}"
+                   class="main-product-image"
+                   id="mainProductImage"
+                   loading="eager"
+                   width="500"
+                   height="500"
+                   onerror="this.closest('.image-wrapper').innerHTML='<div class=&quot;image-error&quot;><i class=&quot;fas fa-image&quot;></i><div>Image not available</div></div>'">
+            </div>
+            <div class="image-overlay" aria-hidden="true"></div>
+          </div>
 
-                    <!-- Video Section (if exists) -->
-                    {% if product.video %}
-                    <div class="video-container mt-3">
-                        <video controls class="product-video" preload="metadata">
-                            <source src="{{ product.video.url }}" type="video/mp4">
-                            <p>Your browser does not support the video tag.
-                               <a href="{{ product.video.url }}">Download the video</a> instead.
-                            </p>
-                        </video>
-                    </div>
-                    {% endif %}
+          <!-- Thumbnail Gallery -->
+          <div class="thumbnail-gallery-container mt-3">
+            <div class="thumbnail-gallery d-flex gap-2 overflow-auto"
+                 style="scroll-snap-type:x mandatory;"
+                 role="tablist"
+                 aria-label="Product image thumbnails">
 
-                    <!-- Additional Image Actions -->
-                    <div class="image-actions mt-3 d-flex gap-2 justify-content-center">
-                        <button class="btn btn-outline-secondary btn-sm" onclick="window.imageHandler?.toggleFitMode()">
-                            <i class="fas fa-expand-arrows-alt me-1"></i> Toggle Fit
-                        </button>
-                        <button class="btn btn-outline-secondary btn-sm" onclick="window.imageHandler?.openFullscreen()">
-                            <i class="fas fa-expand me-1"></i> Fullscreen
-                        </button>
-                    </div>
+              <button class="thumbnail-item active"
+                      data-image="{{ product.image.url }}"
+                      data-features="{}"
+                      role="tab"
+                      aria-selected="true"
+                      aria-label="Main product image"
+                      tabindex="0">
+                <img src="{{ product.image.url }}"
+                     alt="Main image"
+                     loading="lazy"
+                     onerror="this.style.display='none'; this.parentElement.innerHTML='<div style=&quot;display:flex;align-items:center;justify-content:center;height:100%;background:#f8f9fa;color:#999;&quot;><i class=&quot;fas fa-image&quot;></i></div>'">
+              </button>
+
+              {% for img in product.images.all %}
+              <button class="thumbnail-item"
+                      data-image="{{ img.image.url }}"
+                      data-features='{% if img.variants.exists %}{
+                        {% for variant in img.variants.all %}
+                          "{{ variant.feature.name|lower|slugify }}": "{{ variant.value }}"
+                          {% if not forloop.last %},{% endif %}
+                        {% endfor %}
+                      }{% else %}{}{% endif %}'
+                      role="tab"
+                      aria-selected="false"
+                      aria-label="Product image {{ forloop.counter }}"
+                      tabindex="0">
+                <img src="{{ img.image.url }}"
+                     alt="Product image {{ forloop.counter }}"
+                     loading="lazy"
+                     onerror="this.style.display='none'; this.parentElement.innerHTML='<div style=&quot;display:flex;align-items:center;justify-content:center;height:100%;background:#f8f9fa;color:#999;&quot;><i class=&quot;fas fa-image&quot;></i></div>'">
+
+                {% if img.variants.exists %}
+                <div class="thumbnail-badge">
+                  {% for variant in img.variants.all %}
+                    {{ variant.value|first|upper }}
+                  {% endfor %}
                 </div>
-            </section>
+                {% endif %}
+              </button>
+              {% endfor %}
+            </div>
+          </div>
 
-            <!-- Product Information -->
-            <section class="col-lg-7" aria-label="Product details">
-                <div class="product-info">
-                    <h1 class="product-title">{{ product.name }}</h1>
+          {% if product.video %}
+          <div class="video-container mt-3">
+            <video controls class="product-video" preload="metadata">
+              <source src="{{ product.video.url }}" type="video/mp4">
+              <p>Your browser does not support the video tag.
+                <a href="{{ product.video.url }}">Download the video</a> instead.
+              </p>
+            </video>
+          </div>
+          {% endif %}
 
-                    <!-- Brand Information -->
-                    {% if product.brand %}
-                    <div class="brand-info">
-                        <span class="brand-label">Brand:</span>
-                        <a href="{% url 'marketplace:brand_detail' product.brand.id %}" class="brand-link">
-                            {{ product.brand.name }}
-                        </a>
-                    </div>
-                    {% endif %}
+          <div class="image-actions mt-3 d-flex gap-2 justify-content-center">
+            <button class="btn btn-outline-secondary btn-sm" onclick="window.imageHandler?.toggleFitMode()">
+              <i class="fas fa-expand-arrows-alt me-1"></i> Toggle Fit
+            </button>
+            <button class="btn btn-outline-secondary btn-sm" onclick="window.imageHandler?.openFullscreen()">
+              <i class="fas fa-expand me-1"></i> Fullscreen
+            </button>
+          </div>
 
-                    <!-- Rating and Reviews -->
-                    <div class="rating-section" role="region" aria-label="Product rating">
-                        <div class="rating-stars" aria-label="Rating {{ avg_rating|floatformat:1 }} out of 5 stars">
-                            {% for i in rating_range %}
-                                {% if avg_rating >= i %}
-                                    <i class="fas fa-star" aria-hidden="true"></i>
-                                {% elif avg_rating >= i|add:"-0.5" %}
-                                    <i class="fas fa-star-half-alt" aria-hidden="true"></i>
-                                {% else %}
-                                    <i class="far fa-star" aria-hidden="true"></i>
-                                {% endif %}
-                            {% endfor %}
-                        </div>
-                        <span class="rating-text">{{ avg_rating|floatformat:1 }} ({{ review_count }} review{{ review_count|pluralize }})</span>
-                        <span class="divider" aria-hidden="true">|</span>
-                        <span class="sold-count">{{ product.sold_count|default:"0" }} sold</span>
-                    </div>
-
-                    <!-- Price Section -->
-                    <div class="price-section" role="region" aria-label="Product pricing">
-                        <div class="price-display">
-                            <span class="current-price">D{{ product.price|intcomma }}</span>
-                            {% if product.original_price %}
-                                <span class="original-price">D{{ product.original_price|intcomma }}</span>
-                                <span class="discount-badge">
-                                    {{ product.discount_percentage|floatformat:0 }}% OFF
-                                </span>
-                            {% endif %}
-                        </div>
-                        {% if product.used %}
-                            <div class="mt-2">
-                                <span class="condition-badge">
-                                    <i class="fas fa-recycle" aria-hidden="true"></i>Used
-                                </span>
-                            </div>
-                        {% endif %}
-                    </div>
-
-                    <!-- Product Features/Variants -->
-                    {% for feature, options in feature_data.items %}
-                    {# IMPORTANT: radio "name" uses slugified feature key to match JSON keys below #}
-                    <fieldset class="feature-group mb-3" id="{{ feature|lower|slugify }}FeatureGroup">
-                        <legend class="feature-label">
-                            {{ feature }}
-                            <span class="feature-sync-indicator d-none" id="{{ feature|lower|slugify }}SyncIndicator">
-                                <i class="fas fa-check"></i>
-                            </span>
-                        </legend>
-                        <div class="feature-options d-flex flex-wrap gap-2" data-feature="{{ feature|lower|slugify }}" role="radiogroup">
-                            {% for option in options %}
-                                {% if feature|lower == "color" %}
-                                <label class="btn btn-outline-secondary mb-0">
-                                    <input type="radio"
-                                           class="feature-input d-none"
-                                           name="{{ feature|lower|slugify }}"
-                                           id="{{ feature|lower|slugify }}_{{ option.value|slugify }}"
-                                           value="{{ option.value }}"
-                                           autocomplete="off"
-                                           {% if forloop.first %}checked{% endif %}>
-                                    <span class="d-inline-flex align-items-center gap-2">
-                                        <span class="color-swatch" style="width:14px;height:14px;border-radius:50%;background-color: {{ option.value|get_color_code }};"></span>
-                                        <span class="color-name">{{ option.value }}</span>
-                                    </span>
-                                </label>
-                                {% else %}
-                                <label class="btn btn-outline-secondary mb-0">
-                                    <input type="radio"
-                                           class="feature-input d-none"
-                                           name="{{ feature|lower|slugify }}"
-                                           id="{{ feature|lower|slugify }}_{{ option.value|slugify }}"
-                                           value="{{ option.value }}"
-                                           autocomplete="off"
-                                           {% if forloop.first %}checked{% endif %}>
-                                    <span>{{ option.value }}</span>
-                                </label>
-                                {% endif %}
-                            {% endfor %}
-                        </div>
-                    </fieldset>
-                    {% endfor %}
-
-                    <!-- Current Selection Display -->
-                    <div class="selection-display-container" id="selectionDisplayContainer">
-                        <h6><i class="fas fa-info-circle me-1"></i> Current Selection:</h6>
-                        <div id="selectionDisplay"> <!-- populated by JS --> </div>
-                    </div>
-
-                    <!-- Quantity Selector -->
-                    {% if product.stock.quantity > 0 %}
-                    <div class="quantity-section">
-                        <label for="quantity" class="quantity-label">Quantity:</label>
-                        <div class="quantity-controls">
-                            <button class="quantity-btn" type="button" onclick="changeQuantity(-1)" aria-label="Decrease quantity">-</button>
-                            <input type="number" class="quantity-input" id="quantity" value="1" min="1" max="{{ product.stock.quantity }}" aria-label="Product quantity">
-                            <button class="quantity-btn" type="button" onclick="changeQuantity(1)" aria-label="Increase quantity">+</button>
-                        </div>
-                        <span class="stock-info">{{ product.stock.quantity }} available</span>
-                    </div>
-                    {% endif %}
-
-                    <!-- Action Buttons -->
-                    <div class="action-buttons d-flex gap-2 flex-wrap" role="group" aria-label="Product actions">
-                        <!-- Add to Cart -->
-                        <button class="btn-add-cart"
-                                onclick="addToCart({{ product.id }}, this)"
-                                {% if not product.stock or product.stock.quantity == 0 %}disabled aria-disabled="true"{% endif %}>
-                            <span class="spinner-border spinner-border-sm d-none btn-spinner" role="status" aria-hidden="true"></span>
-                            <i class="fas fa-cart-plus me-1" aria-hidden="true"></i> Add to Cart
-                        </button>
-
-                        <!-- Buy Now Button -->
-                        <button class="btn-buy-now"
-                                onclick="buyNow({{ product.id }})"
-                                {% if not product.stock or product.stock.quantity == 0 %}disabled aria-disabled="true"{% endif %}>
-                            <i class="fas fa-bolt me-1" aria-hidden="true"></i> Buy Now
-                        </button>
-
-                        <!-- Wishlist Button -->
-                        <button class="btn-wishlist"
-                                onclick="toggleWishlist({{ product.id }})"
-                                id="wishlistBtn-{{ product.id }}"
-                                aria-label="{% if product.id in user_wishlist_product_ids %}Remove from wishlist{% else %}Add to wishlist{% endif %}">
-                            <i id="wishlistIcon-{{ product.id }}"
-                               class="{% if product.id in user_wishlist_product_ids %}fas fa-heart{% else %}far fa-heart{% endif %}"
-                               aria-hidden="true"></i>
-                        </button>
-                    </div>
-
-                    <!-- Hidden Buy Now Form -->
-                    <form id="buyNowForm" action="{% url 'orders:quick_checkout' %}" method="post" style="display: none;">
-                        {% csrf_token %}
-                        <input type="hidden" name="product" id="buyNowProduct">
-                        <input type="hidden" name="quantity" id="buyNowQuantity">
-                    </form>
-
-                    <!-- Shipping Information -->
-                    {% if user.is_authenticated %}
-                    <section class="shipping-info" aria-label="Shipping information">
-                        <h6 class="shipping-title">
-                            <i class="fas fa-map-marker-alt" aria-hidden="true"></i>
-                            Delivery Information
-                        </h6>
-                        <div class="delivery-address">
-                            <strong>Deliver to:</strong> {{ address_display|default:"Please add your delivery address" }}
-                        </div>
-                        {% if address.geo_code %}
-                            <div class="mb-2">
-                                <a href="https://www.google.com/maps?q={{ address.geo_code }}"
-                                   target="_blank" rel="noopener noreferrer"
-                                   class="text-decoration-underline text-info small">
-                                    View on Google Maps ({{ address.geo_code }})
-                                </a>
-                            </div>
-                        {% endif %}
-                        <div class="shipping-options">
-                            <div class="shipping-option">
-                                <i class="fas fa-clock text-primary" aria-hidden="true"></i>
-                                <span>Estimated Delivery: Tomorrow</span>
-                            </div>
-                            <div class="shipping-option">
-                                <i class="fas fa-truck text-primary" aria-hidden="true"></i>
-                                <span>Free Shipping on orders over D2,000</span>
-                            </div>
-                        </div>
-                        <button class="btn btn-outline-primary btn-change-address btn-sm"
-                                data-bs-toggle="modal" data-bs-target="#editAddressModal"
-                                aria-label="Change delivery address">
-                            <i class="fas fa-edit" aria-hidden="true"></i> Change Address
-                        </button>
-
-                        <!-- Address Edit Modal -->
-                        <div class="modal fade" id="editAddressModal" tabindex="-1" aria-labelledby="editAddressModalLabel" aria-hidden="true">
-                            <div class="modal-dialog modal-dialog-centered">
-                                <div class="modal-content shadow rounded-4">
-                                    <div class="modal-header bg-primary text-white">
-                                        <h5 class="modal-title" id="editAddressModalLabel">
-                                            <i class="fas fa-map-marker-alt me-2" aria-hidden="true"></i>Edit Delivery Address
-                                        </h5>
-                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-                                    </div>
-                                    <form method="POST" action="{% url 'accounts:edit_address_modal' %}" novalidate>
-                                        {% csrf_token %}
-                                        <div class="modal-body">
-                                            <div class="mb-3">
-                                                <label for="address1" class="form-label">Address Line 1 <span class="text-danger">*</span></label>
-                                                <textarea class="form-control" id="address1" name="address1" rows="2" required aria-describedby="address1Help">{{ address.address1 }}</textarea>
-                                                <div id="address1Help" class="form-text">Enter your street address</div>
-                                            </div>
-                                            <div class="mb-3">
-                                                <label for="address2" class="form-label">Address Line 2</label>
-                                                <textarea class="form-control" id="address2" name="address2" rows="2" aria-describedby="address2Help">{{ address.address2 }}</textarea>
-                                                <div id="address2Help" class="form-text">Apartment, suite, etc. (optional)</div>
-                                            </div>
-                                            <div class="mb-3">
-                                                <label for="country" class="form-label">Country <span class="text-danger">*</span></label>
-                                                <input type="text" class="form-control" id="country" name="country" value="{{ address.country }}" required>
-                                            </div>
-                                            <div class="mb-3">
-                                                <label for="geo_code" class="form-label">Geo Code</label>
-                                                <input type="text" name="geo_code" id="geo_code" class="form-control" placeholder="e.g., GC-9A23-KL4" value="{{ address.geo_code }}" aria-describedby="geoCodeHelp">
-                                                <div id="geoCodeHelp" class="form-text">Optional location code for precise delivery</div>
-                                            </div>
-                                        </div>
-                                        <div class="modal-footer justify-content-between">
-                                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                                            <button type="submit" class="btn btn-success">
-                                                <i class="fas fa-save me-1" aria-hidden="true"></i> Save Address
-                                            </button>
-                                        </div>
-                                    </form>
-                                </div>
-                            </div>
-                        </div>
-                    </section>
-                    {% else %}
-                    <div class="alert alert-light text-center">
-                        <i class="fas fa-user-lock fa-2x mb-2" aria-hidden="true"></i>
-                        <p class="mb-2">Please <a href="{% url 'accounts:sign_in' %}">Login</a> to see shipping options</p>
-                    </div>
-                    {% endif %}
-
-                    <!-- Seller Information -->
-                    <section class="seller-info" aria-label="Seller information">
-                        {% if seller_store %}
-                            <div class="seller-header">
-                                <div class="seller-avatar">
-                                    <i class="fas fa-store" aria-hidden="true"></i>
-                                </div>
-                                <div class="seller-details">
-                                    <div class="seller-name">
-                                        {% if store %}
-                                            <a href="{% url 'stores:store_detail' store.slug %}">{{ store.name }}</a>
-                                        {% else %}
-                                            {{ product.seller.get_full_name|default:product.seller.username }}
-                                        {% endif %}
-                                    </div>
-                                    <div class="seller-rating">
-                                        <span class="rating-value">Seller Rating: {{ store.get_average_rating|default:0|floatformat:1 }}/5.0</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="seller-actions">
-                                <a href="{% url 'stores:store_detail' seller_store.slug %}" class="btn-visit-store">
-                                    <i class="fas fa-store" aria-hidden="true"></i> Visit Store
-                                </a>
-                                {% if request.user.is_authenticated and request.user != product.seller %}
-                                <button type="button" class="btn-chat" aria-label="Start chat with seller">
-                                    <i class="fas fa-comments" aria-hidden="true"></i> Chat with Seller
-                                </button>
-                                {% endif %}
-                            </div>
-                        {% else %}
-                            <span class="text-muted">Unknown Seller</span>
-                        {% endif %}
-                    </section>
-                </div>
-            </section>
         </div>
+      </section>
+
+      <!-- Product Information -->
+      <section class="col-lg-7" aria-label="Product details">
+        <div class="product-info">
+
+          <h1 class="product-title">{{ product.name }}</h1>
+
+          <!-- Deal Banner (NEW) -->
+          <div class="em-deal-banner mt-2">
+            {% if product.stock and product.stock.quantity > 0 %}
+              {% if product.discount_percentage %}
+                <div class="em-banner em-banner-deal">
+                  <i class="fas fa-tags"></i>
+                  Hot deal! Save {{ product.discount_percentage|floatformat:0 }}% today.
+                  <span class="em-banner-pill">Limited</span>
+                </div>
+              {% else %}
+                <div class="em-banner em-banner-stock">
+                  <i class="fas fa-box"></i>
+                  In stock — ready to ship.
+                  <span class="em-banner-pill">{{ product.stock.quantity }} left</span>
+                </div>
+              {% endif %}
+            {% else %}
+              <div class="em-banner em-banner-out">
+                <i class="fas fa-times-circle"></i>
+                Out of stock — add to wishlist and we’ll notify you.
+              </div>
+            {% endif %}
+          </div>
+
+          {% if product.brand %}
+          <div class="brand-info mt-3">
+            <span class="brand-label">Brand:</span>
+            <a href="{% url 'marketplace:brand_detail' product.brand.id %}" class="brand-link">
+              {{ product.brand.name }}
+            </a>
+          </div>
+          {% endif %}
+
+          <!-- Rating and Reviews -->
+          <div class="rating-section" role="region" aria-label="Product rating">
+            <div class="rating-stars" aria-label="Rating {{ avg_rating|floatformat:1 }} out of 5 stars">
+              {% for i in rating_range %}
+                {% if avg_rating >= i %}
+                  <i class="fas fa-star" aria-hidden="true"></i>
+                {% elif avg_rating >= i|add:"-0.5" %}
+                  <i class="fas fa-star-half-alt" aria-hidden="true"></i>
+                {% else %}
+                  <i class="far fa-star" aria-hidden="true"></i>
+                {% endif %}
+              {% endfor %}
+            </div>
+            <span class="rating-text">{{ avg_rating|floatformat:1 }} ({{ review_count }} review{{ review_count|pluralize }})</span>
+            <span class="divider" aria-hidden="true">|</span>
+            <span class="sold-count">{{ product.sold_count|default:"0" }} sold</span>
+          </div>
+
+          <!-- Price Section -->
+          <div class="price-section" role="region" aria-label="Product pricing">
+            <div class="price-display">
+              <span class="current-price">D{{ product.price|intcomma }}</span>
+              {% if product.original_price %}
+                <span class="original-price">D{{ product.original_price|intcomma }}</span>
+                <span class="discount-badge">{{ product.discount_percentage|floatformat:0 }}% OFF</span>
+              {% endif %}
+            </div>
+            {% if product.used %}
+            <div class="mt-2">
+              <span class="condition-badge">
+                <i class="fas fa-recycle" aria-hidden="true"></i>Used
+              </span>
+            </div>
+            {% endif %}
+          </div>
+
+          <!-- Trust Chips (NEW) -->
+          <div class="em-trust-chips mt-3">
+            <span class="em-chip"><i class="fas fa-shield-alt"></i> Secure checkout</span>
+            <span class="em-chip"><i class="fas fa-sync-alt"></i> Easy returns</span>
+            <span class="em-chip"><i class="fas fa-bolt"></i> Fast dispatch</span>
+            <span class="em-chip"><i class="fas fa-check-circle"></i> Verified seller</span>
+          </div>
+
+          <!-- Product Features/Variants -->
+          {% for feature, options in feature_data.items %}
+          <fieldset class="feature-group mb-3" id="{{ feature|lower|slugify }}FeatureGroup">
+            <legend class="feature-label">
+              {{ feature }}
+              <span class="feature-sync-indicator d-none" id="{{ feature|lower|slugify }}SyncIndicator">
+                <i class="fas fa-check"></i>
+              </span>
+            </legend>
+
+            <div class="feature-options d-flex flex-wrap gap-2"
+                 data-feature="{{ feature|lower|slugify }}"
+                 role="radiogroup">
+              {% for option in options %}
+                {% if feature|lower == "color" %}
+                <label class="btn btn-outline-secondary mb-0">
+                  <input type="radio"
+                         class="feature-input d-none"
+                         name="{{ feature|lower|slugify }}"
+                         id="{{ feature|lower|slugify }}_{{ option.value|slugify }}"
+                         value="{{ option.value }}"
+                         autocomplete="off"
+                         {% if forloop.first %}checked{% endif %}>
+                  <span class="d-inline-flex align-items-center gap-2">
+                    <span class="color-swatch"
+                          style="width:14px;height:14px;border-radius:50%;background-color: {{ option.value|get_color_code }};"></span>
+                    <span class="color-name">{{ option.value }}</span>
+                  </span>
+                </label>
+                {% else %}
+                <label class="btn btn-outline-secondary mb-0">
+                  <input type="radio"
+                         class="feature-input d-none"
+                         name="{{ feature|lower|slugify }}"
+                         id="{{ feature|lower|slugify }}_{{ option.value|slugify }}"
+                         value="{{ option.value }}"
+                         autocomplete="off"
+                         {% if forloop.first %}checked{% endif %}>
+                  <span>{{ option.value }}</span>
+                </label>
+                {% endif %}
+              {% endfor %}
+            </div>
+          </fieldset>
+          {% endfor %}
+
+          <!-- Current Selection Display -->
+          <div class="selection-display-container" id="selectionDisplayContainer">
+            <h6><i class="fas fa-info-circle me-1"></i> Current Selection:</h6>
+            <div id="selectionDisplay"></div>
+          </div>
+
+          <!-- Quantity Selector -->
+          {% if product.stock.quantity > 0 %}
+          <div class="quantity-section">
+            <label for="quantity" class="quantity-label">Quantity:</label>
+            <div class="quantity-controls">
+              <button class="quantity-btn" type="button" onclick="changeQuantity(-1)" aria-label="Decrease quantity">-</button>
+              <input type="number" class="quantity-input" id="quantity" value="1" min="1" max="{{ product.stock.quantity }}" aria-label="Product quantity">
+              <button class="quantity-btn" type="button" onclick="changeQuantity(1)" aria-label="Increase quantity">+</button>
+            </div>
+            <span class="stock-info">{{ product.stock.quantity }} available</span>
+          </div>
+          {% endif %}
+
+          <!-- Action Buttons -->
+          <div class="action-buttons d-flex gap-2 flex-wrap" role="group" aria-label="Product actions">
+            <button class="btn-add-cart"
+                    onclick="addToCart({{ product.id }}, this)"
+                    {% if not product.stock or product.stock.quantity == 0 %}disabled aria-disabled="true"{% endif %}>
+              <span class="spinner-border spinner-border-sm d-none btn-spinner" role="status" aria-hidden="true"></span>
+              <i class="fas fa-cart-plus me-1" aria-hidden="true"></i> Add to Cart
+            </button>
+
+            <button class="btn-buy-now"
+                    onclick="buyNow({{ product.id }})"
+                    {% if not product.stock or product.stock.quantity == 0 %}disabled aria-disabled="true"{% endif %}>
+              <i class="fas fa-bolt me-1" aria-hidden="true"></i> Buy Now
+            </button>
+
+            <button class="btn-wishlist"
+                    onclick="toggleWishlist({{ product.id }})"
+                    id="wishlistBtn-{{ product.id }}"
+                    aria-label="{% if product.id in user_wishlist_product_ids %}Remove from wishlist{% else %}Add to wishlist{% endif %}">
+              <i id="wishlistIcon-{{ product.id }}"
+                 class="{% if product.id in user_wishlist_product_ids %}fas fa-heart{% else %}far fa-heart{% endif %}"
+                 aria-hidden="true"></i>
+            </button>
+          </div>
+
+          <!-- Hidden Buy Now Form -->
+          <form id="buyNowForm" action="{% url 'orders:quick_checkout' %}" method="post" style="display: none;">
+            {% csrf_token %}
+            <input type="hidden" name="product" id="buyNowProduct">
+            <input type="hidden" name="quantity" id="buyNowQuantity">
+          </form>
+
+          <!-- Shipping Information -->
+          {% if user.is_authenticated %}
+          <section class="shipping-info" aria-label="Shipping information">
+            <h6 class="shipping-title">
+              <i class="fas fa-map-marker-alt" aria-hidden="true"></i>
+              Delivery Information
+            </h6>
+            <div class="delivery-address">
+              <strong>Deliver to:</strong> {{ address_display|default:"Please add your delivery address" }}
+            </div>
+            {% if address.geo_code %}
+              <div class="mb-2">
+                <a href="https://www.google.com/maps?q={{ address.geo_code }}"
+                   target="_blank" rel="noopener noreferrer"
+                   class="text-decoration-underline text-info small">
+                  View on Google Maps ({{ address.geo_code }})
+                </a>
+              </div>
+            {% endif %}
+            <div class="shipping-options">
+              <div class="shipping-option">
+                <i class="fas fa-clock text-primary" aria-hidden="true"></i>
+                <span>Estimated Delivery: Tomorrow</span>
+              </div>
+              <div class="shipping-option">
+                <i class="fas fa-truck text-primary" aria-hidden="true"></i>
+                <span>Free Shipping on orders over D2,000</span>
+              </div>
+            </div>
+            <button class="btn btn-outline-primary btn-change-address btn-sm"
+                    data-bs-toggle="modal" data-bs-target="#editAddressModal"
+                    aria-label="Change delivery address">
+              <i class="fas fa-edit" aria-hidden="true"></i> Change Address
+            </button>
+
+            <!-- Address Edit Modal -->
+            <div class="modal fade" id="editAddressModal" tabindex="-1" aria-labelledby="editAddressModalLabel" aria-hidden="true">
+              <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content shadow rounded-4">
+                  <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="editAddressModalLabel">
+                      <i class="fas fa-map-marker-alt me-2" aria-hidden="true"></i>Edit Delivery Address
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                  </div>
+                  <form method="POST" action="{% url 'accounts:edit_address_modal' %}" novalidate>
+                    {% csrf_token %}
+                    <div class="modal-body">
+                      <div class="mb-3">
+                        <label for="address1" class="form-label">Address Line 1 <span class="text-danger">*</span></label>
+                        <textarea class="form-control" id="address1" name="address1" rows="2" required aria-describedby="address1Help">{{ address.address1 }}</textarea>
+                        <div id="address1Help" class="form-text">Enter your street address</div>
+                      </div>
+                      <div class="mb-3">
+                        <label for="address2" class="form-label">Address Line 2</label>
+                        <textarea class="form-control" id="address2" name="address2" rows="2" aria-describedby="address2Help">{{ address.address2 }}</textarea>
+                        <div id="address2Help" class="form-text">Apartment, suite, etc. (optional)</div>
+                      </div>
+                      <div class="mb-3">
+                        <label for="country" class="form-label">Country <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="country" name="country" value="{{ address.country }}" required>
+                      </div>
+                      <div class="mb-3">
+                        <label for="geo_code" class="form-label">Geo Code</label>
+                        <input type="text" name="geo_code" id="geo_code" class="form-control" placeholder="e.g., GC-9A23-KL4" value="{{ address.geo_code }}" aria-describedby="geoCodeHelp">
+                        <div id="geoCodeHelp" class="form-text">Optional location code for precise delivery</div>
+                      </div>
+                    </div>
+                    <div class="modal-footer justify-content-between">
+                      <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                      <button type="submit" class="btn btn-success">
+                        <i class="fas fa-save me-1" aria-hidden="true"></i> Save Address
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </section>
+          {% else %}
+          <div class="alert alert-light text-center">
+            <i class="fas fa-user-lock fa-2x mb-2" aria-hidden="true"></i>
+            <p class="mb-2">Please <a href="{% url 'accounts:sign_in' %}">Login</a> to see shipping options</p>
+          </div>
+          {% endif %}
+
+          <!-- Seller Information -->
+          <section class="seller-info" aria-label="Seller information">
+            {% if seller_store %}
+              <div class="seller-header">
+                <div class="seller-avatar">
+                  <i class="fas fa-store" aria-hidden="true"></i>
+                </div>
+                <div class="seller-details">
+                  <div class="seller-name">
+                    {% if store %}
+                      <a href="{% url 'stores:store_detail' store.slug %}">{{ store.name }}</a>
+                    {% else %}
+                      {{ product.seller.get_full_name|default:product.seller.username }}
+                    {% endif %}
+                  </div>
+                  <div class="seller-rating">
+                    <span class="rating-value">Seller Rating: {{ store.get_average_rating|default:0|floatformat:1 }}/5.0</span>
+                  </div>
+                </div>
+              </div>
+              <div class="seller-actions">
+                <a href="{% url 'stores:store_detail' seller_store.slug %}" class="btn-visit-store">
+                  <i class="fas fa-store" aria-hidden="true"></i> Visit Store
+                </a>
+                {% if request.user.is_authenticated and request.user != product.seller %}
+                <button type="button" class="btn-chat" aria-label="Start chat with seller">
+                  <i class="fas fa-comments" aria-hidden="true"></i> Chat with Seller
+                </button>
+                {% endif %}
+              </div>
+            {% else %}
+              <span class="text-muted">Unknown Seller</span>
+            {% endif %}
+          </section>
+
+        </div>
+      </section>
+
     </div>
+  </div>
 </main>
 
 <!-- Enhanced Chat Box -->
 <div id="chatBox" class="chat-widget d-none" role="dialog" aria-labelledby="chatHeader" aria-modal="false">
-    <div class="chat-header">
-        <div class="chat-title">
-            <div class="seller-avatar" style="width: 40px; height: 40px; font-size: 1rem;">
-                <i class="fas fa-user" aria-hidden="true"></i>
-            </div>
-            <div>
-                <strong id="chatHeader">{{ product.seller.get_full_name|default:product.seller.username }}</strong>
-                <small class="d-block opacity-75">Online now</small>
-            </div>
+  <div class="chat-header">
+    <div class="chat-title">
+      <div class="seller-avatar" style="width: 40px; height: 40px; font-size: 1rem;">
+        <i class="fas fa-user" aria-hidden="true"></i>
+      </div>
+      <div>
+        <strong id="chatHeader">{{ product.seller.get_full_name|default:product.seller.username }}</strong>
+        <small class="d-block opacity-75">Online now</small>
+      </div>
+    </div>
+    <button type="button" class="chat-close" aria-label="Close chat">
+      <i class="fas fa-times"></i>
+    </button>
+  </div>
+
+  <div class="chat-body" id="chatMessages" role="log" aria-label="Chat messages">
+    {% if product %}
+      <div class="product-preview mb-3 p-2 bg-white rounded shadow-sm border-start border-success border-3">
+        <div class="d-flex align-items-center gap-2">
+          <i class="fas fa-box text-success" aria-hidden="true"></i>
+          <small><strong>{{ product.name }}</strong> - D{{ product.price }}</small>
         </div>
-        <button type="button" class="chat-close" aria-label="Close chat">
-            <i class="fas fa-times"></i>
+      </div>
+    {% endif %}
+
+    {% if messages %}
+      {% for msg in messages %}
+        <div class="message-container mb-3 {% if msg.sender == request.user %}text-end{% endif %}">
+          <div class="message p-2 rounded-4 d-inline-block {% if msg.sender == request.user %}bg-primary text-white{% else %}bg-white{% endif %}">
+            <small class="message-text">{{ msg.message }}</small><br>
+            <small class="message-time opacity-75">{{ msg.timestamp|timesince }} ago</small>
+          </div>
+        </div>
+      {% endfor %}
+    {% else %}
+      <div class="empty-state text-center py-5 text-muted">
+        <i class="fas fa-comments fa-3x mb-3 opacity-25" aria-hidden="true"></i>
+        <p class="small">No messages yet. Start the conversation!</p>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="chat-footer">
+    <form method="post" action="{% url 'chat:start_chat' %}" id="chatForm" novalidate>
+      {% csrf_token %}
+      <input type="hidden" name="recipient_id" value="{{ product.seller.id }}">
+      <input type="hidden" name="product_id" value="{{ product.id }}">
+      <div class="input-group">
+        <label for="chatMessage" class="visually-hidden">Type your message</label>
+        <input type="text"
+               name="message"
+               id="chatMessage"
+               class="form-control rounded-pill border-2 px-3"
+               placeholder="Type your message..."
+               required
+               maxlength="500">
+        <button class="btn btn-success rounded-circle ms-2"
+                type="submit"
+                style="width: 40px; height: 40px;"
+                aria-label="Send message">
+          <i class="fas fa-paper-plane" aria-hidden="true"></i>
         </button>
-    </div>
-
-    <div class="chat-body" id="chatMessages" role="log" aria-label="Chat messages">
-        {% if product %}
-            <div class="product-preview mb-3 p-2 bg-white rounded shadow-sm border-start border-success border-3">
-                <div class="d-flex align-items-center gap-2">
-                    <i class="fas fa-box text-success" aria-hidden="true"></i>
-                    <small><strong>{{ product.name }}</strong> - D{{ product.price }}</small>
-                </div>
-            </div>
-        {% endif %}
-
-        {% if messages %}
-            {% for msg in messages %}
-                <div class="message-container mb-3 {% if msg.sender == request.user %}text-end{% endif %}">
-                    <div class="message p-2 rounded-4 d-inline-block {% if msg.sender == request.user %}bg-primary text-white{% else %}bg-white{% endif %}">
-                        <small class="message-text">{{ msg.message }}</small><br>
-                        <small class="message-time opacity-75">{{ msg.timestamp|timesince }} ago</small>
-                    </div>
-                </div>
-            {% endfor %}
-        {% else %}
-            <div class="empty-state text-center py-5 text-muted">
-                <i class="fas fa-comments fa-3x mb-3 opacity-25" aria-hidden="true"></i>
-                <p class="small">No messages yet. Start the conversation!</p>
-            </div>
-        {% endif %}
-    </div>
-
-    <div class="chat-footer">
-        <form method="post" action="{% url 'chat:start_chat' %}" id="chatForm" novalidate>
-            {% csrf_token %}
-            <input type="hidden" name="recipient_id" value="{{ product.seller.id }}">
-            <input type="hidden" name="product_id" value="{{ product.id }}">
-            <div class="input-group">
-                <label for="chatMessage" class="visually-hidden">Type your message</label>
-                <input type="text"
-                       name="message"
-                       id="chatMessage"
-                       class="form-control rounded-pill border-2 px-3"
-                       placeholder="Type your message..."
-                       required
-                       maxlength="500">
-                <button class="btn btn-success rounded-circle ms-2"
-                        type="submit"
-                        style="width: 40px; height: 40px;"
-                        aria-label="Send message">
-                    <i class="fas fa-paper-plane" aria-hidden="true"></i>
-                </button>
-            </div>
-        </form>
-    </div>
+      </div>
+    </form>
+  </div>
 </div>
 
 <!-- Social Sharing -->
 <section class="container my-5" aria-label="Share this product">
-    <div class="bg-white rounded p-4 shadow-sm">
-        <h6 class="mb-3">Share this product:</h6>
-        <div class="d-flex gap-2 flex-wrap">
-            <a class="btn btn-outline-success"
-               href="https://wa.me/?text={{ request.build_absolute_uri|urlencode }}"
-               target="_blank" rel="noopener noreferrer"
-               aria-label="Share on WhatsApp">
-                <i class="fab fa-whatsapp" aria-hidden="true"></i> WhatsApp
-            </a>
-            <a class="btn btn-outline-primary"
-               href="https://www.facebook.com/sharer/sharer.php?u={{ request.build_absolute_uri|urlencode }}"
-               target="_blank" rel="noopener noreferrer"
-               aria-label="Share on Facebook">
-                <i class="fab fa-facebook" aria-hidden="true"></i> Facebook
-            </a>
-            <button class="btn btn-outline-secondary"
-                    onclick="copyToClipboard('{{ request.build_absolute_uri }}')"
-                    aria-label="Copy product link">
-                <i class="fas fa-link" aria-hidden="true"></i> Copy Link
-            </button>
-        </div>
+  <div class="bg-white rounded p-4 shadow-sm">
+    <h6 class="mb-3">Share this product:</h6>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-outline-success"
+         href="https://wa.me/?text={{ request.build_absolute_uri|urlencode }}"
+         target="_blank" rel="noopener noreferrer"
+         aria-label="Share on WhatsApp">
+        <i class="fab fa-whatsapp" aria-hidden="true"></i> WhatsApp
+      </a>
+      <a class="btn btn-outline-primary"
+         href="https://www.facebook.com/sharer/sharer.php?u={{ request.build_absolute_uri|urlencode }}"
+         target="_blank" rel="noopener noreferrer"
+         aria-label="Share on Facebook">
+        <i class="fab fa-facebook" aria-hidden="true"></i> Facebook
+      </a>
+      <button class="btn btn-outline-secondary"
+              onclick="copyToClipboard('{{ request.build_absolute_uri }}')"
+              aria-label="Copy product link">
+        <i class="fas fa-link" aria-hidden="true"></i> Copy Link
+      </button>
     </div>
+  </div>
 </section>
 
 <!-- Product Description -->
 <section class="product-description-section">
-    <div class="container">
-        <div class="description-card">
-            <h2 class="section-title">About this item</h2>
-            <div class="description-content" id="descShort">
-                {% if short_description %}
-                    <ul class="list-unstyled">
-                        {% for bullet in short_description.splitlines %}
-                        {% if bullet.strip %}
-                        {% with bullet.split as words %}
-                        <li class="feature-item mb-3">
-                            <i class="fas fa-check-circle text-primary me-2" aria-hidden="true"></i>
-                            <strong>{{ words.0 }}</strong>
-                            {% for word in words|slice:"1:" %} {{ word }}{% endfor %}
-                        </li>
-                        {% endwith %}
-                        {% endif %}
-                        {% endfor %}
-                    </ul>
-                {% else %}
-                    <p>{{ product.description|linebreaks }}</p>
-                {% endif %}
-            </div>
+  <div class="container">
+    <div class="description-card">
+      <h2 class="section-title">About this item</h2>
+      <div class="description-content" id="descShort">
+        {% if short_description %}
+          <ul class="list-unstyled">
+            {% for bullet in short_description.splitlines %}
+              {% if bullet.strip %}
+                {% with bullet.split as words %}
+                <li class="feature-item mb-3">
+                  <i class="fas fa-check-circle text-primary me-2" aria-hidden="true"></i>
+                  <strong>{{ words.0 }}</strong>
+                  {% for word in words|slice:"1:" %} {{ word }}{% endfor %}
+                </li>
+                {% endwith %}
+              {% endif %}
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p>{{ product.description|linebreaks }}</p>
+        {% endif %}
+      </div>
 
-            {% if description_truncated %}
-            <div class="collapse" id="fullDescription">
-                <ul class="list-unstyled">
-                    {% for bullet in product.description.splitlines %}
-                    {% if bullet.strip %}
-                    {% with bullet.split as words %}
-                    <li class="feature-item mb-3">
-                        <i class="fas fa-check-circle text-primary me-2" aria-hidden="true"></i>
-                        <strong>{{ words.0 }}</strong>
-                        {% for word in words|slice:"1:" %} {{ word }}{% endfor %}
-                    </li>
-                    {% endwith %}
-                    {% endif %}
-                    {% endfor %}
-                </ul>
-            </div>
-            <button class="btn-toggle-description"
-                    type="button"
-                    data-bs-toggle="collapse"
-                    data-bs-target="#fullDescription"
-                    id="toggleDescBtn"
-                    aria-expanded="false"
-                    aria-controls="fullDescription">
-                <i class="fas fa-chevron-down toggle-icon" aria-hidden="true"></i>
-                <span>Show More</span>
-            </button>
+      {% if description_truncated %}
+      <div class="collapse" id="fullDescription">
+        <ul class="list-unstyled">
+          {% for bullet in product.description.splitlines %}
+            {% if bullet.strip %}
+              {% with bullet.split as words %}
+              <li class="feature-item mb-3">
+                <i class="fas fa-check-circle text-primary me-2" aria-hidden="true"></i>
+                <strong>{{ words.0 }}</strong>
+                {% for word in words|slice:"1:" %} {{ word }}{% endfor %}
+              </li>
+              {% endwith %}
             {% endif %}
-        </div>
+          {% endfor %}
+        </ul>
+      </div>
+      <button class="btn-toggle-description"
+              type="button"
+              data-bs-toggle="collapse"
+              data-bs-target="#fullDescription"
+              id="toggleDescBtn"
+              aria-expanded="false"
+              aria-controls="fullDescription">
+        <i class="fas fa-chevron-down toggle-icon" aria-hidden="true"></i>
+        <span>Show More</span>
+      </button>
+      {% endif %}
     </div>
+  </div>
 </section>
 
 <!-- Specifications -->
 {% if specifications %}
 <section class="product-description-section">
-    <div class="container">
-        <div class="description-card">
-            <h2 class="section-title">Technical Specifications</h2>
-            <div class="table-responsive">
-                <table class="table table-striped mb-0">
-                    <tbody>
-                        {% for key, value in specifications %}
-                        {% if forloop.counter <= 3 %}
-                        <tr>
-                            <th scope="row" style="width: 30%;">{{ key }}</th>
-                            <td>{{ value }}</td>
-                        </tr>
-                        {% endif %}
-                        {% endfor %}
-
-                        {% if specifications|length > 3 %}
-                        {% for key, value in specifications %}
-                        {% if forloop.counter > 3 %}
-                        <tr class="collapse" id="specCollapse">
-                            <th scope="row" style="width: 30%;">{{ key }}</th>
-                            <td>{{ value }}</td>
-                        </tr>
-                        {% endif %}
-                        {% endfor %}
-                        {% endif %}
-                    </tbody>
-                </table>
-            </div>
+  <div class="container">
+    <div class="description-card">
+      <h2 class="section-title">Technical Specifications</h2>
+      <div class="table-responsive">
+        <table class="table table-striped mb-0">
+          <tbody>
+            {% for key, value in specifications %}
+              {% if forloop.counter <= 3 %}
+              <tr>
+                <th scope="row" style="width: 30%;">{{ key }}</th>
+                <td>{{ value }}</td>
+              </tr>
+              {% endif %}
+            {% endfor %}
 
             {% if specifications|length > 3 %}
-            <div class="text-center mt-3">
-                <button class="btn-toggle-description"
-                        type="button"
-                        data-bs-toggle="collapse"
-                        data-bs-target="#specCollapse"
-                        id="toggleSpecBtn"
-                        aria-expanded="false"
-                        aria-controls="specCollapse">
-                    <i class="fas fa-chevron-down toggle-icon" aria-hidden="true"></i>
-                    <span>Show More Specs</span>
-                </button>
-            </div>
+              {% for key, value in specifications %}
+                {% if forloop.counter > 3 %}
+                <tr class="collapse" id="specCollapse">
+                  <th scope="row" style="width: 30%;">{{ key }}</th>
+                  <td>{{ value }}</td>
+                </tr>
+                {% endif %}
+              {% endfor %}
             {% endif %}
-        </div>
+          </tbody>
+        </table>
+      </div>
+
+      {% if specifications|length > 3 %}
+      <div class="text-center mt-3">
+        <button class="btn-toggle-description"
+                type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#specCollapse"
+                id="toggleSpecBtn"
+                aria-expanded="false"
+                aria-controls="specCollapse">
+          <i class="fas fa-chevron-down toggle-icon" aria-hidden="true"></i>
+          <span>Show More Specs</span>
+        </button>
+      </div>
+      {% endif %}
     </div>
+  </div>
 </section>
 {% endif %}
 
 <!-- Recommended Products -->
 <section class="recommendations-section" aria-label="Recommended products">
-    <div class="container">
-        <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-            <h2 class="section-title mb-0">Recommended for You</h2>
-            <a href="{% url 'marketplace:all_products' %}" class="btn btn-outline-primary">
-                View All Products
-            </a>
-        </div>
-
-        <div class="products-grid">
-            {% for item in recommended_items %}
-            <article class="product-card" onclick="window.location.href='{% url 'marketplace:product_detail' item.id %}'">
-                {% if item.discount_percentage %}
-                <span class="discount-badge">{{ item.discount_percentage|floatformat:0 }}% OFF</span>
-                {% endif %}
-
-                <div class="product-image-container">
-                    <img src="{{ item.image.url }}"
-                         class="product-image"
-                         alt="{{ item.name }}"
-                         loading="lazy"
-                         onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                    <div class="product-image d-none" style="background: #f8f9fa; display: flex; align-items: center; justify-content: center; color: #999; flex-direction: column;">
-                        <i class="fas fa-image fa-2x"></i>
-                        <small>No image</small>
-                    </div>
-                </div>
-
-                <div class="product-details">
-                    <h3 class="product-name">{{ item.name|truncatechars:40 }}</h3>
-
-                    <div class="product-price">
-                        <span class="current-price">D{{ item.price|intcomma }}</span>
-                        {% if item.original_price %}
-                        <span class="original-price">D{{ item.original_price }}</span>
-                        {% endif %}
-                    </div>
-
-                    <div class="product-rating">
-                        <div class="rating-stars" aria-label="Rating {{ item.average_rating|default:0|floatformat:1 }} out of 5 stars">
-                            {% with avg=item.average_rating|default:0 %}
-                                {% for i in rating_range %}
-                                    {% if avg >= i %}
-                                        <i class="fas fa-star" aria-hidden="true"></i>
-                                    {% elif avg >= i|add:"-0.5" %}
-                                        <i class="fas fa-star-half-alt" aria-hidden="true"></i>
-                                    {% else %}
-                                        <i class="far fa-star" aria-hidden="true"></i>
-                                    {% endif %}
-                                {% endfor %}
-                            {% endwith %}
-                        </div>
-                        <span class="rating-count">({{ item.review_count|default:0 }})</span>
-                    </div>
-
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <small class="text-primary">
-                            <i class="fas fa-tag me-1" aria-hidden="true"></i> {{ item.category.name }}
-                        </small>
-                        <small class="text-muted">
-                            {{ item.sold_count|default:"0" }} sold
-                        </small>
-                    </div>
-
-                    <div class="product-actions">
-                        <a href="{% url 'marketplace:product_detail' item.id %}"
-                           class="btn-view-product"
-                           onclick="event.stopPropagation();">
-                            <i class="fas fa-eye me-1" aria-hidden="true"></i> View
-                        </a>
-                        {% if user.is_authenticated %}
-                            <button class="btn-quick-add"
-                                    onclick="event.stopPropagation(); addToCart({{ item.id }}, this)"
-                                    {% if not item.stock or item.stock.quantity == 0 %}disabled{% endif %}
-                                    aria-label="Add {{ item.name }} to cart">
-                                <i class="fas fa-cart-plus" aria-hidden="true"></i>
-                            </button>
-                        {% endif %}
-                    </div>
-                </div>
-            </article>
-            {% empty %}
-            <div class="no-recommendations">
-                <i class="fas fa-box-open" aria-hidden="true"></i>
-                <h3>No recommended items available</h3>
-                <p>Check back later for personalized recommendations!</p>
-            </div>
-            {% endfor %}
-        </div>
+  <div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+      <h2 class="section-title mb-0">Recommended for You</h2>
+      <a href="{% url 'marketplace:all_products' %}" class="btn btn-outline-primary">
+        View All Products
+      </a>
     </div>
+
+    <div class="products-grid">
+      {% for item in recommended_items %}
+      <article class="product-card" onclick="window.location.href='{% url 'marketplace:product_detail' item.id %}'">
+        {% if item.discount_percentage %}
+          <span class="discount-badge">{{ item.discount_percentage|floatformat:0 }}% OFF</span>
+        {% endif %}
+
+        <div class="product-image-container">
+          <img src="{{ item.image.url }}"
+               class="product-image"
+               alt="{{ item.name }}"
+               loading="lazy"
+               onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+          <div class="product-image d-none" style="background: #f8f9fa; display: flex; align-items: center; justify-content: center; color: #999; flex-direction: column;">
+            <i class="fas fa-image fa-2x"></i>
+            <small>No image</small>
+          </div>
+        </div>
+
+        <div class="product-details">
+          <h3 class="product-name">{{ item.name|truncatechars:40 }}</h3>
+
+          <div class="product-price">
+            <span class="current-price">D{{ item.price|intcomma }}</span>
+            {% if item.original_price %}
+              <span class="original-price">D{{ item.original_price }}</span>
+            {% endif %}
+          </div>
+
+          <div class="product-rating">
+            <div class="rating-stars" aria-label="Rating {{ item.average_rating|default:0|floatformat:1 }} out of 5 stars">
+              {% with avg=item.average_rating|default:0 %}
+                {% for i in rating_range %}
+                  {% if avg >= i %}
+                    <i class="fas fa-star" aria-hidden="true"></i>
+                  {% elif avg >= i|add:"-0.5" %}
+                    <i class="fas fa-star-half-alt" aria-hidden="true"></i>
+                  {% else %}
+                    <i class="far fa-star" aria-hidden="true"></i>
+                  {% endif %}
+                {% endfor %}
+              {% endwith %}
+            </div>
+            <span class="rating-count">({{ item.review_count|default:0 }})</span>
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <small class="text-primary">
+              <i class="fas fa-tag me-1" aria-hidden="true"></i> {{ item.category.name }}
+            </small>
+            <small class="text-muted">
+              {{ item.sold_count|default:"0" }} sold
+            </small>
+          </div>
+
+          <div class="product-actions">
+            <a href="{% url 'marketplace:product_detail' item.id %}"
+               class="btn-view-product"
+               onclick="event.stopPropagation();">
+              <i class="fas fa-eye me-1" aria-hidden="true"></i> View
+            </a>
+            {% if user.is_authenticated %}
+            <button class="btn-quick-add"
+                    onclick="event.stopPropagation(); addToCart({{ item.id }}, this)"
+                    {% if not item.stock or item.stock.quantity == 0 %}disabled{% endif %}
+                    aria-label="Add {{ item.name }} to cart">
+              <i class="fas fa-cart-plus" aria-hidden="true"></i>
+            </button>
+            {% endif %}
+          </div>
+        </div>
+      </article>
+      {% empty %}
+      <div class="no-recommendations">
+        <i class="fas fa-box-open" aria-hidden="true"></i>
+        <h3>No recommended items available</h3>
+        <p>Check back later for personalized recommendations!</p>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
 </section>
 
 <!-- Reviews Section -->
 <section class="reviews-section" aria-label="Customer reviews">
-    <div class="container">
-        <div class="reviews-card">
-            <h2 class="section-title">Customer Reviews</h2>
+  <div class="container">
+    <div class="reviews-card">
+      <h2 class="section-title">Customer Reviews</h2>
 
-            <!-- Review Summary -->
-            <div class="review-summary">
-                <div class="summary-rating">
-                    <div class="avg-rating">{{ avg_rating|floatformat:1 }}</div>
-                    <div class="rating-stars">
-                        {% for i in rating_range %}
-                            {% if avg_rating >= i %}
-                                <i class="fas fa-star" aria-hidden="true"></i>
-                            {% elif avg_rating >= i|add:"-0.5" %}
-                                <i class="fas fa-star-half-alt" aria-hidden="true"></i>
-                            {% else %}
-                                <i class="far fa-star" aria-hidden="true"></i>
-                            {% endif %}
-                        {% endfor %}
-                    </div>
-                    <div class="total-reviews">{{ review_count }} review{{ review_count|pluralize }}</div>
-                </div>
-            </div>
-
-            <!-- Review Form -->
-            {% if user.is_authenticated %}
-                <div class="review-form-section">
-                    <h6 class="form-title">Write a Review</h6>
-                    <form id="review-form" novalidate>
-                        {% csrf_token %}
-                        <input type="hidden" name="product_id" value="{{ product.id }}">
-
-                        <div class="rating-input">
-                            <label class="form-label">Rating <span class="text-danger">*</span></label>
-                            <div class="star-rating" role="radiogroup" aria-required="true">
-                                {% for i in rating_range %}
-                                    <button type="button"
-                                            class="star-btn"
-                                            data-rating="{{ i }}"
-                                            role="radio"
-                                            aria-checked="false"
-                                            aria-label="{{ i }} star{{ i|pluralize }}">
-                                        <i class="far fa-star" aria-hidden="true"></i>
-                                    </button>
-                                {% endfor %}
-                            </div>
-                            <input type="hidden" name="rating" id="rating-input" required>
-                        </div>
-
-                        <div class="comment-input">
-                            <label for="comment" class="form-label">Comment</label>
-                            <textarea name="comment" id="comment" class="form-control" rows="4"
-                                      placeholder="Share your experience with this product..." maxlength="1000"></textarea>
-                            <div class="form-text">Maximum 1000 characters</div>
-                        </div>
-
-                        <button type="submit" class="btn-submit-review">
-                            <span class="spinner-border spinner-border-sm d-none" id="submit-spinner" role="status" aria-hidden="true"></span>
-                            <span class="submit-text">Submit Review</span>
-                        </button>
-                    </form>
-                </div>
-            {% else %}
-                <div class="login-prompt">
-                    <a href="{% url 'accounts:sign_in' %}">Login</a> to leave a review.
-                </div>
-            {% endif %}
-
-            <!-- Reviews List -->
-            <div id="reviews-container" role="region" aria-label="Product reviews">
-                <!-- Reviews will be loaded here via AJAX -->
-            </div>
-
-            <!-- Load More Button -->
-            <div class="text-center mt-4">
-                <button class="btn btn-outline-primary"
-                        id="load-more-reviews"
-                        data-page="2"
-                        aria-label="Load more reviews">
-                    <span class="load-text">Load More Reviews</span>
-                    <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
-                </button>
-            </div>
+      <div class="review-summary">
+        <div class="summary-rating">
+          <div class="avg-rating">{{ avg_rating|floatformat:1 }}</div>
+          <div class="rating-stars">
+            {% for i in rating_range %}
+              {% if avg_rating >= i %}
+                <i class="fas fa-star" aria-hidden="true"></i>
+              {% elif avg_rating >= i|add:"-0.5" %}
+                <i class="fas fa-star-half-alt" aria-hidden="true"></i>
+              {% else %}
+                <i class="far fa-star" aria-hidden="true"></i>
+              {% endif %}
+            {% endfor %}
+          </div>
+          <div class="total-reviews">{{ review_count }} review{{ review_count|pluralize }}</div>
         </div>
+      </div>
+
+      {% if user.is_authenticated %}
+      <div class="review-form-section">
+        <h6 class="form-title">Write a Review</h6>
+        <form id="review-form" novalidate>
+          {% csrf_token %}
+          <input type="hidden" name="product_id" value="{{ product.id }}">
+
+          <div class="rating-input">
+            <label class="form-label">Rating <span class="text-danger">*</span></label>
+            <div class="star-rating" role="radiogroup" aria-required="true">
+              {% for i in rating_range %}
+              <button type="button"
+                      class="star-btn"
+                      data-rating="{{ i }}"
+                      role="radio"
+                      aria-checked="false"
+                      aria-label="{{ i }} star{{ i|pluralize }}">
+                <i class="far fa-star" aria-hidden="true"></i>
+              </button>
+              {% endfor %}
+            </div>
+            <input type="hidden" name="rating" id="rating-input" required>
+          </div>
+
+          <div class="comment-input">
+            <label for="comment" class="form-label">Comment</label>
+            <textarea name="comment" id="comment" class="form-control" rows="4"
+                      placeholder="Share your experience with this product..." maxlength="1000"></textarea>
+            <div class="form-text">Maximum 1000 characters</div>
+          </div>
+
+          <button type="submit" class="btn-submit-review">
+            <span class="spinner-border spinner-border-sm d-none" id="submit-spinner" role="status" aria-hidden="true"></span>
+            <span class="submit-text">Submit Review</span>
+          </button>
+        </form>
+      </div>
+      {% else %}
+      <div class="login-prompt">
+        <a href="{% url 'accounts:sign_in' %}">Login</a> to leave a review.
+      </div>
+      {% endif %}
+
+      <div id="reviews-container" role="region" aria-label="Product reviews"></div>
+
+      <div class="text-center mt-4">
+        <button class="btn btn-outline-primary"
+                id="load-more-reviews"
+                data-page="2"
+                aria-label="Load more reviews">
+          <span class="load-text">Load More Reviews</span>
+          <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+        </button>
+      </div>
     </div>
+  </div>
 </section>
+
+<!-- Mobile Sticky Buy Bar (NEW) -->
+<div class="em-sticky-buy d-lg-none" id="emStickyBuy">
+  <div class="em-sticky-inner">
+    <div class="em-sticky-left">
+      <div class="em-sticky-title">{{ product.name|truncatechars:28 }}</div>
+      <div class="em-sticky-price">D{{ product.price|intcomma }}</div>
+    </div>
+
+    <div class="em-sticky-actions">
+      <button class="em-sticky-btn em-sticky-cart"
+              onclick="addToCart({{ product.id }}, this)"
+              {% if not product.stock or product.stock.quantity == 0 %}disabled aria-disabled="true"{% endif %}
+              aria-label="Add to cart">
+        <i class="fas fa-cart-plus"></i>
+      </button>
+
+      <button class="em-sticky-btn em-sticky-buy"
+              onclick="buyNow({{ product.id }})"
+              {% if not product.stock or product.stock.quantity == 0 %}disabled aria-disabled="true"{% endif %}>
+        <i class="fas fa-bolt me-1"></i> Buy
+      </button>
+    </div>
+  </div>
+</div>
 
 <!-- JavaScript Configuration -->
 <script>
-  // Global configuration
   window.PRODUCT_ID = {{ product.id }};
   window.CSRF_TOKEN = '{{ csrf_token }}';
 
-  // Review URLs
   window.REVIEWS_SUBMIT_URL = "{% url 'reviews:submit_review' %}";
   window.REVIEWS_DELETE_URL = "{% url 'reviews:delete_review' %}";
   window.REVIEWS_COMMENT_URL = "{% url 'reviews:submit_comment' %}";
@@ -889,7 +1078,7 @@
     {% if product.variants.all %}
       {% for v in product.variants.all %}
         variants.push({
-          id: {{ v.id }},  // <-- add id
+          id: {{ v.id }},
           features: {
             {% for fopt in v.feature_options.all %}
               "{{ fopt.feature.name|lower|slugify }}": "{{ fopt.value }}"{% if not forloop.last %},{% endif %}
@@ -901,12 +1090,11 @@
       {% endfor %}
     {% endif %}
 
-    // Fallback from images if no explicit variants were found
     {% if not product.variants.all or product.variants.all|length == 0 %}
       {% for img in product.images.all %}
         {% if img.variants.exists %}
           variants.push({
-            id: {{ img.id }}, // fallback id (image id as stand-in)
+            id: {{ img.id }},
             features: {
               {% for variant in img.variants.all %}
                 "{{ variant.feature.name|lower|slugify }}": "{{ variant.value }}"{% if not forloop.last %},{% endif %}
@@ -923,7 +1111,6 @@
   })();
 </script>
 
-<!-- (Optional) Image -> Features map (kept for compatibility; keys are image URLs) -->
 <script>
   window.PRODUCT_FEATURES = {
     imageFeatures: {
@@ -941,7 +1128,52 @@
   };
 </script>
 
-<!-- Load JavaScript Files (make sure product_detail.js is the fixed version I gave you) -->
+<!-- Smart Variant Guard (NEW) -->
+<script>
+  window.requireAllFeaturesBeforeAction = function () {
+    const groups = document.querySelectorAll(".feature-options[data-feature]");
+    let ok = true;
+
+    groups.forEach(g => {
+      const name = g.getAttribute("data-feature");
+      const checked = document.querySelector(`input[name="${name}"]:checked`);
+      const fieldset = g.closest(".feature-group");
+      fieldset?.classList.remove("highlighted");
+
+      if (!checked) {
+        ok = false;
+        fieldset?.classList.add("highlighted");
+      }
+    });
+
+    if (!ok) {
+      const first = document.querySelector(".feature-group.highlighted");
+      first?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    return ok;
+  };
+
+  // Wrap existing functions (non-breaking)
+  document.addEventListener("DOMContentLoaded", function(){
+    const _oldAddToCart = window.addToCart;
+    window.addToCart = function(productId, btn){
+      if (typeof window.requireAllFeaturesBeforeAction === "function") {
+        if (!window.requireAllFeaturesBeforeAction()) return;
+      }
+      return _oldAddToCart?.(productId, btn);
+    };
+
+    const _oldBuyNow = window.buyNow;
+    window.buyNow = function(productId){
+      if (typeof window.requireAllFeaturesBeforeAction === "function") {
+        if (!window.requireAllFeaturesBeforeAction()) return;
+      }
+      return _oldBuyNow?.(productId);
+    };
+  });
+</script>
+
+<!-- Load JavaScript Files -->
 <script src="{% static 'js/main.js' %}"></script>
 <script src="{% static 'js/product_detail.js' %}"></script>
 <script src="{% static 'js/message-review.js' %}"></script>

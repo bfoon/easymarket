@@ -2,87 +2,520 @@
 {% load humanize %}
 {% load static %}
 
-{% block title %}Chat with {{ other_user.get_full_name }} | {{ store.name }}{% endblock %}
+{% block title %}Chat with {{ store.owner.get_full_name|default:store.owner.username }} | {{ store.name }}{% endblock %}
 
 {% block content %}
 <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
 <link rel="stylesheet" href="{% static 'css/chat.css' %}">
+
+<style>
+  :root{
+    --c-bg: #0b1220;
+    --c-surface: rgba(255,255,255,.06);
+    --c-surface-2: rgba(255,255,255,.10);
+    --c-border: rgba(255,255,255,.12);
+    --c-text: #e5e7eb;
+    --c-muted: rgba(229,231,235,.68);
+    --c-primary: #2563eb;
+    --c-primary-2: #1d4ed8;
+    --c-success: #22c55e;
+    --c-danger: #ef4444;
+    --c-shadow: 0 20px 60px rgba(0,0,0,.35);
+  }
+
+  .chat-shell{
+    background: radial-gradient(1200px 600px at 20% 0%, rgba(37,99,235,.22), transparent 60%),
+                radial-gradient(900px 500px at 90% 10%, rgba(34,197,94,.16), transparent 60%),
+                linear-gradient(180deg, #070b14, #0b1220 35%, #070b14);
+    border-radius: 18px;
+    border: 1px solid rgba(255,255,255,.08);
+    box-shadow: var(--c-shadow);
+    overflow: hidden;
+  }
+
+  .chat-topbar{
+    background: linear-gradient(135deg, rgba(255,255,255,.10), rgba(255,255,255,.06));
+    border-bottom: 1px solid rgba(255,255,255,.10);
+    backdrop-filter: blur(10px);
+    padding: 14px 16px;
+  }
+
+  .chat-topbar h5{ color: var(--c-text); }
+  .chat-topbar small{ color: var(--c-muted); }
+
+  .pill{
+    display:inline-flex; align-items:center; gap:8px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,.12);
+    background: rgba(255,255,255,.06);
+    color: var(--c-text);
+    font-size: .85rem;
+  }
+  .dot{
+    width: 8px; height:8px; border-radius:50%;
+    background: var(--c-success);
+    box-shadow: 0 0 0 4px rgba(34,197,94,.15);
+  }
+
+  .chat-sidebar{
+    background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+    border-right: 1px solid rgba(255,255,255,.10);
+    height: calc(100vh - 160px);
+    min-height: 520px;
+    overflow: hidden;
+  }
+
+  .thread-list{
+    max-height: calc(100vh - 220px);
+    overflow-y: auto;
+  }
+  .thread-list::-webkit-scrollbar{ width: 8px; }
+  .thread-list::-webkit-scrollbar-thumb{ background: rgba(255,255,255,.12); border-radius: 10px; }
+
+  .thread-item{
+    text-decoration:none;
+    color: var(--c-text);
+    display:flex;
+    gap:12px;
+    padding: 12px 14px;
+    border-bottom: 1px solid rgba(255,255,255,.08);
+    transition: .2s ease;
+    background: transparent;
+  }
+  .thread-item:hover{
+    background: rgba(255,255,255,.06);
+    transform: translateY(-1px);
+  }
+  .thread-item.active{
+    background: rgba(37,99,235,.18);
+    border-left: 3px solid var(--c-primary);
+  }
+
+  .avatar{
+    width: 38px; height: 38px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(37,99,235,.55), rgba(34,197,94,.35));
+    display:flex; align-items:center; justify-content:center;
+    font-weight: 800;
+    color: #fff;
+    flex-shrink:0;
+    box-shadow: 0 12px 30px rgba(0,0,0,.22);
+  }
+
+  .thread-meta small{ color: var(--c-muted); }
+  .unread-badge{
+    min-width: 24px;
+    height: 24px;
+    padding: 0 8px;
+    border-radius: 999px;
+    display:flex; align-items:center; justify-content:center;
+    background: var(--c-danger);
+    color: white;
+    font-weight: 700;
+    font-size: .8rem;
+  }
+
+  .chat-panel{
+    height: calc(100vh - 160px);
+    min-height: 520px;
+    display:flex;
+    flex-direction: column;
+    background: rgba(255,255,255,.03);
+  }
+
+  .chat-body{
+    flex:1;
+    padding: 18px 18px 10px;
+    overflow-y:auto;
+  }
+  .chat-body::-webkit-scrollbar{ width: 10px; }
+  .chat-body::-webkit-scrollbar-thumb{ background: rgba(255,255,255,.12); border-radius: 10px; }
+
+  .day-sep{
+    display:flex; align-items:center; gap:12px;
+    margin: 14px 0;
+    color: rgba(229,231,235,.45);
+    font-size: .82rem;
+  }
+  .day-sep:before, .day-sep:after{
+    content:'';
+    height:1px; flex:1;
+    background: rgba(255,255,255,.10);
+  }
+
+  .msg-row{ display:flex; margin-bottom: 12px; }
+  .msg-row.me{ justify-content:flex-end; }
+  .msg-bubble{
+    max-width: min(720px, 78%);
+    padding: 10px 12px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,.10);
+    box-shadow: 0 12px 30px rgba(0,0,0,.18);
+    position: relative;
+  }
+  .msg-row.me .msg-bubble{
+    background: linear-gradient(135deg, rgba(37,99,235,.92), rgba(29,78,216,.92));
+    color: #fff;
+    border: 1px solid rgba(255,255,255,.12);
+  }
+  .msg-row.them .msg-bubble{
+    background: rgba(255,255,255,.07);
+    color: var(--c-text);
+  }
+
+  .msg-meta{
+    margin-top: 6px;
+    font-size: .78rem;
+    color: rgba(229,231,235,.68);
+    display:flex;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .msg-row.me .msg-meta{ color: rgba(255,255,255,.75); }
+
+  .msg-img{
+    margin-top: 8px;
+    border-radius: 12px;
+    overflow:hidden;
+    border: 1px solid rgba(255,255,255,.12);
+    background: rgba(0,0,0,.18);
+  }
+  .msg-img img{ max-height: 260px; width:100%; object-fit: cover; display:block; }
+
+  .chat-composer{
+    border-top: 1px solid rgba(255,255,255,.10);
+    background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+    padding: 12px 14px;
+  }
+
+  .composer-wrap{
+    display:flex;
+    gap:10px;
+    align-items:flex-end;
+  }
+  .composer-input{
+    flex:1;
+    background: rgba(255,255,255,.07);
+    border: 1px solid rgba(255,255,255,.12);
+    color: var(--c-text);
+    border-radius: 14px;
+    padding: 10px 12px;
+    resize:none;
+    min-height: 44px;
+    max-height: 140px;
+    outline:none;
+  }
+  .composer-input::placeholder{ color: rgba(229,231,235,.55); }
+
+  .icon-btn{
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,.12);
+    background: rgba(255,255,255,.07);
+    color: var(--c-text);
+    display:flex; align-items:center; justify-content:center;
+    transition: .2s ease;
+  }
+  .icon-btn:hover{ transform: translateY(-1px); background: rgba(255,255,255,.10); }
+
+  .send-btn{
+    background: linear-gradient(135deg, var(--c-primary), var(--c-primary-2));
+    border: none;
+    color: #fff;
+    font-weight: 800;
+    box-shadow: 0 16px 35px rgba(37,99,235,.25);
+  }
+
+  .file-pill{
+    display:none;
+    margin-top: 10px;
+    padding: 8px 10px;
+    border-radius: 12px;
+    border: 1px dashed rgba(255,255,255,.18);
+    background: rgba(255,255,255,.05);
+    color: var(--c-text);
+    align-items:center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .file-pill img{
+    width: 34px; height:34px; border-radius: 10px; object-fit: cover;
+    border: 1px solid rgba(255,255,255,.14);
+  }
+
+  .subhint{ color: rgba(229,231,235,.60); font-size: .82rem; margin-top: 8px; }
+
+  /* Mobile sidebar collapse friendly */
+  @media (max-width: 767px){
+    .chat-sidebar{ height: auto; min-height: unset; border-right: none; border-bottom: 1px solid rgba(255,255,255,.10); }
+    .thread-list{ max-height: 300px; }
+    .chat-panel{ height: auto; min-height: 520px; }
+  }
+</style>
+
 <div class="container-fluid py-4">
-  <div class="row">
-    <!-- Sidebar Threads List -->
-    <div class="col-md-4 col-lg-3 mb-3">
-      <div class="card shadow-sm">
-        <div class="card-header bg-primary text-white py-2">
-          <strong>Conversations</strong>
+  <div class="chat-shell">
+    <div class="row g-0">
+
+      <!-- Sidebar -->
+      <div class="col-md-4 col-lg-3 chat-sidebar">
+        <div class="chat-topbar d-flex justify-content-between align-items-center">
+          <div>
+            <div class="fw-bold" style="color:var(--c-text);">
+              Conversations
+            </div>
+            <div class="small" style="color:var(--c-muted);">
+              {{ store.name }}
+            </div>
+          </div>
+
+          <span class="pill" title="Status">
+            <span class="dot"></span>
+            Online
+          </span>
         </div>
-        <div class="list-group list-group-flush">
+
+        <div class="thread-list">
           {% for t in threads %}
-            <a href="{% url 'chat:thread_detail' store.id t.thread.id %}"
-               class="list-group-item list-group-item-action {% if t.thread.id == current_thread.id %}active{% endif %}">
-              <div class="d-flex justify-content-between align-items-center">
-                <div>
-                  {{ t.participant.get_full_name }}
-                  <br><small class="text-muted">{{ t.last_message|truncatechars:40 }}</small>
-                </div>
-                {% if t.unread_count > 0 %}
-                  <span class="badge bg-danger rounded-pill">{{ t.unread_count }}</span>
-                {% endif %}
+            <a href="{% url 'chat:thread_detail' store.id t.thread_id %}"
+               class="thread-item {% if t.thread_id == current_thread_id %}active{% endif %}">
+              <div class="avatar" aria-hidden="true">
+                {{ store.name|slice:":1"|upper }}
               </div>
+
+              <div class="thread-meta flex-grow-1">
+                <div class="d-flex justify-content-between align-items-center">
+                  <div class="fw-semibold">Order #{{ t.thread_id }}</div>
+                  <small class="ms-2">
+                    {% if t.last_message_time %}
+                      {{ t.last_message_time|naturaltime }}
+                    {% endif %}
+                  </small>
+                </div>
+                <small class="d-block">
+                  {{ t.last_message|default:"No messages yet"|truncatechars:48 }}
+                </small>
+              </div>
+
+              {% if t.unread_count|default:0|add:0 > 0 %}
+                <div class="unread-badge" title="Unread messages">{{ t.unread_count }}</div>
+              {% endif %}
             </a>
           {% empty %}
-            <div class="p-3 text-muted">No conversations</div>
+            <div class="p-4 text-center" style="color:var(--c-muted);">
+              <i class="fas fa-inbox fa-2x mb-2"></i>
+              <div class="fw-semibold">No conversations yet</div>
+              <div class="small">Once you message a store, it’ll appear here.</div>
+            </div>
           {% endfor %}
         </div>
       </div>
-    </div>
 
-    <!-- Main Chat Panel -->
-    <div class="col-md-8 col-lg-9">
+      <!-- Chat Panel -->
+      <div class="col-md-8 col-lg-9 chat-panel">
+        <div class="chat-topbar d-flex justify-content-between align-items-center">
+          <div>
+            <h5 class="mb-0">
+              <i class="fas fa-comments me-2" style="color: rgba(37,99,235,.95);"></i>
+              Chat with {{ store.owner.get_full_name|default:store.owner.username }}
+              <small class="ms-2">• Order #{{ thread_id }}</small>
+            </h5>
+            <div class="small" style="color:var(--c-muted);">
+              Keep it professional — receipts love screenshots 😄
+            </div>
+          </div>
 
-      <div class="card shadow-sm">
-        <div class="card-header d-flex justify-content-between align-items-center">
-          <h5 class="mb-0">
-            <i class="fas fa-comments text-primary me-2"></i>
-            Chat with {{ other_user.get_full_name }}
-          </h5>
-          {% if shipment %}
-            <a href="{% url 'logistics:shipment_detail' shipment.id %}" class="btn btn-sm btn-outline-secondary">
-              <i class="fas fa-shipping-fast me-1"></i> Back to Shipment
+          <div class="d-flex gap-2">
+            {% if shipment %}
+              <a href="{% url 'logistics:shipment_detail' shipment.id %}" class="pill text-decoration-none">
+                <i class="fas fa-shipping-fast"></i>
+                Shipment
+              </a>
+            {% endif %}
+            <a href="{% url 'stores:store_dashboard' store.id %}" class="pill text-decoration-none">
+              <i class="fas fa-store"></i>
+              Store
             </a>
-          {% endif %}
+          </div>
+        </div>
 
-        </div>
-        <div class="card-body chat-scroll" style="height: 400px; overflow-y: auto;">
-          {% for message in messages %}
-            <div class="mb-3 {% if message.sender == request.user %}text-end{% endif %}">
-              <div class="{% if message.sender == request.user %}bg-primary text-white{% else %}bg-light{% endif %} rounded p-2 d-inline-block">
-                {{ message.message|linebreaksbr }}
+        <div id="chatBody" class="chat-body" role="log" aria-live="polite" aria-label="Chat messages">
+          {% if messages %}
+            <div class="day-sep">Today</div>
+
+            {% for message in messages %}
+              <div class="msg-row {% if message.sender == request.user %}me{% else %}them{% endif %}">
+                <div class="msg-bubble">
+                  {% if message.content %}
+                    <div style="white-space: pre-wrap;">{{ message.content|linebreaksbr }}</div>
+                  {% endif %}
+
+                  {% if message.image %}
+                    <div class="msg-img">
+                      <a href="{{ message.image.url }}" target="_blank" rel="noopener">
+                        <img src="{{ message.image.url }}" alt="Attachment">
+                      </a>
+                    </div>
+                  {% endif %}
+
+                  <div class="msg-meta">
+                    <span>
+                      {% if message.sender == request.user %}
+                        You
+                      {% else %}
+                        {{ message.sender.get_full_name|default:message.sender.username }}
+                      {% endif %}
+                    </span>
+                    <span title="{{ message.created_at }}">
+                      {{ message.created_at|naturaltime }}
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div class="small text-muted mt-1">
-                {{ message.sender.get_full_name }} • {{ message.timestamp|naturaltime }}
-              </div>
+            {% endfor %}
+          {% else %}
+            <div class="text-center py-5" style="color:var(--c-muted);">
+              <i class="fas fa-comment-dots fa-3x mb-3" style="opacity:.35;"></i>
+              <div class="fw-bold" style="color:var(--c-text);">No messages yet</div>
+              <div class="small">Say hi to the store and keep the order moving 🚀</div>
             </div>
-          {% empty %}
-            <div class="text-center text-muted py-5">
-              <i class="fas fa-comment-dots fa-2x mb-3"></i>
-              <p>No messages yet.</p>
-            </div>
-          {% endfor %}
+          {% endif %}
         </div>
-        <div class="card-footer">
-         <form method="POST" action="{% url 'chat:send_message' thread.id %}?shipment_id={{ shipment.id }}">
+
+        <div class="chat-composer">
+          <form id="chatForm"
+                method="POST"
+                action="{% url 'chat:send_message' current_thread_id %}{% if shipment %}?shipment_id={{ shipment.id }}{% endif %}"
+                enctype="multipart/form-data">
             {% csrf_token %}
-            <div class="input-group">
-              <textarea name="message" class="form-control" rows="1" required placeholder="Type a message..."></textarea>
-              <button class="btn btn-primary" type="submit">
+            <input type="hidden" name="store_id" value="{{ store.id }}">
+
+            <div class="composer-wrap">
+              <textarea id="chatInput"
+                        name="message"
+                        class="composer-input"
+                        rows="1"
+                        placeholder="Type a message… (Shift+Enter for new line)"></textarea>
+
+              <label class="icon-btn" title="Attach image">
+                <i class="fas fa-image"></i>
+                <input id="imageInput" type="file" name="image" accept="image/*" hidden>
+              </label>
+
+              <button id="sendBtn" class="icon-btn send-btn" type="submit" title="Send">
                 <i class="fas fa-paper-plane"></i>
               </button>
             </div>
-        </form>
 
+            <!-- image preview pill -->
+            <div id="filePill" class="file-pill">
+              <div class="d-flex align-items-center gap-2">
+                <img id="fileThumb" src="" alt="preview">
+                <div class="small">
+                  <div class="fw-semibold">Attachment ready</div>
+                  <div id="fileName" style="color:var(--c-muted);"></div>
+                </div>
+              </div>
+              <button type="button" id="removeFileBtn" class="icon-btn" title="Remove">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+
+            <div class="subhint">
+              Tip: Send text, an image, or both. Keep it clear, keep it fast 💬
+            </div>
+          </form>
         </div>
+
       </div>
     </div>
   </div>
 </div>
+
+<script>
+  (function(){
+    const body = document.getElementById('chatBody');
+    const ta = document.getElementById('chatInput');
+    const form = document.getElementById('chatForm');
+    const sendBtn = document.getElementById('sendBtn');
+
+    const imageInput = document.getElementById('imageInput');
+    const filePill = document.getElementById('filePill');
+    const fileThumb = document.getElementById('fileThumb');
+    const fileName = document.getElementById('fileName');
+    const removeFileBtn = document.getElementById('removeFileBtn');
+
+    function scrollBottom(){
+      if(!body) return;
+      body.scrollTop = body.scrollHeight;
+    }
+
+    // Auto-scroll on load
+    scrollBottom();
+
+    // Auto-grow textarea
+    function autogrow(){
+      if(!ta) return;
+      ta.style.height = 'auto';
+      ta.style.height = Math.min(ta.scrollHeight, 140) + 'px';
+    }
+    if(ta){
+      ta.addEventListener('input', autogrow);
+      autogrow();
+    }
+
+    // Enter to send (Shift+Enter new line)
+    if(ta && form){
+      ta.addEventListener('keydown', (e) => {
+        if(e.key === 'Enter' && !e.shiftKey){
+          e.preventDefault();
+          form.requestSubmit();
+        }
+      });
+    }
+
+    // Image preview pill
+    if(imageInput){
+      imageInput.addEventListener('change', () => {
+        const f = imageInput.files && imageInput.files[0];
+        if(!f){
+          filePill.style.display = 'none';
+          return;
+        }
+        if(!f.type.startsWith('image/')){
+          alert('Please attach an image file.');
+          imageInput.value = '';
+          filePill.style.display = 'none';
+          return;
+        }
+        if(f.size > 5 * 1024 * 1024){
+          alert('Image too large (max 5MB).');
+          imageInput.value = '';
+          filePill.style.display = 'none';
+          return;
+        }
+        fileThumb.src = URL.createObjectURL(f);
+        fileName.textContent = f.name;
+        filePill.style.display = 'flex';
+        scrollBottom();
+      });
+    }
+    if(removeFileBtn){
+      removeFileBtn.addEventListener('click', () => {
+        if(imageInput) imageInput.value = '';
+        if(filePill) filePill.style.display = 'none';
+      });
+    }
+
+    // Light "sending" feedback (non-AJAX)
+    if(form && sendBtn){
+      form.addEventListener('submit', () => {
+        sendBtn.disabled = true;
+        sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+      });
+    }
+  })();
+</script>
 {% endblock %}

@@ -33,6 +33,8 @@ from .models import Store, StoreFollow, StoreNotification, StoreFavorite, B2BInq
 from reviews.models import Review
 from marketplace.models import Product, Category, ProductImage
 from orders.models import ChatMessage
+from django.core.exceptions import PermissionDenied
+from django.db.models import Prefetch
 from orders.models import Order, OrderItem, PromoCode
 from django.http import HttpResponseForbidden
 from functools import wraps
@@ -1631,6 +1633,7 @@ def update_order_status(request, order_id):
         return JsonResponse({'success': False, 'message': 'Store not found.'})
 
 User = get_user_model()
+
 @login_required
 def start_store_chat(request, store_id, buyer_id, order_id=None):
     """
@@ -1663,84 +1666,82 @@ def start_store_chat(request, store_id, buyer_id, order_id=None):
 
 @login_required
 def store_chat_panel(request, store_id):
-    store = get_object_or_404(Store, id=store_id, owner=request.user)
+    store = get_object_or_404(Store, id=store_id)
 
-    # Get all threads involving the store owner
-    threads = ChatThread.objects.filter(participants=request.user).order_by('-updated_at')
+    # Permission (adjust as needed)
+    is_owner = getattr(store, "owner_id", None) == request.user.id
+    if not (is_owner or request.user.is_superuser):
+        raise PermissionDenied
 
-    # Optional: preload the latest message per thread
-    thread_data = []
-    for thread in threads:
-        other = thread.participants.exclude(id=request.user.id).first()
-        last_msg = thread.messages.last()
-        thread_data.append({
-            'thread': thread,
-            'participant': other,
-            'last_message': last_msg.message if last_msg else 'No messages yet',
-            'timestamp': last_msg.timestamp if last_msg else None
-        })
+    # Orders that include this store's products AND have chat messages
+    orders_qs = (
+        Order.objects
+        .filter(items__product__store=store)          # assumes Product.store FK exists
+        .filter(chat_messages__isnull=False)          # related_name='chat_messages'
+        .distinct()
+    )
 
-    context = {
-        'store': store,
-        'threads': thread_data,
-    }
-    return render(request, 'stores/chat_panel.html', context)
+    # last message per order
+    last_msg_qs = (
+        ChatMessage.objects
+        .filter(order_id=OuterRef("pk"))
+        .order_by("-created_at")
+    )
 
+    orders_qs = (
+        orders_qs
+        .select_related("buyer")
+        .annotate(
+            last_message=Subquery(last_msg_qs.values("content")[:1]),
+            last_message_time=Subquery(last_msg_qs.values("created_at")[:1]),
+        )
+        .order_by("-last_message_time")
+    )
+
+    threads = [{
+        "thread_id": o.id,          # ✅ keep the name "thread_id" for your URL
+        "order": o,
+        "participant": o.buyer,
+        "last_message": o.last_message,
+        "last_message_time": o.last_message_time,
+    } for o in orders_qs]
+
+    return render(request, "stores/chat_panel.html", {
+        "store": store,
+        "threads": threads,
+    })
 
 @login_required
 def chat_thread_detail(request, store_id, thread_id):
-    store = get_object_or_404(Store, id=store_id, owner=request.user)
-    thread = get_object_or_404(ChatThread, id=thread_id, participants=request.user)
+    """
+    thread_id = Order.id
+    Buyer is viewing a chat for a specific store + order.
+    """
+    store = get_object_or_404(Store, id=store_id)
 
-    # ✅ Mark all unread messages as read
-    thread.messages.filter(is_read=False).exclude(sender=request.user).update(
-        is_read=True,
-        read_at=timezone.now()
+    # Order must belong to this buyer AND include items from this store
+    order = get_object_or_404(
+        Order.objects.select_related("buyer"),
+        id=thread_id,
+        buyer=request.user,
+        items__product__store=store,
     )
 
-    if request.method == 'POST' and request.headers.get('x-requested-with') == 'XMLHttpRequest':
-        msg = request.POST.get('message', '').strip()
-        if msg:
-            chat_message = ChatMessage.objects.create(
-                thread=thread,
-                sender=request.user,
-                message=msg
-            )
-            thread.save()
-            return JsonResponse({
-                'success': True,
-                'message': chat_message.message,
-                'timestamp': chat_message.timestamp.strftime('%H:%M'),
-                'sender': chat_message.sender.get_full_name() or chat_message.sender.username,
-                'message_id': chat_message.id
-            })
-        return JsonResponse({'success': False, 'error': 'Empty message'}, status=400)
+    messages = (
+        ChatMessage.objects
+        .filter(order=order)
+        .select_related("sender")
+        .order_by("created_at")
+    )
 
-    # Load all threads for sidebar
-    all_threads = ChatThread.objects.filter(participants=request.user).prefetch_related('participants', 'messages')
-    threads_data = []
-    for t in all_threads:
-        other = t.participants.exclude(id=request.user.id).first()
-        last_msg = t.messages.order_by('-timestamp').first()
-        unread_count = t.messages.filter(is_read=False).exclude(sender=request.user).count()
+    # Mark store messages as read (optional)
+    ChatMessage.objects.filter(order=order).exclude(sender=request.user).update(is_read=True)
 
-        threads_data.append({
-            'thread': t,
-            'participant': other,
-            'last_message': last_msg.message if last_msg else 'No messages yet',
-            'timestamp': last_msg.timestamp if last_msg else None,
-            'unread_count': unread_count,
-        })
-
-    messages = thread.messages.select_related('sender').order_by('timestamp')
-
-    return render(request, 'stores/chat_thread_detail.html', {
-        'store': store,
-        'thread': thread,
-        'messages': messages,
-        'threads': threads_data,
-        'current_thread': thread,
-        'other_user': thread.participants.exclude(id=request.user.id).first(),
+    return render(request, "chat/thread_detail.html", {
+        "store": store,
+        "order": order,
+        "messages": messages,
+        "thread_id": order.id,
     })
 
 
@@ -1749,32 +1750,31 @@ def store_order_detail(request, store_id, order_id):
     store = get_object_or_404(Store, id=store_id, owner=request.user)
     order = get_object_or_404(Order, id=order_id)
 
-    store_order_items = order.items.filter(product__seller=store.owner).select_related('product')
+    store_order_items = (
+        order.items
+        .filter(product__seller=store.owner)
+        .select_related('product')
+    )
+
     if not store_order_items.exists():
         raise Http404("No items in this order belong to your store.")
 
-    # Chat messages related to the order
     chat_messages = order.chat_messages.all().select_related('sender')
 
-    subtotal_qs = store_order_items.annotate(
-        item_total=ExpressionWrapper(
-            F('product__price') * F('quantity'),
-            output_field=DecimalField()
-        )
-    ).aggregate(total=Sum('item_total'))
-
-    subtotal = subtotal_qs['total'] or 0
+    store_subtotal = sum(
+        (Decimal(item.get_total_price()) for item in store_order_items),
+        Decimal("0.00")
+    )
 
     context = {
-        'store': store,
-        'order': order,
-        'order_items': store_order_items,
-        'buyer': order.buyer,
-        'store_subtotal': subtotal,
-        'chat_messages': chat_messages,  # Pass to template
+        "store": store,
+        "order": order,
+        "order_items": store_order_items,
+        "buyer": order.buyer,
+        "store_subtotal": store_subtotal,
+        "chat_messages": chat_messages,
     }
-    return render(request, 'stores/store_order_detail.html', context)
-
+    return render(request, "stores/store_order_detail.html", context)
 
 def _get_order_seller_users(order):
     """Return queryset of seller Users tied to items in this order."""

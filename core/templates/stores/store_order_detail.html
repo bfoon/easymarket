@@ -434,12 +434,15 @@
           </div>
 
           <!-- Quantity -->
-          <form class="update-quantity-form d-flex align-items-center flex-wrap gap-2 mt-2" data-item-id="{{ item.id }}">
+          <form class="update-quantity-form d-flex align-items-center flex-wrap gap-2 mt-2"
+                data-url="{% url 'stores:update_order_item_quantity' item.id %}">
             {% csrf_token %}
             <span class="fw-bold">Qty</span>
+
             <input type="number" name="quantity" min="1" value="{{ item.quantity }}"
                    class="form-control form-control-sm" style="width: 90px;"
                    {% if order.status == 'shipped' or order.status == 'delivered' %}readonly disabled{% endif %}>
+
             <button type="submit" class="btn btn-sm btn-outline-primary"
                     {% if order.status == 'shipped' or order.status == 'delivered' %}disabled{% endif %}>
               <i class="fas fa-rotate me-1"></i>Update
@@ -673,21 +676,34 @@ document.querySelectorAll('.update-discount-form').forEach(form => {
 document.querySelectorAll('.update-quantity-form').forEach(form => {
   form.addEventListener('submit', function (e) {
     e.preventDefault();
-    const itemId = this.getAttribute('data-item-id');
+
+    const url = this.dataset.url;
     const quantity = this.querySelector('input[name="quantity"]').value;
     const csrfToken = this.querySelector('[name="csrfmiddlewaretoken"]').value;
 
-    fetch(`/stores/order/item/${itemId}/update-quantity/`, {
+    fetch(url, {
       method: 'POST',
-      headers: { 'X-CSRFToken': csrfToken, 'X-Requested-With': 'XMLHttpRequest' },
+      headers: {
+        'X-CSRFToken': csrfToken,
+        'X-Requested-With': 'XMLHttpRequest',
+      },
       body: new URLSearchParams({ quantity })
     })
-    .then(res => res.json())
+    .then(async (res) => {
+      // if Django redirected (login_required), you’ll get HTML not JSON
+      const ct = res.headers.get('content-type') || '';
+      if (!ct.includes('application/json')) throw new Error('Non-JSON response (likely redirect/404)');
+      return res.json();
+    })
     .then(data => data.success ? location.reload() : alert(data.message || 'Failed to update.'))
-    .catch(() => alert('Network error.'));
+    .catch(err => {
+      console.error(err);
+      alert('Update failed. Check the URL pattern + login + console/network tab.');
+    });
   });
 });
 </script>
+
 
 <!-- ✅ FIXED: CSRF for status update -->
 <script>

@@ -56,7 +56,7 @@ urlpatterns = [
 
     # Chat and communication
     path('manage/<uuid:store_id>/chat/', views.store_chat_panel, name='store_chat_panel'),
-    path('manage/<uuid:store_id>/chat/<int:thread_id>/', views.chat_thread_detail, name='chat_thread_detail'),
+    path('manage/<uuid:store_id>/chat/<str:thread_id>/', views.chat_thread_detail, name='chat_thread_detail'),
     path('manage/<uuid:store_id>/chat/start/<int:buyer_id>/', views.start_store_chat, name='start_store_chat'),
     path('manage/<uuid:store_id>/chat/start/<int:buyer_id>/<int:order_id>/', views.start_store_chat, name='start_store_chat_with_order'),
 
