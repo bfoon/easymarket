@@ -4,7 +4,7 @@ from unicodedata import category
 
 from .models import (Category, Product, ProductView,
                      CartItem, Cart, CelebrityFeature, Wishlist,
-                     SearchHistory, PopularSearch, ProductFeature,
+                     SearchHistory, PopularSearch, ProductFeature, ProductImage,
                      ProductFeatureOption, ProductVariant, SharedCart, SocialCart, CartMember, PaymentShare,
                      Career, CareerApplication, PressRelease, InvestorDocument, InvestorEvent,)
 from chat.models import ChatThread, ChatMessage
@@ -13,6 +13,7 @@ from stores.models import Store
 from reviews.models import Review
 from orders.models import PromoCode
 from reviews.forms import ReviewForm
+from django.db.models import Prefetch
 from django.db import models
 from django.contrib.auth import get_user_model
 import re
@@ -24,7 +25,8 @@ from decimal import Decimal
 from django.core.cache import cache
 from .utils import (log_search, get_search_suggestions_with_history,
                     build_cart_context, _coerce_int, _ensure_owner_membership,
-                    _resolve_active_social_for, _resolve_active_cart_for_user)
+                    _resolve_active_social_for, _resolve_active_cart_for_user,
+                    with_display_images)
 from .utils import sync_social_items_totals
 from django.urls import reverse
 import json, uuid
@@ -37,6 +39,7 @@ from decimal import Decimal
 from django.contrib import messages
 from collections import Counter
 from accounts.utils import log_admin_action
+from django.views.decorators.http import require_GET
 from .notifications import send_email, send_whatsapp
 from django.http import JsonResponse, HttpRequest
 from django.template.loader import render_to_string
@@ -81,66 +84,113 @@ def all_products(request):
 
 
 def product_list(request):
-    categories = Category.objects.filter(parent__isnull=True)[:6]  # Only parent categories
-    products = Product.objects.all()
-    featured_products = Product.objects.filter(is_active=True, is_featured=True)[:6]
-    trending_products = Product.objects.filter(is_active=True, is_trending=True)
+    categories = Category.objects.filter(parent__isnull=True)[:6]
 
-    recently_viewed = []
-    similar_items = []
-    recommended_products = []
+    # Base queryset for general lists
+    base_qs = with_display_images(Product.objects.filter(is_active=True))
 
-    # Handle logged-in user
+    # These now ALL carry ProductImage prefetched
+    products = with_display_images(Product.objects.all())
+    featured_products = with_display_images(Product.objects.filter(is_active=True, is_featured=True))[:6]
+    trending_products = with_display_images(Product.objects.filter(is_active=True, is_trending=True))
+
+    # Explore section (paginated)
+    qs = base_qs.order_by("-sold_count", "-created_at")
+    paginator = Paginator(qs, 12)
+    explore_page = paginator.get_page(1)
+
+    recently_viewed = Product.objects.none()
+    similar_items = Product.objects.none()
+
+    # Logged-in recently viewed
     if request.user.is_authenticated:
-        recently_viewed = Product.objects.filter(is_active=True, productview__user=request.user).distinct().order_by(
-            '-productview__viewed_at')[:8]
+        recently_viewed = with_display_images(
+            Product.objects.filter(is_active=True, productview__user=request.user)
+            .distinct()
+            .order_by("-productview__viewed_at")
+        )[:8]
     else:
-        session_recently_viewed = request.session.get('recently_viewed', [])
-        recently_viewed = Product.objects.filter(is_active=True, id__in=session_recently_viewed)
+        session_recently_viewed = request.session.get("recently_viewed", [])
+        recently_viewed = with_display_images(
+            Product.objects.filter(is_active=True, id__in=session_recently_viewed)
+        )
 
-    # Similar items logic - consider main category and its subcategories
+    # Similar items logic
     if recently_viewed:
         last_viewed_product = recently_viewed.first()
-
-        # Determine main category
         if last_viewed_product.category:
             main_category = last_viewed_product.category.parent or last_viewed_product.category
+            related_category_ids = [main_category.id] + list(main_category.children.values_list("id", flat=True))
 
-            # Get IDs of main category and its subcategories
-            related_category_ids = [main_category.id] + list(main_category.children.values_list('id', flat=True))
+            similar_items = with_display_images(
+                Product.objects.filter(is_active=True, category_id__in=related_category_ids)
+                .exclude(id=last_viewed_product.id)
+            )[:8]
 
-            similar_items = Product.objects.filter(
-                is_active=True, category_id__in=related_category_ids
-            ).exclude(id=last_viewed_product.id)[:8]
-
-    # Generate personalized recommendations
+    # Recommendations (ensure it returns queryset or list)
     recommended_products = generate_recommendations(request, recently_viewed)
 
-    return render(request, 'marketplace/product_list.html', {
-        'categories': categories,
-        'featured_products': featured_products,
-        'trending_products': trending_products,
-        'products': products,
-        'recently_viewed': recently_viewed,
-        'similar_items': similar_items,
-        'recommended_products': recommended_products,
+    # If generate_recommendations returns a queryset: prefetch it
+    if hasattr(recommended_products, "prefetch_related"):
+        recommended_products = with_display_images(recommended_products)[:12]
+    else:
+        # If it returns a python list of Products, prefetch by re-querying
+        rec_ids = [p.id for p in recommended_products if getattr(p, "id", None)]
+        recommended_products = with_display_images(Product.objects.filter(id__in=rec_ids, is_active=True))
+
+    return render(request, "marketplace/product_list.html", {
+        "categories": categories,
+        "featured_products": featured_products,
+        "trending_products": trending_products,
+        "products": products,
+        "explore_page": explore_page,
+        "recently_viewed": recently_viewed,
+        "similar_items": similar_items,
+        "recommended_products": recommended_products,
     })
 
 
+@require_GET
+def explore_more(request):
+    page = int(request.GET.get("page", "1"))
+    per_page = int(request.GET.get("per_page", "12"))
+
+    qs = Product.objects.filter(is_active=True).order_by("-sold_count", "-created_at")
+    paginator = Paginator(qs, per_page)
+    page_obj = paginator.get_page(page)
+
+    html = render_to_string(
+        "marketplace/partials/_explore_cards.html",
+        {"products": page_obj.object_list},
+        request=request
+    )
+
+    return JsonResponse({
+        "success": True,
+        "html": html,
+        "has_next": page_obj.has_next(),
+        "next_page": page_obj.next_page_number() if page_obj.has_next() else None,
+    })
+
 def generate_recommendations(request, recently_viewed):
-    """
-    Generate personalized product recommendations based on user behavior
-    """
     recommended_products = []
 
     if request.user.is_authenticated:
-        # For authenticated users, use comprehensive recommendation logic
         recommended_products = get_authenticated_user_recommendations(request.user, recently_viewed)
     else:
-        # For anonymous users, use session-based recommendations
         recommended_products = get_anonymous_user_recommendations(request, recently_viewed)
 
-    return recommended_products[:12]  # Limit to 12 recommendations
+    # If it's a queryset, prefetch directly
+    if hasattr(recommended_products, "prefetch_related"):
+        recommended_products = with_display_images(recommended_products)[:12]
+        return list(recommended_products)
+
+    # If it's a list, re-query by IDs (fast + prefetched)
+    rec_ids = [p.id for p in recommended_products if getattr(p, "id", None)]
+    qs = with_display_images(Product.objects.filter(is_active=True, id__in=rec_ids))
+    # preserve original order
+    ordered = sorted(qs, key=lambda p: rec_ids.index(p.id)) if rec_ids else []
+    return ordered[:12]
 
 
 def get_authenticated_user_recommendations(user, recently_viewed):
@@ -181,51 +231,38 @@ def get_authenticated_user_recommendations(user, recently_viewed):
 
 
 def get_anonymous_user_recommendations(request, recently_viewed):
-    """
-    Generate recommendations for anonymous users based on session data
-    """
     recommendations = []
+    viewed_ids = [p.id for p in recently_viewed] if recently_viewed else []
 
     if recently_viewed:
-        # 1. Category-based recommendations
         category_ids = [p.category.id for p in recently_viewed if p.category]
         if category_ids:
-            category_recommendations = Product.objects.filter(
-                category_id__in=category_ids
-            ).exclude(
-                id__in=[p.id for p in recently_viewed]
-            ).annotate(
-                avg_rating=Avg('reviews__rating')
-            ).order_by('-avg_rating', '-created_at')[:8]
-            recommendations.extend(category_recommendations)
+            category_recommendations = with_display_images(
+                Product.objects.filter(is_active=True, category_id__in=category_ids)
+                .exclude(id__in=viewed_ids)
+                .annotate(avg_rating=Avg('reviews__rating'))
+                .order_by('-avg_rating', '-created_at')
+            )[:8]
+            recommendations.extend(list(category_recommendations))
 
-        # 2. Price range recommendations
         price_range = calculate_price_range(recently_viewed)
         if price_range:
-            price_recommendations = Product.objects.filter(
-                price__range=price_range
-            ).exclude(
-                id__in=[p.id for p in recently_viewed]
-            ).order_by('-is_trending', '-created_at')[:4]
-            recommendations.extend(price_recommendations)
+            price_recommendations = with_display_images(
+                Product.objects.filter(is_active=True, price__range=price_range)
+                .exclude(id__in=viewed_ids)
+                .order_by('-is_trending', '-created_at')
+            )[:4]
+            recommendations.extend(list(price_recommendations))
 
-    # 3. Fallback to popular products
     if len(recommendations) < 8:
-        popular_products = Product.objects.filter(is_active=True).annotate(
-            view_count=Count('productview'),
-            avg_rating=Avg('reviews__rating')
-        ).order_by('-view_count', '-avg_rating')[:12]
-        recommendations.extend(popular_products)
+        popular_products = with_display_images(
+            Product.objects.filter(is_active=True)
+            .annotate(view_count=Count('productview'), avg_rating=Avg('reviews__rating'))
+            .order_by('-view_count', '-avg_rating')
+        )[:12]
+        recommendations.extend(list(popular_products))
 
-    # Remove duplicates
-    seen = set()
-    unique_recommendations = []
-    for product in recommendations:
-        if product.id not in seen:
-            seen.add(product.id)
-            unique_recommendations.append(product)
-
-    return unique_recommendations
+    return remove_duplicates(recommendations, viewed_ids)
 
 
 def get_category_based_recommendations(user, recently_viewed):
@@ -397,42 +434,35 @@ def calculate_price_range(products):
 
 # Additional helper view for AJAX recommendations
 def get_more_recommendations(request):
-    """
-    API endpoint to fetch more recommendations via AJAX
-    """
-    from django.http import JsonResponse
-
     if request.method == 'GET':
         page = int(request.GET.get('page', 1))
         per_page = int(request.GET.get('per_page', 8))
 
-        # Get recently viewed for context
         recently_viewed = []
         if request.user.is_authenticated:
-            recently_viewed = Product.objects.filter(
-                productview__user=request.user, is_active=True
-            ).distinct().order_by('-productview__viewed_at')[:5]
+            recently_viewed = with_display_images(
+                Product.objects.filter(productview__user=request.user, is_active=True)
+                .distinct()
+                .order_by('-productview__viewed_at')
+            )[:5]
 
-        # Generate recommendations
         all_recommendations = generate_recommendations(request, recently_viewed)
 
-        # Paginate
         start = (page - 1) * per_page
         end = start + per_page
         recommendations = all_recommendations[start:end]
 
-        # Serialize data
         data = []
         for product in recommendations:
             data.append({
                 'id': product.id,
                 'name': product.name,
                 'price': str(product.price),
-                'image_url': product.image.url if product.image else '',
-                'url': f'/products/{product.id}/',
-                'rating': product.average_rating if hasattr(product, 'average_rating') else 0,
+                'image_url': product.display_image_url,   # ✅ primary -> first -> product.image
+                'url': product.get_absolute_url if hasattr(product, "get_absolute_url") else f'/products/{product.id}/',
+                'rating': getattr(product, 'average_rating', 0),
                 'is_trending': product.is_trending,
-                'discount_percentage': product.discount_percentage if hasattr(product, 'discount_percentage') else 0,
+                'discount_percentage': getattr(product, 'discount_percentage', 0) or 0,
             })
 
         return JsonResponse({

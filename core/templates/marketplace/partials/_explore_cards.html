@@ -1,0 +1,68 @@
+{% load static %}
+{% for product in products %}
+  <div class="exp-card" onclick="window.location.href='{% url 'marketplace:product_detail' product.id %}'">
+    <div class="exp-img">
+      {% if product.image %}
+        <img src="{{ product.image.url }}"
+             alt="{{ product.name }}"
+             loading="lazy"
+             onerror="this.onerror=null; this.src='{% static 'images/no-image.png' %}';">
+      {% else %}
+        <img src="{% static 'images/no-image.png' %}" alt="No image" loading="lazy">
+      {% endif %}
+
+      <div class="exp-badges">
+        {% if product.discount %}
+          <div class="exp-tag deal">DEAL</div>
+        {% endif %}
+        {% if product.is_trending %}
+          <div class="exp-tag hot">HOT</div>
+        {% endif %}
+      </div>
+
+      <button class="exp-cart" type="button"
+              onclick="event.stopPropagation(); addToCart({{ product.id }}, this)"
+              {% if not product.is_in_stock %}disabled{% endif %}
+              aria-label="Add to cart">
+        <i class="fas fa-shopping-cart"></i>
+      </button>
+    </div>
+
+    <div class="exp-body">
+      <p class="exp-name">{{ product.name }}</p>
+      <p class="exp-desc">
+        {% if product.short_description %}
+          {{ product.short_description }}
+        {% else %}
+          {{ product.description|truncatewords:12 }}
+        {% endif %}
+      </p>
+
+      <div class="exp-price-row">
+        <div class="exp-price">{% if product.price %}D{{ product.price }}{% else %}—{% endif %}</div>
+        {% if product.original_price %}
+          <div class="exp-orig">D{{ product.original_price }}</div>
+        {% endif %}
+      </div>
+
+      <div class="exp-meta">
+        <div>
+          <span class="exp-stars" aria-hidden="true">
+            {% for _ in "12345" %}
+              {% if product.average_rating|default:0 >= forloop.counter %}
+                <i class="fas fa-star"></i>
+              {% elif product.average_rating|default:0 >= forloop.counter|add:"-0.5" %}
+                <i class="fas fa-star-half-alt"></i>
+              {% else %}
+                <i class="far fa-star"></i>
+              {% endif %}
+            {% endfor %}
+          </span>
+          <span>({{ product.reviews.count|default:0 }})</span>
+        </div>
+
+        <div class="exp-sold">{{ product.sold_count|default:0 }} sold</div>
+      </div>
+    </div>
+  </div>
+{% endfor %}

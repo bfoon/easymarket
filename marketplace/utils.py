@@ -3,9 +3,10 @@ from django.db.models import Q, Sum, F
 from django.urls import reverse
 from decimal import Decimal
 from io import BytesIO
+from django.db.models import Prefetch
 import uuid
 
-from .models import Cart, CartItem, Product, SearchHistory, PopularSearch
+from .models import Cart, CartItem, Product, SearchHistory, PopularSearch, ProductImage
 
 from .models import SocialCart, CartMember, PaymentShare
 
@@ -392,6 +393,15 @@ def build_cart_context(request, limit=None):
         "my_share": my_share,
     }
 
+def with_display_images(qs):
+    return qs.select_related("category", "store").prefetch_related(
+        Prefetch(
+            "images",
+            queryset=ProductImage.objects.only("id", "product_id", "image", "is_primary", "created_at")
+                                .order_by("-is_primary", "created_at")
+        )
+    )
+
 def sync_social_items_totals(social):
     """
     Recompute each active member's items_total_amount as the sum of cart
@@ -422,3 +432,4 @@ def sync_social_items_totals(social):
 
     # Final due math
     social.recalc_members_due()
+

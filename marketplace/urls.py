@@ -15,6 +15,7 @@ urlpatterns = [
     path('all-products/', views.all_products, name='all_products'),
     path('hot-picks/', views.hot_picks, name='hot_picks'),
     path('used/', views.used_products_view, name='used_products'),
+    path("explore/more/", views.explore_more, name="explore_more"),
 
     # Cart
     path('cart/', views.cart_view, name='cart'),                  # primary

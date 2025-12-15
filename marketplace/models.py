@@ -432,6 +432,30 @@ class Product(models.Model):
         two_days_ago = timezone.now() - timezone.timedelta(days=2)
         return self.created_at >= two_days_ago
 
+    @property
+    def display_image_url(self):
+        """
+        Primary ProductImage -> first ProductImage -> Product.image
+        """
+        # If prefetched, this won't hit DB repeatedly
+        imgs = getattr(self, "_prefetched_objects_cache", {}).get("images")
+        if imgs is not None:
+            primary = next((im for im in imgs if im.is_primary), None)
+            if primary and primary.image:
+                return primary.image.url
+            first = imgs[0] if len(imgs) else None
+            if first and first.image:
+                return first.image.url
+        else:
+            primary = self.images.filter(is_primary=True).first()
+            if primary and primary.image:
+                return primary.image.url
+            first = self.images.first()
+            if first and first.image:
+                return first.image.url
+
+        return self.image.url if self.image else ""
+
     def get_b2b_price_for_quantity(self, quantity):
         """
         Return the best B2B unit price for a given quantity using tier pricing if present,
