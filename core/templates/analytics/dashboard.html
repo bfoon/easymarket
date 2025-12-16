@@ -1,0 +1,741 @@
+{% extends "base.html" %}
+{% load humanize %}
+{% load static %}
+
+{% block title %}Analytics Dashboard{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+<style>
+  :root {
+    --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --gradient-success: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    --gradient-warning: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    --gradient-info: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  }
+
+  .dashboard-header {
+    background: var(--gradient-primary);
+    border-radius: 16px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    color: white;
+    box-shadow: 0 10px 40px rgba(102, 126, 234, 0.3);
+  }
+
+  .kpi-card {
+    background: white;
+    border-radius: 16px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    border: none;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .kpi-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+  }
+
+  .kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: var(--gradient-primary);
+  }
+
+  .kpi-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    margin-bottom: 1rem;
+  }
+
+  .kpi-card:nth-child(1) .kpi-icon { background: linear-gradient(135deg, #667eea20, #764ba220); color: #667eea; }
+  .kpi-card:nth-child(2) .kpi-icon { background: linear-gradient(135deg, #11998e20, #38ef7d20); color: #11998e; }
+  .kpi-card:nth-child(3) .kpi-icon { background: linear-gradient(135deg, #f093fb20, #f5576c20); color: #f5576c; }
+  .kpi-card:nth-child(4) .kpi-icon { background: linear-gradient(135deg, #4facfe20, #00f2fe20); color: #4facfe; }
+  .kpi-card:nth-child(5) .kpi-icon { background: linear-gradient(135deg, #fa709a20, #fee14020); color: #fa709a; }
+  .kpi-card:nth-child(6) .kpi-icon { background: linear-gradient(135deg, #30cfd020, #330867aa); color: #30cfd0; }
+
+  .kpi-value {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .kpi-label {
+    font-size: 0.875rem;
+    color: #64748b;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .kpi-change {
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-top: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .kpi-change.positive { color: #11998e; }
+  .kpi-change.negative { color: #f5576c; }
+  .kpi-change.neutral { color: #64748b; }
+
+  .chart-card {
+    background: white;
+    border-radius: 16px;
+    padding: 2rem;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    border: none;
+  }
+
+  .funnel-stage {
+    position: relative;
+    padding: 2rem;
+    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+    border-radius: 12px;
+    margin-bottom: 1rem;
+    transition: all 0.3s ease;
+  }
+
+  .funnel-stage:hover {
+    transform: scale(1.02);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+  }
+
+  .funnel-stage-1 { background: linear-gradient(135deg, #667eea15, #764ba215); }
+  .funnel-stage-2 { background: linear-gradient(135deg, #11998e15, #38ef7d15); }
+  .funnel-stage-3 { background: linear-gradient(135deg, #4facfe15, #00f2fe15); }
+
+  .funnel-arrow {
+    text-align: center;
+    font-size: 2rem;
+    color: #cbd5e1;
+    margin: -0.5rem 0;
+  }
+
+  .funnel-conversion-rate {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    background: rgba(102, 126, 234, 0.1);
+    color: #667eea;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 0.875rem;
+    margin-top: 0.5rem;
+  }
+
+  .table-modern {
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  .table-modern thead th {
+    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+    color: #475569;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.5px;
+    padding: 1rem;
+    border: none;
+  }
+
+  .table-modern tbody tr {
+    transition: all 0.2s ease;
+  }
+
+  .table-modern tbody tr:hover {
+    background: #f8fafc;
+    transform: scale(1.01);
+  }
+
+  .table-modern tbody td {
+    padding: 1rem;
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  .time-selector {
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 12px;
+    padding: 0.5rem 1rem;
+    color: white;
+    font-weight: 500;
+    transition: all 0.3s ease;
+  }
+
+  .time-selector:hover {
+    background: rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.5);
+  }
+
+  .time-selector:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3);
+  }
+
+  .badge-metric {
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.875rem;
+  }
+
+  .animated-bg {
+    background: linear-gradient(-45deg, #667eea, #764ba2, #f093fb, #f5576c);
+    background-size: 400% 400%;
+    animation: gradient 15s ease infinite;
+  }
+
+  @keyframes gradient {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  .pulse {
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+
+  .performance-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .performance-item {
+    text-align: center;
+    padding: 1.5rem;
+    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+    border-radius: 12px;
+    transition: all 0.3s ease;
+  }
+
+  .performance-item:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+  }
+
+  .performance-label {
+    font-size: 0.75rem;
+    color: #64748b;
+    text-transform: uppercase;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.5rem;
+  }
+
+  .performance-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #667eea;
+  }
+
+  .traffic-source-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    background: #f8fafc;
+    border-radius: 8px;
+    margin-bottom: 0.5rem;
+    transition: all 0.2s ease;
+  }
+
+  .traffic-source-item:hover {
+    background: #e2e8f0;
+    transform: translateX(5px);
+  }
+
+  .event-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: #f8fafc;
+    border-radius: 8px;
+    margin-bottom: 0.5rem;
+    transition: all 0.2s ease;
+  }
+
+  .event-item:hover {
+    background: #e2e8f0;
+  }
+
+  .event-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+  }
+
+  .event-icon.add { background: #11998e20; color: #11998e; }
+  .event-icon.checkout { background: #f5576c20; color: #f5576c; }
+  .event-icon.paid { background: #667eea20; color: #667eea; }
+
+  .date-range-badge {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    font-size: 0.875rem;
+  }
+</style>
+
+<div class="container-fluid py-4">
+  <!-- Header -->
+  <div class="dashboard-header animated-bg">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+      <div>
+        <h1 class="fw-bold mb-2">📊 Analytics Overview</h1>
+        <p class="mb-0 opacity-90">Real-time insights into your business performance</p>
+        <div class="date-range-badge mt-2">
+          {{ date_range.start|date:"M d, Y" }} - {{ date_range.end|date:"M d, Y" }}
+        </div>
+      </div>
+      <form method="get">
+        <select name="days" class="form-select time-selector" onchange="this.form.submit()">
+          <option value="7" {% if days == 7 %}selected{% endif %}>📅 Last 7 days</option>
+          <option value="30" {% if days == 30 %}selected{% endif %}>📅 Last 30 days</option>
+          <option value="90" {% if days == 90 %}selected{% endif %}>📅 Last 90 days</option>
+        </select>
+      </form>
+    </div>
+  </div>
+
+  <!-- KPI CARDS -->
+  <div class="row g-4 mb-4">
+    {% for kpi in kpis %}
+      <div class="col-md-6 col-lg-4 col-xl-2">
+        <div class="card kpi-card h-100">
+          <div class="card-body">
+            <div class="kpi-icon">
+              {{ kpi.icon|default:"📊" }}
+            </div>
+            <div class="kpi-label">{{ kpi.label }}</div>
+            <div class="kpi-value">
+              {% if kpi.is_currency %}
+                D{{ kpi.value|floatformat:2|intcomma }}
+              {% elif kpi.is_percent %}
+                {{ kpi.value|floatformat:1 }}%
+              {% else %}
+                {{ kpi.value|intcomma }}
+              {% endif %}
+            </div>
+
+            {% if forloop.counter == 1 and comparison.page_views_change %}
+              <div class="kpi-change {% if comparison.page_views_change > 0 %}positive{% elif comparison.page_views_change < 0 %}negative{% else %}neutral{% endif %}">
+                {% if comparison.page_views_change > 0 %}↑{% elif comparison.page_views_change < 0 %}↓{% else %}→{% endif %}
+                {{ comparison.page_views_change|floatformat:1 }}%
+              </div>
+            {% elif forloop.counter == 2 and comparison.visitors_change %}
+              <div class="kpi-change {% if comparison.visitors_change > 0 %}positive{% elif comparison.visitors_change < 0 %}negative{% else %}neutral{% endif %}">
+                {% if comparison.visitors_change > 0 %}↑{% elif comparison.visitors_change < 0 %}↓{% else %}→{% endif %}
+                {{ comparison.visitors_change|floatformat:1 }}%
+              </div>
+            {% elif forloop.counter == 4 and comparison.orders_change %}
+              <div class="kpi-change {% if comparison.orders_change > 0 %}positive{% elif comparison.orders_change < 0 %}negative{% else %}neutral{% endif %}">
+                {% if comparison.orders_change > 0 %}↑{% elif comparison.orders_change < 0 %}↓{% else %}→{% endif %}
+                {{ comparison.orders_change|floatformat:1 }}%
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+
+  <!-- Performance Metrics -->
+  {% if performance %}
+  <div class="chart-card mb-4">
+    <h5 class="fw-bold mb-4">🎯 Performance Metrics</h5>
+    <div class="performance-grid">
+      <div class="performance-item">
+        <div class="performance-label">Bounce Rate</div>
+        <div class="performance-value">{{ performance.bounce_rate|floatformat:1 }}%</div>
+      </div>
+      <div class="performance-item">
+        <div class="performance-label">Cart Abandonment</div>
+        <div class="performance-value">{{ performance.cart_abandonment|floatformat:1 }}%</div>
+      </div>
+      <div class="performance-item">
+        <div class="performance-label">Return Rate</div>
+        <div class="performance-value">{{ performance.return_rate|floatformat:1 }}%</div>
+      </div>
+      <div class="performance-item">
+        <div class="performance-label">Avg Pages/Session</div>
+        <div class="performance-value">{{ performance.avg_session_pages|floatformat:1 }}</div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- CHART -->
+  <div class="chart-card mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h5 class="fw-bold mb-0">📈 Traffic & Conversion Trends</h5>
+      <span class="badge bg-success pulse">Live</span>
+    </div>
+    <canvas id="trafficChart" height="80"></canvas>
+  </div>
+
+  <!-- FUNNEL -->
+  <div class="chart-card mb-4">
+    <h5 class="fw-bold mb-4">🔄 Conversion Funnel</h5>
+    <div class="row">
+      {% for k, v in funnel.items %}
+        <div class="col-md-4">
+          <div class="funnel-stage funnel-stage-{{ forloop.counter }}">
+            <div class="text-center">
+              <div class="fw-bold text-uppercase mb-2" style="color: #475569; font-size: 0.875rem;">
+                {% if k == "add_to_cart" %}Add to Cart
+                {% elif k == "checkout" %}Checkout
+                {% elif k == "paid" %}Paid
+                {% else %}{{ k|cut:"_"|title }}
+                {% endif %}
+              </div>
+              <div class="display-4 fw-bold" style="color: #667eea;">
+                {{ v|intcomma }}
+              </div>
+              {% if funnel_rates %}
+                {% if forloop.counter == 2 and funnel_rates.cart_to_checkout %}
+                  <div class="funnel-conversion-rate">
+                    {{ funnel_rates.cart_to_checkout|floatformat:1 }}% conversion
+                  </div>
+                {% elif forloop.counter == 3 and funnel_rates.checkout_to_paid %}
+                  <div class="funnel-conversion-rate">
+                    {{ funnel_rates.checkout_to_paid|floatformat:1 }}% conversion
+                  </div>
+                {% endif %}
+              {% endif %}
+            </div>
+          </div>
+          {% if not forloop.last %}
+            <div class="funnel-arrow">↓</div>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+    {% if funnel_rates.overall_conversion %}
+      <div class="text-center mt-3">
+        <span class="badge" style="background: #667eea; color: white; padding: 0.75rem 1.5rem; font-size: 1rem;">
+          Overall Conversion Rate: {{ funnel_rates.overall_conversion|floatformat:1 }}%
+        </span>
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- TABLES AND ADDITIONAL INFO -->
+  <div class="row g-4 mb-4">
+    <div class="col-lg-6">
+      <div class="chart-card">
+        <h6 class="fw-bold mb-4">🏪 Top Performing Stores</h6>
+        <div class="table-responsive">
+          <table class="table table-modern">
+            <thead>
+              <tr>
+                <th>Store</th>
+                <th>Revenue</th>
+                <th>Orders</th>
+                <th>Conv Rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for s in top_stores %}
+              <tr>
+                <td class="fw-semibold">{{ s.store__name }}</td>
+                <td><span class="badge badge-metric" style="background: #11998e20; color: #11998e;">D{{ s.revenue|floatformat:2|intcomma }}</span></td>
+                <td>{{ s.paid|intcomma }}</td>
+                <td><span class="badge badge-metric" style="background: #667eea20; color: #667eea;">{{ s.conversion|floatformat:1 }}%</span></td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="4" class="text-center text-muted py-4">No data available</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-6">
+      <div class="chart-card">
+        <h6 class="fw-bold mb-4">📄 Most Visited Pages</h6>
+        <div class="table-responsive">
+          <table class="table table-modern">
+            <thead>
+              <tr>
+                <th>Page Path</th>
+                <th>Views</th>
+                <th>Sessions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for p in top_pages %}
+              <tr>
+                <td class="fw-semibold" style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ p.path }}">{{ p.path }}</td>
+                <td><span class="badge badge-metric" style="background: #4facfe20; color: #4facfe;">{{ p.views|intcomma }}</span></td>
+                <td>{{ p.unique_sessions|intcomma }}</td>
+              </tr>
+              {% empty %}
+              <tr><td colspan="3" class="text-center text-muted py-4">No data available</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Traffic Sources and Recent Activity -->
+  <div class="row g-4">
+    {% if traffic_sources %}
+    <div class="col-lg-6">
+      <div class="chart-card">
+        <h6 class="fw-bold mb-4">🌐 Top Traffic Sources</h6>
+        {% for source in traffic_sources %}
+          <div class="traffic-source-item">
+            <div>
+              <div class="fw-semibold" style="font-size: 0.875rem; color: #475569;">
+                {{ source.referrer|truncatechars:50 }}
+              </div>
+            </div>
+            <div>
+              <span class="badge badge-metric" style="background: #667eea20; color: #667eea;">
+                {{ source.visits|intcomma }} visits
+              </span>
+            </div>
+          </div>
+        {% empty %}
+          <div class="text-center text-muted py-4">No referrer data available</div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if recent_events %}
+    <div class="col-lg-6">
+      <div class="chart-card">
+        <h6 class="fw-bold mb-4">⚡ Recent Activity</h6>
+        <div style="max-height: 400px; overflow-y: auto;">
+          {% for event in recent_events|slice:":10" %}
+            <div class="event-item">
+              <div class="event-icon {% if event.event == 'add_to_cart' %}add{% elif event.event == 'checkout' %}checkout{% elif event.event == 'paid' %}paid{% endif %}">
+                {% if event.event == "add_to_cart" %}🛒
+                {% elif event.event == "checkout" %}💳
+                {% elif event.event == "paid" %}✅
+                {% else %}📦
+                {% endif %}
+              </div>
+              <div class="flex-grow-1">
+                <div class="fw-semibold" style="font-size: 0.875rem;">
+                  {% if event.event == "add_to_cart" %}Added to Cart
+                  {% elif event.event == "checkout" %}Checkout Initiated
+                  {% elif event.event == "paid" %}Order Completed
+                  {% elif event.event == "product_view" %}Product Viewed
+                  {% else %}{{ event.get_event_display }}
+                  {% endif %}
+                </div>
+                <div class="text-muted small">
+                  {% if event.store %}{{ event.store.name }}{% endif %}
+                  {% if event.product %} • {{ event.product.name|truncatechars:30 }}{% endif %}
+                </div>
+              </div>
+              <div class="text-muted small">
+                {{ event.created_at|timesince }} ago
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+const ctx = document.getElementById("trafficChart");
+
+// Gradient fills
+const gradient1 = ctx.getContext('2d').createLinearGradient(0, 0, 0, 400);
+gradient1.addColorStop(0, 'rgba(102, 126, 234, 0.3)');
+gradient1.addColorStop(1, 'rgba(102, 126, 234, 0)');
+
+const gradient2 = ctx.getContext('2d').createLinearGradient(0, 0, 0, 400);
+gradient2.addColorStop(0, 'rgba(17, 153, 142, 0.3)');
+gradient2.addColorStop(1, 'rgba(17, 153, 142, 0)');
+
+const gradient3 = ctx.getContext('2d').createLinearGradient(0, 0, 0, 400);
+gradient3.addColorStop(0, 'rgba(245, 87, 108, 0.3)');
+gradient3.addColorStop(1, 'rgba(245, 87, 108, 0)');
+
+new Chart(ctx, {
+  type: "line",
+  data: {
+    labels: {{ chart.labels|safe }},
+    datasets: [
+      {
+        label: "Page Views",
+        data: {{ chart.page_views|safe }},
+        borderColor: '#667eea',
+        backgroundColor: gradient1,
+        tension: 0.4,
+        fill: true,
+        borderWidth: 3,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        pointBackgroundColor: '#667eea',
+        pointBorderColor: '#fff',
+        pointBorderWidth: 2
+      },
+      {
+        label: "Visitors",
+        data: {{ chart.unique_visitors|safe }},
+        borderColor: '#11998e',
+        backgroundColor: gradient2,
+        tension: 0.4,
+        fill: true,
+        borderWidth: 3,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        pointBackgroundColor: '#11998e',
+        pointBorderColor: '#fff',
+        pointBorderWidth: 2
+      },
+      {
+        label: "Conversion %",
+        data: {{ chart.conversion_rate|safe }},
+        borderColor: '#f5576c',
+        backgroundColor: gradient3,
+        tension: 0.4,
+        yAxisID: "y1",
+        fill: true,
+        borderWidth: 3,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        pointBackgroundColor: '#f5576c',
+        pointBorderColor: '#fff',
+        pointBorderWidth: 2
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: true,
+    interaction: {
+      mode: 'index',
+      intersect: false,
+    },
+    plugins: {
+      legend: {
+        display: true,
+        position: 'top',
+        labels: {
+          usePointStyle: true,
+          padding: 20,
+          font: {
+            size: 13,
+            weight: '600'
+          }
+        }
+      },
+      tooltip: {
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        padding: 12,
+        titleColor: '#fff',
+        bodyColor: '#fff',
+        borderColor: 'rgba(255, 255, 255, 0.2)',
+        borderWidth: 1,
+        cornerRadius: 8,
+        displayColors: true,
+        callbacks: {
+          label: function(context) {
+            let label = context.dataset.label || '';
+            if (label) {
+              label += ': ';
+            }
+            if (context.parsed.y !== null) {
+              if (context.datasetIndex === 2) {
+                label += context.parsed.y.toFixed(1) + '%';
+              } else {
+                label += context.parsed.y.toLocaleString();
+              }
+            }
+            return label;
+          }
+        }
+      }
+    },
+    scales: {
+      x: {
+        grid: {
+          display: false
+        },
+        ticks: {
+          font: {
+            size: 12
+          }
+        }
+      },
+      y: {
+        beginAtZero: true,
+        grid: {
+          color: 'rgba(0, 0, 0, 0.05)'
+        },
+        ticks: {
+          font: {
+            size: 12
+          },
+          callback: function(value) {
+            return value.toLocaleString();
+          }
+        }
+      },
+      y1: {
+        beginAtZero: true,
+        position: "right",
+        grid: {
+          display: false
+        },
+        ticks: {
+          callback: function(value) {
+            return value + '%';
+          },
+          font: {
+            size: 12
+          }
+        }
+      }
+    }
+  }
+});
+</script>
+{% endblock %}

@@ -8,6 +8,7 @@ from .models import (Category, Product, ProductView,
                      ProductFeatureOption, ProductVariant, SharedCart, SocialCart, CartMember, PaymentShare,
                      Career, CareerApplication, PressRelease, InvestorDocument, InvestorEvent,)
 from chat.models import ChatThread, ChatMessage
+from analytics.models import CartEvent
 from accounts.models import Address
 from stores.models import Store
 from reviews.models import Review
@@ -54,7 +55,27 @@ import os
 # Get the custom User model
 User = get_user_model()
 
-# Create your views here!
+def _ensure_session(request):
+    """Make sure guests also have a session_key for tracking."""
+    if not request.session.session_key:
+        request.session.create()
+    return request.session.session_key
+
+
+def _track_cart_event(request, event: str):
+    """
+    Record cart analytics event (add/remove/checkout/completed/abandoned).
+    Safe: never breaks cart flow if analytics fails.
+    """
+    try:
+        session_key = _ensure_session(request)
+        CartEvent.objects.create(
+            user=request.user if request.user.is_authenticated else None,
+            session_key=session_key,
+            event=event,
+        )
+    except Exception:
+        pass
 
 def all_products(request):
     parent_categories = Category.objects.filter(parent__isnull=True, is_active=True)
@@ -1486,6 +1507,8 @@ def add_to_cart(request, product_id):
         else:
             item.save(update_fields=["quantity", "added_by"])
 
+        _track_cart_event(request, "add")
+
         # optional: recompute social shares
         if social:
             _ensure_owner_membership(social)
@@ -1514,6 +1537,8 @@ def add_to_cart(request, product_id):
     }
     request.session["cart"] = session_cart
     request.session.modified = True
+
+    _track_cart_event(request, "add")
 
     total_qty = sum(int(v.get("quantity", 1) or 1) for v in session_cart.values())
     return JsonResponse(
@@ -1665,6 +1690,11 @@ def update_cart_quantity(request):
             cart_item.quantity = new_q
             cart_item.save(update_fields=["quantity"])
 
+            if action == "increase":
+                _track_cart_event(request, "add")
+            elif action == "decrease":
+                _track_cart_event(request, "remove")
+
             # Update social shares if in social cart
             if social and social.is_active and social.status in ("open", "checkout"):
                 if hasattr(social, "recalc_members_due"):
@@ -1737,6 +1767,11 @@ def update_cart_quantity(request):
             except Product.DoesNotExist:
                 continue
 
+        if action == "increase":
+            _track_cart_event(request, "add")
+        elif action == "decrease":
+            _track_cart_event(request, "remove")
+
         tax_amount = total_price * CART_TAX_RATE
         final_total = total_price + tax_amount
 
@@ -1789,6 +1824,8 @@ def remove_cart_item(request):
             request.session["cart"] = session_cart
             request.session.modified = True
 
+            _track_cart_event(request, "remove")
+
             ctx = build_cart_context(request)
             return JsonResponse(
                 {
@@ -1836,6 +1873,8 @@ def remove_cart_item(request):
             return JsonResponse({"success": False, "message": "Not allowed"}, status=403)
 
     item.delete()
+
+    _track_cart_event(request, "remove")
 
     # Recalc social shares if needed
     if social and hasattr(social, "recalc_members_due"):

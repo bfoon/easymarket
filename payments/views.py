@@ -13,10 +13,33 @@ from marketplace.notifications import send_whatsapp, send_email
 
 from orders.models import Order, ShippingAddress
 from .models import Payment
+from analytics.models import CartEvent
 from django.contrib.auth import get_user_model
 import threading
 from django.db.models import Sum
 
+
+def _ensure_session(request):
+    """Make sure guests also have a session_key for tracking."""
+    if not request.session.session_key:
+        request.session.create()
+    return request.session.session_key
+
+
+def _track_cart_event(request, event: str):
+    """
+    Record cart analytics event (add/remove/checkout/completed/abandoned).
+    Safe: never breaks cart flow if analytics fails.
+    """
+    try:
+        session_key = _ensure_session(request)
+        CartEvent.objects.create(
+            user=request.user if request.user.is_authenticated else None,
+            session_key=session_key,
+            event=event,
+        )
+    except Exception:
+        pass
 
 def notify_seller_payment(order):
     User = get_user_model()
@@ -152,6 +175,8 @@ def process_payment(request, order_id):
                     product = item.product
                     product.sold_count = (product.sold_count or 0) + item.quantity
                     product.save()
+
+                _track_cart_event(request, "completed")
 
                 notify_seller_payment_async(order)
 

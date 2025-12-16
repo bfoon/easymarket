@@ -12,6 +12,7 @@ from stock.models import Stock
 from stores.models import Store
 from .models import Order, OrderItem, PromoCode, ChatMessage
 from marketplace.models import Cart, CartItem, Product
+from analytics.models import CartEvent
 from utils.qr import generate_invoice_qr_code
 from django.core.exceptions import ValidationError
 from decimal import Decimal, InvalidOperation
@@ -30,6 +31,28 @@ from django.contrib.auth import get_user_model
 import threading
 from marketplace.notifications import send_whatsapp, send_email
 
+
+def _ensure_session(request):
+    """Make sure guests also have a session_key for tracking."""
+    if not request.session.session_key:
+        request.session.create()
+    return request.session.session_key
+
+
+def _track_cart_event(request, event: str):
+    """
+    Record cart analytics event (add/remove/checkout/completed/abandoned).
+    Safe: never breaks cart flow if analytics fails.
+    """
+    try:
+        session_key = _ensure_session(request)
+        CartEvent.objects.create(
+            user=request.user if request.user.is_authenticated else None,
+            session_key=session_key,
+            event=event,
+        )
+    except Exception:
+        pass
 
 def notify_store_new_order(order):
     User = get_user_model()
@@ -174,6 +197,8 @@ def checkout_cart(request):
             if promo:
                 promo.increment_usage()
 
+            _track_cart_event(request, "checkout")
+
             notify_store_new_order_async(order)
 
             messages.success(request, "Order placed successfully!")
@@ -232,6 +257,8 @@ def quick_checkout(request):
                 product=locked_product,
                 quantity=quantity
             )
+
+            _track_cart_event(request, "checkout")
 
             notify_store_new_order_async(order)
 

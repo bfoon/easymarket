@@ -84,6 +84,7 @@ INSTALLED_APPS = [
     "finance",
     "auction",
     "helpdesk",
+    "analytics",
 ]
 
 SITE_ID = config("SITE_ID", default=1, cast=int)
@@ -135,6 +136,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",
+    "analytics.middleware.AnalyticsMiddleware",
 ]
 
 ROOT_URLCONF = "easymarket.urls"
@@ -156,6 +158,8 @@ TEMPLATES = [
                 "reviews.context_processors.global_review_stats",
                 "auction.context_processors.auction_counts",
                 "marketplace.context_processors.nav_categories",
+                "analytics.context_processors.analytics_metrics",
+                "analytics.context_processors.store_analytics_kpis",
             ],
         },
     },
