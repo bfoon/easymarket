@@ -9,6 +9,7 @@ from .models import (Category, Product, ProductView,
                      Career, CareerApplication, PressRelease, InvestorDocument, InvestorEvent,)
 from chat.models import ChatThread, ChatMessage
 from analytics.models import CartEvent
+from analytics.services import track_event
 from accounts.models import Address
 from stores.models import Store
 from reviews.models import Review
@@ -54,6 +55,8 @@ import os
 
 # Get the custom User model
 User = get_user_model()
+
+
 
 def _ensure_session(request):
     """Make sure guests also have a session_key for tracking."""
@@ -953,6 +956,22 @@ def product_detail(request, product_id):
         if last_space != -1:
             short_description = short_description[:last_space]
 
+    # ✅ ANALYTICS: Track product view
+    session_key = request.session.session_key
+    if not session_key:
+        request.session.create()
+        session_key = request.session.session_key
+
+    track_event(
+        session_key=session_key,
+        event_type="product_view",
+        user=request.user if request.user.is_authenticated else None,
+        store=product.store,
+        product=product,
+        path=request.path,
+        referrer=request.META.get('HTTP_REFERER', ''),
+    )
+
     # Reviews
     reviews = Review.objects.filter(product=product)
     user_review = Review.objects.filter(product=product,
@@ -1464,6 +1483,10 @@ def _collect_selected_features(request):
     return selected_features or {}
 
 
+# ============================================================================
+# CART VIEWS WITH ANALYTICS
+# ============================================================================
+
 @require_POST
 def add_to_cart(request, product_id):
     """
@@ -1473,6 +1496,8 @@ def add_to_cart(request, product_id):
     Body can be form or JSON:
       quantity: int, default 1
       selected_features: JSON (e.g. {"color":"Red","size":"M"})
+
+    ✅ Analytics: Tracks add_to_cart event
     """
     # Parse incoming
     if request.content_type and "application/json" in request.content_type:
@@ -1493,7 +1518,7 @@ def add_to_cart(request, product_id):
     if request.user.is_authenticated:
         cart, social = _resolve_active_cart_for_user(request.user)
 
-        # Create/update DB CartItem (assumes JSONField on selected_features)
+        # Create/update DB CartItem
         item, created = CartItem.objects.get_or_create(
             cart=cart,
             product=product,
@@ -1502,14 +1527,21 @@ def add_to_cart(request, product_id):
         )
         if not created:
             item.quantity = _coerce_int(item.quantity + quantity)
-            # keep original added_by
             item.save(update_fields=["quantity"])
         else:
             item.save(update_fields=["quantity", "added_by"])
 
-        _track_cart_event(request, "add")
+        # ANALYTICS: Track add to cart event
+        track_event(
+            session_key=request.session.session_key or request.user.username,
+            event_type="add_to_cart",
+            user=request.user,
+            store=product.store,
+            product=product,
+            path=request.path,
+        )
 
-        # optional: recompute social shares
+        # Optional: recompute social shares
         if social:
             _ensure_owner_membership(social)
             if hasattr(social, "recalc_members_due"):
@@ -1538,7 +1570,18 @@ def add_to_cart(request, product_id):
     request.session["cart"] = session_cart
     request.session.modified = True
 
-    _track_cart_event(request, "add")
+    # ✅ ANALYTICS: Track guest add to cart
+    if not request.session.session_key:
+        request.session.create()
+
+    track_event(
+        session_key=request.session.session_key,
+        event_type="add_to_cart",
+        user=None,
+        store=product.store,
+        product=product,
+        path=request.path,
+    )
 
     total_qty = sum(int(v.get("quantity", 1) or 1) for v in session_cart.values())
     return JsonResponse(
@@ -1562,11 +1605,14 @@ def cart_view(request):
     ctx = build_cart_context(request, limit=None)
     return render(request, "marketplace/cart_detail.html", ctx)
 
+
 @csrf_exempt
 def get_cart_count(request):
     """
     Returns counts/totals. If user has an active SocialCart, we use that cart.
     """
+    CART_TAX_RATE = Decimal("0.085")
+
     try:
         if request.user.is_authenticated:
             social = _resolve_active_social_for(request.user)
@@ -1640,13 +1686,18 @@ def get_cart_context(request):
 
     return {"cart_count": cart_count, "cart_total": cart_total}
 
+
 @csrf_exempt
 @require_POST
 def update_cart_quantity(request):
     """
     Update cart item quantity for authenticated users (prefers SocialCart) and guests.
+
+    Analytics: Tracks add_to_cart or remove_from_cart based on action
     """
-    # Resolve user cart (and guard social if needed)
+    CART_TAX_RATE = Decimal("0.085")
+
+    # Resolve user cart
     if request.user.is_authenticated:
         cart, social = _resolve_active_cart_for_user(request.user)
         try:
@@ -1667,7 +1718,6 @@ def update_cart_quantity(request):
             if cart_item_id:
                 cart_item = get_object_or_404(CartItem, id=cart_item_id, cart=cart)
             else:
-                # Fallback to product_id
                 product = get_object_or_404(Product, id=product_id, is_active=True)
                 cart_item = CartItem.objects.filter(cart=cart, product=product).first()
                 if not cart_item:
@@ -1676,6 +1726,7 @@ def update_cart_quantity(request):
                     )
 
             # Compute new quantity
+            old_quantity = cart_item.quantity
             if quantity:
                 new_q = max(1, min(99, int(quantity)))
             elif action == "increase":
@@ -1690,12 +1741,27 @@ def update_cart_quantity(request):
             cart_item.quantity = new_q
             cart_item.save(update_fields=["quantity"])
 
-            if action == "increase":
-                _track_cart_event(request, "add")
-            elif action == "decrease":
-                _track_cart_event(request, "remove")
+            # ✅ ANALYTICS: Track based on action
+            if action == "increase" or (quantity and new_q > old_quantity):
+                track_event(
+                    session_key=request.session.session_key or request.user.username,
+                    event_type="add_to_cart",
+                    user=request.user,
+                    store=cart_item.product.store,
+                    product=cart_item.product,
+                    path=request.path,
+                )
+            elif action == "decrease" or (quantity and new_q < old_quantity):
+                track_event(
+                    session_key=request.session.session_key or request.user.username,
+                    event_type="remove_from_cart",
+                    user=request.user,
+                    store=cart_item.product.store,
+                    product=cart_item.product,
+                    path=request.path,
+                )
 
-            # Update social shares if in social cart
+            # Update social shares if needed
             if social and social.is_active and social.status in ("open", "checkout"):
                 if hasattr(social, "recalc_members_due"):
                     social.recalc_members_due()
@@ -1733,6 +1799,7 @@ def update_cart_quantity(request):
             return JsonResponse({"success": False, "message": "Item not found in cart"})
 
         # Compute new qty
+        old_quantity = int(cart[session_key]["quantity"])
         if quantity:
             new_q = max(1, min(99, int(quantity)))
         elif action == "increase":
@@ -1748,10 +1815,34 @@ def update_cart_quantity(request):
         request.session["cart"] = cart
         request.session.modified = True
 
-        # Calculate totals
+        # Get product for analytics
         pid_str = session_key.split("::", 1)[0]
         product = get_object_or_404(Product, id=int(pid_str), is_active=True)
 
+        # ANALYTICS: Track guest action
+        if not request.session.session_key:
+            request.session.create()
+
+        if action == "increase" or (quantity and new_q > old_quantity):
+            track_event(
+                session_key=request.session.session_key,
+                event_type="add_to_cart",
+                user=None,
+                store=product.store,
+                product=product,
+                path=request.path,
+            )
+        elif action == "decrease" or (quantity and new_q < old_quantity):
+            track_event(
+                session_key=request.session.session_key,
+                event_type="remove_from_cart",
+                user=None,
+                store=product.store,
+                product=product,
+                path=request.path,
+            )
+
+        # Calculate totals
         quantity_val = int(cart[session_key]["quantity"])
         subtotal = product.price * quantity_val
 
@@ -1766,11 +1857,6 @@ def update_cart_quantity(request):
                 item_count += q
             except Product.DoesNotExist:
                 continue
-
-        if action == "increase":
-            _track_cart_event(request, "add")
-        elif action == "decrease":
-            _track_cart_event(request, "remove")
 
         tax_amount = total_price * CART_TAX_RATE
         final_total = total_price + tax_amount
@@ -1794,12 +1880,15 @@ def update_cart_quantity(request):
     except Exception as e:
         return JsonResponse({"success": False, "message": f"An error occurred: {str(e)}"})
 
+
 @require_POST
 def remove_cart_item(request):
     """
     Remove one cart line.
     - Guests: remove session entry by 'remove_id'
     - Authed: remove CartItem by id (permission-aware for SocialCart)
+
+    ✅ Analytics: Tracks remove_from_cart event
     """
     try:
         # Parse data from POST or JSON
@@ -1820,11 +1909,29 @@ def remove_cart_item(request):
     if (not request.user.is_authenticated) or item_type == "session":
         session_cart = request.session.get("cart", {})
         if str(remove_id) in session_cart:
+            # Get product for analytics before deleting
+            try:
+                pid = int(str(remove_id).split("::", 1)[0])
+                product = Product.objects.get(id=pid, is_active=True)
+
+                # ANALYTICS: Track removal
+                if not request.session.session_key:
+                    request.session.create()
+
+                track_event(
+                    session_key=request.session.session_key,
+                    event_type="remove_from_cart",
+                    user=None,
+                    store=product.store,
+                    product=product,
+                    path=request.path,
+                )
+            except (ValueError, Product.DoesNotExist):
+                pass
+
             del session_cart[str(remove_id)]
             request.session["cart"] = session_cart
             request.session.modified = True
-
-            _track_cart_event(request, "remove")
 
             ctx = build_cart_context(request)
             return JsonResponse(
@@ -1856,6 +1963,7 @@ def remove_cart_item(request):
 
     # Permission check for social cart
     if social:
+
         me_member = CartMember.objects.filter(
             social_cart=social, user=user, status="joined"
         ).first()
@@ -1872,9 +1980,17 @@ def remove_cart_item(request):
         if cart.user_id != user.id:
             return JsonResponse({"success": False, "message": "Not allowed"}, status=403)
 
-    item.delete()
+    # ANALYTICS: Track before deletion
+    track_event(
+        session_key=request.session.session_key or request.user.username,
+        event_type="remove_from_cart",
+        user=request.user,
+        store=item.product.store,
+        product=item.product,
+        path=request.path,
+    )
 
-    _track_cart_event(request, "remove")
+    item.delete()
 
     # Recalc social shares if needed
     if social and hasattr(social, "recalc_members_due"):
@@ -1893,21 +2009,47 @@ def remove_cart_item(request):
         }
     )
 
+
+# ============================================================================
+# WISHLIST VIEWS WITH ANALYTICS
+# ============================================================================
+
 @require_http_methods(["GET", "POST"])
 @login_required
 def toggle_wishlist(request, product_id):
     """
     Toggle wishlist item for a product.
     - If ?action=add_to_cart, add to cart and (optionally) remove from wishlist.
-    - When adding to wishlist, capture last_known_price/stock so threaded notifications have a baseline.
+    - When adding to wishlist, capture last_known_price/stock for notifications.
+
+     Analytics: Tracks add_to_cart when moving from wishlist to cart
     """
+
     product = get_object_or_404(Product, id=product_id)
     is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest'
 
     # If user clicked 'Add to Cart' from wishlist
     if request.GET.get('action') == 'add_to_cart':
         cart, _ = Cart.objects.get_or_create(user=request.user)
-        CartItem.objects.get_or_create(cart=cart, product=product, defaults={'quantity': 1})
+        cart_item, created = CartItem.objects.get_or_create(
+            cart=cart,
+            product=product,
+            defaults={'quantity': 1}
+        )
+
+        if not created:
+            cart_item.quantity += 1
+            cart_item.save(update_fields=['quantity'])
+
+        # ANALYTICS: Track add to cart from wishlist
+        track_event(
+            session_key=request.session.session_key or request.user.username,
+            event_type="add_to_cart",
+            user=request.user,
+            store=product.store,
+            product=product,
+            path=request.path,
+        )
 
         # Remove from wishlist (optional)
         Wishlist.objects.filter(user=request.user, product=product).delete()
@@ -1920,8 +2062,6 @@ def toggle_wishlist(request, product_id):
         user=request.user,
         product=product,
         defaults={
-            # ✅ Crucial for threaded notifications:
-            # set the baseline so later product saves can compare and notify.
             'last_known_price': product.price,
             'last_known_stock': product.stock_quantity,
         }
@@ -1965,6 +2105,13 @@ def toggle_wishlist(request, product_id):
 
     messages.info(request, f"{product.name} removed from your wishlist.")
     return redirect('marketplace:my_wishlist')
+
+
+@login_required
+def my_wishlist(request):
+    """Display user's wishlist"""
+    items = Wishlist.objects.filter(user=request.user).select_related('product')
+    return render(request, 'wishlist/my_wishlist.html', {'items': items})
 
 
 @login_required

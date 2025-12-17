@@ -30,6 +30,7 @@ import tempfile
 from django.contrib.auth import get_user_model
 import threading
 from marketplace.notifications import send_whatsapp, send_email
+from analytics.services import track_event
 
 
 def _ensure_session(request):
@@ -132,11 +133,18 @@ def checkout_redirect(request):
 @require_http_methods(["POST"])
 @csrf_protect
 def checkout_cart(request):
+    """
+    Complete checkout from cart.
+
+    ✅ Analytics: Tracks checkout and paid events
+    - checkout: When user initiates checkout
+    - paid: When order is successfully created (split by store)
+    """
     if not request.user.is_authenticated:
         request.session['checkout_after_login'] = True
         return redirect(f"{reverse('accounts:sign_in')}?next={reverse('orders:checkout_redirect')}")
 
-        # migrate and proceed
+    # Migrate session cart to user cart
     from marketplace.utils import migrate_session_cart_to_user
     migrate_session_cart_to_user(request, request.user)
 
@@ -146,7 +154,7 @@ def checkout_cart(request):
 
     try:
         cart = Cart.objects.get(user=request.user)
-        cart_items = CartItem.objects.filter(cart=cart).select_related('product')
+        cart_items = CartItem.objects.filter(cart=cart).select_related('product', 'product__store')
 
         if not cart_items.exists():
             messages.error(request, "Your cart is empty.")
@@ -166,6 +174,7 @@ def checkout_cart(request):
                 messages.error(request, "Promo code not found.")
                 return redirect('marketplace:cart_view')
 
+        # Calculate totals
         for item in cart_items:
             line_total = item.product.price * item.quantity
             subtotal += line_total
@@ -175,6 +184,24 @@ def checkout_cart(request):
 
         discount_amount = eligible_discount
 
+        # ✅ ANALYTICS: Track checkout initiation (before order creation)
+        # Track one checkout event per unique store in cart
+        stores_in_cart = set()
+        for item in cart_items:
+            if item.product.store:
+                stores_in_cart.add(item.product.store)
+
+        session_key = request.session.session_key or request.user.username
+
+        for store in stores_in_cart:
+            track_event(
+                session_key=session_key,
+                event_type="checkout",
+                user=request.user,
+                store=store,
+                path=request.path,
+            )
+
         # Create Order
         with transaction.atomic():
             order = Order.objects.create(
@@ -183,9 +210,11 @@ def checkout_cart(request):
                 discount_amount=discount_amount
             )
 
+            # Create order items and reduce stock
             for item in cart_items:
                 product = item.product.__class__.objects.select_for_update().get(id=item.product.id)
                 reduce_stock(product, item.quantity)
+
                 OrderItem.objects.create(
                     order=order,
                     product=product,
@@ -193,12 +222,38 @@ def checkout_cart(request):
                     selected_features=item.selected_features
                 )
 
+            # ✅ ANALYTICS: Track paid event (order successfully created)
+            # Group by store for accurate per-store tracking
+            store_items = {}
+            for item in cart_items:
+                store = item.product.store
+                if store not in store_items:
+                    store_items[store] = []
+                store_items[store].append(item)
+
+            # Track paid event per store
+            for store, items in store_items.items():
+                # You can track the first product as representative,
+                # or create multiple events (one per product)
+                for item in items:
+                    track_event(
+                        session_key=session_key,
+                        event_type="paid",
+                        user=request.user,
+                        store=store,
+                        product=item.product,
+                        order=order,
+                        path=request.path,
+                    )
+
+            # Clear cart
             cart_items.delete()
+
+            # Increment promo usage
             if promo:
                 promo.increment_usage()
 
-            _track_cart_event(request, "checkout")
-
+            # Send notifications
             notify_store_new_order_async(order)
 
             messages.success(request, "Order placed successfully!")
@@ -219,10 +274,16 @@ def checkout_cart(request):
         messages.error(request, "An error occurred during checkout. Please try again.")
         return redirect('marketplace:cart_view')
 
+
 @require_http_methods(["POST"])
 @csrf_protect
 @login_required
 def quick_checkout(request):
+    """
+    Quick checkout (buy now) - bypasses cart.
+
+    Analytics: Tracks checkout and paid events for single product
+    """
     product_id = request.POST.get('product')
     quantity = request.POST.get('quantity', 1)
 
@@ -234,13 +295,25 @@ def quick_checkout(request):
         messages.error(request, "Invalid quantity selected.")
         return redirect('marketplace:all_products')
 
-    product = get_object_or_404(Product, id=product_id)
+    product = get_object_or_404(Product.objects.select_related('store'), id=product_id)
 
-    if product.stock.quantity < quantity:
+    if product.stock_quantity < quantity:
         messages.error(request, "Insufficient stock available.")
         return redirect('marketplace:product_detail', product_id=product.id)
 
     try:
+        session_key = request.session.session_key or request.user.username
+
+        # ANALYTICS: Track checkout initiation
+        track_event(
+            session_key=session_key,
+            event_type="checkout",
+            user=request.user,
+            store=product.store,
+            product=product,
+            path=request.path,
+        )
+
         with transaction.atomic():
             order = Order.objects.create(
                 buyer=request.user,
@@ -258,8 +331,18 @@ def quick_checkout(request):
                 quantity=quantity
             )
 
-            _track_cart_event(request, "checkout")
+            # ANALYTICS: Track paid event (order created successfully)
+            track_event(
+                session_key=session_key,
+                event_type="paid",
+                user=request.user,
+                store=product.store,
+                product=product,
+                order=order,
+                path=request.path,
+            )
 
+            # Send notifications
             notify_store_new_order_async(order)
 
             messages.success(request, "Quick checkout successful!")
@@ -268,13 +351,152 @@ def quick_checkout(request):
     except ValidationError as e:
         messages.error(request, f"Checkout failed: {str(e)}")
         return redirect('marketplace:product_detail', product_id=product.id)
+
     except Exception as e:
         import logging
         logger = logging.getLogger(__name__)
         logger.error(f"Quick checkout error for user {request.user.id}: {str(e)}")
-
         messages.error(request, "An error occurred during quick checkout.")
         return redirect('marketplace:product_detail', product_id=product.id)
+
+
+# ============================================================================
+# SOCIAL CART CHECKOUT (if applicable)
+# ============================================================================
+
+@require_http_methods(["POST"])
+@csrf_protect
+@login_required
+def checkout_social_cart(request, social_cart_id):
+    """
+    Checkout a social cart (group order).
+
+    ✅ Analytics: Tracks checkout and paid events for all members
+    """
+    from socialcart.models import SocialCart, CartMember
+
+    social_cart = get_object_or_404(
+        SocialCart.objects.select_related('cart', 'owner'),
+        id=social_cart_id
+    )
+
+    # Permission check
+    member = CartMember.objects.filter(
+        social_cart=social_cart,
+        user=request.user,
+        status='joined'
+    ).first()
+
+    if not member:
+        messages.error(request, "You are not a member of this cart.")
+        return redirect('socialcart:view', social_cart_id=social_cart_id)
+
+    # Only owner can checkout
+    if social_cart.owner != request.user:
+        messages.error(request, "Only the cart owner can checkout.")
+        return redirect('socialcart:view', social_cart_id=social_cart_id)
+
+    if social_cart.status != 'open':
+        messages.error(request, "This cart is not open for checkout.")
+        return redirect('socialcart:view', social_cart_id=social_cart_id)
+
+    try:
+        cart = social_cart.cart
+        cart_items = CartItem.objects.filter(cart=cart).select_related(
+            'product',
+            'product__store',
+            'added_by'
+        )
+
+        if not cart_items.exists():
+            messages.error(request, "Cart is empty.")
+            return redirect('socialcart:view', social_cart_id=social_cart_id)
+
+        session_key = request.session.session_key or request.user.username
+
+        # ✅ ANALYTICS: Track checkout for social cart
+        stores_in_cart = set()
+        for item in cart_items:
+            if item.product.store:
+                stores_in_cart.add(item.product.store)
+
+        for store in stores_in_cart:
+            track_event(
+                session_key=session_key,
+                event_type="checkout",
+                user=request.user,
+                store=store,
+                path=request.path,
+            )
+
+        with transaction.atomic():
+            # Create orders per member based on their items
+            member_orders = {}
+
+            for item in cart_items:
+                buyer = item.added_by or social_cart.owner
+
+                if buyer not in member_orders:
+                    member_orders[buyer] = Order.objects.create(
+                        buyer=buyer,
+                        promo_code=None,
+                        discount_amount=Decimal('0'),
+                        is_social_order=True,
+                        social_cart_id=social_cart_id,
+                    )
+
+                order = member_orders[buyer]
+
+                # Lock and reduce stock
+                product = Product.objects.select_for_update().get(id=item.product.id)
+                reduce_stock(product, item.quantity)
+
+                OrderItem.objects.create(
+                    order=order,
+                    product=product,
+                    quantity=item.quantity,
+                    selected_features=item.selected_features
+                )
+
+                # ✅ ANALYTICS: Track paid event per item
+                track_event(
+                    session_key=session_key,
+                    event_type="paid",
+                    user=buyer,
+                    store=product.store,
+                    product=product,
+                    order=order,
+                    path=request.path,
+                )
+
+            # Update social cart status
+            social_cart.status = 'completed'
+            social_cart.save(update_fields=['status'])
+
+            # Clear cart
+            cart_items.delete()
+
+            # Notify all members and stores
+            for buyer, order in member_orders.items():
+                notify_store_new_order_async(order)
+
+            messages.success(
+                request,
+                f"Social cart checked out successfully! "
+                f"{len(member_orders)} order(s) created."
+            )
+            return redirect('socialcart:view', social_cart_id=social_cart_id)
+
+    except ValidationError as e:
+        messages.error(request, f"Checkout failed: {str(e)}")
+        return redirect('socialcart:view', social_cart_id=social_cart_id)
+
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Social cart checkout error: {str(e)}")
+        messages.error(request, "An error occurred during checkout.")
+        return redirect('socialcart:view', social_cart_id=social_cart_id)
 
 @login_required
 def order_detail(request, order_id):

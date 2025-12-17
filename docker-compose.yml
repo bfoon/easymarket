@@ -1,3 +1,5 @@
+version: "3.9"
+
 services:
   db:
     image: postgres:15
@@ -10,6 +12,11 @@ services:
     ports:
       - "5432:5432"
 
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
   web:
     build: .
     command: python manage.py runserver 0.0.0.0:8000
@@ -20,9 +27,38 @@ services:
       - "8000:8000"
     depends_on:
       - db
+      - redis
     environment:
-      - DEBUG=1
-      - DATABASE_URL=postgres://postgres:dazzling%40123@db:5432/easy_market
+      DEBUG: "1"
+      DATABASE_URL: postgres://postgres:dazzling%40123@db:5432/easy_market
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+
+  celery:
+    build: .
+    command: celery -A easymarket worker -l info
+    volumes:
+      - .:/app
+    depends_on:
+      - db
+      - redis
+    environment:
+      DATABASE_URL: postgres://postgres:dazzling%40123@db:5432/easy_market
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+
+  celery-beat:
+    build: .
+    command: celery -A easymarket beat -l info
+    volumes:
+      - .:/app
+    depends_on:
+      - db
+      - redis
+    environment:
+      DATABASE_URL: postgres://postgres:dazzling%40123@db:5432/easy_market
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
 
 volumes:
   postgres_data:

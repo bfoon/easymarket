@@ -65,6 +65,7 @@ INSTALLED_APPS = [
     "allauth.account",
     "allauth.socialaccount",
     "allauth.socialaccount.providers.google",
+    "django_celery_beat",
 
     # UI
     "crispy_forms",
@@ -257,6 +258,10 @@ CELERY_BROKER_URL = config("CELERY_BROKER_URL", default="redis://localhost:6379"
 CELERY_RESULT_BACKEND = config("CELERY_RESULT_BACKEND", default="redis://localhost:6379")
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
+CELERY_TIMEZONE = 'UTC'
+
+# Celery Beat settings
+CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 
 # -----------------------------------------------------------------------------
 # Static & Media
