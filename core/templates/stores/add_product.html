@@ -303,18 +303,35 @@
               </div>
 
               <div class="col-md-4">
-                <label class="form-label ap-label">Category</label>
-                <select class="form-select" name="category" id="category">
-                  <option value="">Select Category</option>
-                  {% for category in categories %}
-                    <option value="{{ category.id }}"
-                      {% if form_data.category == category.id|stringformat:"s" %}selected{% endif %}>
-                      {{ category.name }}
-                    </option>
-                  {% endfor %}
-                </select>
-                <div class="form-text">Choose the most relevant category.</div>
-              </div>
+  <label class="form-label ap-label">Category</label>
+
+  <select class="form-select" name="category" id="category">
+    <option value="">Select Category</option>
+
+    {% for root in categories %}
+      {% if root.is_root %}
+        <!-- ROOT CATEGORY -->
+        <option value="{{ root.id }}"
+                style="font-weight: 700;"
+                {% if form_data.category == root.id|stringformat:"s" %}selected{% endif %}>
+          {{ root.name }}
+        </option>
+
+        <!-- SUBCATEGORIES -->
+        {% for child in root.get_all_subcategories %}
+          <option value="{{ child.id }}"
+                  {% if form_data.category == child.id|stringformat:"s" %}selected{% endif %}>
+            {{ child.get_full_name }}
+          </option>
+        {% endfor %}
+      {% endif %}
+    {% endfor %}
+  </select>
+
+  <div class="form-text">Choose the most relevant category.</div>
+</div>
+
+
 
               <div class="col-12">
                 <label class="form-label ap-label">Product Description <span class="text-danger">*</span></label>
