@@ -3,7 +3,7 @@ from marketplace.models import Product, ProductImage, Category, ProductVariant, 
 from django.core.exceptions import ValidationError
 from .models import Store, StoreHours, StoreShippingZone, StoreReturnSettings
 import re
-
+from django.core.validators import RegexValidator
 
 class ProductForm(forms.ModelForm):
     class Meta:
@@ -598,3 +598,402 @@ class StoreReferralForm(forms.Form):
         'class': 'form-control',
         'placeholder': 'Enter your friend\'s email'
     }))
+
+
+class StoreThemeForm(forms.ModelForm):
+    """
+    Comprehensive form for store theme customization
+    """
+
+    class Meta:
+        model = Store
+        fields = [
+            # Theme Selection
+            'theme_preset',
+
+            # Color Scheme
+            'primary_color',
+            'secondary_color',
+            'accent_color',
+            'background_color',
+            'text_color',
+
+            # Typography
+            'font_heading',
+            'font_body',
+
+            # Layout
+            'product_layout',
+            'products_per_row',
+            'show_product_ratings',
+            'show_product_badges',
+            'show_quick_view',
+
+            # Store Page Features
+            'show_store_description',
+            'show_store_stats',
+            'show_social_links',
+            'show_operating_hours',
+            'show_map_location',
+
+            # Social Media
+            'facebook_url',
+            'instagram_url',
+            'twitter_url',
+            'linkedin_url',
+            'youtube_url',
+            'tiktok_url',
+
+            # Header & Banner
+            'header_message',
+            'show_header_message',
+            'banner_overlay_opacity',
+            'banner_height',
+
+            # Button Styling
+            'cta_button_text',
+            'cta_button_style',
+
+            # Product Cards
+            'product_card_style',
+            'product_image_shape',
+
+            # Animations
+            'enable_animations',
+            'enable_hover_effects',
+            'enable_parallax_banner',
+
+            # Store Sections
+            'enable_featured_products',
+            'enable_new_arrivals',
+            'enable_best_sellers',
+            'enable_testimonials',
+
+            # Trust Badges
+            'show_secure_checkout_badge',
+            'show_free_shipping_badge',
+            'show_money_back_guarantee',
+            'show_customer_support_badge',
+
+            # Mobile
+            'mobile_menu_style',
+
+            # SEO
+            'meta_title',
+            'meta_description',
+            'meta_keywords',
+
+            # Performance
+            'enable_lazy_loading',
+            'enable_image_optimization',
+
+            # Custom CSS
+            'custom_css',
+        ]
+
+        widgets = {
+            'theme_preset': forms.Select(attrs={
+                'class': 'form-select form-control-lg',
+                'id': 'themePreset',
+            }),
+
+            # Color Pickers
+            'primary_color': forms.TextInput(attrs={
+                'type': 'color',
+                'class': 'form-control form-control-color',
+                'title': 'Choose primary color',
+            }),
+            'secondary_color': forms.TextInput(attrs={
+                'type': 'color',
+                'class': 'form-control form-control-color',
+                'title': 'Choose secondary color',
+            }),
+            'accent_color': forms.TextInput(attrs={
+                'type': 'color',
+                'class': 'form-control form-control-color',
+                'title': 'Choose accent color',
+            }),
+            'background_color': forms.TextInput(attrs={
+                'type': 'color',
+                'class': 'form-control form-control-color',
+                'title': 'Choose background color',
+            }),
+            'text_color': forms.TextInput(attrs={
+                'type': 'color',
+                'class': 'form-control form-control-color',
+                'title': 'Choose text color',
+            }),
+
+            # Typography
+            'font_heading': forms.Select(attrs={
+                'class': 'form-select',
+            }),
+            'font_body': forms.Select(attrs={
+                'class': 'form-select',
+            }),
+
+            # Layout
+            'product_layout': forms.Select(attrs={
+                'class': 'form-select',
+            }),
+            'products_per_row': forms.Select(attrs={
+                'class': 'form-select',
+            }),
+
+            # Social Media
+            'facebook_url': forms.URLInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'https://facebook.com/yourpage',
+            }),
+            'instagram_url': forms.URLInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'https://instagram.com/yourprofile',
+            }),
+            'twitter_url': forms.URLInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'https://twitter.com/yourhandle',
+            }),
+            'linkedin_url': forms.URLInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'https://linkedin.com/company/yourcompany',
+            }),
+            'youtube_url': forms.URLInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'https://youtube.com/c/yourchannel',
+            }),
+            'tiktok_url': forms.URLInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'https://tiktok.com/@yourprofile',
+            }),
+
+            # Header Message
+            'header_message': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'e.g., Free shipping on orders over $50!',
+                'maxlength': 200,
+            }),
+
+            # Banner
+            'banner_overlay_opacity': forms.Select(attrs={
+                'class': 'form-select',
+            }),
+            'banner_height': forms.Select(attrs={
+                'class': 'form-select',
+            }),
+
+            # CTA
+            'cta_button_text': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Shop Now',
+                'maxlength': 50,
+            }),
+            'cta_button_style': forms.Select(attrs={
+                'class': 'form-select',
+            }),
+
+            # Product Card
+            'product_card_style': forms.Select(attrs={
+                'class': 'form-select',
+            }),
+            'product_image_shape': forms.Select(attrs={
+                'class': 'form-select',
+            }),
+
+            # Mobile
+            'mobile_menu_style': forms.Select(attrs={
+                'class': 'form-select',
+            }),
+
+            # SEO
+            'meta_title': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Leave blank to use store name',
+                'maxlength': 60,
+            }),
+            'meta_description': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 3,
+                'placeholder': 'Brief description of your store (160 characters max)',
+                'maxlength': 160,
+            }),
+            'meta_keywords': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'keyword1, keyword2, keyword3',
+                'maxlength': 255,
+            }),
+
+            # Custom CSS
+            'custom_css': forms.Textarea(attrs={
+                'class': 'form-control font-monospace',
+                'rows': 10,
+                'placeholder': '/* Add your custom CSS here */\n.store-page {\n  /* Your styles */\n}',
+                'spellcheck': 'false',
+            }),
+        }
+
+        labels = {
+            'theme_preset': 'Theme Preset',
+            'primary_color': 'Primary Brand Color',
+            'secondary_color': 'Secondary Color',
+            'accent_color': 'Accent Color',
+            'background_color': 'Background Color',
+            'text_color': 'Text Color',
+            'font_heading': 'Heading Font',
+            'font_body': 'Body Font',
+            'product_layout': 'Product Display Layout',
+            'products_per_row': 'Products Per Row',
+            'show_product_ratings': 'Show Product Ratings',
+            'show_product_badges': 'Show Product Badges',
+            'show_quick_view': 'Enable Quick View',
+            'show_store_description': 'Show Store Description',
+            'show_store_stats': 'Show Store Statistics',
+            'show_social_links': 'Show Social Media Links',
+            'show_operating_hours': 'Show Operating Hours',
+            'show_map_location': 'Show Map Location',
+            'header_message': 'Announcement Message',
+            'show_header_message': 'Display Announcement',
+            'banner_overlay_opacity': 'Banner Overlay Darkness',
+            'banner_height': 'Banner Height',
+            'cta_button_text': 'Call-to-Action Button Text',
+            'cta_button_style': 'Button Style',
+            'product_card_style': 'Product Card Style',
+            'product_image_shape': 'Product Image Shape',
+            'enable_animations': 'Enable Animations',
+            'enable_hover_effects': 'Enable Hover Effects',
+            'enable_parallax_banner': 'Parallax Banner Effect',
+            'enable_featured_products': 'Featured Products Section',
+            'enable_new_arrivals': 'New Arrivals Section',
+            'enable_best_sellers': 'Best Sellers Section',
+            'enable_testimonials': 'Testimonials Section',
+            'show_secure_checkout_badge': 'Secure Checkout Badge',
+            'show_free_shipping_badge': 'Free Shipping Badge',
+            'show_money_back_guarantee': 'Money Back Guarantee',
+            'show_customer_support_badge': '24/7 Support Badge',
+            'mobile_menu_style': 'Mobile Menu Style',
+            'meta_title': 'SEO Title',
+            'meta_description': 'SEO Description',
+            'meta_keywords': 'SEO Keywords',
+            'enable_lazy_loading': 'Lazy Load Images',
+            'enable_image_optimization': 'Optimize Images',
+            'custom_css': 'Custom CSS Code',
+        }
+
+        help_texts = {
+            'theme_preset': 'Start with a pre-designed theme, then customize it to your liking',
+            'primary_color': 'Main color used throughout your store',
+            'custom_css': 'Advanced: Add custom CSS to override default styles',
+            'meta_description': 'This appears in search engine results',
+            'header_message': 'Display a promotional message at the top of your store',
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Add custom attributes for better UX
+        for field_name, field in self.fields.items():
+            if isinstance(field.widget, forms.CheckboxInput):
+                field.widget.attrs['class'] = 'form-check-input'
+                field.widget.attrs['role'] = 'switch'
+
+            # Add data attributes for live preview
+            if field_name in ['primary_color', 'secondary_color', 'accent_color']:
+                field.widget.attrs['data-preview'] = 'color'
+            elif field_name in ['font_heading', 'font_body']:
+                field.widget.attrs['data-preview'] = 'font'
+            elif field_name == 'theme_preset':
+                field.widget.attrs['data-preview'] = 'theme'
+
+    def clean_custom_css(self):
+        """Validate custom CSS for security"""
+        css = self.cleaned_data.get('custom_css', '')
+        if css:
+            # Basic validation - check for potentially dangerous content
+            dangerous_patterns = ['javascript:', 'expression(', 'import', '@import', 'behavior:']
+            css_lower = css.lower()
+            for pattern in dangerous_patterns:
+                if pattern in css_lower:
+                    raise forms.ValidationError(
+                        f'Custom CSS contains potentially dangerous code: {pattern}'
+                    )
+        return css
+
+    def clean(self):
+        cleaned_data = super().clean()
+
+        # Ensure contrast between text and background colors
+        text_color = cleaned_data.get('text_color')
+        bg_color = cleaned_data.get('background_color')
+
+        if text_color and bg_color:
+            # Simple check - ensure they're not too similar
+            if text_color.lower() == bg_color.lower():
+                self.add_error('text_color', 'Text color must be different from background color')
+
+        return cleaned_data
+
+
+class StoreThemePresetForm(forms.Form):
+    """
+    Quick form for applying theme presets
+    """
+    PRESET_THEMES = [
+        ('modern', 'Modern & Clean', {
+            'primary_color': '#2563eb',
+            'secondary_color': '#64748b',
+            'accent_color': '#f59e0b',
+            'background_color': '#ffffff',
+            'text_color': '#1e293b',
+            'font_heading': 'poppins',
+            'font_body': 'inter',
+        }),
+        ('elegant', 'Elegant & Luxury', {
+            'primary_color': '#1f2937',
+            'secondary_color': '#d4af37',
+            'accent_color': '#b8860b',
+            'background_color': '#faf9f6',
+            'text_color': '#1f2937',
+            'font_heading': 'playfair',
+            'font_body': 'lato',
+        }),
+        ('vibrant', 'Vibrant & Bold', {
+            'primary_color': '#ec4899',
+            'secondary_color': '#8b5cf6',
+            'accent_color': '#f59e0b',
+            'background_color': '#ffffff',
+            'text_color': '#111827',
+            'font_heading': 'montserrat',
+            'font_body': 'roboto',
+        }),
+        ('minimal', 'Minimal & Simple', {
+            'primary_color': '#000000',
+            'secondary_color': '#6b7280',
+            'accent_color': '#ffffff',
+            'background_color': '#ffffff',
+            'text_color': '#000000',
+            'font_heading': 'inter',
+            'font_body': 'inter',
+        }),
+        ('dark', 'Dark Mode', {
+            'primary_color': '#3b82f6',
+            'secondary_color': '#6366f1',
+            'accent_color': '#10b981',
+            'background_color': '#111827',
+            'text_color': '#f9fafb',
+            'font_heading': 'inter',
+            'font_body': 'roboto',
+        }),
+    ]
+
+    theme = forms.ChoiceField(
+        choices=[(theme[0], theme[1]) for theme in PRESET_THEMES],
+        widget=forms.RadioSelect,
+        label='Choose a Theme Preset'
+    )
+
+    def get_theme_data(self):
+        """Return the theme data for the selected preset"""
+        theme_choice = self.cleaned_data.get('theme')
+        for preset in self.PRESET_THEMES:
+            if preset[0] == theme_choice:
+                return preset[2]
+        return {}

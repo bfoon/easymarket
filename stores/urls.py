@@ -7,13 +7,11 @@ urlpatterns = [
     # Store management URLs - Store creation and general management
     path('', views.store_list, name='store_list'),
 
-
     # 🔹 NEW: B2B marketplace URL
     path("b2b/", views.b2b_marketplace, name="b2b_marketplace"),
     path("stores/<uuid:store_id>/api/b2b-counts/", views.b2b_counts, name="b2b_counts"),
 
     path("<slug:slug>/b2b-settings/", views.b2b_settings, name="b2b_settings"),
-
 
     path('favorites/', views.my_favorite_stores, name='my_favorite_stores'),
     path('create/', views.create_store, name='create_store'),
@@ -50,15 +48,16 @@ urlpatterns = [
     path('manage/<uuid:store_id>/orders/', views.store_orders, name='store_orders'),
     path('manage/<uuid:store_id>/orders/<int:order_id>/', views.store_order_detail, name='store_order_detail'),
     path('orders/<int:order_id>/update-status/', views.update_order_status, name='update_order_status'),
-    path('orders/items/<int:item_id>/update-quantity/', views.update_order_item_quantity, name='update_order_item_quantity'),
+    path('orders/items/<int:item_id>/update-quantity/', views.update_order_item_quantity,
+         name='update_order_item_quantity'),
     path('<uuid:store_id>/order/<int:order_id>/set-shipping-cost/', views.set_shipping_cost, name='set_shipping_cost'),
-
 
     # Chat and communication
     path('manage/<uuid:store_id>/chat/', views.store_chat_panel, name='store_chat_panel'),
     path('manage/<uuid:store_id>/chat/<str:thread_id>/', views.chat_thread_detail, name='chat_thread_detail'),
     path('manage/<uuid:store_id>/chat/start/<int:buyer_id>/', views.start_store_chat, name='start_store_chat'),
-    path('manage/<uuid:store_id>/chat/start/<int:buyer_id>/<int:order_id>/', views.start_store_chat, name='start_store_chat_with_order'),
+    path('manage/<uuid:store_id>/chat/start/<int:buyer_id>/<int:order_id>/', views.start_store_chat,
+         name='start_store_chat_with_order'),
 
     # AJAX endpoints
     path('ajax/chat/send/', views.send_store_chat_message, name='send_store_chat_message'),
@@ -71,18 +70,26 @@ urlpatterns = [
 
     # API endpoints
     path('api/stores/<uuid:store_id>/metrics/', views.store_metrics_api, name='store_metrics_api'),
-    path('api/stores/<uuid:store_id>/inventory/bulk-update/', views.bulk_inventory_update, name='bulk_inventory_update'),
+    path('api/stores/<uuid:store_id>/inventory/bulk-update/', views.bulk_inventory_update,
+         name='bulk_inventory_update'),
     path('api/b2b-inquiry/', views.create_b2b_inquiry, name='create_b2b_inquiry'),
 
     # Product detail (public view)
     path('product/<int:product_id>/', views.product_detail, name='product_detail'),
 
-    # Public store display URLs (using slug for SEO-friendly URLs) - MUST come last to avoid conflicts
+    # ⭐⭐⭐ CRITICAL: SLUG-BASED FOLLOW ENDPOINTS - MUST BE HERE (before generic <slug:slug>/) ⭐⭐⭐
+    # These handle the follow functionality from public store pages
+    path('<slug:slug>/follow/', views.follow_store_by_slug, name='follow_store_by_slug'),
+    path('<slug:slug>/follow-status/', views.get_follow_status_by_slug, name='follow_status_by_slug'),
+
+    # Public store display URLs (using slug for SEO-friendly URLs) - MUST come AFTER specific slug patterns
     path('<slug:slug>/', views.store_detail, name='store_detail'),
     path('<slug:slug>/products/', views.store_products, name='store_products'),
+
+    # Referral (moved after generic slug to avoid conflicts)
     path('refer/store/<uuid:store_id>/', views.create_store_referral, name='refer_store'),
 
-    # Store following URLs
+    # Legacy UUID-based follow URLs (kept for backward compatibility with admin/API)
     path('api/follow/<uuid:store_id>/', views.toggle_store_follow, name='toggle_store_follow'),
     path('api/follow-status/<uuid:store_id>/', views.get_store_follow_status, name='get_store_follow_status'),
     path('api/followed-stores/', views.get_followed_stores, name='get_followed_stores'),
@@ -104,14 +111,24 @@ urlpatterns = [
 
     # Campaign detail and management URLs
     path('<slug:slug>/campaigns/<int:campaign_id>/', views.campaign_detail, name='campaign_detail'),
-    path('<slug:slug>/campaigns/<int:campaign_id>/submit/', views.campaign_submit_review, name='campaign_submit_review'),
+    path('<slug:slug>/campaigns/<int:campaign_id>/submit/', views.campaign_submit_review,
+         name='campaign_submit_review'),
     path('<slug:slug>/campaigns/<int:campaign_id>/approve/', views.campaign_approve, name='campaign_approve'),
     path('<slug:slug>/campaigns/<int:campaign_id>/reject/', views.campaign_reject, name='campaign_reject'),
     path('<slug:slug>/campaigns/<int:campaign_id>/pause/', views.campaign_pause, name='campaign_pause'),
     path('<slug:slug>/campaigns/<int:campaign_id>/stop/', views.campaign_stop, name='campaign_stop'),
     path('<slug:slug>/campaigns/<int:campaign_id>/duplicate/', views.campaign_duplicate, name='campaign_duplicate'),
     path('<slug:slug>/campaigns/<int:campaign_id>/delete/', views.campaign_delete, name='campaign_delete'),
-    path('<slug:slug>/campaigns/<int:campaign_id>/report/download/', views.campaign_download_report, name='campaign_download_report'),
-    path('<slug:slug>/campaigns/<int:campaign_id>/request-changes/', views.campaign_request_changes, name='campaign_request_changes'),
+    path('<slug:slug>/campaigns/<int:campaign_id>/report/download/', views.campaign_download_report,
+         name='campaign_download_report'),
+    path('<slug:slug>/campaigns/<int:campaign_id>/request-changes/', views.campaign_request_changes,
+         name='campaign_request_changes'),
 
+    # Theme customization URLs
+    path('manage/<uuid:store_id>/theme/', views.store_theme_settings, name='store_theme_settings'),
+    path('manage/<uuid:store_id>/theme/preset/apply/', views.apply_theme_preset, name='apply_theme_preset'),
+    path('manage/<uuid:store_id>/theme/preview/', views.preview_theme, name='preview_theme'),
+    path('manage/<uuid:store_id>/theme/reset/', views.reset_theme, name='reset_theme'),
+    path('manage/<uuid:store_id>/theme/duplicate/<uuid:target_store_id>/', views.duplicate_theme,
+         name='duplicate_theme'),
 ]

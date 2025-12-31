@@ -1,0 +1,1033 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load widget_tweaks %}
+
+{% block title %}Store Theme & Settings - {{ store.name }}{% endblock %}
+
+{% block extra_head %}
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+<style>
+/* Theme Customization Specific Styles */
+.theme-preview-card {
+    border: 3px solid transparent;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+
+.theme-preview-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 30px rgba(0,0,0,0.15);
+}
+
+.theme-preview-card.active {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+}
+
+.theme-preview-card .theme-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: var(--primary-color);
+    color: white;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.theme-preview-card.active .theme-badge {
+    opacity: 1;
+}
+
+.color-picker-group {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.color-picker-item {
+    text-align: center;
+}
+
+.color-picker-item label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    font-size: 0.9rem;
+}
+
+.color-picker-item input[type="color"] {
+    width: 100%;
+    height: 60px;
+    border: 3px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.color-picker-item input[type="color"]:hover {
+    border-color: var(--primary-color);
+    transform: scale(1.05);
+}
+
+.color-value-display {
+    margin-top: 0.5rem;
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+.font-preview {
+    padding: 1rem;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    margin-top: 0.5rem;
+    text-align: center;
+}
+
+.font-preview.heading {
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+.font-preview.body {
+    font-size: 1rem;
+    line-height: 1.6;
+}
+
+.live-preview-panel {
+    position: sticky;
+    top: 20px;
+    background: var(--bg-primary);
+    border-radius: var(--radius-xl);
+    padding: 1.5rem;
+    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--border-color);
+}
+
+.live-preview-header {
+    font-weight: 600;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.preview-toggle {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.preview-toggle button {
+    padding: 0.25rem 0.75rem;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.preview-toggle button.active {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.preview-mockup {
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: 1rem;
+    background: white;
+    min-height: 300px;
+    transition: all 0.3s;
+}
+
+.preview-banner {
+    width: 100%;
+    height: 120px;
+    border-radius: var(--radius-md);
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 600;
+    position: relative;
+    overflow: hidden;
+}
+
+.preview-product-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.preview-product-card {
+    border-radius: var(--radius-md);
+    padding: 0.75rem;
+    text-align: center;
+    transition: all 0.3s;
+}
+
+.preview-product-image {
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+}
+
+.preview-button {
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: var(--radius-md);
+    font-weight: 500;
+    margin-top: 0.5rem;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.social-links-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+.social-link-item {
+    position: relative;
+}
+
+.social-link-item .input-group-text {
+    background: var(--bg-secondary);
+    border: 2px solid var(--border-color);
+    border-right: none;
+}
+
+.social-link-item input {
+    border-left: none;
+}
+
+.feature-toggle-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.feature-toggle-item {
+    background: var(--bg-secondary);
+    padding: 1rem;
+    border-radius: var(--radius-lg);
+    border: 2px solid var(--border-color);
+    transition: all 0.3s;
+}
+
+.feature-toggle-item:hover {
+    border-color: var(--primary-color);
+    transform: translateY(-2px);
+}
+
+.feature-toggle-item .form-check {
+    margin-bottom: 0;
+}
+
+.feature-toggle-item label {
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+}
+
+.feature-toggle-item i {
+    color: var(--primary-color);
+}
+
+.preset-themes-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+}
+
+.preset-theme-card {
+    text-align: center;
+    padding: 1.5rem;
+    border-radius: var(--radius-xl);
+    border: 3px solid var(--border-color);
+    cursor: pointer;
+    transition: all 0.3s;
+    position: relative;
+}
+
+.preset-theme-card:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--shadow-xl);
+}
+
+.preset-theme-card.selected {
+    border-color: var(--primary-color);
+    background: rgba(37, 99, 235, 0.05);
+}
+
+.preset-theme-colors {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    margin: 1rem 0;
+}
+
+.preset-color-dot {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: 2px solid white;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.preset-theme-name {
+    font-weight: 600;
+    margin-top: 0.5rem;
+    color: var(--text-primary);
+}
+
+.css-editor {
+    font-family: 'Courier New', Courier, monospace;
+    background: #1e1e1e;
+    color: #d4d4d4;
+    border: none;
+    border-radius: var(--radius-md);
+    padding: 1rem;
+    line-height: 1.6;
+}
+
+.css-editor:focus {
+    outline: 3px solid var(--primary-color);
+}
+
+.save-theme-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: white;
+    border-top: 2px solid var(--border-color);
+    padding: 1rem 2rem;
+    box-shadow: 0 -5px 20px rgba(0,0,0,0.1);
+    z-index: 1000;
+    display: none;
+    animation: slideUp 0.3s ease;
+}
+
+.save-theme-bar.show {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(100%);
+    }
+    to {
+        transform: translateY(0);
+    }
+}
+
+.unsaved-changes-indicator {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--warning-color);
+    font-weight: 500;
+}
+
+.unsaved-changes-indicator i {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .color-picker-group {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .preset-themes-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .live-preview-panel {
+        position: static;
+        margin-top: 2rem;
+    }
+    
+    .feature-toggle-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Tab-specific overrides for theme customization */
+#theme-customization .settings-card {
+    background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+}
+
+.theme-section-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.theme-section-header i {
+    font-size: 1.5rem;
+    color: var(--primary-color);
+}
+
+.theme-section-header h4 {
+    margin: 0;
+    font-weight: 600;
+}
+
+.theme-section-description {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-top: 0.25rem;
+}
+
+/* Import the base settings styles */
+@import url('/static/css/store_settings.css');
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Include existing settings HTML structure, then add this new tab -->
+
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <header>
+        <h1><i class="fas fa-palette me-2"></i>Store Theme & Customization</h1>
+        <p class="text-muted">Personalize your store's appearance and create a unique shopping experience</p>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <div class="settings-nav">
+        <ul class="nav nav-pills" id="settingsTabs" role="tablist">
+            <!-- Add this to your existing tabs -->
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="theme-tab" data-bs-toggle="pill" data-bs-target="#theme-customization" 
+                        type="button" role="tab" aria-controls="theme-customization" aria-selected="false">
+                    <i class="fas fa-palette me-2"></i>
+                    <span>Theme & Design</span>
+                </button>
+            </li>
+            <!-- ... other existing tabs ... -->
+        </ul>
+    </div>
+
+    <!-- Tab Content -->
+    <div class="tab-content" id="settingsTabContent">
+        
+        <!-- Theme Customization Tab -->
+        <div class="tab-pane fade" id="theme-customization" role="tabpanel" aria-labelledby="theme-tab">
+            <form method="post" id="themeForm" class="needs-validation" novalidate>
+                {% csrf_token %}
+                <input type="hidden" name="form_type" value="theme">
+                
+                <div class="row">
+                    <!-- Left Column: Theme Controls -->
+                    <div class="col-lg-8">
+                        
+                        <!-- Quick Theme Presets -->
+                        <div class="settings-card mb-4">
+                            <div class="card-header">
+                                <h2><i class="fas fa-magic me-2"></i>Quick Theme Presets</h2>
+                            </div>
+                            <div class="card-body">
+                                <p class="text-muted mb-3">Choose a pre-designed theme to get started quickly</p>
+                                
+                                <div class="preset-themes-grid">
+                                    <div class="preset-theme-card" data-theme="modern">
+                                        <div class="preset-theme-colors">
+                                            <div class="preset-color-dot" style="background: #2563eb;"></div>
+                                            <div class="preset-color-dot" style="background: #64748b;"></div>
+                                            <div class="preset-color-dot" style="background: #f59e0b;"></div>
+                                        </div>
+                                        <div class="preset-theme-name">Modern & Clean</div>
+                                        <small class="text-muted">Professional blue theme</small>
+                                    </div>
+                                    
+                                    <div class="preset-theme-card" data-theme="elegant">
+                                        <div class="preset-theme-colors">
+                                            <div class="preset-color-dot" style="background: #1f2937;"></div>
+                                            <div class="preset-color-dot" style="background: #d4af37;"></div>
+                                            <div class="preset-color-dot" style="background: #b8860b;"></div>
+                                        </div>
+                                        <div class="preset-theme-name">Elegant & Luxury</div>
+                                        <small class="text-muted">Premium gold accents</small>
+                                    </div>
+                                    
+                                    <div class="preset-theme-card" data-theme="vibrant">
+                                        <div class="preset-theme-colors">
+                                            <div class="preset-color-dot" style="background: #ec4899;"></div>
+                                            <div class="preset-color-dot" style="background: #8b5cf6;"></div>
+                                            <div class="preset-color-dot" style="background: #f59e0b;"></div>
+                                        </div>
+                                        <div class="preset-theme-name">Vibrant & Bold</div>
+                                        <small class="text-muted">Colorful and energetic</small>
+                                    </div>
+                                    
+                                    <div class="preset-theme-card" data-theme="minimal">
+                                        <div class="preset-theme-colors">
+                                            <div class="preset-color-dot" style="background: #000000;"></div>
+                                            <div class="preset-color-dot" style="background: #6b7280;"></div>
+                                            <div class="preset-color-dot" style="background: #ffffff;"></div>
+                                        </div>
+                                        <div class="preset-theme-name">Minimal & Simple</div>
+                                        <small class="text-muted">Clean black & white</small>
+                                    </div>
+                                    
+                                    <div class="preset-theme-card" data-theme="dark">
+                                        <div class="preset-theme-colors">
+                                            <div class="preset-color-dot" style="background: #3b82f6;"></div>
+                                            <div class="preset-color-dot" style="background: #6366f1;"></div>
+                                            <div class="preset-color-dot" style="background: #10b981;"></div>
+                                        </div>
+                                        <div class="preset-theme-name">Dark Mode</div>
+                                        <small class="text-muted">Easy on the eyes</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Color Scheme -->
+                        <div class="settings-card mb-4">
+                            <div class="card-header">
+                                <h2><i class="fas fa-fill-drip me-2"></i>Color Scheme</h2>
+                            </div>
+                            <div class="card-body">
+                                <div class="color-picker-group">
+                                    <div class="color-picker-item">
+                                        <label for="{{ theme_form.primary_color.id_for_label }}">
+                                            <i class="fas fa-crown me-1"></i>Primary
+                                        </label>
+                                        {{ theme_form.primary_color }}
+                                        <div class="color-value-display" id="primary-value">{{ store.primary_color }}</div>
+                                    </div>
+                                    
+                                    <div class="color-picker-item">
+                                        <label for="{{ theme_form.secondary_color.id_for_label }}">
+                                            <i class="fas fa-circle me-1"></i>Secondary
+                                        </label>
+                                        {{ theme_form.secondary_color }}
+                                        <div class="color-value-display" id="secondary-value">{{ store.secondary_color }}</div>
+                                    </div>
+                                    
+                                    <div class="color-picker-item">
+                                        <label for="{{ theme_form.accent_color.id_for_label }}">
+                                            <i class="fas fa-star me-1"></i>Accent
+                                        </label>
+                                        {{ theme_form.accent_color }}
+                                        <div class="color-value-display" id="accent-value">{{ store.accent_color }}</div>
+                                    </div>
+                                    
+                                    <div class="color-picker-item">
+                                        <label for="{{ theme_form.background_color.id_for_label }}">
+                                            <i class="fas fa-square me-1"></i>Background
+                                        </label>
+                                        {{ theme_form.background_color }}
+                                        <div class="color-value-display" id="background-value">{{ store.background_color }}</div>
+                                    </div>
+                                    
+                                    <div class="color-picker-item">
+                                        <label for="{{ theme_form.text_color.id_for_label }}">
+                                            <i class="fas fa-font me-1"></i>Text
+                                        </label>
+                                        {{ theme_form.text_color }}
+                                        <div class="color-value-display" id="text-value">{{ store.text_color }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Typography -->
+                        <div class="settings-card mb-4">
+                            <div class="card-header">
+                                <h2><i class="fas fa-text-height me-2"></i>Typography</h2>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="{{ theme_form.font_heading.id_for_label }}" class="form-label">
+                                            Heading Font
+                                        </label>
+                                        {{ theme_form.font_heading }}
+                                        <div class="font-preview heading" id="heading-preview" style="font-family: {{ store.font_heading }};">
+                                            Welcome to Our Store
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="col-md-6 mb-3">
+                                        <label for="{{ theme_form.font_body.id_for_label }}" class="form-label">
+                                            Body Font
+                                        </label>
+                                        {{ theme_form.font_body }}
+                                        <div class="font-preview body" id="body-preview" style="font-family: {{ store.font_body }};">
+                                            Discover amazing products at great prices. Shop with confidence.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Layout Settings -->
+                        <div class="settings-card mb-4">
+                            <div class="card-header">
+                                <h2><i class="fas fa-th-large me-2"></i>Layout & Display</h2>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="{{ theme_form.product_layout.id_for_label }}" class="form-label">
+                                            Product Layout
+                                        </label>
+                                        {{ theme_form.product_layout }}
+                                    </div>
+                                    
+                                    <div class="col-md-6 mb-3">
+                                        <label for="{{ theme_form.products_per_row.id_for_label }}" class="form-label">
+                                            Products Per Row
+                                        </label>
+                                        {{ theme_form.products_per_row }}
+                                    </div>
+                                    
+                                    <div class="col-md-6 mb-3">
+                                        <label for="{{ theme_form.product_card_style.id_for_label }}" class="form-label">
+                                            Product Card Style
+                                        </label>
+                                        {{ theme_form.product_card_style }}
+                                    </div>
+                                    
+                                    <div class="col-md-6 mb-3">
+                                        <label for="{{ theme_form.product_image_shape.id_for_label }}" class="form-label">
+                                            Product Image Shape
+                                        </label>
+                                        {{ theme_form.product_image_shape }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Store Features Toggle -->
+                        <div class="settings-card mb-4">
+                            <div class="card-header">
+                                <h2><i class="fas fa-toggle-on me-2"></i>Store Features</h2>
+                            </div>
+                            <div class="card-body">
+                                <div class="feature-toggle-grid">
+                                    <div class="feature-toggle-item">
+                                        <div class="form-check form-switch">
+                                            {{ theme_form.show_product_ratings }}
+                                            <label class="form-check-label" for="{{ theme_form.show_product_ratings.id_for_label }}">
+                                                <i class="fas fa-star"></i> Product Ratings
+                                            </label>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="feature-toggle-item">
+                                        <div class="form-check form-switch">
+                                            {{ theme_form.show_product_badges }}
+                                            <label class="form-check-label" for="{{ theme_form.show_product_badges.id_for_label }}">
+                                                <i class="fas fa-certificate"></i> Product Badges
+                                            </label>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="feature-toggle-item">
+                                        <div class="form-check form-switch">
+                                            {{ theme_form.enable_animations }}
+                                            <label class="form-check-label" for="{{ theme_form.enable_animations.id_for_label }}">
+                                                <i class="fas fa-magic"></i> Animations
+                                            </label>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="feature-toggle-item">
+                                        <div class="form-check form-switch">
+                                            {{ theme_form.enable_hover_effects }}
+                                            <label class="form-check-label" for="{{ theme_form.enable_hover_effects.id_for_label }}">
+                                                <i class="fas fa-hand-pointer"></i> Hover Effects
+                                            </label>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="feature-toggle-item">
+                                        <div class="form-check form-switch">
+                                            {{ theme_form.show_social_links }}
+                                            <label class="form-check-label" for="{{ theme_form.show_social_links.id_for_label }}">
+                                                <i class="fas fa-share-alt"></i> Social Links
+                                            </label>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="feature-toggle-item">
+                                        <div class="form-check form-switch">
+                                            {{ theme_form.enable_featured_products }}
+                                            <label class="form-check-label" for="{{ theme_form.enable_featured_products.id_for_label }}">
+                                                <i class="fas fa-fire"></i> Featured Products
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Social Media Links -->
+                        <div class="settings-card mb-4">
+                            <div class="card-header">
+                                <h2><i class="fab fa-facebook me-2"></i>Social Media</h2>
+                            </div>
+                            <div class="card-body">
+                                <div class="social-links-grid">
+                                    {% for field in theme_form %}
+                                        {% if 'url' in field.name and field.name != 'website' %}
+                                            <div class="social-link-item">
+                                                <label for="{{ field.id_for_label }}" class="form-label">
+                                                    {% if 'facebook' in field.name %}<i class="fab fa-facebook text-primary"></i> Facebook
+                                                    {% elif 'instagram' in field.name %}<i class="fab fa-instagram text-danger"></i> Instagram
+                                                    {% elif 'twitter' in field.name %}<i class="fab fa-twitter text-info"></i> Twitter
+                                                    {% elif 'linkedin' in field.name %}<i class="fab fa-linkedin text-primary"></i> LinkedIn
+                                                    {% elif 'youtube' in field.name %}<i class="fab fa-youtube text-danger"></i> YouTube
+                                                    {% elif 'tiktok' in field.name %}<i class="fab fa-tiktok text-dark"></i> TikTok
+                                                    {% endif %}
+                                                </label>
+                                                {{ field }}
+                                            </div>
+                                        {% endif %}
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Custom CSS -->
+                        <div class="settings-card mb-4">
+                            <div class="card-header">
+                                <h2><i class="fas fa-code me-2"></i>Advanced: Custom CSS</h2>
+                            </div>
+                            <div class="card-body">
+                                <p class="text-muted mb-3">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Add custom CSS to further personalize your store. Use with caution.
+                                </p>
+                                {{ theme_form.custom_css }}
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- Right Column: Live Preview -->
+                    <div class="col-lg-4">
+                        <div class="live-preview-panel">
+                            <div class="live-preview-header">
+                                <span><i class="fas fa-eye me-2"></i>Live Preview</span>
+                                <div class="preview-toggle">
+                                    <button type="button" class="active" data-device="desktop">
+                                        <i class="fas fa-desktop"></i>
+                                    </button>
+                                    <button type="button" data-device="mobile">
+                                        <i class="fas fa-mobile-alt"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="preview-mockup" id="previewMockup">
+                                <div class="preview-banner" id="previewBanner">
+                                    <h3>{{ store.name }}</h3>
+                                </div>
+                                
+                                <div class="preview-product-grid">
+                                    <div class="preview-product-card">
+                                        <div class="preview-product-image">
+                                            <i class="fas fa-image"></i>
+                                        </div>
+                                        <div class="preview-product-name">Product Name</div>
+                                        <button class="preview-button" id="previewButton">Shop Now</button>
+                                    </div>
+                                    
+                                    <div class="preview-product-card">
+                                        <div class="preview-product-image">
+                                            <i class="fas fa-image"></i>
+                                        </div>
+                                        <div class="preview-product-name">Product Name</div>
+                                        <button class="preview-button">Shop Now</button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mt-3 text-center">
+                                <a href="{% url 'stores:store_detail' store.slug %}" target="_blank" class="btn btn-outline-primary btn-sm">
+                                    <i class="fas fa-external-link-alt me-1"></i>
+                                    View Full Store
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Save Bar -->
+                <div class="save-theme-bar" id="saveBar">
+                    <div class="unsaved-changes-indicator">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <span>You have unsaved changes</span>
+                    </div>
+                    <div>
+                        <button type="button" class="btn btn-secondary me-2" onclick="location.reload()">
+                            <i class="fas fa-undo me-1"></i>Discard Changes
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-1"></i>Save Theme Settings
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+    </div>
+</div>
+
+<script>
+// Theme Customization JavaScript
+(function() {
+    'use strict';
+    
+    const themeManager = {
+        init: function() {
+            this.setupPresetThemes();
+            this.setupColorPickers();
+            this.setupFontPreview();
+            this.setupLivePreview();
+            this.trackChanges();
+        },
+        
+        setupPresetThemes: function() {
+            const presetCards = document.querySelectorAll('.preset-theme-card');
+            const themePresets = {
+                'modern': {
+                    primary_color: '#2563eb',
+                    secondary_color: '#64748b',
+                    accent_color: '#f59e0b',
+                    background_color: '#ffffff',
+                    text_color: '#1e293b'
+                },
+                'elegant': {
+                    primary_color: '#1f2937',
+                    secondary_color: '#d4af37',
+                    accent_color: '#b8860b',
+                    background_color: '#faf9f6',
+                    text_color: '#1f2937'
+                },
+                'vibrant': {
+                    primary_color: '#ec4899',
+                    secondary_color: '#8b5cf6',
+                    accent_color: '#f59e0b',
+                    background_color: '#ffffff',
+                    text_color: '#111827'
+                },
+                'minimal': {
+                    primary_color: '#000000',
+                    secondary_color: '#6b7280',
+                    accent_color: '#ffffff',
+                    background_color: '#ffffff',
+                    text_color: '#000000'
+                },
+                'dark': {
+                    primary_color: '#3b82f6',
+                    secondary_color: '#6366f1',
+                    accent_color: '#10b981',
+                    background_color: '#111827',
+                    text_color: '#f9fafb'
+                }
+            };
+            
+            presetCards.forEach(card => {
+                card.addEventListener('click', function() {
+                    const theme = this.dataset.theme;
+                    const colors = themePresets[theme];
+                    
+                    // Update all color inputs
+                    Object.keys(colors).forEach(key => {
+                        const input = document.querySelector(`input[name="${key}"]`);
+                        if (input) {
+                            input.value = colors[key];
+                            input.dispatchEvent(new Event('change'));
+                        }
+                    });
+                    
+                    // Visual feedback
+                    presetCards.forEach(c => c.classList.remove('selected'));
+                    this.classList.add('selected');
+                    
+                    // Show save bar
+                    document.getElementById('saveBar').classList.add('show');
+                });
+            });
+        },
+        
+        setupColorPickers: function() {
+            const colorInputs = document.querySelectorAll('input[type="color"]');
+            
+            colorInputs.forEach(input => {
+                // Update value display
+                const valueDisplay = document.getElementById(`${input.name.replace('_', '-')}-value`);
+                
+                input.addEventListener('change', function() {
+                    if (valueDisplay) {
+                        valueDisplay.textContent = this.value.toUpperCase();
+                    }
+                    themeManager.updatePreview();
+                });
+                
+                // Real-time preview
+                input.addEventListener('input', function() {
+                    if (valueDisplay) {
+                        valueDisplay.textContent = this.value.toUpperCase();
+                    }
+                    themeManager.updatePreview();
+                });
+            });
+        },
+        
+        setupFontPreview: function() {
+            const fontHeading = document.querySelector('select[name="font_heading"]');
+            const fontBody = document.querySelector('select[name="font_body"]');
+            
+            if (fontHeading) {
+                fontHeading.addEventListener('change', function() {
+                    const preview = document.getElementById('heading-preview');
+                    if (preview) {
+                        preview.style.fontFamily = this.value;
+                    }
+                });
+            }
+            
+            if (fontBody) {
+                fontBody.addEventListener('change', function() {
+                    const preview = document.getElementById('body-preview');
+                    if (preview) {
+                        preview.style.fontFamily = this.value;
+                    }
+                });
+            }
+        },
+        
+        updatePreview: function() {
+            const primaryColor = document.querySelector('input[name="primary_color"]').value;
+            const secondaryColor = document.querySelector('input[name="secondary_color"]').value;
+            const accentColor = document.querySelector('input[name="accent_color"]').value;
+            const backgroundColor = document.querySelector('input[name="background_color"]').value;
+            const textColor = document.querySelector('input[name="text_color"]').value;
+            
+            const preview = document.getElementById('previewMockup');
+            const banner = document.getElementById('previewBanner');
+            const button = document.getElementById('previewButton');
+            
+            if (preview) {
+                preview.style.backgroundColor = backgroundColor;
+                preview.style.color = textColor;
+            }
+            
+            if (banner) {
+                banner.style.background = `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})`;
+            }
+            
+            if (button) {
+                button.style.backgroundColor = primaryColor;
+                button.style.color = '#ffffff';
+            }
+            
+            // Update all product cards
+            document.querySelectorAll('.preview-product-card').forEach(card => {
+                card.style.borderColor = secondaryColor;
+            });
+        },
+        
+        setupLivePreview: function() {
+            const toggleButtons = document.querySelectorAll('.preview-toggle button');
+            const mockup = document.getElementById('previewMockup');
+            
+            toggleButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    toggleButtons.forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    const device = this.dataset.device;
+                    if (device === 'mobile') {
+                        mockup.style.maxWidth = '375px';
+                        mockup.style.margin = '0 auto';
+                    } else {
+                        mockup.style.maxWidth = '100%';
+                        mockup.style.margin = '0';
+                    }
+                });
+            });
+            
+            // Initial preview update
+            this.updatePreview();
+        },
+        
+        trackChanges: function() {
+            const form = document.getElementById('themeForm');
+            const saveBar = document.getElementById('saveBar');
+            let hasChanges = false;
+            
+            form.addEventListener('change', function() {
+                hasChanges = true;
+                saveBar.classList.add('show');
+            });
+            
+            // Warn before leaving if there are unsaved changes
+            window.addEventListener('beforeunload', function(e) {
+                if (hasChanges) {
+                    e.preventDefault();
+                    e.returnValue = '';
+                    return '';
+                }
+            });
+            
+            // Remove warning after save
+            form.addEventListener('submit', function() {
+                hasChanges = false;
+            });
+        }
+    };
+    
+    // Initialize when DOM is ready
+    document.addEventListener('DOMContentLoaded', function() {
+        themeManager.init();
+        console.log('🎨 Theme customization initialized');
+    });
+})();
+</script>
+
+{% endblock %}

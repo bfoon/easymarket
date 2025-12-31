@@ -23,7 +23,7 @@ from django.forms import modelformset_factory
 from chat.models import ChatThread, ChatMessage
 from django.contrib.auth import get_user_model
 from marketplace.models import Product, ProductImage, ProductVariant, ProductView
-from .forms import ProductForm, ProductImageForm, ProductVariantForm, ProductFeatureOption
+from .forms import ProductForm, ProductImageForm, ProductVariantForm, ProductFeatureOption, StoreThemeForm, StoreThemePresetForm
 from django.db import transaction
 from accounts.models import AdminLog
 import re
@@ -873,6 +873,80 @@ def product_detail(request, product_id):
 
 
 @login_required
+@require_POST
+def follow_store_by_slug(request, slug):
+    """
+    Toggle follow/unfollow for a store using slug (for public store pages)
+    This is the view that the template calls
+    """
+    try:
+        store = get_object_or_404(Store, slug=slug, status='active')
+
+        # Check if follow exists
+        follow = StoreFollow.objects.filter(user=request.user, store=store).first()
+
+        if follow:
+            # Toggle existing follow
+            follow.is_active = not follow.is_active
+            follow.save()
+            created = False
+        else:
+            # Create new follow
+            follow = StoreFollow.objects.create(user=request.user, store=store, is_active=True)
+            created = True
+
+        followers_count = store.get_followers_count()
+
+        return JsonResponse({
+            'success': True,
+            'status': 'success',  # Added for compatibility
+            'is_following': follow.is_active,
+            'following': follow.is_active,  # Added for compatibility
+            'followers_count': followers_count,
+            'message': f'You are now {"following" if follow.is_active else "no longer following"} {store.name}'
+        })
+
+    except Store.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'message': 'Store not found.'
+        }, status=404)
+
+    except Exception as e:
+        print(f"Error in follow_store_by_slug: {e}")  # Debug logging
+        return JsonResponse({
+            'success': False,
+            'message': 'An error occurred while updating your follow status.'
+        }, status=500)
+
+
+# ADD THIS NEW VIEW (slug-based) - get follow status
+@login_required
+def get_follow_status_by_slug(request, slug):
+    """Get follow status using store slug"""
+    try:
+        store = get_object_or_404(Store, slug=slug, status='active')
+
+        follow = StoreFollow.objects.filter(
+            user=request.user,
+            store=store,
+            is_active=True
+        ).exists()
+
+        return JsonResponse({
+            'success': True,
+            'is_following': follow,
+            'followers_count': store.get_followers_count()
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': str(e)
+        }, status=500)
+
+
+@login_required
 @require_http_methods(["POST"])
 def toggle_store_follow(request, store_id):
     """Toggle follow/unfollow for a store"""
@@ -903,6 +977,7 @@ def toggle_store_follow(request, store_id):
             'success': False,
             'message': 'An error occurred while updating your follow status.'
         }, status=500)
+
 
 @login_required
 def get_user_notifications(request):
@@ -1090,15 +1165,29 @@ def get_store_follow_status(request, store_id):
 
 
 def store_detail(request, slug):
-    """Public store detail page."""
+    """
+    Public store detail page with theme support.
+
+    This view displays a store's profile page with:
+    - Store information and branding
+    - Products (filtered by store owner's seller account)
+    - Reviews and ratings
+    - Categories
+    - Follow/unfollow functionality
+    - Theme customization applied
+    - Referral tracking
+    """
+    # Get the store
     store = get_object_or_404(Store, slug=slug, status='active')
 
-    # ✅ Capture referral code from URL
+    # ✅ Handle referral code tracking
     ref_code = request.GET.get('ref')
-    if ref_code and store.allow_referrals:
+    if ref_code and hasattr(store, 'allow_referrals') and store.allow_referrals:
+        # Store referral code in session
         request.session['store_referral_code'] = ref_code
         request.session['store_referral_store_id'] = str(store.id)
 
+        # Mark referral as used
         try:
             referral = StoreReferral.objects.get(
                 referral_code=ref_code,
@@ -1111,79 +1200,240 @@ def store_detail(request, slug):
         except StoreReferral.DoesNotExist:
             pass
 
-    # 🛍️ Store products
-    products = Product.objects.filter(seller=store.owner).order_by('-created_at')[:8]
-    product_ids = products.values_list('id', flat=True)
+    # 🛍️ Get store products
+    # IMPORTANT: Products are linked to seller (User), not Store directly in marketplace
+    # We filter by seller = store.owner to get all products from this store's owner
+    products_queryset = Product.objects.filter(
+        seller=store.owner,
+        is_active=True,
+        visible_in_b2c=True  # Only show B2C products on store page
+    ).select_related('category', 'seller').prefetch_related('images').order_by('-created_at')
 
-    # ⭐ Reviews
-    recent_reviews = Review.objects.filter(
-        product_id__in=product_ids
-    ).select_related('user').order_by('-created_at')[:5]
+    # Get product IDs for reviews
+    product_ids = products_queryset.values_list('id', flat=True)
 
+    # 📦 Featured products (if theme setting enabled)
+    featured_products = None
+    if getattr(store, 'enable_featured_products', True):
+        featured_products = products_queryset.filter(is_featured=True)[:8]
+
+    # 🆕 New arrivals (if theme setting enabled)
+    new_products = None
+    if getattr(store, 'enable_new_arrivals', True):
+        new_products = products_queryset.order_by('-created_at')[:8]
+
+    # 🔥 Best sellers (if theme setting enabled)
+    best_sellers = None
+    if getattr(store, 'enable_best_sellers', True):
+        # Get products with their total sold count from orders
+        best_sellers = products_queryset.annotate(
+            total_sold=Sum('order_items__quantity')
+        ).order_by('-total_sold')[:8]
+
+    # 📄 Pagination for main product list
+    products_per_row = getattr(store, 'products_per_row', 4)
+    items_per_page = products_per_row * 3  # Show 3 rows per page
+
+    paginator = Paginator(products_queryset, items_per_page)
+    page_number = request.GET.get('page', 1)
+    products_page = paginator.get_page(page_number)
+
+    # ⭐ Reviews and ratings
     reviews = Review.objects.filter(product_id__in=product_ids)
     review_count = reviews.count()
     average_rating = reviews.aggregate(avg=Avg('rating'))['avg'] or 0
+
+    # Rating breakdown (1-5 stars)
     rating_breakdown = {i: reviews.filter(rating=i).count() for i in range(1, 6)}
 
+    # Recent reviews for display
+    recent_reviews = Review.objects.filter(
+        product_id__in=product_ids
+    ).select_related('user', 'product').order_by('-created_at')[:5]
+
     # 🏷️ Categories
+    # Get unique categories from store's products
     categories = (
         Category.objects
-        .filter(product__seller=store.owner)
+        .filter(product__seller=store.owner, product__is_active=True)
         .annotate(product_count=Count('product'))
         .distinct()
+        .order_by('name')
     )
 
     # ❤️ Follow status
     is_following = False
+    followers_count = 0
+
     if request.user.is_authenticated:
-        is_following = store.is_followed_by(request.user)
+        # Check if user is following this store
+        from .models import StoreFollow
+        is_following = StoreFollow.objects.filter(
+            user=request.user,
+            store=store,
+            is_active=True
+        ).exists()
 
-    # 🕒 Grouped opening hours
-    store_hours = store.hours.order_by('day_of_week')
-    grouped_hours = group_store_hours(store_hours)
+    # Get followers count
+    if hasattr(store, 'followers'):
+        followers_count = store.followers.filter(is_active=True).count()
+    elif hasattr(store, 'get_followers_count'):
+        followers_count = store.get_followers_count()
 
+    # 🕒 Store hours (grouped for better display)
+    store_hours = None
+    grouped_hours = []
+
+    if hasattr(store, 'hours'):
+        store_hours = store.hours.order_by('day_of_week')
+        grouped_hours = group_store_hours(store_hours)
+
+    # 📊 Store statistics
+    products_count = products_queryset.count()
+
+    # 🎨 Theme configuration
+    # Get theme-related data if available, with fallbacks
+    theme_colors = getattr(store, 'get_theme_colors', lambda: {
+        'primary': '#2563eb',
+        'secondary': '#64748b',
+        'accent': '#f59e0b',
+        'background': '#ffffff',
+        'text': '#1e293b',
+    })()
+
+    font_urls = getattr(store, 'get_font_urls', lambda: None)()
+    enable_animations = getattr(store, 'enable_animations', True)
+    enable_lazy_loading = getattr(store, 'enable_lazy_loading', True)
+
+    # 📦 Context for template
     context = {
         'store': store,
-        'products': products,
+        'products': products_page,
+        'featured_products': featured_products,
+        'new_products': new_products,
+        'best_sellers': best_sellers,
+        'products_count': products_count,
+
+        # Reviews & Ratings
         'review_count': review_count,
         'average_rating': round(average_rating, 1),
         'rating_breakdown': rating_breakdown,
-        'rating_order': [5, 4, 3, 2, 1],
+        'rating_order': [5, 4, 3, 2, 1],  # For template iteration
         'recent_reviews': recent_reviews,
+
+        # Categories
         'categories': categories,
+
+        # Social & Following
         'is_following': is_following,
-        'followers_count': store.get_followers_count(),
+        'followers_count': followers_count,
+
+        # Store Hours
         'grouped_hours': grouped_hours,
+        'store_hours': store_hours,
+
+        # Theme & Customization
+        'theme_colors': theme_colors,
+        'font_urls': font_urls,
+        'enable_animations': enable_animations,
+        'enable_lazy_loading': enable_lazy_loading,
+
+        # Additional theme settings (with safe fallbacks)
+        'show_product_ratings': getattr(store, 'show_product_ratings', True),
+        'show_product_badges': getattr(store, 'show_product_badges', True),
+        'show_quick_view': getattr(store, 'show_quick_view', True),
+        'show_store_description': getattr(store, 'show_store_description', True),
+        'show_store_stats': getattr(store, 'show_store_stats', True),
+        'show_social_links': getattr(store, 'show_social_links', True),
+        'show_operating_hours': getattr(store, 'show_operating_hours', True),
+        'product_layout': getattr(store, 'product_layout', 'grid'),
+        'products_per_row': products_per_row,
     }
 
     return render(request, 'stores/store_detail.html', context)
 
 
 def store_products(request, slug):
-    """Public store products page."""
-    store = get_object_or_404(Store, slug=slug, status='active')  # Using status field
+    """
+    Dedicated products page for a store with filtering and sorting
+    """
+    store = get_object_or_404(Store, slug=slug, status='active')
 
-    # Get all products by this store owner
-    products = Product.objects.filter(seller=store.owner, is_active=True).order_by('-created_at')
-    # Get all categories used by this store's products
-    categories = (
-        Category.objects
-        .filter(product__seller=store.owner)
-        .annotate(product_count=Count('product'))
-        .distinct()
-    )
-    # Add pagination
-    from django.core.paginator import Paginator
-    paginator = Paginator(products, 12)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
+    # Get all store products
+    products = Product.objects.filter(
+        seller=store.owner,
+        is_active=True,
+        visible_in_b2c=True
+    ).select_related('category', 'seller').prefetch_related('images')
+
+    # Filter by category if specified
+    category_id = request.GET.get('category')
+    if category_id:
+        products = products.filter(category_id=category_id)
+
+    # Search
+    search_query = request.GET.get('q')
+    if search_query:
+        products = products.filter(
+            Q(name__icontains=search_query) |
+            Q(description__icontains=search_query)
+        )
+
+    # Sorting
+    sort_by = request.GET.get('sort', '-created_at')
+    valid_sorts = {
+        'price_low': 'price',
+        'price_high': '-price',
+        'name': 'name',
+        'newest': '-created_at',
+        'popular': '-sold_count',
+        'rating': '-average_rating',
+    }
+
+    if sort_by in valid_sorts:
+        products = products.order_by(valid_sorts[sort_by])
+    else:
+        products = products.order_by('-created_at')
+
+    # Price range filter
+    min_price = request.GET.get('min_price')
+    max_price = request.GET.get('max_price')
+    if min_price:
+        products = products.filter(price__gte=min_price)
+    if max_price:
+        products = products.filter(price__lte=max_price)
+
+    # Pagination
+    products_per_row = getattr(store, 'products_per_row', 4)
+    items_per_page = products_per_row * 4  # 4 rows
+
+    paginator = Paginator(products, items_per_page)
+    page_number = request.GET.get('page', 1)
+    products_page = paginator.get_page(page_number)
+
+    # Categories for filter
+    categories = Category.objects.filter(
+        product__seller=store.owner,
+        product__is_active=True
+    ).annotate(
+        product_count=Count('product')
+    ).distinct().order_by('name')
 
     context = {
         'store': store,
-        'products': page_obj,
+        'products': products_page,
         'categories': categories,
+        'search_query': search_query,
+        'current_category': category_id,
+        'current_sort': sort_by,
+        'min_price': min_price,
+        'max_price': max_price,
 
+        # Theme
+        'theme_colors': getattr(store, 'get_theme_colors', lambda: {})(),
+        'font_urls': getattr(store, 'get_font_urls', lambda: None)(),
     }
+
     return render(request, 'stores/store_products.html', context)
 
 
@@ -2162,6 +2412,7 @@ def store_dashboard(request, store_id):
 
     return render(request, 'stores/store_dashboard.html', context)
 
+
 @login_required
 @store_owner_required
 def store_settings(request, store_id):
@@ -2183,6 +2434,34 @@ def store_settings(request, store_id):
 
     if request.method == 'POST':
         tab = request.POST.get('tab', 'basic')
+        # Add this theme handling
+        if tab == 'theme':
+            try:
+                # Colors
+                store.primary_color = request.POST.get('primary_color', '#2563eb')
+                store.secondary_color = request.POST.get('secondary_color', '#64748b')
+                store.accent_color = request.POST.get('accent_color', '#f59e0b')
+                store.background_color = request.POST.get('background_color', '#ffffff')
+                store.text_color = request.POST.get('text_color', '#1e293b')
+
+                # Fonts
+                store.font_heading = request.POST.get('font_heading', 'poppins')
+                store.font_body = request.POST.get('font_body', 'inter')
+
+                # Features (checkboxes - only present if checked)
+                store.show_product_ratings = 'show_product_ratings' in request.POST
+                store.show_product_badges = 'show_product_badges' in request.POST
+                store.enable_animations = 'enable_animations' in request.POST
+                store.enable_hover_effects = 'enable_hover_effects' in request.POST
+                store.enable_featured_products = 'enable_featured_products' in request.POST
+                store.enable_new_arrivals = 'enable_new_arrivals' in request.POST
+
+                store.save()
+                messages.success(request, 'Theme settings saved successfully!')
+                return redirect('stores:store_settings', store_id=store.id)
+
+            except Exception as e:
+                messages.error(request, f'Error saving theme: {str(e)}')
 
         if tab == 'basic':
             form = StoreSettingsForm(request.POST, request.FILES, instance=store)
@@ -3947,4 +4226,358 @@ def b2b_counts(request, store_id):
     return JsonResponse({
         "orders": orders_count,
         "cart": cart_count,
+    })
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def store_theme_settings(request, store_id):
+    """
+    Comprehensive store theme customization view
+    """
+    store = get_object_or_404(Store, id=store_id)
+
+    # Check if user is owner or manager
+    if store.owner != request.user and not store.managers.filter(id=request.user.id).exists():
+        messages.error(request, "You don't have permission to edit this store's theme.")
+        return redirect('stores:store_detail', slug=store.slug)
+
+    if request.method == 'POST':
+        form = StoreThemeForm(request.POST, instance=store)
+
+        if form.is_valid():
+            # Save the theme settings
+            updated_store = form.save(commit=False)
+            updated_store.theme_updated_at = timezone.now()
+            updated_store.save()
+
+            messages.success(
+                request,
+                '🎨 Theme settings saved successfully! Your store has been updated.',
+                extra_tags='theme-success'
+            )
+
+            # Return JSON for AJAX requests
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'success': True,
+                    'message': 'Theme updated successfully!',
+                    'store_url': store.get_absolute_url()
+                })
+
+            # Redirect to preview the changes
+            return redirect('stores:store_detail', slug=store.slug)
+        else:
+            messages.error(
+                request,
+                'There were errors in your theme settings. Please check the form.',
+                extra_tags='theme-error'
+            )
+
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'success': False,
+                    'errors': form.errors
+                }, status=400)
+    else:
+        form = StoreThemeForm(instance=store)
+
+    context = {
+        'store': store,
+        'theme_form': form,
+        'active_tab': 'theme',
+        'page_title': f'Theme Settings - {store.name}',
+    }
+
+    return render(request, 'stores/store_theme_settings.html', context)
+
+
+@login_required
+@require_http_methods(["POST"])
+def apply_theme_preset(request, store_id):
+    """
+    Quick apply a theme preset
+    """
+    store = get_object_or_404(Store, id=store_id)
+
+    # Check permissions
+    if store.owner != request.user and not store.managers.filter(id=request.user.id).exists():
+        return JsonResponse({
+            'success': False,
+            'message': "You don't have permission to edit this store."
+        }, status=403)
+
+    preset_name = request.POST.get('preset')
+
+    # Theme presets configuration
+    THEME_PRESETS = {
+        'modern': {
+            'theme_preset': 'modern',
+            'primary_color': '#2563eb',
+            'secondary_color': '#64748b',
+            'accent_color': '#f59e0b',
+            'background_color': '#ffffff',
+            'text_color': '#1e293b',
+            'font_heading': 'poppins',
+            'font_body': 'inter',
+            'product_card_style': 'shadow',
+            'cta_button_style': 'rounded',
+        },
+        'elegant': {
+            'theme_preset': 'elegant',
+            'primary_color': '#1f2937',
+            'secondary_color': '#d4af37',
+            'accent_color': '#b8860b',
+            'background_color': '#faf9f6',
+            'text_color': '#1f2937',
+            'font_heading': 'playfair',
+            'font_body': 'lato',
+            'product_card_style': 'border',
+            'cta_button_style': 'square',
+        },
+        'vibrant': {
+            'theme_preset': 'vibrant',
+            'primary_color': '#ec4899',
+            'secondary_color': '#8b5cf6',
+            'accent_color': '#f59e0b',
+            'background_color': '#ffffff',
+            'text_color': '#111827',
+            'font_heading': 'montserrat',
+            'font_body': 'roboto',
+            'product_card_style': 'elevated',
+            'cta_button_style': 'pill',
+        },
+        'minimal': {
+            'theme_preset': 'minimal',
+            'primary_color': '#000000',
+            'secondary_color': '#6b7280',
+            'accent_color': '#ffffff',
+            'background_color': '#ffffff',
+            'text_color': '#000000',
+            'font_heading': 'inter',
+            'font_body': 'inter',
+            'product_card_style': 'minimal',
+            'cta_button_style': 'square',
+        },
+        'dark': {
+            'theme_preset': 'dark',
+            'primary_color': '#3b82f6',
+            'secondary_color': '#6366f1',
+            'accent_color': '#10b981',
+            'background_color': '#111827',
+            'text_color': '#f9fafb',
+            'font_heading': 'inter',
+            'font_body': 'roboto',
+            'product_card_style': 'shadow',
+            'cta_button_style': 'rounded',
+        },
+        'classic': {
+            'theme_preset': 'classic',
+            'primary_color': '#1e40af',
+            'secondary_color': '#475569',
+            'accent_color': '#dc2626',
+            'background_color': '#f8fafc',
+            'text_color': '#1e293b',
+            'font_heading': 'merriweather',
+            'font_body': 'lato',
+            'product_card_style': 'border',
+            'cta_button_style': 'rounded',
+        },
+        'creative': {
+            'theme_preset': 'creative',
+            'primary_color': '#7c3aed',
+            'secondary_color': '#ec4899',
+            'accent_color': '#f59e0b',
+            'background_color': '#fef3c7',
+            'text_color': '#1f2937',
+            'font_heading': 'montserrat',
+            'font_body': 'poppins',
+            'product_card_style': 'elevated',
+            'cta_button_style': 'pill',
+        },
+        'professional': {
+            'theme_preset': 'professional',
+            'primary_color': '#0f172a',
+            'secondary_color': '#334155',
+            'accent_color': '#0ea5e9',
+            'background_color': '#ffffff',
+            'text_color': '#0f172a',
+            'font_heading': 'raleway',
+            'font_body': 'roboto',
+            'product_card_style': 'shadow',
+            'cta_button_style': 'square',
+        },
+    }
+
+    if preset_name not in THEME_PRESETS:
+        return JsonResponse({
+            'success': False,
+            'message': 'Invalid theme preset selected.'
+        }, status=400)
+
+    # Apply the preset
+    preset_data = THEME_PRESETS[preset_name]
+    for field, value in preset_data.items():
+        setattr(store, field, value)
+
+    store.theme_updated_at = timezone.now()
+    store.save()
+
+    return JsonResponse({
+        'success': True,
+        'message': f'{preset_name.title()} theme applied successfully!',
+        'preset_data': preset_data,
+        'store_url': store.get_absolute_url()
+    })
+
+
+@login_required
+@require_http_methods(["GET"])
+def preview_theme(request, store_id):
+    """
+    Generate a preview of theme changes without saving
+    """
+    store = get_object_or_404(Store, id=store_id)
+
+    # Check permissions
+    if store.owner != request.user and not store.managers.filter(id=request.user.id).exists():
+        return JsonResponse({
+            'success': False,
+            'message': "You don't have permission to preview this store."
+        }, status=403)
+
+    # Get preview parameters from query string
+    theme_data = {
+        'primary_color': request.GET.get('primary_color', store.primary_color),
+        'secondary_color': request.GET.get('secondary_color', store.secondary_color),
+        'accent_color': request.GET.get('accent_color', store.accent_color),
+        'background_color': request.GET.get('background_color', store.background_color),
+        'text_color': request.GET.get('text_color', store.text_color),
+        'font_heading': request.GET.get('font_heading', store.font_heading),
+        'font_body': request.GET.get('font_body', store.font_body),
+        'product_card_style': request.GET.get('product_card_style', store.product_card_style),
+        'cta_button_style': request.GET.get('cta_button_style', store.cta_button_style),
+    }
+
+    return JsonResponse({
+        'success': True,
+        'theme_data': theme_data,
+        'css_variables': {
+            '--store-primary': theme_data['primary_color'],
+            '--store-secondary': theme_data['secondary_color'],
+            '--store-accent': theme_data['accent_color'],
+            '--store-background': theme_data['background_color'],
+            '--store-text': theme_data['text_color'],
+        }
+    })
+
+
+@login_required
+@require_http_methods(["POST"])
+def reset_theme(request, store_id):
+    """
+    Reset store theme to default settings
+    """
+    store = get_object_or_404(Store, id=store_id)
+
+    # Check permissions
+    if store.owner != request.user and not store.managers.filter(id=request.user.id).exists():
+        return JsonResponse({
+            'success': False,
+            'message': "You don't have permission to edit this store."
+        }, status=403)
+
+    # Reset to default theme
+    default_theme = {
+        'theme_preset': 'modern',
+        'primary_color': '#2563eb',
+        'secondary_color': '#64748b',
+        'accent_color': '#f59e0b',
+        'background_color': '#ffffff',
+        'text_color': '#1e293b',
+        'font_heading': 'poppins',
+        'font_body': 'inter',
+        'product_layout': 'grid',
+        'products_per_row': 4,
+        'product_card_style': 'shadow',
+        'product_image_shape': 'square',
+        'cta_button_style': 'rounded',
+        'cta_button_text': 'Shop Now',
+        'banner_overlay_opacity': 30,
+        'banner_height': 'medium',
+        'enable_animations': True,
+        'enable_hover_effects': True,
+        'enable_parallax_banner': False,
+        'show_product_ratings': True,
+        'show_product_badges': True,
+        'show_quick_view': True,
+        'show_store_description': True,
+        'show_store_stats': True,
+        'show_social_links': True,
+        'show_operating_hours': True,
+        'custom_css': '',
+    }
+
+    for field, value in default_theme.items():
+        setattr(store, field, value)
+
+    store.theme_updated_at = timezone.now()
+    store.save()
+
+    messages.success(request, 'Theme has been reset to default settings.')
+
+    return JsonResponse({
+        'success': True,
+        'message': 'Theme reset to default successfully!',
+        'redirect_url': reverse('stores:store_theme_settings', kwargs={'store_id': store_id})
+    })
+
+
+@login_required
+@require_http_methods(["POST"])
+def duplicate_theme(request, source_store_id, target_store_id):
+    """
+    Copy theme settings from one store to another
+    """
+    source_store = get_object_or_404(Store, id=source_store_id)
+    target_store = get_object_or_404(Store, id=target_store_id)
+
+    # Check permissions for both stores
+    if (target_store.owner != request.user and
+            not target_store.managers.filter(id=request.user.id).exists()):
+        return JsonResponse({
+            'success': False,
+            'message': "You don't have permission to edit the target store."
+        }, status=403)
+
+    # Theme fields to copy
+    theme_fields = [
+        'theme_preset', 'primary_color', 'secondary_color', 'accent_color',
+        'background_color', 'text_color', 'font_heading', 'font_body',
+        'product_layout', 'products_per_row', 'product_card_style',
+        'product_image_shape', 'cta_button_style', 'cta_button_text',
+        'banner_overlay_opacity', 'banner_height', 'enable_animations',
+        'enable_hover_effects', 'enable_parallax_banner', 'show_product_ratings',
+        'show_product_badges', 'show_quick_view', 'show_store_description',
+        'show_store_stats', 'show_social_links', 'show_operating_hours',
+        'enable_featured_products', 'enable_new_arrivals', 'enable_best_sellers',
+        'custom_css',
+    ]
+
+    # Copy theme settings
+    for field in theme_fields:
+        setattr(target_store, field, getattr(source_store, field))
+
+    target_store.theme_updated_at = timezone.now()
+    target_store.save()
+
+    messages.success(
+        request,
+        f'Theme copied from {source_store.name} to {target_store.name} successfully!'
+    )
+
+    return JsonResponse({
+        'success': True,
+        'message': 'Theme duplicated successfully!',
+        'redirect_url': reverse('stores:store_theme_settings', kwargs={'store_id': target_store_id})
     })

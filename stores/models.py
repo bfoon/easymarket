@@ -14,8 +14,9 @@ from django.contrib.auth import get_user_model
 from marketplace.models import Product
 import threading
 from django.core.mail import send_mail
-from django.core.validators import MinValueValidator
+from django.core.validators import MinValueValidator, RegexValidator
 from django.contrib.postgres.fields import ArrayField
+
 from django.apps import apps
 
 User = get_user_model()
@@ -300,10 +301,330 @@ class Store(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     approved_at = models.DateTimeField(blank=True, null=True)
 
+    # Theme Configuration
+    THEME_CHOICES = [
+        ('modern', 'Modern & Clean'),
+        ('elegant', 'Elegant & Luxury'),
+        ('vibrant', 'Vibrant & Bold'),
+        ('minimal', 'Minimal & Simple'),
+        ('dark', 'Dark Mode'),
+        ('classic', 'Classic Business'),
+        ('creative', 'Creative & Artistic'),
+        ('professional', 'Professional Corporate'),
+    ]
+
+    LAYOUT_CHOICES = [
+        ('grid', 'Grid Layout'),
+        ('list', 'List Layout'),
+        ('masonry', 'Masonry Layout'),
+        ('carousel', 'Carousel Layout'),
+    ]
+
+    FONT_CHOICES = [
+        ('inter', 'Inter (Modern Sans-Serif)'),
+        ('roboto', 'Roboto (Clean & Professional)'),
+        ('playfair', 'Playfair Display (Elegant Serif)'),
+        ('montserrat', 'Montserrat (Bold & Modern)'),
+        ('lato', 'Lato (Friendly & Readable)'),
+        ('poppins', 'Poppins (Geometric & Modern)'),
+        ('raleway', 'Raleway (Elegant Sans-Serif)'),
+        ('merriweather', 'Merriweather (Classic Serif)'),
+    ]
+
+    COLOR_VALIDATOR = RegexValidator(
+        regex=r'^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$',
+        message='Enter a valid hex color code (e.g., #FF5733)'
+    )
+
+    # Theme & Branding
+    theme_preset = models.CharField(
+        max_length=20,
+        choices=THEME_CHOICES,
+        default='modern',
+        help_text='Choose a pre-designed theme for your store'
+    )
+
+    # Color Scheme
+    primary_color = models.CharField(
+        max_length=7,
+        default='#2563eb',
+        validators=[COLOR_VALIDATOR],
+        help_text='Main brand color (hex code)'
+    )
+    secondary_color = models.CharField(
+        max_length=7,
+        default='#64748b',
+        validators=[COLOR_VALIDATOR],
+        help_text='Secondary accent color'
+    )
+    accent_color = models.CharField(
+        max_length=7,
+        default='#f59e0b',
+        validators=[COLOR_VALIDATOR],
+        help_text='Accent color for highlights and CTAs'
+    )
+    background_color = models.CharField(
+        max_length=7,
+        default='#ffffff',
+        validators=[COLOR_VALIDATOR],
+        help_text='Main background color'
+    )
+    text_color = models.CharField(
+        max_length=7,
+        default='#1e293b',
+        validators=[COLOR_VALIDATOR],
+        help_text='Primary text color'
+    )
+
+    # Typography
+    font_heading = models.CharField(
+        max_length=20,
+        choices=FONT_CHOICES,
+        default='poppins',
+        help_text='Font for headings and titles'
+    )
+    font_body = models.CharField(
+        max_length=20,
+        choices=FONT_CHOICES,
+        default='inter',
+        help_text='Font for body text'
+    )
+
+    # Layout & Display
+    product_layout = models.CharField(
+        max_length=20,
+        choices=LAYOUT_CHOICES,
+        default='grid',
+        help_text='How products are displayed on your store page'
+    )
+    products_per_row = models.IntegerField(
+        default=4,
+        choices=[(2, '2 products'), (3, '3 products'), (4, '4 products'), (5, '5 products')],
+        help_text='Number of products per row'
+    )
+    show_product_ratings = models.BooleanField(
+        default=True,
+        help_text='Display star ratings on product cards'
+    )
+    show_product_badges = models.BooleanField(
+        default=True,
+        help_text='Show "New", "Sale", "Bestseller" badges'
+    )
+    show_quick_view = models.BooleanField(
+        default=True,
+        help_text='Enable quick view button on products'
+    )
+
+    # Store Page Features
+    show_store_description = models.BooleanField(
+        default=True,
+        help_text='Display store description on store page'
+    )
+    show_store_stats = models.BooleanField(
+        default=True,
+        help_text='Show total products, reviews, ratings'
+    )
+    show_social_links = models.BooleanField(
+        default=True,
+        help_text='Display social media links'
+    )
+    show_operating_hours = models.BooleanField(
+        default=True,
+        help_text='Display business hours on store page'
+    )
+    show_map_location = models.BooleanField(
+        default=False,
+        help_text='Show store location on map'
+    )
+
+    # Social Media Links
+    facebook_url = models.URLField(blank=True, null=True, help_text='Facebook page URL')
+    instagram_url = models.URLField(blank=True, null=True, help_text='Instagram profile URL')
+    twitter_url = models.URLField(blank=True, null=True, help_text='Twitter/X profile URL')
+    linkedin_url = models.URLField(blank=True, null=True, help_text='LinkedIn company page URL')
+    youtube_url = models.URLField(blank=True, null=True, help_text='YouTube channel URL')
+    tiktok_url = models.URLField(blank=True, null=True, help_text='TikTok profile URL')
+
+    # Advanced Customization
+    custom_css = models.TextField(
+        blank=True,
+        null=True,
+        help_text='Add custom CSS to further customize your store appearance'
+    )
+    header_message = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text='Announcement message displayed at top of store (e.g., "Free shipping on orders over $50!")'
+    )
+    show_header_message = models.BooleanField(
+        default=False,
+        help_text='Display header announcement message'
+    )
+
+    # Banner Customization
+    banner_overlay_opacity = models.IntegerField(
+        default=30,
+        choices=[(i, f'{i}%') for i in range(0, 101, 10)],
+        help_text='Darkness of overlay on banner image'
+    )
+    banner_height = models.CharField(
+        max_length=10,
+        default='medium',
+        choices=[
+            ('small', 'Small (300px)'),
+            ('medium', 'Medium (400px)'),
+            ('large', 'Large (500px)'),
+            ('xlarge', 'Extra Large (600px)'),
+        ],
+        help_text='Height of store banner'
+    )
+
+    # Call-to-Action Settings
+    cta_button_text = models.CharField(
+        max_length=50,
+        default='Shop Now',
+        help_text='Text for main call-to-action buttons'
+    )
+    cta_button_style = models.CharField(
+        max_length=20,
+        default='rounded',
+        choices=[
+            ('rounded', 'Rounded Corners'),
+            ('square', 'Square Corners'),
+            ('pill', 'Pill Shape'),
+        ],
+        help_text='Style of buttons throughout store'
+    )
+
+    # Product Card Styling
+    product_card_style = models.CharField(
+        max_length=20,
+        default='shadow',
+        choices=[
+            ('shadow', 'Card with Shadow'),
+            ('border', 'Card with Border'),
+            ('minimal', 'Minimal (No Border)'),
+            ('elevated', 'Elevated (Deep Shadow)'),
+        ],
+        help_text='Style of product cards'
+    )
+    product_image_shape = models.CharField(
+        max_length=20,
+        default='square',
+        choices=[
+            ('square', 'Square'),
+            ('rounded', 'Rounded Corners'),
+            ('circle', 'Circle'),
+        ],
+        help_text='Shape of product images'
+    )
+
+    # Animation & Effects
+    enable_animations = models.BooleanField(
+        default=True,
+        help_text='Enable smooth animations and transitions'
+    )
+    enable_hover_effects = models.BooleanField(
+        default=True,
+        help_text='Enable hover effects on products and buttons'
+    )
+    enable_parallax_banner = models.BooleanField(
+        default=False,
+        help_text='Enable parallax scrolling effect on banner'
+    )
+
+    # Store Sections
+    enable_featured_products = models.BooleanField(
+        default=True,
+        help_text='Show featured products section'
+    )
+    enable_new_arrivals = models.BooleanField(
+        default=True,
+        help_text='Show new arrivals section'
+    )
+    enable_best_sellers = models.BooleanField(
+        default=True,
+        help_text='Show best sellers section'
+    )
+    enable_testimonials = models.BooleanField(
+        default=False,
+        help_text='Show customer testimonials section'
+    )
+
+    # Trust Badges & Icons
+    show_secure_checkout_badge = models.BooleanField(
+        default=True,
+        help_text='Display "Secure Checkout" badge'
+    )
+    show_free_shipping_badge = models.BooleanField(
+        default=False,
+        help_text='Display "Free Shipping" badge'
+    )
+    show_money_back_guarantee = models.BooleanField(
+        default=False,
+        help_text='Display "Money Back Guarantee" badge'
+    )
+    show_customer_support_badge = models.BooleanField(
+        default=True,
+        help_text='Display "24/7 Customer Support" badge'
+    )
+
+    # Mobile Optimization
+    mobile_menu_style = models.CharField(
+        max_length=20,
+        default='bottom',
+        choices=[
+            ('bottom', 'Bottom Navigation'),
+            ('sidebar', 'Sidebar Menu'),
+            ('top', 'Top Dropdown'),
+        ],
+        help_text='Mobile navigation style'
+    )
+
+    # SEO & Marketing
+    meta_title = models.CharField(
+        max_length=60,
+        blank=True,
+        null=True,
+        help_text='Custom SEO title (leave blank to use store name)'
+    )
+    meta_description = models.CharField(
+        max_length=160,
+        blank=True,
+        null=True,
+        help_text='Custom SEO description'
+    )
+    meta_keywords = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text='SEO keywords (comma-separated)'
+    )
+
+    # Store Performance Settings
+    enable_lazy_loading = models.BooleanField(
+        default=True,
+        help_text='Lazy load images for better performance'
+    )
+    enable_image_optimization = models.BooleanField(
+        default=True,
+        help_text='Automatically optimize images'
+    )
+
+    # Theme last updated tracker
+    theme_updated_at = models.DateTimeField(auto_now=True)
+
     class Meta:
         ordering = ['-created_at']
         verbose_name = 'Store'
         verbose_name_plural = 'Stores'
+        indexes = [
+            # ... existing indexes
+            models.Index(fields=['theme_preset', 'status']),
+            models.Index(fields=['product_layout']),
+        ]
+
 
     def __str__(self):
         return self.name
@@ -380,6 +701,50 @@ class Store(models.Model):
     def get_followers_count(self):
         from .models import StoreFollow
         return StoreFollow.objects.filter(store=self, is_active=True).count()
+
+    def get_theme_colors(self):
+        """Returns dictionary of theme colors for easy template access"""
+        return {
+            'primary': self.primary_color,
+            'secondary': self.secondary_color,
+            'accent': self.accent_color,
+            'background': self.background_color,
+            'text': self.text_color,
+        }
+
+    def get_font_urls(self):
+        """Generate Google Fonts URLs for selected fonts"""
+        fonts = set()
+        if self.font_heading:
+            fonts.add(self.font_heading.replace('_', '+'))
+        if self.font_body:
+            fonts.add(self.font_body.replace('_', '+'))
+
+        font_map = {
+            'inter': 'Inter:wght@300;400;500;600;700;800',
+            'roboto': 'Roboto:wght@300;400;500;700',
+            'playfair': 'Playfair+Display:wght@400;500;600;700',
+            'montserrat': 'Montserrat:wght@300;400;500;600;700;800',
+            'lato': 'Lato:wght@300;400;700',
+            'poppins': 'Poppins:wght@300;400;500;600;700;800',
+            'raleway': 'Raleway:wght@300;400;500;600;700',
+            'merriweather': 'Merriweather:wght@300;400;700',
+        }
+
+        font_params = [font_map.get(f, f) for f in fonts if f in font_map]
+        if font_params:
+            return f"https://fonts.googleapis.com/css2?{'&'.join([f'family={f}' for f in font_params])}&display=swap"
+        return None
+
+    def get_banner_height_px(self):
+        """Convert banner height choice to pixels"""
+        height_map = {
+            'small': '300px',
+            'medium': '400px',
+            'large': '500px',
+            'xlarge': '600px',
+        }
+        return height_map.get(self.banner_height, '400px')
 
     # ---------- NOTIFICATIONS / EMAILS ----------
 

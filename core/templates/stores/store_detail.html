@@ -1,1471 +1,1356 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load humanize %}
-
-{% block title %}{{ store.name }} - {{ store.short_description|default:"Premium Store" }}{% endblock %}
 {% load dictionary_get %}
+{% load phone_utils %}
 
-{% block extra_head %}
-<!-- Optimized Font Loading -->
+{% block title %}{{ store.meta_title|default:store.name }} - {{ store.short_description|default:"Premium Store" }}{% endblock %}
+{% block content %}
+<!-- Dynamic Font Loading -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="{{ font_urls }}" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+<!-- Font Awesome -->
 <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
 <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"></noscript>
 
-<!-- Enhanced SEO Meta Tags -->
-<meta name="description" content="{{ store.description|striptags|truncatewords:30|default:'Discover amazing products at '|add:store.name }}">
-<meta name="keywords" content="{{ store.name }}, {{ store.city }}, {{ store.country }}, online store, shopping">
+<!-- SEO Meta Tags -->
+<meta name="description" content="{{ store.meta_description|default:store.description|striptags|truncatewords:30 }}">
+<meta name="keywords" content="{{ store.meta_keywords|default:store.name }}">
 <meta name="author" content="{{ store.name }}">
 <meta name="robots" content="index, follow">
 <link rel="canonical" href="{{ request.build_absolute_uri }}">
 
-<!-- Enhanced Open Graph -->
+<!-- Open Graph -->
 <meta property="og:type" content="website">
 <meta property="og:title" content="{{ store.name }} - {{ store.short_description|default:'Premium Store' }}">
-<meta property="og:description" content="{{ store.description|striptags|truncatewords:30|default:'Discover amazing products' }}">
+<meta property="og:description" content="{{ store.description|striptags|truncatewords:30 }}">
 <meta property="og:image" content="{{ store.banner.url|default:store.logo.url }}">
 <meta property="og:url" content="{{ request.build_absolute_uri }}">
-<meta property="og:site_name" content="{{ store.name }}">
-<meta property="og:locale" content="en_US">
 
-<!-- Twitter Card -->
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="{{ store.name }} - {{ store.short_description|default:'Premium Store' }}">
-<meta name="twitter:description" content="{{ store.description|striptags|truncatewords:30|default:'Discover amazing products' }}">
-<meta name="twitter:image" content="{{ store.banner.url|default:store.logo.url }}">
-
-<!-- Add user authentication status for JavaScript -->
+<!-- User Auth & CSRF -->
 <meta name="user-authenticated" content="{% if user.is_authenticated %}true{% else %}false{% endif %}">
 <meta name="csrf-token" content="{{ csrf_token }}">
 
-<!-- Structured Data -->
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "Store",
-  "name": "{{ store.name }}",
-  "description": "{{ store.description|striptags|default:'Quality products and service' }}",
-  "image": "{{ store.logo.url|default:store.banner.url }}",
-  "url": "{{ request.build_absolute_uri }}",
-  "address": {
-    "@type": "PostalAddress",
-    "streetAddress": "{{ store.address_line_1 }}",
-    "addressLocality": "{{ store.city }}",
-    "addressRegion": "{{ store.region }}",
-    "postalCode": "{{ store.postal_code }}",
-    "addressCountry": "{{ store.country }}"
-  },
-  "geo": {
-    "@type": "GeoCoordinates",
-    "latitude": "{{ store.latitude|default:'' }}",
-    "longitude": "{{ store.longitude|default:'' }}"
-  },
-  "telephone": "{{ store.phone }}",
-  "email": "{{ store.email }}",
-  "priceRange": "$$",
-  "aggregateRating": {
-    "@type": "AggregateRating",
-    "ratingValue": "{{ average_rating|floatformat:1 }}",
-    "reviewCount": "{{ review_count }}"
-  },
-  "foundingDate": "{{ store.created_at|date:'Y-m-d' }}"
-}
-</script>
-
-<!-- Store Follow Styles -->
+<!-- Creative Modern Store Styles -->
 <style>
-.notification-item {
-  transition: background-color 0.3s ease;
-  cursor: pointer;
+/* ============================================
+   🎨 CREATIVE ULTRA-MODERN STORE DESIGN
+   ============================================ */
+
+:root {
+    --store-primary: {{ theme_colors.primary|default:'#6366f1' }};
+    --store-secondary: {{ theme_colors.secondary|default:'#8b5cf6' }};
+    --store-accent: {{ theme_colors.accent|default:'#f59e0b' }};
+    --store-background: {{ theme_colors.background|default:'#fafafa' }};
+    --store-text: {{ theme_colors.text|default:'#1e293b' }};
+    --store-gradient: linear-gradient(135deg, var(--store-primary) 0%, var(--store-secondary) 100%);
+    --glass-bg: rgba(255, 255, 255, 0.7);
+    --glass-border: rgba(255, 255, 255, 0.3);
 }
 
-.notification-item:hover {
-  background-color: rgba(0,0,0,0.05) !important;
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
 }
 
-.notification-icon {
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: rgba(0,0,0,0.05);
-  border-radius: 50%;
+.store-page {
+    background: var(--store-background);
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color: var(--store-text);
+    min-height: 100vh;
+    overflow-x: hidden;
 }
 
-.followers-info {
-  opacity: 0.9;
+/* ============================================
+   🌟 ANIMATED HERO SECTION
+   ============================================ */
+.creative-hero {
+    position: relative;
+    height: 75vh;
+    min-height: 600px;
+    background: var(--store-gradient);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
 }
 
-.follow-status {
-  animation: fadeIn 0.5s ease-in;
+.hero-background {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0.2;
+    background-image:
+        radial-gradient(circle at 20% 50%, rgba(255,255,255,0.3) 0%, transparent 50%),
+        radial-gradient(circle at 80% 80%, rgba(255,255,255,0.2) 0%, transparent 50%);
+    animation: heroGlow 10s ease-in-out infinite alternate;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+@keyframes heroGlow {
+    0% { opacity: 0.2; transform: scale(1); }
+    100% { opacity: 0.4; transform: scale(1.1); }
 }
 
-.btn-follow {
-  transition: all 0.3s ease;
-  min-width: 120px;
+.hero-pattern {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image:
+        linear-gradient(30deg, transparent 48%, rgba(255,255,255,0.05) 50%, transparent 52%),
+        linear-gradient(60deg, transparent 48%, rgba(255,255,255,0.05) 50%, transparent 52%);
+    background-size: 60px 60px;
+    animation: patternMove 20s linear infinite;
 }
 
-.btn-follow.btn-success {
-  background-color: #28a745;
-  border-color: #28a745;
+@keyframes patternMove {
+    0% { background-position: 0 0; }
+    100% { background-position: 60px 60px; }
 }
 
-.btn-follow.btn-success:hover {
-  background-color: #dc3545;
-  border-color: #dc3545;
+.hero-content {
+    position: relative;
+    z-index: 10;
+    color: white;
+    text-align: center;
+    padding: 0 2rem;
 }
 
-.btn-follow.btn-success:hover .btn-text::after {
-  content: " (Unfollow)";
-  font-size: 0.8em;
+.hero-logo {
+    width: 120px;
+    height: 120px;
+    border-radius: 30px;
+    border: 5px solid rgba(255,255,255,0.3);
+    backdrop-filter: blur(10px);
+    background: var(--glass-bg);
+    padding: 10px;
+    margin: 0 auto 2rem;
+    animation: logoFloat 3s ease-in-out infinite;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
 }
 
-.notification-badge {
-  font-size: 0.7em;
-  min-width: 18px;
-  height: 18px;
+@keyframes logoFloat {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50% { transform: translateY(-20px) rotate(5deg); }
 }
 
-.btn-notifications {
-  position: relative;
+.hero-title {
+    font-size: 4rem;
+    font-weight: 800;
+    margin-bottom: 1rem;
+    text-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    animation: titleSlideIn 0.8s ease-out;
+    letter-spacing: -0.02em;
 }
 
-/* Loading state for follow button */
-.btn-follow.loading {
-  pointer-events: none;
-  opacity: 0.6;
+@keyframes titleSlideIn {
+    0% { opacity: 0; transform: translateY(30px); }
+    100% { opacity: 1; transform: translateY(0); }
 }
 
-.btn-follow .spinner {
-  display: none;
-  width: 16px;
-  height: 16px;
-  border: 2px solid transparent;
-  border-top: 2px solid currentColor;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
+.hero-subtitle {
+    font-size: 1.5rem;
+    font-weight: 400;
+    margin-bottom: 2rem;
+    opacity: 0.95;
+    animation: subtitleSlideIn 0.8s ease-out 0.2s both;
 }
 
-.btn-follow.loading .spinner {
-  display: inline-block;
+@keyframes subtitleSlideIn {
+    0% { opacity: 0; transform: translateY(20px); }
+    100% { opacity: 0.95; transform: translateY(0); }
 }
 
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+.hero-stats {
+    display: flex;
+    justify-content: center;
+    gap: 3rem;
+    margin-bottom: 3rem;
+    animation: statsSlideIn 0.8s ease-out 0.4s both;
+}
+
+@keyframes statsSlideIn {
+    0% { opacity: 0; transform: translateY(20px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+
+.stat-item {
+    text-align: center;
+}
+
+.stat-number {
+    font-size: 2.5rem;
+    font-weight: 700;
+    display: block;
+    text-shadow: 0 2px 10px rgba(0,0,0,0.2);
+}
+
+.stat-label {
+    font-size: 0.9rem;
+    opacity: 0.9;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 500;
+}
+
+.hero-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    animation: actionsSlideIn 0.8s ease-out 0.6s both;
+}
+
+@keyframes actionsSlideIn {
+    0% { opacity: 0; transform: translateY(20px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+
+.btn-hero {
+    padding: 1rem 2.5rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+    border-radius: 50px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.btn-hero-primary {
+    background: white;
+    color: var(--store-primary);
+    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+}
+
+.btn-hero-primary:hover {
+    transform: translateY(-4px) scale(1.05);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+
+.btn-hero-secondary {
+    background: rgba(255,255,255,0.2);
+    color: white;
+    backdrop-filter: blur(10px);
+    border: 2px solid rgba(255,255,255,0.3);
+}
+
+.btn-hero-secondary:hover {
+    background: rgba(255,255,255,0.3);
+    transform: translateY(-4px);
+}
+
+/* Floating particles effect */
+.particles {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.particle {
+    position: absolute;
+    background: rgba(255,255,255,0.3);
+    border-radius: 50%;
+    animation: particleFloat 15s infinite;
+}
+
+@keyframes particleFloat {
+    0% { transform: translateY(100vh) translateX(0) scale(0); opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 1; }
+    100% { transform: translateY(-100vh) translateX(100px) scale(1); opacity: 0; }
+}
+
+/* ============================================
+   🎯 STICKY NAVIGATION BAR
+   ============================================ */
+.floating-nav {
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px) saturate(180%);
+    border-bottom: 1px solid var(--glass-border);
+    box-shadow: 0 4px 30px rgba(0,0,0,0.1);
+    animation: navSlideDown 0.5s ease-out;
+}
+
+@keyframes navSlideDown {
+    0% { transform: translateY(-100%); opacity: 0; }
+    100% { transform: translateY(0); opacity: 1; }
+}
+
+.floating-nav .container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 2rem;
+}
+
+.nav-pills {
+    display: flex;
+    gap: 0.5rem;
+    border: none;
+    background: transparent;
+}
+
+.nav-pills .nav-link {
+    padding: 0.75rem 1.5rem;
+    border-radius: 50px;
+    border: none;
+    background: transparent;
+    color: var(--store-text);
+    font-weight: 600;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.nav-pills .nav-link:hover {
+    background: rgba(99, 102, 241, 0.1);
+    color: var(--store-primary);
+    transform: translateY(-2px);
+}
+
+.nav-pills .nav-link.active {
+    background: var(--store-gradient);
+    color: white;
+    box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+}
+
+/* ============================================
+   💎 PREMIUM PRODUCT CARDS
+   ============================================ */
+.products-section {
+    padding: 4rem 0;
+    background: linear-gradient(180deg, #fafafa 0%, #ffffff 100%);
+}
+
+.section-header {
+    text-align: center;
+    margin-bottom: 3rem;
+}
+
+.section-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    background: var(--store-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.section-subtitle {
+    font-size: 1.1rem;
+    color: #64748b;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.products-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 2rem;
+    padding: 0 1rem;
+}
+
+/* Revolutionary Product Card */
+.product-card {
+    position: relative;
+    background: white;
+    border-radius: 24px;
+    overflow: hidden;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.08);
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.product-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: var(--store-gradient);
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.product-card:hover {
+    transform: translateY(-12px) scale(1.02);
+    box-shadow: 0 30px 80px rgba(99, 102, 241, 0.25);
+}
+
+.product-card:hover::before {
+    opacity: 0.05;
+}
+
+.product-image-wrapper {
+    position: relative;
+    width: 100%;
+    padding-top: 100%;
+    overflow: hidden;
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+}
+
+.product-image-wrapper img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.product-card:hover .product-image-wrapper img {
+    transform: scale(1.1) rotate(2deg);
+}
+
+/* Floating badge */
+.product-badge {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.badge-item {
+    padding: 0.5rem 1rem;
+    border-radius: 50px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    animation: badgePulse 2s ease-in-out infinite;
+}
+
+@keyframes badgePulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+.badge-featured {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.badge-discount {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: white;
+}
+
+.badge-new {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    color: white;
+}
+
+/* Quick action buttons */
+.quick-actions {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    gap: 0.75rem;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: 10;
+}
+
+.product-card:hover .quick-actions {
+    opacity: 1;
+}
+
+.quick-action-btn {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: white;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    transition: all 0.3s ease;
+    color: var(--store-primary);
+    font-size: 1.2rem;
+}
+
+.quick-action-btn:hover {
+    transform: scale(1.15);
+    background: var(--store-primary);
+    color: white;
+}
+
+/* Product Info Section */
+.product-info {
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    position: relative;
+    z-index: 2;
+}
+
+.product-category {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--store-primary);
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.product-name {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--store-text);
+    margin-bottom: 0.75rem;
+    line-height: 1.4;
+    min-height: 3rem;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.product-name a {
+    color: inherit;
+    text-decoration: none;
+    transition: color 0.3s ease;
+}
+
+.product-name a:hover {
+    color: var(--store-primary);
+}
+
+.product-description {
+    font-size: 0.9rem;
+    color: #64748b;
+    line-height: 1.6;
+    margin-bottom: 1rem;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    flex-grow: 1;
+}
+
+/* Rating & Stock Section */
+.product-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #f1f5f9;
+}
+
+.product-rating {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.rating-stars {
+    display: flex;
+    gap: 2px;
+}
+
+.rating-stars i {
+    color: #fbbf24;
+    font-size: 0.9rem;
+}
+
+.rating-count {
+    font-size: 0.85rem;
+    color: #94a3b8;
+    margin-left: 0.5rem;
+}
+
+.stock-indicator {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0.75rem;
+    border-radius: 50px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.stock-in {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.stock-low {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.stock-out {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+/* Price Section */
+.product-pricing {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.price-current {
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: var(--store-primary);
+}
+
+.price-original {
+    font-size: 1.1rem;
+    color: #94a3b8;
+    text-decoration: line-through;
+}
+
+.price-save {
+    padding: 0.25rem 0.75rem;
+    background: #fef3c7;
+    color: #92400e;
+    border-radius: 50px;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+/* CTA Button */
+.product-cta {
+    width: 100%;
+    padding: 1rem;
+    background: var(--store-gradient);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    text-decoration: none;
+}
+
+.product-cta:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 30px rgba(99, 102, 241, 0.4);
+    color: white;
+}
+
+.product-cta i {
+    transition: transform 0.3s ease;
+}
+
+.product-cta:hover i {
+    transform: translateX(4px);
+}
+
+/* ============================================
+   🎨 SIDEBAR WITH GLASSMORPHISM
+   ============================================ */
+.store-sidebar {
+    position: sticky;
+    top: 100px;
+}
+
+.sidebar-card {
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border);
+    border-radius: 24px;
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.08);
+    transition: all 0.3s ease;
+}
+
+.sidebar-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.12);
+}
+
+.sidebar-title {
+    font-size: 1.3rem;
+    font-weight: 700;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: var(--store-text);
+}
+
+.sidebar-title i {
+    color: var(--store-primary);
+    font-size: 1.5rem;
+}
+
+/* Contact Links */
+.contact-list {
+    list-style: none;
+}
+
+.contact-item {
+    padding: 0.75rem 0;
+    border-bottom: 1px solid rgba(0,0,0,0.05);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    transition: all 0.3s ease;
+}
+
+.contact-item:last-child {
+    border-bottom: none;
+}
+
+.contact-item:hover {
+    padding-left: 0.5rem;
+    color: var(--store-primary);
+}
+
+.contact-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: var(--store-gradient);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.contact-item a {
+    color: inherit;
+    text-decoration: none;
+    flex-grow: 1;
+}
+
+/* Social Links */
+.social-links {
+    display: flex;
+    gap: 1rem;
+}
+
+.social-link {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.social-link::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: var(--store-gradient);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.social-link:hover::before {
+    opacity: 1;
+}
+
+.social-link i {
+    position: relative;
+    z-index: 1;
+    transition: all 0.3s ease;
+}
+
+.social-link:hover {
+    transform: translateY(-4px) scale(1.1);
+    box-shadow: 0 8px 25px rgba(99, 102, 241, 0.4);
+}
+
+.social-link:hover i {
+    color: white;
+}
+
+/* ============================================
+   📱 WHATSAPP FLOATING BUTTON
+   ============================================ */
+.wa-float {
+    position: fixed;
+    right: 2rem;
+    bottom: 2rem;
+    z-index: 9999;
+    animation: floatBounce 3s ease-in-out infinite;
+}
+
+@keyframes floatBounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+}
+
+.wa-float a {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.5rem;
+    background: #25D366;
+    color: white;
+    border-radius: 50px;
+    text-decoration: none;
+    font-weight: 600;
+    box-shadow: 0 10px 40px rgba(37, 211, 102, 0.4);
+    transition: all 0.3s ease;
+}
+
+.wa-float a:hover {
+    transform: scale(1.1);
+    box-shadow: 0 15px 50px rgba(37, 211, 102, 0.6);
+    color: white;
+}
+
+.wa-float i {
+    font-size: 1.5rem;
+    animation: ring 2s ease-in-out infinite;
+}
+
+@keyframes ring {
+    0%, 100% { transform: rotate(0deg); }
+    10%, 30% { transform: rotate(-15deg); }
+    20%, 40% { transform: rotate(15deg); }
+}
+
+/* ============================================
+   🎭 SCROLL ANIMATIONS
+   ============================================ */
+.fade-in-up {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: all 0.6s ease-out;
+}
+
+.fade-in-up.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* ============================================
+   📱 RESPONSIVE DESIGN
+   ============================================ */
+@media (max-width: 1200px) {
+    .products-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 968px) {
+    .products-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1.5rem;
+    }
+
+    .hero-title {
+        font-size: 3rem;
+    }
+
+    .hero-stats {
+        gap: 2rem;
+    }
+}
+
+@media (max-width: 576px) {
+    .products-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .hero-title {
+        font-size: 2rem;
+    }
+
+    .hero-subtitle {
+        font-size: 1.1rem;
+    }
+
+    .hero-stats {
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+
+    .hero-actions {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .btn-hero {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+/* ============================================
+   ✨ CUSTOM SCROLLBAR
+   ============================================ */
+::-webkit-scrollbar {
+    width: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--store-gradient);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, var(--store-secondary) 0%, var(--store-primary) 100%);
 }
 </style>
-{% endblock %}
 
-{% block content %}
-{% load phone_utils %}
 <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
-<link rel="stylesheet" type="text/css" href="{% static 'css/store.css' %}">
+{% csrf_token %}
 
-<!-- Enhanced store page with better accessibility and performance -->
-<div class="store-page" itemscope itemtype="https://schema.org/Store">
+<div class="store-page">
 
-<!-- Store Header Section with enhanced accessibility -->
-<header class="store-header" role="banner">
-  <div class="store-banner-container">
-    {% if store.banner %}
-    <div class="store-banner position-relative">
-      <picture>
-        <source media="(max-width: 480px)" srcset="{{ store.banner.url }}?w=480&q=75">
-        <source media="(max-width: 768px)" srcset="{{ store.banner.url }}?w=768&q=80">
-        <source media="(max-width: 1200px)" srcset="{{ store.banner.url }}?w=1200&q=85">
-        <img src="{{ store.banner.url }}?w=1920&q=90"
-             alt="{{ store.name }} store banner showcasing our products and brand"
-             class="banner-image"
-             loading="eager"
-             itemprop="image">
-      </picture>
-      <div class="banner-overlay" aria-hidden="true"></div>
+<!-- 🌟 CREATIVE HERO SECTION -->
+<section class="creative-hero">
+    <div class="hero-background"></div>
+    <div class="hero-pattern"></div>
+
+    <!-- Floating particles -->
+    <div class="particles">
+        <div class="particle" style="left: 10%; width: 4px; height: 4px; animation-delay: 0s;"></div>
+        <div class="particle" style="left: 20%; width: 6px; height: 6px; animation-delay: 2s;"></div>
+        <div class="particle" style="left: 30%; width: 3px; height: 3px; animation-delay: 4s;"></div>
+        <div class="particle" style="left: 40%; width: 5px; height: 5px; animation-delay: 1s;"></div>
+        <div class="particle" style="left: 50%; width: 4px; height: 4px; animation-delay: 3s;"></div>
+        <div class="particle" style="left: 60%; width: 6px; height: 6px; animation-delay: 5s;"></div>
+        <div class="particle" style="left: 70%; width: 3px; height: 3px; animation-delay: 2s;"></div>
+        <div class="particle" style="left: 80%; width: 5px; height: 5px; animation-delay: 4s;"></div>
+        <div class="particle" style="left: 90%; width: 4px; height: 4px; animation-delay: 1s;"></div>
     </div>
-    {% else %}
-    <div class="store-banner-placeholder" role="img" aria-label="Store banner placeholder for {{ store.name }}">
-      <div class="placeholder-content">
-        <i class="fas fa-store" aria-hidden="true"></i>
-        <span class="visually-hidden">{{ store.name }} store</span>
-      </div>
-    </div>
-    {% endif %}
 
-    <!-- Enhanced Store Information Overlay -->
-    <div class="store-info-overlay">
-      <div class="container">
-        <div class="row align-items-end">
-          <div class="col-lg-8">
-            <div class="store-identity">
-              <div class="store-logo-container">
-                {% if store.logo %}
-                <img src="{{ store.logo.url }}"
-                     alt="{{ store.name }} logo"
-                     class="store-logo"
-                     loading="eager"
-                     itemprop="logo">
-                {% else %}
-                <div class="store-logo store-logo-placeholder" role="img" aria-label="Store logo placeholder for {{ store.name }}">
-                  <i class="fas fa-store" aria-hidden="true"></i>
+    <div class="container">
+        <div class="hero-content">
+            {% if store.logo %}
+            <img src="{{ store.logo.url }}" alt="{{ store.name }}" class="hero-logo">
+            {% endif %}
+
+            <h1 class="hero-title">{{ store.name }}</h1>
+            <p class="hero-subtitle">{{ store.short_description|default:"Your Premium Shopping Destination" }}</p>
+
+            <div class="hero-stats">
+                <div class="stat-item">
+                    <span class="stat-number">{{ products_count|default:0 }}</span>
+                    <span class="stat-label">Products</span>
                 </div>
-                {% endif %}
-              </div>
-
-              <div class="store-details">
-                <h1 class="store-name" itemprop="name">{{ store.name }}</h1>
-                {% if store.short_description %}
-                <p class="store-tagline" itemprop="description">{{ store.short_description }}</p>
-                {% endif %}
-
-                <div class="store-meta">
-                  <span class="meta-item" itemprop="address" itemscope itemtype="https://schema.org/PostalAddress">
-                    <i class="fas fa-map-marker-alt" aria-hidden="true"></i>
-                    <span>
-                      <span itemprop="addressLocality">{{ store.city }}</span>,
-                      <span itemprop="addressCountry">{{ store.country }}</span>
-                    </span>
-                  </span>
-                  <span class="meta-item">
-                    <i class="fas fa-calendar" aria-hidden="true"></i>
-                    <span>Since <time datetime="{{ store.created_at|date:'Y' }}" itemprop="foundingDate">{{ store.created_at|date:"Y" }}</time></span>
-                  </span>
-                  <span class="meta-item" itemprop="aggregateRating" itemscope itemtype="https://schema.org/AggregateRating">
-                    <i class="fas fa-star" aria-hidden="true"></i>
-                    <span>
-                      <span itemprop="ratingValue">{{ average_rating|floatformat:1|default:"New" }}</span>
-                      {% if review_count %}
-                        (<span itemprop="reviewCount">{{ review_count }}</span> review{{ review_count|pluralize }})
-                      {% endif %}
-                    </span>
-                  </span>
+                <div class="stat-item">
+                    <span class="stat-number">{{ average_rating|floatformat:1|default:"5.0" }}</span>
+                    <span class="stat-label">Rating</span>
                 </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="col-lg-4">
-            <div class="store-actions">
-              <!-- Enhanced Follow Button with Click Handler -->
-              <button class="btn btn-outline-light btn-follow"
-                      onclick="toggleStoreFollow('{{ store.id }}')"
-                      aria-label="{% if is_following %}Unfollow{% else %}Follow{% endif %} {{ store.name }} store"
-                      data-store-id="{{ store.id|stringformat:'s' }}"
-                      data-is-following="{% if is_following %}true{% else %}false{% endif %}">
-                <span class="spinner" aria-hidden="true"></span>
-                <i class="{% if is_following %}fas fa-check{% else %}fas fa-heart{% endif %}" id="favoriteIcon" aria-hidden="true"></i>
-                <span class="btn-text">{% if is_following %}Following{% else %}Follow{% endif %}</span>
-              </button>
-
-              <!-- Contact Button -->
-              <button class="btn btn-primary btn-contact"
-                      data-bs-toggle="modal"
-                      data-bs-target="#contactModal"
-                      aria-label="Contact {{ store.name }} store">
-                <i class="fas fa-envelope" aria-hidden="true"></i>
-                <span class="btn-text">Contact</span>
-              </button>
-
-
-              <!-- Notifications Button (will be added by JavaScript if user is authenticated) -->
-
-              {% if store.allow_referrals %}
-              <button class="btn btn-sm btn-outline-success btn-block" data-bs-toggle="modal" data-bs-target="#storeReferralModal">
-                <i class="fas fa-gift me-1"></i> Refer a Friend & Earn
-              </button>
-              {% endif %}
+                <div class="stat-item">
+                    <span class="stat-number followers-count">{{ followers_count|default:0 }}</span>
+                    <span class="stat-label">Followers</span>
+                </div>
             </div>
 
-            <!-- Followers Count Display -->
-            <div class="followers-info mt-2">
-              <small class="text-light">
-                <i class="fas fa-users me-1"></i>
-                <span class="followers-count">{{ followers_count|default:0 }}</span>
-                follower{{ followers_count|pluralize }}
-              </small>
+            <div class="hero-actions">
+                <button class="btn-hero btn-hero-primary" onclick="scrollToProducts()">
+                    <i class="fas fa-shopping-bag"></i>
+                    Shop Now
+                </button>
+                <button class="btn-hero btn-hero-secondary" onclick="toggleStoreFollow('{{ store.slug }}')" id="heroFollowBtn">
+                    <i class="fas fa-heart"></i>
+                    <span>{% if is_following %}Following{% else %}Follow Store{% endif %}</span>
+                </button>
             </div>
-          </div>
         </div>
-      </div>
     </div>
-  </div>
-</header>
+</section>
 
-<!-- Enhanced Store Navigation with skip links -->
-<nav class="store-navigation" role="navigation" aria-label="Store sections navigation">
-  <div class="nav-scroll-outer">
-    <div class="nav-scroll-wrapper px-3">
-      <ul class="nav nav-pills flex-nowrap" id="storeNav" role="tablist">
-      <li class="nav-item" role="presentation">
-        <button class="nav-link active"
-                type="button"
-                data-section="products"
-                role="tab"
-                aria-selected="true"
-                aria-controls="products"
-                id="products-tab">
-          <i class="fas fa-box" aria-hidden="true"></i>
-          <span>Products</span>
-        </button>
-      </li>
-      <li class="nav-item" role="presentation">
-        <button class="nav-link"
-                type="button"
-                data-section="about"
-                role="tab"
-                aria-selected="false"
-                aria-controls="about"
-                id="about-tab">
-          <i class="fas fa-info-circle" aria-hidden="true"></i>
-          <span>About</span>
-        </button>
-      </li>
-      <li class="nav-item" role="presentation">
-        <button class="nav-link"
-                type="button"
-                data-section="reviews"
-                role="tab"
-                aria-selected="false"
-                aria-controls="reviews"
-                id="reviews-tab">
-          <i class="fas fa-star" aria-hidden="true"></i>
-          <span>Reviews</span>
-        </button>
-      </li>
-      <li class="nav-item" role="presentation">
-        <button class="nav-link"
-                type="button"
-                data-section="contact"
-                role="tab"
-                aria-selected="false"
-                aria-controls="contact"
-                id="contact-tab">
-          <i class="fas fa-phone" aria-hidden="true"></i>
-          <span>Contact</span>
-        </button>
-      </li>
-    </ul>
-  </div>
+<!-- 🎯 FLOATING NAVIGATION -->
+<nav class="floating-nav">
+    <div class="container">
+        <ul class="nav nav-pills">
+            <li class="nav-item">
+                <button class="nav-link active" data-section="products">
+                    <i class="fas fa-box me-2"></i>Products
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-section="about">
+                    <i class="fas fa-info-circle me-2"></i>About
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-section="reviews">
+                    <i class="fas fa-star me-2"></i>Reviews
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-section="contact">
+                    <i class="fas fa-phone me-2"></i>Contact
+                </button>
+            </li>
+        </ul>
+    </div>
 </nav>
 
-<!-- Enhanced Main Content -->
-<main class="store-main">
-  <div class="container">
-    <div class="row">
-      <div class="col-lg-9">
+<!-- 💎 PRODUCTS SECTION -->
+<section id="products" class="products-section">
+    <div class="container">
+        <div class="section-header fade-in-up">
+            <h2 class="section-title">Discover Our Collection</h2>
+            <p class="section-subtitle">Handpicked products just for you. Quality guaranteed.</p>
+        </div>
 
-        <!-- Enhanced Products Section -->
-        <section id="products"
-                 class="store-section"
-                 aria-labelledby="products-heading"
-                 role="tabpanel"
-                 aria-describedby="products-tab">
-          <header class="section-header">
-            <h2 id="products-heading" class="section-title">
-              <i class="fas fa-box text-primary" aria-hidden="true"></i>
-              Our Products
-            </h2>
-            <div class="section-controls">
-              <label for="sortProducts" class="visually-hidden">Sort products by</label>
-              <select class="form-select" id="sortProducts" aria-label="Sort products by">
-                <option value="newest">Newest First</option>
-                <option value="price-low">Price: Low to High</option>
-                <option value="price-high">Price: High to Low</option>
-                <option value="popular">Most Popular</option>
-                <option value="rating">Highest Rated</option>
-              </select>
-              <div class="view-toggle" role="group" aria-label="View options">
-                <button class="btn btn-outline-secondary active"
-                        data-view="grid"
-                        aria-label="Grid view"
-                        title="Grid view">
-                  <i class="fas fa-th" aria-hidden="true"></i>
-                </button>
-                <button class="btn btn-outline-secondary"
-                        data-view="list"
-                        aria-label="List view"
-                        title="List view">
-                  <i class="fas fa-list" aria-hidden="true"></i>
-                </button>
-              </div>
-              <a href="{% url 'stores:store_products' store.slug %}" class="btn btn-outline-primary">
-                <span>View All Products</span>
-                <i class="fas fa-arrow-right" aria-hidden="true"></i>
-              </a>
-            </div>
-          </header>
-
-          {% if products %}
-          <div class="products-grid" id="productsContainer" role="grid" aria-label="Products grid">
+        {% if products %}
+        <div class="products-grid">
             {% for product in products %}
-            <article class="product-card" role="gridcell" itemscope itemtype="https://schema.org/Product">
-              <div class="product-image-container">
-                {% if product.image %}
-                <img src="{{ product.image.url }}?w=300&q=80"
-                     alt="{{ product.name }}"
-                     class="product-image"
-                     loading="lazy"
-                     itemprop="image"
-                     data-src="{{ product.image.url }}?w=600&q=90">
-                {% else %}
-                <div class="product-image product-image-placeholder" role="img" aria-label="Product image placeholder">
-                  <i class="fas fa-image" aria-hidden="true"></i>
-                </div>
-                {% endif %}
-
-                <!-- Enhanced Product Badges -->
-                <div class="product-badges" aria-label="Product badges">
-                  {% if product.is_new %}
-                  <span class="badge badge-new" aria-label="New product">New</span>
-                  {% endif %}
-                  {% if product.is_featured %}
-                  <span class="badge badge-featured" aria-label="Featured product">Featured</span>
-                  {% endif %}
-                  {% if product.discount_percentage %}
-                  <span class="badge badge-discount" aria-label="{{ product.discount_percentage }}% discount">{{ product.discount_percentage }}% OFF</span>
-                  {% endif %}
-                </div>
-
-                <!-- Enhanced Quick Actions -->
-                <div class="product-actions">
-                  <button class="btn btn-action"
-                          title="Add {{ product.name }} to wishlist"
-                          aria-label="Add {{ product.name }} to wishlist"
-                          onclick="addToWishlist({{ product.id }}, this)"
-                          data-product-id="{{ product.id }}">
-                    <i class="fas fa-heart" aria-hidden="true"></i>
-                  </button>
-                  <button class="btn btn-action"
-                          title="Quick view of {{ product.name }}"
-                          aria-label="Quick view of {{ product.name }}"
-                          onclick="quickView({{ product.id }})"
-                          data-product-id="{{ product.id }}">
-                    <i class="fas fa-eye" aria-hidden="true"></i>
-                  </button>
-
-                  <button class="btn btn-action"
-                          title="Share {{ product.name }}"
-                          aria-label="Share {{ product.name }}"
-                          onclick="shareProduct({{ product.id }})"
-                          data-product-id="{{ product.id }}">
-                    <i class="fas fa-share-alt" aria-hidden="true"></i>
-                  </button>
-                </div>
-
-                <!-- Enhanced Stock Status -->
-                {% if not product.is_in_stock %}
-                <div class="stock-status out-of-stock" aria-label="Out of stock">
-                  <span>Out of Stock</span>
-                </div>
-                {% elif product.stock_quantity <= 5 %}
-                <div class="stock-status low-stock bg-warning" aria-label="Low stock">
-                  <span>Only {{ product.stock_quantity }} left!</span>
-                </div>
-                {% endif %}
-              </div>
-
-              <div class="product-info">
-                <h3 class="product-name" itemprop="name">
-                  <a href="{% url 'marketplace:product_detail' product.id %}"
-                     class="product-link">{{ product.name|truncatechars:50 }}</a>
-                </h3>
-
-                <div class="product-pricing" itemprop="offers" itemscope itemtype="https://schema.org/Offer">
-                  <span class="price-current" itemprop="price" content="{{ product.price }}">
-                    <span class="currency">D</span>{{ product.price|floatformat:2 }}
-                  </span>
-                  {% if product.original_price %}
-                  <span class="price-original">
-                    <span class="currency">D</span>{{ product.original_price|floatformat:2 }}
-                  </span>
-                  {% endif %}
-                  <meta itemprop="priceCurrency" content="GMD">
-                  <meta itemprop="availability" content="{% if product.is_in_stock %}https://schema.org/InStock{% else %}https://schema.org/OutOfStock{% endif %}">
-                </div>
-
-                <div class="product-rating"
-                     aria-label="Product rating: {{ product.average_rating|floatformat:1 }} out of 5 stars"
-                     itemprop="aggregateRating"
-                     itemscope
-                     itemtype="https://schema.org/AggregateRating">
-                  <div class="stars" role="img" aria-label="{{ product.average_rating|floatformat:1 }} out of 5 stars">
-                    {% for i in "12345" %}
-                      {% if forloop.counter <= product.average_rating %}
-                        <i class="fas fa-star" aria-hidden="true"></i>
-                      {% else %}
-                        <i class="far fa-star" aria-hidden="true"></i>
-                      {% endif %}
-                    {% endfor %}
-                  </div>
-                  <span class="rating-count">
-                    (<span itemprop="reviewCount">{{ product.review_count|default:0 }}</span>)
-                  </span>
-                  <meta itemprop="ratingValue" content="{{ product.average_rating|floatformat:1 }}">
-                  <meta itemprop="bestRating" content="5">
-                  <meta itemprop="worstRating" content="1">
-                </div>
-
-                {% if product.free_shipping %}
-                <div class="shipping-info" aria-label="Free shipping available">
-                  <i class="fas fa-shipping-fast" aria-hidden="true"></i>
-                  <span>Free Shipping</span>
-                </div>
-                {% endif %}
-
-                <div class="product-action">
-                  {% if product.is_in_stock %}
-                  <button class="btn btn-primary btn-add-cart"
-                          onclick="addToCart({{ product.id }}, this)"
-                          aria-label="Add {{ product.name }} to cart"
-                          data-product-id="{{ product.id }}">
-                    <i class="fas fa-shopping-cart" aria-hidden="true"></i>
-                    <span>Add to Cart</span>
-                  </button>
-                  {% else %}
-                  <button class="btn btn-secondary"
-                          disabled
-                          aria-label="{{ product.name }} is out of stock">
-                    <i class="fas fa-times" aria-hidden="true"></i>
-                    <span>Out of Stock</span>
-                  </button>
-                  {% endif %}
-                </div>
-              </div>
-            </article>
-            {% endfor %}
-          </div>
-
-          <!-- Pagination -->
-          {% if products.has_other_pages %}
-          <nav aria-label="Products pagination" class="mt-4">
-            <ul class="pagination justify-content-center">
-              {% if products.has_previous %}
-                <li class="page-item">
-                  <a class="page-link" href="?page={{ products.previous_page_number }}" aria-label="Previous page">
-                    <i class="fas fa-chevron-left" aria-hidden="true"></i>
-                  </a>
-                </li>
-              {% endif %}
-
-              {% for num in products.paginator.page_range %}
-                {% if products.number == num %}
-                  <li class="page-item active" aria-current="page">
-                    <span class="page-link">{{ num }}</span>
-                  </li>
-                {% else %}
-                  <li class="page-item">
-                    <a class="page-link" href="?page={{ num }}">{{ num }}</a>
-                  </li>
-                {% endif %}
-              {% endfor %}
-
-              {% if products.has_next %}
-                <li class="page-item">
-                  <a class="page-link" href="?page={{ products.next_page_number }}" aria-label="Next page">
-                    <i class="fas fa-chevron-right" aria-hidden="true"></i>
-                  </a>
-                </li>
-              {% endif %}
-            </ul>
-          </nav>
-          {% endif %}
-          {% else %}
-          <div class="empty-state" role="status" aria-label="No products available">
-            <i class="fas fa-box" aria-hidden="true"></i>
-            <h3>No products available</h3>
-            <p>This store hasn't added any products yet. Check back soon!</p>
-          </div>
-          {% endif %}
-        </section>
-
-        <!-- Enhanced About Section -->
-        <section id="about"
-                 class="store-section"
-                 aria-labelledby="about-heading"
-                 role="tabpanel"
-                 aria-describedby="about-tab">
-          <h2 id="about-heading" class="section-title">
-            <i class="fas fa-info-circle text-primary" aria-hidden="true"></i>
-            About Our Store
-          </h2>
-
-          <div class="row">
-            <div class="col-md-8">
-              <div class="store-description">
-                {% if store.description %}
-                <div class="lead" itemprop="description">{{ store.description|linebreaks }}</div>
-                {% else %}
-                <p class="text-muted">No store description available.</p>
-                {% endif %}
-              </div>
-
-              <div class="store-features">
-                <h3>Why Shop With Us?</h3>
-                <div class="features-grid">
-                  <div class="feature-item">
-                    <i class="fas fa-shield-alt" aria-hidden="true"></i>
-                    <div>
-                      <strong>Secure Shopping</strong>
-                      <p>Your data is protected with SSL encryption</p>
-                    </div>
-                  </div>
-                  <div class="feature-item">
-                    <i class="fas fa-truck" aria-hidden="true"></i>
-                    <div>
-                      <strong>Fast Delivery</strong>
-                      <p>Quick and reliable shipping options</p>
-                    </div>
-                  </div>
-                  <div class="feature-item">
-                    <i class="fas fa-undo" aria-hidden="true"></i>
-                    <div>
-                      <strong>Easy Returns</strong>
-                      <p>{{store.return_policy_days}}-day hassle-free return policy</p>
-                    </div>
-                  </div>
-                  <div class="feature-item">
-                    <i class="fas fa-headset" aria-hidden="true"></i>
-                    <div>
-                      <strong>24/7 Support</strong>
-                      <p>Round-the-clock EM customer service</p>
-                    </div>
-                  </div>
-                  <div class="feature-item">
-                    <i class="fas fa-medal" aria-hidden="true"></i>
-                    <div>
-                      <strong>Quality Guarantee</strong>
-                      <p>All products meet our high standards</p>
-                    </div>
-                  </div>
-                  <div class="feature-item">
-                    <i class="fas fa-credit-card" aria-hidden="true"></i>
-                    <div>
-                      <strong>Secure Payments</strong>
-                      <p>Multiple payment options available</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Enhanced Store Statistics with Follow Info -->
-            <div class="col-md-4">
-              <div class="store-stats-card">
-                <h4>Store Statistics</h4>
-                <div class="stats-grid">
-                  <div class="stat-item">
-                    <div class="stat-number">{{ products.count|default:0|intcomma }}</div>
-                    <div class="stat-label">Product{{ products.count|pluralize }}</div>
-                  </div>
-                  <div class="stat-item">
-                    <div class="stat-number followers-count">{{ followers_count|default:0|intcomma }}</div>
-                    <div class="stat-label">Follower{{ followers_count|pluralize }}</div>
-                  </div>
-                  <div class="stat-item">
-                    <div class="stat-number">{{ review_count|default:0|intcomma }}</div>
-                    <div class="stat-label">Review{{ review_count|pluralize }}</div>
-                  </div>
-                  <div class="stat-item stat-rating">
-                    <div class="stat-number">{{ average_rating|floatformat:1|default:"0.0" }}/5</div>
-                    <div class="stat-label">Average Rating</div>
-                  </div>
-                  <div class="stat-item">
-                    <div class="stat-number">{{ store.created_at|timesince }}</div>
-                    <div class="stat-label">In Business</div>
-                  </div>
-                </div>
-
-                <!-- Follow Status for Authenticated Users -->
-                {% if user.is_authenticated and is_following %}
-                <div class="follow-status mt-3 p-2 bg-success bg-opacity-10 border border-success rounded">
-                  <div class="d-flex align-items-center justify-content-between">
-                    <small class="text-success">
-                      <i class="fas fa-check-circle me-1"></i>
-                      You're following this store
-                    </small>
-                    <button class="btn btn-sm btn-outline-success" onclick="storeFollowManager.showNotificationPreferences()">
-                      <i class="fas fa-cog me-1"></i>Settings
-                    </button>
-                  </div>
-                  <small class="text-muted d-block mt-1">
-                    You'll be notified about new products and price changes
-                  </small>
-                </div>
-                {% endif %}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- Enhanced Reviews Section -->
-       <section id="reviews"
-         class="store-section py-4"
-         aria-labelledby="reviews-heading"
-         role="tabpanel"
-         aria-describedby="reviews-tab">
-          <h2 id="reviews-heading" class="section-title mb-4">
-            <i class="fas fa-star text-primary me-2"></i>Customer Product Reviews
-          </h2>
-
-          <!-- Overall Summary -->
-          <div class="reviews-overview row g-4 mb-4">
-          <!-- Summary -->
-          <div class="col-md-4">
-            <div class="rating-summary text-center bg-light p-4 rounded shadow-sm h-100">
-              <div class="overall-rating display-5 fw-bold text-primary">
-                {{ average_rating|floatformat:1|default:"0.0" }}
-              </div>
-              <div class="rating-stars mb-2" role="img" aria-label="{{ average_rating|floatformat:1 }} out of 5 stars">
-              {% with avg=average_rating|default:0 %}
-                {% for i in "12345"|make_list %}
-                  {% widthratio avg 1 10 as avg10 %} {# Convert to integer-like scale, e.g., 4.5 → 45 #}
-                  {% widthratio forloop.counter 1 10 as index10 %}
-
-                  {% if avg10 >= index10 %}
-                    <i class="fas fa-star text-warning"></i>
-                  {% elif avg10 >= index10|add:"-5" %}
-                    <i class="fas fa-star-half-alt text-warning"></i>
-                  {% else %}
-                    <i class="far fa-star text-warning"></i>
-                  {% endif %}
-                {% endfor %}
-              {% endwith %}
-              </div>
-              <p class="text-muted mb-0">
-                Based on {{ review_count|default:0|intcomma }} review{{ review_count|pluralize }}
-              </p>
-            </div>
-          </div>
-
-          <!-- Breakdown -->
-          <div class="col-md-8">
-            <div class="rating-breakdown">
-              {% for star in "54321"|make_list %}
-                {% with count=rating_breakdown|dict_get:star %}
-                  {% widthratio count review_count|default_if_none:1 100 as percent %}
-                  <div class="rating-bar d-flex align-items-center mb-2" aria-label="{{ star }} star: {{ count }} reviews">
-                    <span class="star-label me-2" style="width: 40px;">{{ star }} <i class="fas fa-star text-warning"></i></span>
-                    <div class="progress flex-grow-1 me-2" style="height: 8px;">
-                      <div class="progress-bar bg-warning" role="progressbar"
-                           style="width: {{ percent }}%;" aria-valuenow="{{ percent }}"
-                           aria-valuemin="0" aria-valuemax="100"></div>
-                    </div>
-                    <span class="count-label text-muted small" style="width: 30px;">{{ count }}</span>
-                  </div>
-                {% endwith %}
-              {% endfor %}
-            </div>
-          </div>
-        </div>
-
-      <div class="reviews-list">
-        {% for review in recent_reviews %}
-        <article class="review-card border rounded p-3 mb-3 shadow-sm bg-white" itemscope itemtype="https://schema.org/Review">
-          <header class="review-header d-flex justify-content-between align-items-start mb-2">
-            <div class="reviewer-info d-flex">
-              <div class="reviewer-avatar rounded-circle bg-primary text-white fw-bold d-flex align-items-center justify-content-center me-3"
-                   style="width: 40px; height: 40px;">
-                <span>{{ review.user.first_name|default:"C"|slice:":1" }}</span>
-              </div>
-              <div class="reviewer-details d-flex flex-column">
-                <h4 class="reviewer-name text-truncate mb-0 fs-6" itemprop="author" style="max-width: 200px;">
-                  {{ review.user.get_full_name|default:"Anonymous Customer" }}
-                </h4>
-                <div class="d-inline-flex align-items-center text-muted small text-truncate" style="max-width: 200px;">
-                  <i class="fas fa-check-circle text-success me-1"></i>
-                  <a href="{% url 'marketplace:product_detail' review.product.id %}" class="text-decoration-none text-muted" title="{{ review.product.name }}">
-                    {{ review.product.name|truncatechars:40 }}
-                  </a>
-                </div>
-              </div>
-            </div>
-
-            <div class="review-meta text-end small">
-              <div class="review-rating mb-1" aria-label="{{ review.rating }} out of 5 stars"
-                   itemprop="reviewRating" itemscope itemtype="https://schema.org/Rating">
-                {% for i in "12345" %}
-                  {% if forloop.counter <= review.rating %}
-                    <i class="fas fa-star text-warning"></i>
-                  {% else %}
-                    <i class="far fa-star text-muted"></i>
-                  {% endif %}
-                {% endfor %}
-                <meta itemprop="ratingValue" content="{{ review.rating }}">
-                <meta itemprop="bestRating" content="5">
-                <meta itemprop="worstRating" content="1">
-              </div>
-              <time class="text-muted d-block"
-                    datetime="{{ review.created_at|date:'c' }}"
-                    itemprop="datePublished">
-                {{ review.created_at|date:"M d, Y" }} ({{ review.created_at|timesince }} ago)
-              </time>
-            </div>
-          </header>
-
-          <div class="review-product d-flex align-items-center mb-3">
-            <a href="{% url 'marketplace:product_detail' review.product.id %}" class="me-3">
-              <img src="{{ review.product.image.url|default:'/static/images/default-product.png' }}"
-                   alt="{{ review.product.name }}"
-                   class="img-thumbnail rounded"
-                   style="width: 60px; height: 60px; object-fit: cover;">
-            </a>
-            <div class="text-muted small">
-              <a href="{% url 'marketplace:product_detail' review.product.id %}" class="text-decoration-none fw-semibold">
-                {{ review.product.name|truncatechars:60 }}
-              </a>
-            </div>
-          </div>
-
-          <div class="review-body" itemprop="reviewBody">
-            <p class="mb-0 text-dark">
-              {{ review.comment|linebreaksbr|default:"No comment provided." }}
-            </p>
-          </div>
-        </article>
-        {% empty %}
-        <div class="empty-state text-center py-5" role="status">
-          <i class="fas fa-star fa-2x text-muted mb-3" aria-hidden="true"></i>
-          <h4>No reviews yet</h4>
-          <p class="text-muted">Be the first to review this store!</p>
-          <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#reviewModal">
-            Write a Review
-          </button>
-        </div>
-        {% endfor %}
-      </div>
-
-      {% if recent_reviews %}
-      <div class="text-center mt-4">
-        <a href="#" class="btn btn-outline-primary">
-          View All Reviews
-        </a>
-      </div>
-      {% endif %}
-       </section>
-      </div>
-
-      <!-- Enhanced Sidebar -->
-      <aside class="col-lg-3" role="complementary">
-        <div class="sidebar-sticky">
-
-          <!-- Enhanced Contact Card -->
-          <div class="sidebar-card" id="contact">
-            <h3 class="sidebar-title">
-              <i class="fas fa-phone text-primary" aria-hidden="true"></i>
-              Contact Store
-            </h3>
-            <div class="contact-info" itemprop="contactPoint" itemscope itemtype="https://schema.org/ContactPoint">
-              {% if store.phone %}
-              <div class="contact-item">
-                <i class="fas fa-phone" aria-hidden="true"></i>
-                <a href="tel:{{ store.phone }}" itemprop="telephone">{{ store.phone }}</a>
-              </div>
-              {% endif %}
-
-              <div class="contact-item">
-                <i class="fas fa-envelope" aria-hidden="true"></i>
-                <a href="mailto:{{ store.email }}" itemprop="email">{{ store.email }}</a>
-              </div>
-
-              <div class="contact-item">
-                <i class="fas fa-map-marker-alt" aria-hidden="true"></i>
-                <address itemprop="address" itemscope itemtype="https://schema.org/PostalAddress">
-                  <span itemprop="streetAddress">{{ store.address_line_1 }}</span><br>
-                  {% if store.address_line_2 %}<span itemprop="streetAddress">{{ store.address_line_2 }}</span><br>{% endif %}
-                  <span itemprop="addressLocality">{{ store.city }}</span>, <span itemprop="addressRegion">{{ store.region }}</span><br>
-                  <span itemprop="addressCountry">{{ store.country }}</span> <span itemprop="postalCode">{{ store.postal_code }}</span>
-                </address>
-              </div>
-
-              {% if store.website %}
-              <div class="contact-item">
-                <i class="fas fa-globe" aria-hidden="true"></i>
-                <a href="{{ store.website }}" target="_blank" rel="noopener noreferrer" itemprop="url">
-                  Visit Website
-                  <i class="fas fa-external-link-alt" aria-hidden="true"></i>
-                </a>
-              </div>
-              {% endif %}
-              {% if grouped_hours %}
-              <div class="contact-item">
-                <i class="fas fa-clock" aria-hidden="true"></i>
-                <div class="opening-hours" itemprop="openingHours">
-                  <ul class="list-unstyled mb-0">
-                    {% for group in grouped_hours %}
-                      <li>
-                        <strong>{{ group.days }}:</strong>
-                        {% if group.from == 'Closed' %}
-                          Closed
+            <article class="product-card fade-in-up" style="animation-delay: {{ forloop.counter0|divisibleby:3 }}00ms;">
+                <!-- Product Image -->
+                <div class="product-image-wrapper">
+                    <a href="{% url 'stores:product_detail' product.id %}">
+                        {% if product.images.first %}
+                        <img src="{{ product.images.first.image.url }}" alt="{{ product.name }}" loading="lazy">
                         {% else %}
-                          {{ group.from }} - {{ group.to }}
+                        <img src="{% static 'images/placeholder-product.jpg' %}" alt="{{ product.name }}">
                         {% endif %}
-                      </li>
-                    {% endfor %}
-                  </ul>
-                </div>
-              </div>
-            {% endif %}
-            <button class="btn btn-primary btn-block" data-bs-toggle="modal" data-bs-target="#contactModal">
-              <i class="fas fa-envelope" aria-hidden="true"></i>
-              <span>Send Message</span>
-            </button>
-          </div>
+                    </a>
 
-          <!-- Enhanced Categories -->
-          <div class="sidebar-card">
-            <h3 class="sidebar-title">
-              <i class="fas fa-tags text-primary" aria-hidden="true"></i>
-              Categories
-            </h3>
-            <nav class="category-nav" aria-label="Product categories">
-              {% for category in categories %}
-                <a href="{% url 'marketplace:category_detail' category.id %}" class="category-link">
-                  {{ category.name }}
-                  <span class="count" aria-label="{{ category.product_count }} products">({{ category.product_count }})</span>
-                </a>
-              {% empty %}
-                <p class="text-muted">No categories available for this store.</p>
-              {% endfor %}
-            </nav>
-          </div>
-
-          <!-- Enhanced Social Media -->
-          <div class="sidebar-card">
-            <h3 class="sidebar-title">
-              <i class="fas fa-share-alt text-primary" aria-hidden="true"></i>
-              Follow Us
-            </h3>
-            <div class="social-links">
-              {% if store.facebook_url %}
-              <a href="{{ store.facebook_url }}"
-                 class="social-link facebook"
-                 target="_blank"
-                 rel="noopener noreferrer"
-                 aria-label="Follow {{ store.name }} on Facebook">
-                <i class="fab fa-facebook" aria-hidden="true"></i>
-              </a>
-              {% endif %}
-              {% if store.twitter_url %}
-              <a href="{{ store.twitter_url }}"
-                 class="social-link twitter"
-                 target="_blank"
-                 rel="noopener noreferrer"
-                 aria-label="Follow {{ store.name }} on Twitter">
-                <i class="fab fa-twitter" aria-hidden="true"></i>
-              </a>
-              {% endif %}
-              {% if store.instagram_url %}
-              <a href="{{ store.instagram_url }}"
-                 class="social-link instagram"
-                 target="_blank"
-                 rel="noopener noreferrer"
-                 aria-label="Follow {{ store.name }} on Instagram">
-                <i class="fab fa-instagram" aria-hidden="true"></i>
-              </a>
-              {% endif %}
-              {% if store.linkedin_url %}
-              <a href="{{ store.linkedin_url }}"
-                 class="social-link linkedin"
-                 target="_blank"
-                 rel="noopener noreferrer"
-                 aria-label="Follow {{ store.name }} on LinkedIn">
-                <i class="fab fa-linkedin" aria-hidden="true"></i>
-              </a>
-              {% endif %}
-            </div>
-
-            <button class="btn btn-outline-primary btn-block" onclick="shareStore()">
-              <i class="fas fa-share" aria-hidden="true"></i>
-              <span>Share Store</span>
-            </button>
-          </div>
-
-          <!-- Newsletter Signup -->
-          <div class="sidebar-card">
-            <h3 class="sidebar-title">
-              <i class="fas fa-bell text-primary" aria-hidden="true"></i>
-              Stay Updated
-            </h3>
-            <p class="small text-muted">Get notified about new products and special offers.</p>
-            <form class="newsletter-form" onsubmit="subscribeNewsletter(event)">
-              <div class="input-group">
-                <input type="email"
-                       class="form-control"
-                       placeholder="Your email"
-                       required
-                       aria-label="Email address for newsletter">
-                <button class="btn btn-primary" type="submit">
-                  <i class="fas fa-paper-plane" aria-hidden="true"></i>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      </aside>
-    </div>
-  </div>
-</main>
-
-<!-- Enhanced Contact Modal -->
-<div class="modal fade" id="contactModal" tabindex="-1" aria-labelledby="contactModalLabel" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h1 class="modal-title fs-5" id="contactModalLabel">Contact {{ store.name }}</h1>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <form id="contactForm" novalidate>
-          {% csrf_token %}
-          <div class="mb-3">
-            <label for="contactName" class="form-label">Your Name <span class="required" aria-label="required">*</span></label>
-            <input type="text"
-                   class="form-control"
-                   id="contactName"
-                   name="name"
-                   required
-                   aria-describedby="contactNameError">
-            <div id="contactNameError" class="invalid-feedback">Please provide your name.</div>
-          </div>
-          <div class="mb-3">
-            <label for="contactEmail" class="form-label">Email <span class="required" aria-label="required">*</span></label>
-            <input type="email"
-                   class="form-control"
-                   id="contactEmail"
-                   name="email"
-                   required
-                   aria-describedby="contactEmailError">
-            <div id="contactEmailError" class="invalid-feedback">Please provide a valid email address.</div>
-          </div>
-          <div class="mb-3">
-            <label for="contactPhone" class="form-label">Phone (Optional)</label>
-            <input type="tel"
-                   class="form-control"
-                   id="contactPhone"
-                   name="phone">
-          </div>
-          <div class="mb-3">
-            <label for="contactSubject" class="form-label">Subject <span class="required" aria-label="required">*</span></label>
-            <select class="form-select" id="contactSubject" name="subject" required aria-describedby="contactSubjectError">
-              <option value="">Select a subject</option>
-              <option value="general">General Inquiry</option>
-              <option value="product">Product Question</option>
-              <option value="order">Order Support</option>
-              <option value="complaint">Complaint</option>
-              <option value="other">Other</option>
-            </select>
-            <div id="contactSubjectError" class="invalid-feedback">Please select a subject.</div>
-          </div>
-          <div class="mb-3">
-            <label for="contactMessage" class="form-label">Message <span class="required" aria-label="required">*</span></label>
-            <textarea class="form-control"
-                      id="contactMessage"
-                      name="message"
-                      rows="4"
-                      required
-                      aria-describedby="contactMessageError"></textarea>
-            <div id="contactMessageError" class="invalid-feedback">Please provide a message.</div>
-          </div>
-          <div class="mb-3 form-check">
-            <input type="checkbox"
-                   class="form-check-input"
-                   id="contactConsent"
-                   name="consent"
-                   required>
-            <label class="form-check-label" for="contactConsent">
-              I agree to be contacted regarding my inquiry <span class="required" aria-label="required">*</span>
-            </label>
-          </div>
-        </form>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button type="submit" class="btn btn-primary" form="contactForm">
-          <span class="btn-text">Send Message</span>
-          <i class="fas fa-paper-plane" aria-hidden="true"></i>
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
-
-
-<!-- Enhanced Toast Notifications -->
-<div class="toast-container position-fixed bottom-0 end-0 p-3" aria-live="polite" aria-atomic="true">
-  <div id="successToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
-    <div class="toast-header">
-      <i class="fas fa-check-circle text-success me-2" aria-hidden="true"></i>
-      <strong class="me-auto">Success</strong>
-      <small class="text-muted">just now</small>
-      <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
-    </div>
-    <div class="toast-body">
-      <!-- Message will be inserted here -->
-    </div>
-  </div>
-
-  <div id="errorToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
-    <div class="toast-header">
-      <i class="fas fa-exclamation-circle text-danger me-2" aria-hidden="true"></i>
-      <strong class="me-auto">Error</strong>
-      <small class="text-muted">just now</small>
-      <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
-    </div>
-    <div class="toast-body">
-      <!-- Message will be inserted here -->
-    </div>
-  </div>
-</div>
-
-<!-- Store Referral Modal -->
-<div class="modal fade" id="storeReferralModal" tabindex="-1" aria-labelledby="storeReferralModalLabel" aria-hidden="true">
-  <div class="modal-dialog">
-    <form method="post" action="{% url 'stores:refer_store' store.id %}" class="modal-content">
-      {% csrf_token %}
-      <div class="modal-header">
-        <h5 class="modal-title" id="storeReferralModalLabel">Refer {{ store.name }} to a Friend</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <p class="small text-muted">Invite a friend to shop at <strong>{{ store.name }}</strong>. You'll earn a discount if they make a purchase.</p>
-        <div class="mb-3">
-          <label for="referralEmail" class="form-label">Friend's Email</label>
-          <input type="email" class="form-control" id="referralEmail" name="referred_email" placeholder="e.g. friend@example.com" required>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button type="submit" class="btn btn-success">
-          <i class="fas fa-paper-plane me-1"></i> Send Invite
-        </button>
-      </div>
-    </form>
-  </div>
-</div>
-
-
-  {% if store.whatsapp_number|default:store.phone %}
-<style>
-  .wa-float{position:fixed;right:18px;bottom:18px;z-index:1050}
-  .wa-float a{display:inline-flex;align-items:center;gap:.5rem;padding:.75rem 1rem;border-radius:999px;background:#25D366;color:#fff;text-decoration:none;box-shadow:0 8px 24px rgba(0,0,0,.18)}
-  .wa-float a:hover{filter:brightness(0.95)}
-</style>
-{% with wa_text="Hi "|add:store.name|add:", I'm browsing your store on EasyMarket." %}
-<div class="wa-float">
-  <a href="https://wa.me/{{ store.whatsapp_number|default:store.phone|phone_to_wa }}?text={{ wa_text|urlencode }}"
-     target="_blank" rel="noopener" aria-label="Open WhatsApp chat">
-    <i class="fab fa-whatsapp"></i> Chat
-  </a>
-</div>
-{% endwith %}
-{% endif %}
-
-
-<!-- JavaScript -->
-<script src="{% static 'js/main.js' %}"></script>
-<script src="{% static 'js/store-page-manager.js' %}" defer></script>
-
-<script>
-// Set user authentication status for JavaScript
-document.body.dataset.userAuthenticated = "{% if user.is_authenticated %}true{% else %}false{% endif %}";
-
-class StoreFollowManager {
-    constructor() {
-        this.storeId = null;
-        this.isFollowing = false;
-        this.storeName = "{{ store.name|escapejs }}";  // safely inject into JS
-        this.init();
-    }
-
-    init() {
-        const followBtn = document.querySelector('.btn-follow');
-        if (followBtn) {
-            this.storeId = followBtn.dataset.storeId;
-            this.isFollowing = followBtn.dataset.isFollowing === 'true';
-        }
-
-        if (this.storeId && this.isUserAuthenticated()) {
-            this.loadFollowStatus();
-        }
-    }
-
-    isUserAuthenticated() {
-        return document.body.dataset.userAuthenticated === 'true';
-    }
-
-    async loadFollowStatus() {
-        try {
-            const response = await fetch(`/stores/api/follow-status/${this.storeId}/`);
-            const data = await response.json();
-
-            if (data.success) {
-                this.isFollowing = data.is_following;
-                this.updateFollowButton();
-                this.updateFollowersCount(data.followers_count);
-            }
-        } catch (error) {
-            console.error('Error loading follow status:', error);
-        }
-    }
-
-    toggleFollow() {
-        return toggleStoreFollow(this.storeId);
-    }
-
-    updateFollowButton() {
-        const followBtn = document.querySelector('.btn-follow');
-        const icon = followBtn.querySelector('i');
-        const text = followBtn.querySelector('.btn-text');
-
-        followBtn.dataset.isFollowing = this.isFollowing.toString();
-
-        if (this.isFollowing) {
-            followBtn.classList.remove('btn-outline-light');
-            followBtn.classList.add('btn-success');
-            icon.className = 'fas fa-check';
-            text.textContent = 'Following';
-            followBtn.setAttribute('aria-label', `Unfollow ${this.storeName} store`);
-        } else {
-            followBtn.classList.remove('btn-success');
-            followBtn.classList.add('btn-outline-light');
-            icon.className = 'fas fa-heart';
-            text.textContent = 'Follow';
-            followBtn.setAttribute('aria-label', `Follow ${this.storeName} store`);
-        }
-    }
-
-    updateFollowersCount(count) {
-        const followersCountElements = document.querySelectorAll('.followers-count');
-        followersCountElements.forEach(el => el.textContent = count);
-    }
-
-    showNotificationPreferences() {
-        this.openNotificationPreferences();
-    }
-
-    async openNotificationPreferences() {
-        try {
-            const response = await fetch(`/stores/api/notifications/preferences/${this.storeId}/`);
-            const data = await response.json();
-
-            if (data.success) {
-                const modal = this.createNotificationPreferencesModal(data.preferences);
-                document.body.appendChild(modal);
-                const bsModal = new bootstrap.Modal(modal);
-                bsModal.show();
-
-                modal.addEventListener('hidden.bs.modal', () => modal.remove());
-            } else {
-                showToast('error', 'Failed to load notification preferences.');
-            }
-        } catch (error) {
-            console.error('Error loading preferences:', error);
-            showToast('error', 'An error occurred while loading preferences.');
-        }
-    }
-
-    createNotificationPreferencesModal(preferences = {}) {
-        const {
-            notify_new_products = false,
-            notify_price_changes = false,
-            notify_discounts = false
-        } = preferences;
-
-        const modal = document.createElement('div');
-        modal.className = 'modal fade';
-        modal.innerHTML = `
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Notification Preferences</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <!-- Badges -->
+                    <div class="product-badge">
+                        {% if product.is_featured %}
+                        <span class="badge-item badge-featured">★ Featured</span>
+                        {% endif %}
+                        {% if product.original_price and product.original_price > product.price %}
+                        {% widthratio product.original_price|add:0|add:"-"|add:product.price product.original_price 100 as discount %}
+                        <span class="badge-item badge-discount">-{{ discount }}% OFF</span>
+                        {% endif %}
                     </div>
-                    <div class="modal-body">
-                        <p class="mb-3">Choose what notifications you'd like to receive from this store:</p>
 
-                        <div class="form-check mb-2">
-                            <input class="form-check-input" type="checkbox" id="notifyNewProducts" ${notify_new_products ? 'checked' : ''}>
-                            <label class="form-check-label" for="notifyNewProducts">
-                                <i class="fas fa-box text-primary me-2"></i>New Products
-                            </label>
-                        </div>
-
-                        <div class="form-check mb-2">
-                            <input class="form-check-input" type="checkbox" id="notifyPriceChanges" ${notify_price_changes ? 'checked' : ''}>
-                            <label class="form-check-label" for="notifyPriceChanges">
-                                <i class="fas fa-tag text-success me-2"></i>Price Changes
-                            </label>
-                        </div>
-
-                        <div class="form-check mb-2">
-                            <input class="form-check-input" type="checkbox" id="notifyDiscounts" ${notify_discounts ? 'checked' : ''}>
-                            <label class="form-check-label" for="notifyDiscounts">
-                                <i class="fas fa-percent text-danger me-2"></i>Special Discounts
-                            </label>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="button" class="btn btn-primary" onclick="storeFollowManager.saveNotificationPreferences(this)">
-                            Save Preferences
+                    <!-- Quick Actions -->
+                    <div class="quick-actions">
+                        <button class="quick-action-btn" onclick="quickView({{ product.id }})" title="Quick View">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="quick-action-btn" onclick="addToWishlist({{ product.id }})" title="Add to Wishlist">
+                            <i class="fas fa-heart"></i>
                         </button>
                     </div>
                 </div>
+
+                <!-- Product Info -->
+                <div class="product-info">
+                    <div class="product-category">{{ product.category.name|default:"GENERAL" }}</div>
+
+                    <h3 class="product-name">
+                        <a href="{% url 'stores:product_detail' product.id %}">{{ product.name }}</a>
+                    </h3>
+
+                    <p class="product-description">
+                        {{ product.description|striptags|truncatewords:15|default:"Premium quality product available now" }}
+                    </p>
+
+                    <!-- Meta: Rating & Stock -->
+                    <div class="product-meta">
+                        <div class="product-rating">
+                            <div class="rating-stars">
+                                {% for i in "12345" %}
+                                <i class="{% if forloop.counter <= product.average_rating|default:5 %}fas{% else %}far{% endif %} fa-star"></i>
+                                {% endfor %}
+                            </div>
+                            <span class="rating-count">({{ product.review_count|default:0 }})</span>
+                        </div>
+
+                        <div class="stock-indicator {% if product.stock_quantity > 10 %}stock-in{% elif product.stock_quantity > 0 %}stock-low{% else %}stock-out{% endif %}">
+                            {% if product.stock_quantity > 10 %}
+                            <i class="fas fa-check-circle"></i> In Stock
+                            {% elif product.stock_quantity > 0 %}
+                            <i class="fas fa-exclamation-circle"></i> {{ product.stock_quantity }} Left
+                            {% else %}
+                            <i class="fas fa-times-circle"></i> Out of Stock
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Pricing -->
+                    <div class="product-pricing">
+                        <span class="price-current">D{{ product.price|floatformat:2 }}</span>
+                        {% if product.original_price and product.original_price > product.price %}
+                        <span class="price-original">D{{ product.original_price|floatformat:2 }}</span>
+                        {% widthratio product.original_price|add:0|add:"-"|add:product.price 1 1 as saved %}
+                        <span class="price-save">Save D{{ saved|floatformat:2 }}</span>
+                        {% endif %}
+                    </div>
+
+                    <!-- CTA -->
+                    <a href="{% url 'stores:product_detail' product.id %}" class="product-cta">
+                        <i class="fas fa-shopping-cart"></i>
+                        View Details
+                        <i class="fas fa-arrow-right"></i>
+                    </a>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-box-open fa-4x text-muted mb-4"></i>
+            <h3>No Products Yet</h3>
+            <p class="text-muted">Check back soon for amazing products!</p>
+        </div>
+        {% endif %}
+    </div>
+</section>
+
+<!-- 🎨 ABOUT & SIDEBAR -->
+<section id="about" class="py-5 bg-white">
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="fade-in-up">
+                    <h2 class="section-title">About {{ store.name }}</h2>
+                    <div class="lead mb-4">{{ store.description|linebreaks|default:"Welcome to our store!" }}</div>
+                </div>
             </div>
-        `;
-        return modal;
-    }
 
-    async saveNotificationPreferences(button) {
-        const modal = button.closest('.modal');
-        const preferences = {
-            notify_new_products: modal.querySelector('#notifyNewProducts').checked,
-            notify_price_changes: modal.querySelector('#notifyPriceChanges').checked,
-            notify_discounts: modal.querySelector('#notifyDiscounts').checked
-        };
+            <div class="col-lg-4">
+                <div class="store-sidebar">
+                    <!-- Contact Card -->
+                    <div class="sidebar-card fade-in-up" id="contact">
+                        <h3 class="sidebar-title">
+                            <i class="fas fa-phone-alt"></i>
+                            Get In Touch
+                        </h3>
+                        <ul class="contact-list">
+                            {% if store.phone %}
+                            <li class="contact-item">
+                                <div class="contact-icon">
+                                    <i class="fas fa-phone"></i>
+                                </div>
+                                <a href="tel:{{ store.phone }}">{{ store.phone }}</a>
+                            </li>
+                            {% endif %}
+                            <li class="contact-item">
+                                <div class="contact-icon">
+                                    <i class="fas fa-envelope"></i>
+                                </div>
+                                <a href="mailto:{{ store.email }}">{{ store.email }}</a>
+                            </li>
+                            <li class="contact-item">
+                                <div class="contact-icon">
+                                    <i class="fas fa-map-marker-alt"></i>
+                                </div>
+                                <span>{{ store.city }}, {{ store.country }}</span>
+                            </li>
+                        </ul>
+                    </div>
 
-        const originalText = button.innerHTML;
-        button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Saving...';
-        button.disabled = true;
+                    <!-- Social Links -->
+                    <div class="sidebar-card fade-in-up">
+                        <h3 class="sidebar-title">
+                            <i class="fas fa-share-alt"></i>
+                            Follow Us
+                        </h3>
+                        <div class="social-links">
+                            {% if store.facebook_url %}
+                            <a href="{{ store.facebook_url }}" target="_blank" class="social-link" style="background: #1877f2; color: white;">
+                                <i class="fab fa-facebook-f"></i>
+                            </a>
+                            {% endif %}
+                            {% if store.twitter_url %}
+                            <a href="{{ store.twitter_url }}" target="_blank" class="social-link" style="background: #1da1f2; color: white;">
+                                <i class="fab fa-twitter"></i>
+                            </a>
+                            {% endif %}
+                            {% if store.instagram_url %}
+                            <a href="{{ store.instagram_url }}" target="_blank" class="social-link" style="background: linear-gradient(45deg, #f09433 0%,#e6683c 25%,#dc2743 50%,#cc2366 75%,#bc1888 100%); color: white;">
+                                <i class="fab fa-instagram"></i>
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
 
-        try {
-            const response = await fetch(`/stores/api/notifications/preferences/${this.storeId}/`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': getCSRFToken()
-                },
-                body: JSON.stringify(preferences)
-            });
+<!-- Reviews Section -->
+<section id="reviews" class="py-5" style="background: #fafafa;">
+    <div class="container">
+        <div class="section-header fade-in-up">
+            <h2 class="section-title">What Customers Say</h2>
+            <p class="section-subtitle">Real reviews from real customers</p>
+        </div>
 
-            const data = await response.json();
+        {% for review in recent_reviews %}
+        <div class="sidebar-card fade-in-up mb-3">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <div>
+                    <strong>{{ review.user.get_full_name|default:"Anonymous" }}</strong>
+                    <div class="mt-1">
+                        {% for i in "12345" %}
+                        <i class="fas fa-star" style="color: #fbbf24; font-size: 0.9rem;"></i>
+                        {% endfor %}
+                    </div>
+                </div>
+                <small class="text-muted">{{ review.created_at|timesince }} ago</small>
+            </div>
+            <p>{{ review.comment|linebreaksbr }}</p>
+        </div>
+        {% empty %}
+        <div class="text-center py-5">
+            <i class="fas fa-star fa-3x text-muted mb-3"></i>
+            <h4>No Reviews Yet</h4>
+            <p class="text-muted">Be the first to share your experience!</p>
+        </div>
+        {% endfor %}
+    </div>
+</section>
 
-            if (data.success) {
-                showToast('success', 'Notification preferences updated successfully!');
-                bootstrap.Modal.getInstance(modal).hide();
-            } else {
-                showToast('error', data.message || 'Failed to save preferences.');
-            }
-        } catch (error) {
-            console.error('Error saving preferences:', error);
-            showToast('error', 'An error occurred while saving preferences.');
-        } finally {
-            button.innerHTML = originalText;
-            button.disabled = false;
-        }
-    }
+</div>
+
+<!-- WhatsApp Floating Button -->
+{% if store.whatsapp_number|default:store.phone %}
+<div class="wa-float">
+    <a href="https://wa.me/{{ store.whatsapp_number|default:store.phone|phone_to_wa }}?text=Hi {{ store.name }}, I'm interested in your products!"
+       target="_blank" rel="noopener">
+        <i class="fab fa-whatsapp"></i>
+        <span>Chat with us</span>
+    </a>
+</div>
+{% endif %}
+
+<!-- JavaScript -->
+<script>
+// Smooth scroll to products
+function scrollToProducts() {
+    document.getElementById('products').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-function toggleStoreFollow(storeId) {
-    const button = document.querySelector('.btn-follow');
-    const icon = button.querySelector('#favoriteIcon');
-    const text = button.querySelector('.btn-text');
-
-    if (document.body.dataset.userAuthenticated !== 'true') {
-        showLoginRequired();
+// Follow Store
+function toggleStoreFollow(storeSlug) {
+    const isAuth = document.querySelector('meta[name="user-authenticated"]')?.content === 'true';
+    if (!isAuth) {
+        alert('Please login to follow stores');
+        window.location.href = '/accounts/sign_in/?next=' + window.location.pathname;
         return;
     }
 
-    button.classList.add('loading');
-    button.disabled = true;
-
-    fetch(`/stores/api/follow/${storeId}/`, {
+    fetch(`/stores/${storeSlug}/follow/`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'X-CSRFToken': getCSRFToken()
         }
     })
-    .then(response => response.json())
+    .then(res => res.json())
     .then(data => {
         if (data.success) {
-            if (window.storeFollowManager) {
-                storeFollowManager.isFollowing = data.is_following;
-                storeFollowManager.updateFollowButton();
-                storeFollowManager.updateFollowersCount(data.followers_count);
-            }
+            const heroBtn = document.getElementById('heroFollowBtn');
+            const isFollowing = data.is_following;
+            heroBtn.innerHTML = `<i class="fas fa-heart"></i><span>${isFollowing ? 'Following' : 'Follow Store'}</span>`;
 
-            showToast('success', data.message);
-
-            if (data.is_following && window.storeFollowManager) {
-                setTimeout(() => {
-                    window.storeFollowManager.showNotificationPreferences();
-                }, 1000);
-            }
-        } else {
-            showToast('error', data.message || 'Failed to update follow status');
+            document.querySelectorAll('.followers-count').forEach(el => {
+                el.textContent = data.followers_count;
+            });
         }
     })
-    .catch(error => {
-        console.error('Follow error:', error);
-        showToast('error', 'An error occurred. Please try again.');
-    })
-    .finally(() => {
-        button.classList.remove('loading');
-        button.disabled = false;
-    });
-}
-
-function showLoginRequired() {
-    const modal = document.createElement('div');
-    modal.className = 'modal fade';
-    modal.innerHTML = `
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Login Required</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <p>Please log in to follow stores and receive notifications about new products and price changes.</p>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <a href="/accounts/sign_in/?next={{ request.get_full_path|escapejs }}" class="btn btn-primary">Login</a>
-                </div>
-            </div>
-        </div>
-    `;
-
-    document.body.appendChild(modal);
-    const bsModal = new bootstrap.Modal(modal);
-    bsModal.show();
-
-    modal.addEventListener('hidden.bs.modal', () => modal.remove());
-}
-
-function showToast(type, message) {
-    const toastId = type === 'success' ? 'successToast' : 'errorToast';
-    const toast = document.getElementById(toastId);
-
-    if (toast) {
-        toast.querySelector('.toast-body').textContent = message;
-        const bsToast = new bootstrap.Toast(toast);
-        bsToast.show();
-    }
+    .catch(err => console.error('Error:', err));
 }
 
 function getCSRFToken() {
     return document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
-           document.querySelector('meta[name="csrf-token"]')?.content || '';
+           document.querySelector('meta[name="csrf-token"]')?.content ||
+           getCookie('csrftoken');
 }
 
-// For backward compatibility
-function toggleFavorite(storeId) {
-    toggleStoreFollow(storeId);
+function getCookie(name) {
+    let value = null;
+    if (document.cookie) {
+        const cookies = document.cookie.split(';');
+        for (let cookie of cookies) {
+            const c = cookie.trim();
+            if (c.startsWith(name + '=')) {
+                value = decodeURIComponent(c.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return value;
 }
 
-// Initialize on DOM load
-document.addEventListener('DOMContentLoaded', function() {
-    window.storeFollowManager = new StoreFollowManager();
+// Navigation
+document.querySelectorAll('.nav-link').forEach(btn => {
+    btn.addEventListener('click', function() {
+        const section = this.dataset.section;
+        document.getElementById(section)?.scrollIntoView({ behavior: 'smooth' });
+
+        document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+        this.classList.add('active');
+    });
 });
+
+// Scroll animations
+const observerOptions = {
+    threshold: 0.1,
+    rootMargin: '0px 0px -50px 0px'
+};
+
+const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+        if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+        }
+    });
+}, observerOptions);
+
+document.querySelectorAll('.fade-in-up').forEach(el => observer.observe(el));
+
+// Placeholder functions
+function quickView(id) { console.log('Quick view:', id); }
+function addToWishlist(id) { console.log('Add to wishlist:', id); }
 </script>
-
-
 
 {% endblock %}
