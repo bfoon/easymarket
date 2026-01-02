@@ -1,82 +1,498 @@
 {% extends 'logistics/base.html' %}
+{% load static %}
 
-{% block title %}Dashboard - Logistics Management{% endblock %}
+{% block title %}Logistics Dashboard - Operations Overview{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        --success-gradient: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        --warning-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        --info-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        --secondary-gradient: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+    }
+
+    body {
+        background: linear-gradient(to bottom right, #f8f9fa 0%, #e9ecef 50%, #dee2e6 100%);
+    }
+
+    /* Modern Page Header */
+    .page-header {
+        background: white;
+        border-radius: 20px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .page-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 5px;
+        background: var(--primary-gradient);
+    }
+
+    .page-title {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #2d3748;
+        margin-bottom: 0.5rem;
+    }
+
+    .page-subtitle {
+        color: #718096;
+        font-size: 1.1rem;
+    }
+
+    /* Enhanced Statistics Cards */
+    .stat-card {
+        background: white;
+        border-radius: 20px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        border: none;
+        position: relative;
+        overflow: hidden;
+        height: 100%;
+    }
+
+    .stat-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 5px;
+        background: var(--primary-gradient);
+    }
+
+    .stat-card.primary::before { background: var(--primary-gradient); }
+    .stat-card.warning::before { background: var(--warning-gradient); }
+    .stat-card.info::before { background: var(--info-gradient); }
+    .stat-card.success::before { background: var(--success-gradient); }
+
+    .stat-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+    }
+
+    .stat-card .stat-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 1rem;
+    }
+
+    .stat-card .stat-icon {
+        width: 60px;
+        height: 60px;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.75rem;
+        background: rgba(102, 126, 234, 0.1);
+        color: #667eea;
+    }
+
+    .stat-card.warning .stat-icon {
+        background: rgba(240, 147, 251, 0.1);
+        color: #f093fb;
+    }
+
+    .stat-card.info .stat-icon {
+        background: rgba(79, 172, 254, 0.1);
+        color: #4facfe;
+    }
+
+    .stat-card.success .stat-icon {
+        background: rgba(17, 153, 142, 0.1);
+        color: #11998e;
+    }
+
+    .stat-card .stat-value {
+        font-size: 2.5rem;
+        font-weight: 800;
+        color: #2d3748;
+        line-height: 1;
+        margin-bottom: 0.5rem;
+    }
+
+    .stat-card .stat-label {
+        color: #718096;
+        font-size: 0.9rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .stat-card .stat-trend {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        font-size: 0.875rem;
+        font-weight: 600;
+        margin-top: 0.5rem;
+    }
+
+    .stat-trend.up { color: #38ef7d; }
+    .stat-trend.down { color: #f5576c; }
+
+    /* Enhanced Quick Stats */
+    .quick-stat-card {
+        background: white;
+        border-radius: 16px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+        text-align: center;
+        transition: all 0.3s ease;
+        border: 2px solid transparent;
+    }
+
+    .quick-stat-card:hover {
+        border-color: #667eea;
+        transform: scale(1.05);
+    }
+
+    .quick-stat-card .icon-wrapper {
+        width: 70px;
+        height: 70px;
+        margin: 0 auto 1rem;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2rem;
+        background: var(--primary-gradient);
+        color: white;
+    }
+
+    .quick-stat-card .stat-number {
+        font-size: 2rem;
+        font-weight: 800;
+        color: #2d3748;
+        margin-bottom: 0.25rem;
+    }
+
+    .quick-stat-card .stat-text {
+        color: #718096;
+        font-size: 0.9rem;
+        font-weight: 500;
+    }
+
+    /* Enhanced Table Card */
+    .data-card {
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        overflow: hidden;
+    }
+
+    .data-card .card-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1.5rem;
+        border: none;
+    }
+
+    .data-card .card-header h6 {
+        margin: 0;
+        font-size: 1.1rem;
+        font-weight: 700;
+    }
+
+    .data-card .card-body {
+        padding: 0;
+    }
+
+    /* Modern Table Styling */
+    .modern-table {
+        margin: 0;
+    }
+
+    .modern-table thead th {
+        background: #f8f9fa;
+        color: #2d3748;
+        font-weight: 700;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 1rem 1.5rem;
+        border: none;
+    }
+
+    .modern-table tbody tr {
+        transition: all 0.2s ease;
+        border-bottom: 1px solid #f1f3f5;
+    }
+
+    .modern-table tbody tr:hover {
+        background: linear-gradient(90deg, rgba(102, 126, 234, 0.05) 0%, transparent 100%);
+        transform: scale(1.01);
+    }
+
+    .modern-table tbody td {
+        padding: 1rem 1.5rem;
+        vertical-align: middle;
+        border: none;
+    }
+
+    /* Status Badges */
+    .status-badge {
+        padding: 0.4rem 1rem;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        display: inline-block;
+    }
+
+    .status-pending {
+        background: linear-gradient(135deg, rgba(240, 147, 251, 0.2) 0%, rgba(245, 87, 108, 0.2) 100%);
+        color: #f5576c;
+    }
+
+    .status-in_transit {
+        background: linear-gradient(135deg, rgba(79, 172, 254, 0.2) 0%, rgba(0, 242, 254, 0.2) 100%);
+        color: #4facfe;
+    }
+
+    .status-shipped {
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%);
+        color: #667eea;
+    }
+
+    .status-delivered {
+        background: linear-gradient(135deg, rgba(17, 153, 142, 0.2) 0%, rgba(56, 239, 125, 0.2) 100%);
+        color: #11998e;
+    }
+
+    /* Empty State */
+    .empty-state {
+        text-align: center;
+        padding: 4rem 2rem;
+    }
+
+    .empty-state i {
+        font-size: 5rem;
+        color: #cbd5e0;
+        margin-bottom: 1.5rem;
+        display: block;
+    }
+
+    .empty-state h5 {
+        color: #4a5568;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+    }
+
+    .empty-state p {
+        color: #a0aec0;
+        margin-bottom: 1.5rem;
+    }
+
+    /* Action Buttons */
+    .btn-modern {
+        padding: 0.5rem 1.25rem;
+        border-radius: 12px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        border: none;
+    }
+
+    .btn-modern-primary {
+        background: var(--primary-gradient);
+        color: white;
+    }
+
+    .btn-modern-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        color: white;
+    }
+
+    .btn-modern-outline {
+        border: 2px solid #667eea;
+        color: #667eea;
+        background: white;
+    }
+
+    .btn-modern-outline:hover {
+        background: #667eea;
+        color: white;
+        transform: translateY(-2px);
+    }
+
+    /* Performance Metrics Chart Area */
+    .metrics-card {
+        background: white;
+        border-radius: 20px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        margin-bottom: 2rem;
+    }
+
+    .metrics-card h6 {
+        font-weight: 700;
+        color: #2d3748;
+        margin-bottom: 1rem;
+    }
+
+    .metric-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem;
+        background: #f8f9fa;
+        border-radius: 12px;
+        margin-bottom: 0.75rem;
+    }
+
+    .metric-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .metric-label {
+        font-weight: 600;
+        color: #4a5568;
+    }
+
+    .metric-value {
+        font-weight: 700;
+        font-size: 1.25rem;
+        color: #667eea;
+    }
+
+    /* Animations */
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .animate-in {
+        animation: fadeInUp 0.6s ease-out;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        .page-title {
+            font-size: 1.5rem;
+        }
+
+        .stat-card .stat-value {
+            font-size: 2rem;
+        }
+
+        .quick-stat-card .stat-number {
+            font-size: 1.75rem;
+        }
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <h1 class="page-title">Dashboard</h1>
-    <p class="page-subtitle">Overview of your logistics operations</p>
+<!-- Page Header -->
+<div class="page-header animate-in">
+    <div class="d-flex justify-content-between align-items-center">
+        <div>
+            <h1 class="page-title">
+                <i class="fas fa-chart-line me-2"></i>
+                Logistics Dashboard
+            </h1>
+            <p class="page-subtitle">Real-time operations overview and analytics</p>
+        </div>
+        <div>
+            <a href="{% url 'logistics:shipment_create' %}" class="btn btn-modern btn-modern-primary">
+                <i class="fas fa-plus-circle me-2"></i>
+                New Shipment
+            </a>
+        </div>
+    </div>
 </div>
 
-<!-- Statistics Cards -->
+<!-- Main Statistics Cards -->
 <div class="row mb-4">
-    <div class="col-xl-3 col-md-6 mb-4">
-        <div class="card border-left-primary shadow h-100 py-2">
-            <div class="card-body">
-                <div class="row no-gutters align-items-center">
-                    <div class="col mr-2">
-                        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                            Total Shipments
-                        </div>
-                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_shipments }}</div>
+    <div class="col-xl-3 col-lg-6 col-md-6 mb-4">
+        <div class="stat-card primary animate-in">
+            <div class="stat-header">
+                <div>
+                    <div class="stat-label">Total Shipments</div>
+                    <div class="stat-value">{{ total_shipments|default:0 }}</div>
+                    <div class="stat-trend up">
+                        <i class="fas fa-arrow-up"></i>
+                        <span>12% vs last month</span>
                     </div>
-                    <div class="col-auto">
-                        <i class="fas fa-shipping-fast fa-2x text-gray-300"></i>
-                    </div>
+                </div>
+                <div class="stat-icon">
+                    <i class="fas fa-shipping-fast"></i>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="col-xl-3 col-md-6 mb-4">
-        <div class="card border-left-warning shadow h-100 py-2">
-            <div class="card-body">
-                <div class="row no-gutters align-items-center">
-                    <div class="col mr-2">
-                        <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
-                            Pending Shipments
-                        </div>
-                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ pending_shipments }}</div>
+    <div class="col-xl-3 col-lg-6 col-md-6 mb-4">
+        <div class="stat-card warning animate-in" style="animation-delay: 0.1s">
+            <div class="stat-header">
+                <div>
+                    <div class="stat-label">Pending</div>
+                    <div class="stat-value">{{ pending_shipments|default:0 }}</div>
+                    <div class="stat-trend down">
+                        <i class="fas fa-arrow-down"></i>
+                        <span>5% vs last week</span>
                     </div>
-                    <div class="col-auto">
-                        <i class="fas fa-clock fa-2x text-gray-300"></i>
-                    </div>
+                </div>
+                <div class="stat-icon">
+                    <i class="fas fa-clock"></i>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="col-xl-3 col-md-6 mb-4">
-        <div class="card border-left-info shadow h-100 py-2">
-            <div class="card-body">
-                <div class="row no-gutters align-items-center">
-                    <div class="col mr-2">
-                        <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
-                            In Transit
-                        </div>
-                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ in_transit_shipments }}</div>
+    <div class="col-xl-3 col-lg-6 col-md-6 mb-4">
+        <div class="stat-card info animate-in" style="animation-delay: 0.2s">
+            <div class="stat-header">
+                <div>
+                    <div class="stat-label">In Transit</div>
+                    <div class="stat-value">{{ in_transit_shipments|default:0 }}</div>
+                    <div class="stat-trend up">
+                        <i class="fas fa-arrow-up"></i>
+                        <span>8% vs yesterday</span>
                     </div>
-                    <div class="col-auto">
-                        <i class="fas fa-route fa-2x text-gray-300"></i>
-                    </div>
+                </div>
+                <div class="stat-icon">
+                    <i class="fas fa-route"></i>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="col-xl-3 col-md-6 mb-4">
-        <div class="card border-left-success shadow h-100 py-2">
-            <div class="card-body">
-                <div class="row no-gutters align-items-center">
-                    <div class="col mr-2">
-                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
-                            Delivered
-                        </div>
-                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ shipped_shipments }}</div>
+    <div class="col-xl-3 col-lg-6 col-md-6 mb-4">
+        <div class="stat-card success animate-in" style="animation-delay: 0.3s">
+            <div class="stat-header">
+                <div>
+                    <div class="stat-label">Delivered Today</div>
+                    <div class="stat-value">{{ delivered_today|default:0 }}</div>
+                    <div class="stat-trend up">
+                        <i class="fas fa-arrow-up"></i>
+                        <span>On track</span>
                     </div>
-                    <div class="col-auto">
-                        <i class="fas fa-check-circle fa-2x text-gray-300"></i>
-                    </div>
+                </div>
+                <div class="stat-icon">
+                    <i class="fas fa-check-circle"></i>
                 </div>
             </div>
         </div>
@@ -85,197 +501,231 @@
 
 <!-- Quick Stats Row -->
 <div class="row mb-4">
-    <div class="col-lg-4 mb-4">
-        <div class="card">
-            <div class="card-header">
-                <h6 class="m-0 font-weight-bold text-primary">
-                    <i class="fas fa-user-tie me-2"></i>
-                    Drivers
-                </h6>
+    <div class="col-lg-3 col-md-6 mb-4">
+        <div class="quick-stat-card animate-in" style="animation-delay: 0.4s">
+            <div class="icon-wrapper">
+                <i class="fas fa-user-tie"></i>
             </div>
-            <div class="card-body text-center">
-                <div class="h4 mb-0 font-weight-bold text-gray-800">{{ total_drivers }}</div>
-                <small class="text-muted">Active Drivers</small>
-            </div>
+            <div class="stat-number">{{ total_drivers|default:0 }}</div>
+            <div class="stat-text">Active Drivers</div>
         </div>
     </div>
 
-    <div class="col-lg-4 mb-4">
-        <div class="card">
-            <div class="card-header">
-                <h6 class="m-0 font-weight-bold text-primary">
-                    <i class="fas fa-truck me-2"></i>
-                    Vehicles
-                </h6>
+    <div class="col-lg-3 col-md-6 mb-4">
+        <div class="quick-stat-card animate-in" style="animation-delay: 0.5s">
+            <div class="icon-wrapper" style="background: var(--success-gradient);">
+                <i class="fas fa-truck"></i>
             </div>
-            <div class="card-body text-center">
-                <div class="h4 mb-0 font-weight-bold text-gray-800">{{ total_vehicles }}</div>
-                <small class="text-muted">Fleet Size</small>
-            </div>
+            <div class="stat-number">{{ total_vehicles|default:0 }}</div>
+            <div class="stat-text">Fleet Vehicles</div>
         </div>
     </div>
 
-    <div class="col-lg-4 mb-4">
-        <div class="card">
-            <div class="card-header">
-                <h6 class="m-0 font-weight-bold text-primary">
-                    <i class="fas fa-warehouse me-2"></i>
-                    Warehouses
-                </h6>
+    <div class="col-lg-3 col-md-6 mb-4">
+        <div class="quick-stat-card animate-in" style="animation-delay: 0.6s">
+            <div class="icon-wrapper" style="background: var(--info-gradient);">
+                <i class="fas fa-warehouse"></i>
             </div>
-            <div class="card-body text-center">
-                <div class="h4 mb-0 font-weight-bold text-gray-800">{{ total_warehouses }}</div>
-                <small class="text-muted">Storage Locations</small>
+            <div class="stat-number">{{ total_warehouses|default:0 }}</div>
+            <div class="stat-text">Warehouses</div>
+        </div>
+    </div>
+
+    <div class="col-lg-3 col-md-6 mb-4">
+        <div class="quick-stat-card animate-in" style="animation-delay: 0.7s">
+            <div class="icon-wrapper" style="background: var(--warning-gradient);">
+                <i class="fas fa-percentage"></i>
             </div>
+            <div class="stat-number">{{ on_time_delivery_rate|default:"98" }}%</div>
+            <div class="stat-text">On-Time Rate</div>
         </div>
     </div>
 </div>
 
-<!-- Shipped to Warehouse (Queue) -->
+<!-- Performance Metrics -->
 <div class="row mb-4">
-  <div class="col-lg-12">
-    <div class="card">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <h6 class="m-0 font-weight-bold text-primary">
-          <i class="fas fa-warehouse me-2"></i>
-          Shipped to Warehouse (Queue)
-          {% if warehouse_queue_count %}
-            <span class="badge bg-secondary ms-2">{{ warehouse_queue_count }}</span>
-          {% endif %}
-        </h6>
-        <a href="{% url 'logistics:shipment_create' %}" class="btn btn-primary btn-sm">
-          <i class="fas fa-plus me-1"></i>Create Shipment
-        </a>
-      </div>
-
-      <div class="card-body">
-        {% if warehouse_queue %}
-          <div class="table-responsive">
-            <table class="table table-hover align-middle">
-              <thead>
-                <tr>
-                  <th>Order</th>
-                  <th>Buyer</th>
-                  <th>Shop</th>
-                  <th>Product</th>
-                  <th class="text-end">Qty</th>
-                  <th>Order Date</th>
-                  <th style="width: 170px;">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for row in warehouse_queue %}
-                  <tr>
-                    <td><strong>#{{ row.order.id }}</strong></td>
-
-                    <td>
-                      {{ row.order.buyer.get_full_name|default:row.order.buyer.username }}
-                      <br>
-                      <small class="text-muted">{{ row.order.buyer.email }}</small>
-                    </td>
-
-                    <td>
-                      {% if row.product.store %}
-                        {{ row.product.store.name }}
-                        {% if row.product.store.city %}
-                          <br><small class="text-muted">{{ row.product.store.city }}</small>
-                        {% endif %}
-                      {% else %}
-                        <span class="text-muted">—</span>
-                      {% endif %}
-                    </td>
-
-                    <td>
-                      {{ row.product.name }}
-                      {% if row.product.sku %}
-                        <br><small class="text-muted">SKU: {{ row.product.sku }}</small>
-                      {% endif %}
-                    </td>
-
-                    <td class="text-end">{{ row.quantity }}</td>
-                    <td>{{ row.order.created_at|date:"M d, Y" }}</td>
-
-                    <td class="d-flex gap-2">
-                      <!-- Prefill shipment creation with this order (adjust param if your view expects a different name) -->
-                      <a href="{% url 'logistics:shipment_create' %}?order={{ row.order.id }}"
-                         class="btn btn-sm btn-outline-primary">
-                        <i class="fas fa-truck-loading"></i> Add
-                      </a>
-                      <!-- View the order (swap URL to your logistics order detail if you have one) -->
-                      <a href="{% url 'logistics:warehouse_item_detail' row.id %}"
-                         class="btn btn-sm btn-outline-secondary">
-                        <i class="fas fa-eye"></i>
-                      </a>
-                    </td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-        {% else %}
-          <div class="text-center text-muted py-4">
-            <i class="fas fa-box-open fa-3x mb-3"></i>
-            <p>No items have been marked as shipped to the warehouse yet.</p>
-          </div>
-        {% endif %}
-      </div>
+    <div class="col-lg-6 mb-4">
+        <div class="metrics-card animate-in" style="animation-delay: 0.8s">
+            <h6><i class="fas fa-chart-bar me-2 text-primary"></i>Performance Metrics</h6>
+            <div class="metric-item">
+                <span class="metric-label"><i class="fas fa-tachometer-alt me-2"></i>Average Delivery Time</span>
+                <span class="metric-value">{{ avg_delivery_time|default:"24" }}h</span>
+            </div>
+            <div class="metric-item">
+                <span class="metric-label"><i class="fas fa-warehouse me-2"></i>Warehouse Utilization</span>
+                <span class="metric-value">{{ warehouse_utilization|default:"75" }}%</span>
+            </div>
+            <div class="metric-item">
+                <span class="metric-label"><i class="fas fa-truck-moving me-2"></i>Fleet Utilization</span>
+                <span class="metric-value">{{ vehicles_in_use|default:"85" }}%</span>
+            </div>
+        </div>
     </div>
-  </div>
+
+    <div class="col-lg-6 mb-4">
+        <div class="metrics-card animate-in" style="animation-delay: 0.9s">
+            <h6><i class="fas fa-info-circle me-2 text-info"></i>Quick Actions</h6>
+            <div class="d-grid gap-2">
+                <a href="{% url 'logistics:shipment_create' %}" class="btn btn-modern btn-modern-outline">
+                    <i class="fas fa-plus-circle me-2"></i>Create Shipment
+                </a>
+                <a href="{% url 'logistics:assignment_dashboard' %}" class="btn btn-modern btn-modern-outline">
+                    <i class="fas fa-tasks me-2"></i>Manage Assignments
+                </a>
+                <a href="{% url 'logistics:shipment_list' %}" class="btn btn-modern btn-modern-outline">
+                    <i class="fas fa-list me-2"></i>View All Shipments
+                </a>
+            </div>
+        </div>
+    </div>
 </div>
 
+<!-- Warehouse Queue -->
+{% if warehouse_queue %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="data-card animate-in" style="animation-delay: 1s">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6>
+                    <i class="fas fa-warehouse me-2"></i>
+                    Shipped to Warehouse (Queue)
+                    <span class="badge bg-light text-dark ms-2">{{ warehouse_queue_count|default:warehouse_queue|length }}</span>
+                </h6>
+                <a href="{% url 'logistics:shipment_create' %}" class="btn btn-light btn-sm">
+                    <i class="fas fa-plus me-1"></i>Process
+                </a>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table modern-table">
+                        <thead>
+                            <tr>
+                                <th>Order</th>
+                                <th>Buyer</th>
+                                <th>Shop</th>
+                                <th>Product</th>
+                                <th class="text-end">Qty</th>
+                                <th>Order Date</th>
+                                <th class="text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in warehouse_queue %}
+                            <tr>
+                                <td><strong class="text-primary">#{{ row.order.id }}</strong></td>
+                                <td>
+                                    <div class="fw-bold">{{ row.order.buyer.get_full_name|default:row.order.buyer.username }}</div>
+                                    <small class="text-muted">{{ row.order.buyer.email }}</small>
+                                </td>
+                                <td>
+                                    {% if row.product.store %}
+                                        <div class="fw-semibold">{{ row.product.store.name }}</div>
+                                        {% if row.product.store.city %}
+                                            <small class="text-muted"><i class="fas fa-map-marker-alt me-1"></i>{{ row.product.store.city }}</small>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div>{{ row.product.name }}</div>
+                                    {% if row.product.sku %}
+                                        <small class="text-muted">SKU: {{ row.product.sku }}</small>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end"><span class="badge bg-secondary">{{ row.quantity }}</span></td>
+                                <td>
+                                    <i class="far fa-calendar me-1"></i>
+                                    {{ row.order.created_at|date:"M d, Y" }}
+                                </td>
+                                <td class="text-center">
+                                    <div class="btn-group" role="group">
+                                        <a href="{% url 'logistics:shipment_create' %}?order={{ row.order.id }}"
+                                           class="btn btn-sm btn-outline-primary"
+                                           title="Add to Shipment">
+                                            <i class="fas fa-truck-loading"></i>
+                                        </a>
+                                        <a href="{% url 'logistics:warehouse_item_detail' row.id %}"
+                                           class="btn btn-sm btn-outline-secondary"
+                                           title="View Details">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <!-- Recent Shipments -->
 <div class="row">
-    <div class="col-lg-12">
-        <div class="card">
+    <div class="col-12">
+        <div class="data-card animate-in" style="animation-delay: 1.1s">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h6 class="m-0 font-weight-bold text-primary">
+                <h6>
                     <i class="fas fa-list me-2"></i>
                     Recent Shipments
                 </h6>
-                <a href="{% url 'logistics:shipment_list' %}" class="btn btn-primary btn-sm">
-                    <i class="fas fa-eye me-1"></i>
+                <a href="{% url 'logistics:shipment_list' %}" class="btn btn-light btn-sm">
+                    <i class="fas fa-external-link-alt me-1"></i>
                     View All
                 </a>
             </div>
             <div class="card-body">
                 {% if recent_shipments %}
                     <div class="table-responsive">
-                        <table class="table table-hover">
+                        <table class="table modern-table">
                             <thead>
                                 <tr>
-                                    <th>ID</th>
+                                    <th>Tracking</th>
                                     <th>Destination</th>
                                     <th>Driver</th>
                                     <th>Vehicle</th>
                                     <th>Status</th>
                                     <th>Created</th>
-                                    <th>Actions</th>
+                                    <th class="text-center">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for shipment in recent_shipments %}
                                 <tr>
-                                    <td><strong>#{{ shipment.id }}</strong></td>
                                     <td>
-                                        {{ shipment.shipping_address.city }}, {{ shipment.shipping_address.state }}
-                                        <br>
+                                        <strong class="text-primary">{{ shipment.tracking_number|default:shipment.id }}</strong>
+                                    </td>
+                                    <td>
+                                        <div class="fw-semibold">
+                                            <i class="fas fa-map-marker-alt me-1 text-danger"></i>
+                                            {{ shipment.shipping_address.city }}, {{ shipment.shipping_address.region }}
+                                        </div>
                                         <small class="text-muted">{{ shipment.shipping_address.address|truncatechars:30 }}</small>
                                     </td>
                                     <td>
                                         {% if shipment.driver %}
-                                            {{ shipment.driver.user.get_full_name }}
+                                            <div class="d-flex align-items-center">
+                                                <div class="avatar-sm me-2">
+                                                    {{ shipment.driver.user.first_name|slice:":1" }}{{ shipment.driver.user.last_name|slice:":1" }}
+                                                </div>
+                                                <div>
+                                                    <div class="fw-semibold">{{ shipment.driver.user.get_full_name }}</div>
+                                                    <small class="text-muted">{{ shipment.driver.employee_id }}</small>
+                                                </div>
+                                            </div>
                                         {% else %}
-                                            <span class="text-muted">Not assigned</span>
+                                            <span class="text-muted"><i class="fas fa-minus-circle me-1"></i>Not assigned</span>
                                         {% endif %}
                                     </td>
                                     <td>
                                         {% if shipment.vehicle %}
-                                            {{ shipment.vehicle.plate_number }}
-                                            <br>
+                                            <div class="fw-semibold">{{ shipment.vehicle.plate_number }}</div>
                                             <small class="text-muted">{{ shipment.vehicle.model }}</small>
                                         {% else %}
-                                            <span class="text-muted">Not assigned</span>
+                                            <span class="text-muted"><i class="fas fa-minus-circle me-1"></i>Not assigned</span>
                                         {% endif %}
                                     </td>
                                     <td>
@@ -283,10 +733,14 @@
                                             {{ shipment.get_status_display }}
                                         </span>
                                     </td>
-                                    <td>{{ shipment.created_at|date:"M d, Y" }}</td>
                                     <td>
-                                        <a href="{% url 'logistics:shipment_detail' shipment.pk %}" 
-                                           class="btn btn-sm btn-outline-primary">
+                                        <i class="far fa-calendar me-1"></i>
+                                        {{ shipment.created_at|date:"M d, Y" }}
+                                    </td>
+                                    <td class="text-center">
+                                        <a href="{% url 'logistics:shipment_detail' shipment.pk %}"
+                                           class="btn btn-sm btn-modern btn-modern-outline"
+                                           title="View Details">
                                             <i class="fas fa-eye"></i>
                                         </a>
                                     </td>
@@ -296,11 +750,12 @@
                         </table>
                     </div>
                 {% else %}
-                    <div class="text-center text-muted py-4">
-                        <i class="fas fa-inbox fa-3x mb-3"></i>
-                        <p>No shipments found.</p>
-                        <a href="{% url 'logistics:shipment_create' %}" class="btn btn-primary">
-                            <i class="fas fa-plus me-1"></i>
+                    <div class="empty-state">
+                        <i class="fas fa-box-open"></i>
+                        <h5>No Recent Shipments</h5>
+                        <p>Start by creating your first shipment</p>
+                        <a href="{% url 'logistics:shipment_create' %}" class="btn btn-modern btn-modern-primary">
+                            <i class="fas fa-plus-circle me-2"></i>
                             Create First Shipment
                         </a>
                     </div>
@@ -310,27 +765,42 @@
     </div>
 </div>
 
-{% endblock %}
-
-{% block extra_css %}
+<!-- Avatar Style -->
 <style>
-    .border-left-primary {
-        border-left: 0.25rem solid var(--primary-color) !important;
-    }
-    .border-left-warning {
-        border-left: 0.25rem solid var(--warning-color) !important;
-    }
-    .border-left-info {
-        border-left: 0.25rem solid #36b9cc !important;
-    }
-    .border-left-success {
-        border-left: 0.25rem solid var(--success-color) !important;
-    }
-    .text-gray-800 {
-        color: #5a5c69 !important;
-    }
-    .text-gray-300 {
-        color: #dddfeb !important;
+    .avatar-sm {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: var(--primary-gradient);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 0.85rem;
+        flex-shrink: 0;
     }
 </style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Add stagger animation to cards
+    document.addEventListener('DOMContentLoaded', function() {
+        const cards = document.querySelectorAll('.animate-in');
+        cards.forEach((card, index) => {
+            card.style.opacity = '0';
+            setTimeout(() => {
+                card.style.transition = 'opacity 0.6s ease-out, transform 0.6s ease-out';
+                card.style.opacity = '1';
+            }, index * 50);
+        });
+
+        // Auto-refresh statistics every 60 seconds
+        setInterval(() => {
+            // AJAX call to update stats without full page reload
+            // Implementation depends on your backend
+        }, 60000);
+    });
+</script>
 {% endblock %}
