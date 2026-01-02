@@ -179,6 +179,8 @@ class Store(models.Model):
     )
 
     email = models.EmailField()
+    email_verified = models.BooleanField(default=False)
+
     phone = models.CharField(max_length=20)
     website = models.URLField(blank=True, null=True)
 
@@ -271,10 +273,10 @@ class Store(models.Model):
         help_text="Preferred channel for B2B negotiations."
     )
 
-    # Social & marketing
-    facebook_url = models.URLField(blank=True, null=True)
-    twitter_url = models.URLField(blank=True, null=True)
-    instagram_url = models.URLField(blank=True, null=True)
+    # # Social & marketing
+    # facebook_url = models.URLField(blank=True, null=True)
+    # twitter_url = models.URLField(blank=True, null=True)
+    # instagram_url = models.URLField(blank=True, null=True)
 
     # Auctions
     allow_auctions = models.BooleanField(default=True)

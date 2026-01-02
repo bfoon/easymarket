@@ -133,6 +133,7 @@ class StoreAdmin(admin.ModelAdmin):
                 "allow_auctions",
                 "auto_approve_auctions",
                 "allow_referrals",
+                "email_verified",
             )
         }),
         ("B2B / Wholesale", {

@@ -2383,10 +2383,39 @@ def store_dashboard(request, store_id):
         review_count = 0
         average_rating = 0
         rating_breakdown = {}
+        
+    # --- Store health score (0 - 100) ---
+    store_health_score = 0
+
+    # Profile completeness
+    if store.phone:
+        store_health_score += 15
+    if store.email_verified:
+        store_health_score += 15
+    if store.store_type:
+        store_health_score += 10
+    if store.logo:
+        store_health_score += 10
+    if store.banner:
+        store_health_score += 5
+
+    # Activity / inventory
+    if total_products >= 10:
+        store_health_score += 25
+    elif total_products >= 1:
+        store_health_score += 15
+
+    if total_orders >= 5:
+        store_health_score += 20
+    elif total_orders >= 1:
+        store_health_score += 10
+
+    store_health_score = max(0, min(100, int(store_health_score)))
 
     context = {
         'store': store,
         'total_products': total_products,
+        'store_health_score': store_health_score,
         'recent_products': recent_products,
         'total_orders': total_orders,
         'monthly_orders': monthly_orders,
@@ -2437,6 +2466,9 @@ def store_settings(request, store_id):
         # Add this theme handling
         if tab == 'theme':
             try:
+                # Preset
+                store.theme_preset = request.POST.get('theme_preset', store.theme_preset or 'modern')
+
                 # Colors
                 store.primary_color = request.POST.get('primary_color', '#2563eb')
                 store.secondary_color = request.POST.get('secondary_color', '#64748b')
@@ -2448,13 +2480,23 @@ def store_settings(request, store_id):
                 store.font_heading = request.POST.get('font_heading', 'poppins')
                 store.font_body = request.POST.get('font_body', 'inter')
 
-                # Features (checkboxes - only present if checked)
+                # Layout / UI (safe defaults)
+                store.product_layout = request.POST.get('product_layout', store.product_layout or 'grid')
+                store.products_per_row = int(request.POST.get('products_per_row', store.products_per_row or 4))
+                store.product_card_style = request.POST.get('product_card_style', store.product_card_style or 'shadow')
+                store.product_image_shape = request.POST.get('product_image_shape',
+                                                             store.product_image_shape or 'square')
+                store.mobile_menu_style = request.POST.get('mobile_menu_style', store.mobile_menu_style or 'bottom')
+
+                # Features (checkboxes)
                 store.show_product_ratings = 'show_product_ratings' in request.POST
                 store.show_product_badges = 'show_product_badges' in request.POST
                 store.enable_animations = 'enable_animations' in request.POST
                 store.enable_hover_effects = 'enable_hover_effects' in request.POST
                 store.enable_featured_products = 'enable_featured_products' in request.POST
                 store.enable_new_arrivals = 'enable_new_arrivals' in request.POST
+                store.enable_best_sellers = 'enable_best_sellers' in request.POST
+                store.enable_testimonials = 'enable_testimonials' in request.POST
 
                 store.save()
                 messages.success(request, 'Theme settings saved successfully!')
