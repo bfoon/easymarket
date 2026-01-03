@@ -1,205 +1,544 @@
 {% extends 'logistics/base.html' %}
+{% load static %}
 
 {% block title %}
     {% if object %}Edit Warehouse - {{ object.name }}{% else %}Add New Warehouse{% endif %}
 {% endblock %}
 
+{% block extra_css %}
+<style>
+    :root {
+        --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        --success-gradient: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    }
+
+    /* Page Header */
+    .form-header {
+        background: white;
+        border-radius: 20px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .form-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 5px;
+        background: var(--primary-gradient);
+    }
+
+    /* Form Card */
+    .form-card {
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        overflow: hidden;
+    }
+
+    .form-card-header {
+        background: var(--primary-gradient);
+        color: white;
+        padding: 1.25rem 1.5rem;
+        border: none;
+    }
+
+    .form-card-header h6 {
+        margin: 0;
+        font-weight: 700;
+        font-size: 1.1rem;
+    }
+
+    /* Section Headers */
+    .section-header {
+        border-bottom: 2px solid #f1f3f5;
+        padding-bottom: 0.75rem;
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .section-header h6 {
+        margin: 0;
+        color: #667eea;
+        font-weight: 700;
+        font-size: 1rem;
+    }
+
+    /* Form Controls */
+    .form-label {
+        font-weight: 600;
+        color: #2d3748;
+        margin-bottom: 0.5rem;
+        font-size: 0.9rem;
+    }
+
+    .form-label .required {
+        color: #ef4444;
+        margin-left: 2px;
+    }
+
+    .form-control,
+    .form-select {
+        border-radius: 12px;
+        border: 2px solid #e2e8f0;
+        padding: 0.75rem 1rem;
+        transition: all 0.3s ease;
+        font-size: 0.95rem;
+    }
+
+    .form-control:focus,
+    .form-select:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+    }
+
+    .form-control.is-invalid {
+        border-color: #ef4444;
+    }
+
+    textarea.form-control {
+        min-height: 100px;
+        resize: vertical;
+    }
+
+    /* Form Text */
+    .form-text {
+        font-size: 0.8rem;
+        color: #718096;
+        margin-top: 0.25rem;
+    }
+
+    /* Error Messages */
+    .invalid-feedback {
+        display: block;
+        color: #ef4444;
+        font-size: 0.85rem;
+        margin-top: 0.25rem;
+    }
+
+    /* Stats Cards (for edit mode) */
+    .stat-card {
+        background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+        border-radius: 16px;
+        padding: 1.5rem;
+        text-align: center;
+        border: 2px solid #f1f3f5;
+        transition: all 0.3s ease;
+    }
+
+    .stat-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    }
+
+    .stat-value {
+        font-size: 2rem;
+        font-weight: 800;
+        line-height: 1;
+        margin-bottom: 0.5rem;
+    }
+
+    .stat-value.primary { color: #667eea; }
+    .stat-value.warning { color: #f5576c; }
+    .stat-value.success { color: #11998e; }
+
+    .stat-label {
+        font-size: 0.85rem;
+        color: #718096;
+        font-weight: 500;
+    }
+
+    /* Buttons */
+    .btn-modern {
+        border-radius: 12px;
+        padding: 0.625rem 1.25rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        border: none;
+    }
+
+    .btn-primary-modern {
+        background: var(--primary-gradient);
+        color: white;
+    }
+
+    .btn-primary-modern:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        color: white;
+    }
+
+    .btn-outline-modern {
+        border: 2px solid #e2e8f0;
+        color: #64748b;
+        background: white;
+    }
+
+    .btn-outline-modern:hover {
+        background: #f8f9fa;
+        border-color: #cbd5e0;
+    }
+
+    /* Map Container (if you add coordinate picker) */
+    .map-container {
+        height: 300px;
+        border-radius: 12px;
+        overflow: hidden;
+        border: 2px solid #e2e8f0;
+        background: #f8f9fa;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #a0aec0;
+    }
+
+    /* Animation */
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .animate-in {
+        animation: fadeInUp 0.6s ease-out;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="page-header d-flex justify-content-between align-items-center">
-    <div>
-        <h1 class="page-title">
-            {% if object %}
-                Edit Warehouse - {{ object.name }}
-            {% else %}
-                Add New Warehouse
-            {% endif %}
-        </h1>
-        <p class="page-subtitle">
-            {% if object %}
-                Update warehouse information and location details
-            {% else %}
-                Add a new warehouse location to your network
-            {% endif %}
-        </p>
+<!-- Page Header -->
+<div class="form-header animate-in">
+    <div class="d-flex justify-content-between align-items-center">
+        <div>
+            <h1 class="h2 mb-1">
+                <i class="fas fa-warehouse me-2"></i>
+                {% if object %}
+                    Edit Warehouse
+                {% else %}
+                    Add New Warehouse
+                {% endif %}
+            </h1>
+            <p class="text-muted mb-0">
+                {% if object %}
+                    Update warehouse information and location details for {{ object.name }}
+                {% else %}
+                    Add a new warehouse location to your logistics network
+                {% endif %}
+            </p>
+        </div>
+        <a href="{% url 'logistics:warehouse_list' %}" class="btn btn-modern btn-outline-modern">
+            <i class="fas fa-arrow-left me-1"></i>
+            Back to List
+        </a>
     </div>
-    <a href="{% url 'logistics:warehouse_list' %}" class="btn btn-outline-secondary">
-        <i class="fas fa-arrow-left me-1"></i>
-        Back to Warehouses
-    </a>
 </div>
 
 <div class="row">
     <div class="col-lg-8 mx-auto">
-        <div class="card">
-            <div class="card-header">
-                <h6 class="m-0 font-weight-bold text-primary">
-                    <i class="fas fa-warehouse me-2"></i>
+        <!-- Main Form Card -->
+        <div class="form-card animate-in" style="animation-delay: 0.1s">
+            <div class="form-card-header">
+                <h6>
+                    <i class="fas fa-info-circle me-2"></i>
                     Warehouse Information
                 </h6>
             </div>
-            <div class="card-body">
-                <form method="post" novalidate>
+            <div class="card-body p-4">
+                <form method="post" novalidate id="warehouseForm">
                     {% csrf_token %}
-                    
-                    <!-- Basic Information -->
-                    <div class="row mb-4">
-                        <div class="col-12">
-                            <h6 class="text-primary border-bottom pb-2 mb-3">
-                                <i class="fas fa-info-circle me-2"></i>
-                                Basic Information
-                            </h6>
+
+                    <!-- Basic Information Section -->
+                    <div class="mb-4">
+                        <div class="section-header">
+                            <i class="fas fa-building"></i>
+                            <h6>Basic Information</h6>
                         </div>
-                        
-                        <div class="col-md-6 mb-3">
-                            <label for="{{ form.name.id_for_label }}" class="form-label">
-                                Warehouse Name <span class="text-danger">*</span>
-                            </label>
-                            {{ form.name }}
-                            {% if form.name.errors %}
-                                <div class="text-danger small">{{ form.name.errors.0 }}</div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="{{ form.name.id_for_label }}" class="form-label">
+                                    Warehouse Name <span class="required">*</span>
+                                </label>
+                                {{ form.name }}
+                                {% if form.name.errors %}
+                                    <div class="invalid-feedback">{{ form.name.errors.0 }}</div>
+                                {% endif %}
+                                <div class="form-text">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Unique identifier for this warehouse location
+                                </div>
+                            </div>
+
+                            {% if form.code %}
+                            <div class="col-md-6 mb-3">
+                                <label for="{{ form.code.id_for_label }}" class="form-label">
+                                    Warehouse Code
+                                </label>
+                                {{ form.code }}
+                                {% if form.code.errors %}
+                                    <div class="invalid-feedback">{{ form.code.errors.0 }}</div>
+                                {% endif %}
+                                <div class="form-text">
+                                    <i class="fas fa-tag me-1"></i>
+                                    Short code for quick reference (e.g., WH-001)
+                                </div>
+                            </div>
                             {% endif %}
-                            <div class="form-text">
-                                Unique name to identify this warehouse
+                        </div>
+                    </div>
+
+                    <!-- Location Information Section -->
+                    <div class="mb-4">
+                        <div class="section-header">
+                            <i class="fas fa-map-marker-alt"></i>
+                            <h6>Location Details</h6>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-12 mb-3">
+                                <label for="{{ form.address.id_for_label }}" class="form-label">
+                                    Full Address <span class="required">*</span>
+                                </label>
+                                {{ form.address }}
+                                {% if form.address.errors %}
+                                    <div class="invalid-feedback">{{ form.address.errors.0 }}</div>
+                                {% endif %}
+                                <div class="form-text">
+                                    <i class="fas fa-location-dot me-1"></i>
+                                    Complete address including street, city, region, and postal code
+                                </div>
+                            </div>
+
+                            {% if form.latitude and form.longitude %}
+                            <div class="col-md-6 mb-3">
+                                <label for="{{ form.latitude.id_for_label }}" class="form-label">
+                                    Latitude
+                                </label>
+                                {{ form.latitude }}
+                                {% if form.latitude.errors %}
+                                    <div class="invalid-feedback">{{ form.latitude.errors.0 }}</div>
+                                {% endif %}
+                                <div class="form-text">
+                                    <i class="fas fa-globe me-1"></i>
+                                    GPS coordinate (e.g., 13.4443)
+                                </div>
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label for="{{ form.longitude.id_for_label }}" class="form-label">
+                                    Longitude
+                                </label>
+                                {{ form.longitude }}
+                                {% if form.longitude.errors %}
+                                    <div class="invalid-feedback">{{ form.longitude.errors.0 }}</div>
+                                {% endif %}
+                                <div class="form-text">
+                                    <i class="fas fa-globe me-1"></i>
+                                    GPS coordinate (e.g., -16.6738)
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Placeholder for Map (optional) -->
+                        <div class="map-container">
+                            <div class="text-center">
+                                <i class="fas fa-map-location-dot fa-3x mb-2"></i>
+                                <p class="mb-0">Map integration can be added here</p>
+                                <small>Click to select warehouse location</small>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Location Information -->
-                    <div class="row mb-4">
-                        <div class="col-12">
-                            <h6 class="text-primary border-bottom pb-2 mb-3">
-                                <i class="fas fa-map-marker-alt me-2"></i>
-                                Location Details
-                            </h6>
+                    <!-- Capacity & Details Section -->
+                    {% if form.capacity_cubic_meters or form.manager %}
+                    <div class="mb-4">
+                        <div class="section-header">
+                            <i class="fas fa-cube"></i>
+                            <h6>Capacity & Management</h6>
                         </div>
-                        
-                        <div class="col-12 mb-3">
-                            <label for="{{ form.address.id_for_label }}" class="form-label">
-                                Address <span class="text-danger">*</span>
-                            </label>
-                            {{ form.address }}
-                            {% if form.address.errors %}
-                                <div class="text-danger small">{{ form.address.errors.0 }}</div>
+
+                        <div class="row">
+                            {% if form.capacity_cubic_meters %}
+                            <div class="col-md-6 mb-3">
+                                <label for="{{ form.capacity_cubic_meters.id_for_label }}" class="form-label">
+                                    Storage Capacity (m³)
+                                </label>
+                                {{ form.capacity_cubic_meters }}
+                                {% if form.capacity_cubic_meters.errors %}
+                                    <div class="invalid-feedback">{{ form.capacity_cubic_meters.errors.0 }}</div>
+                                {% endif %}
+                                <div class="form-text">
+                                    <i class="fas fa-box me-1"></i>
+                                    Total storage capacity in cubic meters
+                                </div>
+                            </div>
                             {% endif %}
-                            <div class="form-text">
-                                Complete address including street, city, and postal code
-                            </div>
-                        </div>
-                    </div>
 
-                    <!-- Current Statistics (for editing only) -->
-                    {% if object %}
-                    <div class="row mb-4">
-                        <div class="col-12">
-                            <h6 class="text-primary border-bottom pb-2 mb-3">
-                                <i class="fas fa-chart-bar me-2"></i>
-                                Current Statistics
-                            </h6>
-                        </div>
-                        
-                        <div class="col-md-4">
-                            <div class="card bg-light">
-                                <div class="card-body text-center">
-                                    <h5 class="text-primary">{{ object.shipment_set.count }}</h5>
-                                    <small class="text-muted">Total Shipments</small>
+                            {% if form.manager %}
+                            <div class="col-md-6 mb-3">
+                                <label for="{{ form.manager.id_for_label }}" class="form-label">
+                                    Warehouse Manager
+                                </label>
+                                {{ form.manager }}
+                                {% if form.manager.errors %}
+                                    <div class="invalid-feedback">{{ form.manager.errors.0 }}</div>
+                                {% endif %}
+                                <div class="form-text">
+                                    <i class="fas fa-user-tie me-1"></i>
+                                    Assign a manager for this warehouse
                                 </div>
                             </div>
-                        </div>
-                        
-                        <div class="col-md-4">
-                            <div class="card bg-light">
-                                <div class="card-body text-center">
-                                    <h5 class="text-warning">{{ active_shipments_count|default:0 }}</h5>
-                                    <small class="text-muted">Active Shipments</small>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="col-md-4">
-                            <div class="card bg-light">
-                                <div class="card-body text-center">
-                                    <h5 class="text-success">{{ completed_shipments_count|default:0 }}</h5>
-                                    <small class="text-muted">Completed</small>
-                                </div>
-                            </div>
+                            {% endif %}
                         </div>
                     </div>
                     {% endif %}
 
-                    <!-- Form Actions -->
-                    <div class="row">
-                        <div class="col-12">
-                            <div class="d-flex justify-content-end gap-2">
-                                <a href="{% url 'logistics:warehouse_list' %}" class="btn btn-outline-secondary">
-                                    <i class="fas fa-times me-1"></i>
-                                    Cancel
-                                </a>
-                                <button type="submit" class="btn btn-primary">
-                                    <i class="fas fa-save me-1"></i>
-                                    {% if object %}Update Warehouse{% else %}Add Warehouse{% endif %}
-                                </button>
+                    <!-- Current Statistics (Edit Mode Only) -->
+                    {% if object %}
+                    <div class="mb-4">
+                        <div class="section-header">
+                            <i class="fas fa-chart-bar"></i>
+                            <h6>Current Statistics</h6>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <div class="stat-card">
+                                    <div class="stat-value primary">
+                                        {{ total_shipments|default:0 }}
+                                    </div>
+                                    <div class="stat-label">
+                                        <i class="fas fa-shipping-fast me-1"></i>
+                                        Total Shipments
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4 mb-3">
+                                <div class="stat-card">
+                                    <div class="stat-value warning">
+                                        {{ active_shipments_count|default:0 }}
+                                    </div>
+                                    <div class="stat-label">
+                                        <i class="fas fa-truck-loading me-1"></i>
+                                        Active Shipments
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4 mb-3">
+                                <div class="stat-card">
+                                    <div class="stat-value success">
+                                        {{ completed_shipments_count|default:0 }}
+                                    </div>
+                                    <div class="stat-label">
+                                        <i class="fas fa-check-circle me-1"></i>
+                                        Completed
+                                    </div>
+                                </div>
                             </div>
                         </div>
+
+                        {% if object.capacity_cubic_meters %}
+                        <div class="alert alert-info mt-3">
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-info-circle me-2 fs-4"></i>
+                                <div>
+                                    <strong>Storage Utilization</strong><br>
+                                    <small>
+                                        {% if current_utilization and utilization_percentage %}
+                                            Current capacity: {{ current_utilization|floatformat:2 }} m³ / {{ object.capacity_cubic_meters }} m³
+                                            ({{ utilization_percentage|floatformat:0 }}% utilized)
+                                        {% else %}
+                                            Capacity: {{ object.capacity_cubic_meters }} m³
+                                        {% endif %}
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
+                    <!-- Form Actions -->
+                    <div class="d-flex justify-content-end gap-2 pt-3 border-top">
+                        <a href="{% url 'logistics:warehouse_list' %}" class="btn btn-modern btn-outline-modern">
+                            <i class="fas fa-times me-1"></i>
+                            Cancel
+                        </a>
+                        <button type="submit" class="btn btn-modern btn-primary-modern">
+                            <i class="fas fa-save me-1"></i>
+                            {% if object %}Update Warehouse{% else %}Create Warehouse{% endif %}
+                        </button>
                     </div>
                 </form>
             </div>
         </div>
     </div>
 </div>
-
-{% endblock %}
-
-{% block extra_css %}
-<style>
-    .form-control, .form-select {
-        border-radius: 8px;
-        border: 1px solid #d1d5db;
-        padding: 12px 16px;
-    }
-    
-    .form-control:focus, .form-select:focus {
-        border-color: var(--primary-color);
-        box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.15);
-    }
-    
-    .form-label {
-        font-weight: 600;
-        color: #374151;
-        margin-bottom: 8px;
-    }
-    
-    .text-danger {
-        font-size: 14px;
-        margin-top: 4px;
-    }
-    
-    .form-text {
-        font-size: 12px;
-        color: #6b7280;
-        margin-top: 4px;
-    }
-    
-    .border-bottom {
-        border-color: #e5e7eb !important;
-    }
-    
-    textarea.form-control {
-        min-height: 100px;
-        resize: vertical;
-    }
-</style>
 {% endblock %}
 
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Add Bootstrap classes to form fields
-    const inputs = document.querySelectorAll('input, textarea');
-    
-    inputs.forEach(input => {
-        if (input.type === 'text' || input.tagName === 'TEXTAREA') {
-            input.classList.add('form-control');
+    // Add Bootstrap classes to Django-generated form fields
+    const form = document.getElementById('warehouseForm');
+
+    form.querySelectorAll('input[type="text"], input[type="number"], input[type="email"], textarea, select').forEach(field => {
+        if (!field.classList.contains('form-control') && !field.classList.contains('form-select')) {
+            if (field.tagName === 'SELECT') {
+                field.classList.add('form-select');
+            } else {
+                field.classList.add('form-control');
+            }
         }
+
+        // Mark invalid fields
+        if (field.getAttribute('aria-invalid') === 'true') {
+            field.classList.add('is-invalid');
+        }
+    });
+
+    // Form validation feedback
+    form.addEventListener('submit', function(e) {
+        const requiredFields = form.querySelectorAll('[required]');
+        let isValid = true;
+
+        requiredFields.forEach(field => {
+            if (!field.value.trim()) {
+                field.classList.add('is-invalid');
+                isValid = false;
+            } else {
+                field.classList.remove('is-invalid');
+            }
+        });
+
+        if (!isValid) {
+            e.preventDefault();
+            alert('Please fill in all required fields');
+        }
+    });
+
+    // Remove invalid class on input
+    form.querySelectorAll('.form-control, .form-select').forEach(field => {
+        field.addEventListener('input', function() {
+            if (this.value.trim()) {
+                this.classList.remove('is-invalid');
+            }
+        });
     });
 });
 </script>

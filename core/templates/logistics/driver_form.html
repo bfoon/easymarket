@@ -1,191 +1,691 @@
 {% extends 'logistics/base.html' %}
+{% load static %}
 
 {% block title %}
     {% if object %}Edit Driver - {{ object.user.get_full_name }}{% else %}Add New Driver{% endif %}
 {% endblock %}
 
+{% block extra_css %}
+<style>
+    :root {
+        --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        --success-gradient: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    }
+
+    /* Page Header */
+    .form-header {
+        background: white;
+        border-radius: 20px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .form-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 5px;
+        background: var(--primary-gradient);
+    }
+
+    /* Form Card */
+    .form-card {
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        overflow: hidden;
+    }
+
+    .form-card-header {
+        background: var(--primary-gradient);
+        color: white;
+        padding: 1.25rem 1.5rem;
+        border: none;
+    }
+
+    .form-card-header h6 {
+        margin: 0;
+        font-weight: 700;
+        font-size: 1.1rem;
+    }
+
+    /* Section Headers */
+    .section-header {
+        border-bottom: 2px solid #f1f3f5;
+        padding-bottom: 0.75rem;
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .section-header h6 {
+        margin: 0;
+        color: #667eea;
+        font-weight: 700;
+        font-size: 1rem;
+    }
+
+    /* Form Controls */
+    .form-label {
+        font-weight: 600;
+        color: #2d3748;
+        margin-bottom: 0.5rem;
+        font-size: 0.9rem;
+    }
+
+    .form-label .required {
+        color: #ef4444;
+        margin-left: 2px;
+    }
+
+    .form-control,
+    .form-select {
+        border-radius: 12px;
+        border: 2px solid #e2e8f0;
+        padding: 0.75rem 1rem;
+        transition: all 0.3s ease;
+        font-size: 0.95rem;
+    }
+
+    .form-control:focus,
+    .form-select:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+    }
+
+    .form-control.is-invalid {
+        border-color: #ef4444;
+    }
+
+    .form-control.is-invalid:focus {
+        box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.1);
+    }
+
+    /* Form Text */
+    .form-text {
+        font-size: 0.8rem;
+        color: #718096;
+        margin-top: 0.25rem;
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    /* Error Messages */
+    .invalid-feedback {
+        display: block;
+        color: #ef4444;
+        font-size: 0.85rem;
+        margin-top: 0.25rem;
+        font-weight: 500;
+    }
+
+    /* Info Box */
+    .info-box {
+        background: linear-gradient(135deg, rgba(79, 172, 254, 0.1) 0%, rgba(79, 172, 254, 0.05) 100%);
+        border: 2px solid rgba(79, 172, 254, 0.2);
+        border-radius: 12px;
+        padding: 1rem 1.25rem;
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: start;
+        gap: 0.75rem;
+    }
+
+    .info-box-icon {
+        color: #4facfe;
+        font-size: 1.25rem;
+        flex-shrink: 0;
+    }
+
+    .info-box-content {
+        flex: 1;
+    }
+
+    .info-box-title {
+        font-weight: 700;
+        color: #0369a1;
+        margin-bottom: 0.25rem;
+    }
+
+    .info-box-text {
+        font-size: 0.85rem;
+        color: #0c4a6e;
+        margin: 0;
+    }
+
+    /* Stat Cards (for edit mode) */
+    .stat-card {
+        background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+        border-radius: 16px;
+        padding: 1.5rem;
+        text-align: center;
+        border: 2px solid #f1f3f5;
+        transition: all 0.3s ease;
+    }
+
+    .stat-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    }
+
+    .stat-value {
+        font-size: 2rem;
+        font-weight: 800;
+        line-height: 1;
+        margin-bottom: 0.5rem;
+    }
+
+    .stat-value.primary { color: #667eea; }
+    .stat-value.success { color: #11998e; }
+    .stat-value.warning { color: #f5576c; }
+
+    .stat-label {
+        font-size: 0.85rem;
+        color: #718096;
+        font-weight: 500;
+    }
+
+    /* Buttons */
+    .btn-modern {
+        border-radius: 12px;
+        padding: 0.625rem 1.25rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        border: none;
+    }
+
+    .btn-primary-modern {
+        background: var(--primary-gradient);
+        color: white;
+    }
+
+    .btn-primary-modern:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        color: white;
+    }
+
+    .btn-outline-modern {
+        border: 2px solid #e2e8f0;
+        color: #64748b;
+        background: white;
+    }
+
+    .btn-outline-modern:hover {
+        background: #f8f9fa;
+        border-color: #cbd5e0;
+    }
+
+    /* Input Icons */
+    .input-group-modern {
+        position: relative;
+    }
+
+    .input-icon {
+        position: absolute;
+        left: 1rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #a0aec0;
+        pointer-events: none;
+    }
+
+    .input-group-modern .form-control {
+        padding-left: 2.75rem;
+    }
+
+    /* Animation */
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .animate-in {
+        animation: fadeInUp 0.6s ease-out;
+    }
+
+    /* Help Text Icon */
+    .help-icon {
+        cursor: help;
+        color: #a0aec0;
+        font-size: 0.9rem;
+        margin-left: 0.25rem;
+    }
+
+    .help-icon:hover {
+        color: #667eea;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="page-header d-flex justify-content-between align-items-center">
-    <div>
-        <h1 class="page-title">
-            {% if object %}
-                Edit Driver - {{ object.user.get_full_name }}
-            {% else %}
-                Add New Driver
-            {% endif %}
-        </h1>
-        <p class="page-subtitle">
-            {% if object %}
-                Update driver information and contact details
-            {% else %}
-                Enter driver information to add to your fleet
-            {% endif %}
-        </p>
+<!-- Page Header -->
+<div class="form-header animate-in">
+    <div class="d-flex justify-content-between align-items-center">
+        <div>
+            <h1 class="h2 mb-1">
+                <i class="fas fa-user-tie me-2"></i>
+                {% if object %}
+                    Edit Driver
+                {% else %}
+                    Add New Driver
+                {% endif %}
+            </h1>
+            <p class="text-muted mb-0">
+                {% if object %}
+                    Update driver information and contact details for {{ object.user.get_full_name }}
+                {% else %}
+                    Enter driver information to add to your fleet
+                {% endif %}
+            </p>
+        </div>
+        <a href="{% url 'logistics:driver_list' %}" class="btn btn-modern btn-outline-modern">
+            <i class="fas fa-arrow-left me-1"></i>
+            Back to Drivers
+        </a>
     </div>
-    <a href="{% url 'logistics:driver_list' %}" class="btn btn-outline-secondary">
-        <i class="fas fa-arrow-left me-1"></i>
-        Back to Drivers
-    </a>
 </div>
 
 <div class="row">
     <div class="col-lg-8 mx-auto">
-        <div class="card">
-            <div class="card-header">
-                <h6 class="m-0 font-weight-bold text-primary">
-                    <i class="fas fa-user-tie me-2"></i>
+        <!-- Main Form Card -->
+        <div class="form-card animate-in" style="animation-delay: 0.1s">
+            <div class="form-card-header">
+                <h6>
+                    <i class="fas fa-id-card me-2"></i>
                     Driver Information
                 </h6>
             </div>
-            <div class="card-body">
-                <form method="post" novalidate>
+            <div class="card-body p-4">
+                <!-- Info Box -->
+                {% if not object %}
+                <div class="info-box">
+                    <i class="fas fa-info-circle info-box-icon"></i>
+                    <div class="info-box-content">
+                        <div class="info-box-title">Creating New Driver Account</div>
+                        <p class="info-box-text">
+                            A new user account will be created for this driver with the provided email address.
+                            The driver will receive login credentials via email.
+                        </p>
+                    </div>
+                </div>
+                {% endif %}
+
+                <form method="post" novalidate id="driverForm">
                     {% csrf_token %}
-                    
-                    <!-- Personal Information -->
-                    <div class="row mb-4">
-                        <div class="col-12">
-                            <h6 class="text-primary border-bottom pb-2 mb-3">
-                                <i class="fas fa-user me-2"></i>
-                                Personal Information
-                            </h6>
+
+                    <!-- Personal Information Section -->
+                    <div class="mb-4">
+                        <div class="section-header">
+                            <i class="fas fa-user"></i>
+                            <h6>Personal Information</h6>
                         </div>
-                        
-                        <div class="col-md-6 mb-3">
-                            <label for="{{ form.first_name.id_for_label }}" class="form-label">
-                                First Name <span class="text-danger">*</span>
-                            </label>
-                            {{ form.first_name }}
-                            {% if form.first_name.errors %}
-                                <div class="text-danger small">{{ form.first_name.errors.0 }}</div>
-                            {% endif %}
-                        </div>
-                        
-                        <div class="col-md-6 mb-3">
-                            <label for="{{ form.last_name.id_for_label }}" class="form-label">
-                                Last Name <span class="text-danger">*</span>
-                            </label>
-                            {{ form.last_name }}
-                            {% if form.last_name.errors %}
-                                <div class="text-danger small">{{ form.last_name.errors.0 }}</div>
-                            {% endif %}
-                        </div>
-                        
-                        <div class="col-md-6 mb-3">
-                            <label for="{{ form.email.id_for_label }}" class="form-label">
-                                Email Address <span class="text-danger">*</span>
-                            </label>
-                            {{ form.email }}
-                            {% if form.email.errors %}
-                                <div class="text-danger small">{{ form.email.errors.0 }}</div>
-                            {% endif %}
-                            <div class="form-text">
-                                Will be used as username for login
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="{{ form.first_name.id_for_label }}" class="form-label">
+                                    First Name <span class="required">*</span>
+                                </label>
+                                <div class="input-group-modern">
+                                    <i class="fas fa-user input-icon"></i>
+                                    {{ form.first_name }}
+                                </div>
+                                {% if form.first_name.errors %}
+                                    <div class="invalid-feedback">{{ form.first_name.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label for="{{ form.last_name.id_for_label }}" class="form-label">
+                                    Last Name <span class="required">*</span>
+                                </label>
+                                <div class="input-group-modern">
+                                    <i class="fas fa-user input-icon"></i>
+                                    {{ form.last_name }}
+                                </div>
+                                {% if form.last_name.errors %}
+                                    <div class="invalid-feedback">{{ form.last_name.errors.0 }}</div>
+                                {% endif %}
                             </div>
                         </div>
-                        
-                        <div class="col-md-6 mb-3">
-                            <label for="{{ form.phone.id_for_label }}" class="form-label">
-                                Phone Number <span class="text-danger">*</span>
-                            </label>
-                            {{ form.phone }}
-                            {% if form.phone.errors %}
-                                <div class="text-danger small">{{ form.phone.errors.0 }}</div>
-                            {% endif %}
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="{{ form.email.id_for_label }}" class="form-label">
+                                    Email Address <span class="required">*</span>
+                                    <i class="fas fa-question-circle help-icon"
+                                       title="Will be used as username for login"></i>
+                                </label>
+                                <div class="input-group-modern">
+                                    <i class="fas fa-envelope input-icon"></i>
+                                    {{ form.email }}
+                                </div>
+                                {% if form.email.errors %}
+                                    <div class="invalid-feedback">{{ form.email.errors.0 }}</div>
+                                {% endif %}
+                                <div class="form-text">
+                                    <i class="fas fa-info-circle"></i>
+                                    Will be used as username for login
+                                </div>
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label for="{{ form.phone.id_for_label }}" class="form-label">
+                                    Phone Number <span class="required">*</span>
+                                </label>
+                                <div class="input-group-modern">
+                                    <i class="fas fa-phone input-icon"></i>
+                                    {{ form.phone }}
+                                </div>
+                                {% if form.phone.errors %}
+                                    <div class="invalid-feedback">{{ form.phone.errors.0 }}</div>
+                                {% endif %}
+                                <div class="form-text">
+                                    <i class="fas fa-mobile-alt"></i>
+                                    Include country code (e.g., +1234567890)
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- License Information -->
-                    <div class="row mb-4">
-                        <div class="col-12">
-                            <h6 class="text-primary border-bottom pb-2 mb-3">
-                                <i class="fas fa-id-card me-2"></i>
-                                License Information
-                            </h6>
+                    <!-- License Information Section -->
+                    <div class="mb-4">
+                        <div class="section-header">
+                            <i class="fas fa-id-card"></i>
+                            <h6>License & Identification</h6>
                         </div>
-                        
-                        <div class="col-md-6 mb-3">
-                            <label for="{{ form.license_number.id_for_label }}" class="form-label">
-                                License Number <span class="text-danger">*</span>
-                            </label>
-                            {{ form.license_number }}
-                            {% if form.license_number.errors %}
-                                <div class="text-danger small">{{ form.license_number.errors.0 }}</div>
-                            {% endif %}
-                            <div class="form-text">
-                                Driver's license number for verification
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="{{ form.license_number.id_for_label }}" class="form-label">
+                                    Driver's License Number <span class="required">*</span>
+                                </label>
+                                <div class="input-group-modern">
+                                    <i class="fas fa-id-card input-icon"></i>
+                                    {{ form.license_number }}
+                                </div>
+                                {% if form.license_number.errors %}
+                                    <div class="invalid-feedback">{{ form.license_number.errors.0 }}</div>
+                                {% endif %}
+                                <div class="form-text">
+                                    <i class="fas fa-shield-alt"></i>
+                                    Valid driver's license number for verification
+                                </div>
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label for="{{ form.employee_id.id_for_label }}" class="form-label">
+                                    Employee ID
+                                </label>
+                                <div class="input-group-modern">
+                                    <i class="fas fa-hashtag input-icon"></i>
+                                    {{ form.employee_id }}
+                                </div>
+                                {% if form.employee_id.errors %}
+                                    <div class="invalid-feedback">{{ form.employee_id.errors.0 }}</div>
+                                {% endif %}
+                                <div class="form-text">
+                                    <i class="fas fa-tag"></i>
+                                    Auto-generated if left empty
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="{{ form.license_expiry.id_for_label }}" class="form-label">
+                                    License Expiry Date
+                                </label>
+                                <div class="input-group-modern">
+                                    <i class="fas fa-calendar-alt input-icon"></i>
+                                    {{ form.license_expiry }}
+                                </div>
+                                {% if form.license_expiry.errors %}
+                                    <div class="invalid-feedback">{{ form.license_expiry.errors.0 }}</div>
+                                {% endif %}
+                                <div class="form-text">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                    System will alert before expiry
+                                </div>
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label for="{{ form.date_hired.id_for_label }}" class="form-label">
+                                    Date Hired
+                                </label>
+                                <div class="input-group-modern">
+                                    <i class="fas fa-calendar-check input-icon"></i>
+                                    {{ form.date_hired }}
+                                </div>
+                                {% if form.date_hired.errors %}
+                                    <div class="invalid-feedback">{{ form.date_hired.errors.0 }}</div>
+                                {% endif %}
+                                <div class="form-text">
+                                    <i class="fas fa-briefcase"></i>
+                                    Employment start date
+                                </div>
                             </div>
                         </div>
                     </div>
+
+                    <!-- Emergency Contact Section -->
+                    <div class="mb-4">
+                        <div class="section-header">
+                            <i class="fas fa-phone-square-alt"></i>
+                            <h6>Emergency Contact</h6>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="{{ form.emergency_contact_name.id_for_label }}" class="form-label">
+                                    Emergency Contact Name
+                                </label>
+                                <div class="input-group-modern">
+                                    <i class="fas fa-user-shield input-icon"></i>
+                                    {{ form.emergency_contact_name }}
+                                </div>
+                                {% if form.emergency_contact_name.errors %}
+                                    <div class="invalid-feedback">{{ form.emergency_contact_name.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label for="{{ form.emergency_contact_phone.id_for_label }}" class="form-label">
+                                    Emergency Contact Phone
+                                </label>
+                                <div class="input-group-modern">
+                                    <i class="fas fa-phone-alt input-icon"></i>
+                                    {{ form.emergency_contact_phone }}
+                                </div>
+                                {% if form.emergency_contact_phone.errors %}
+                                    <div class="invalid-feedback">{{ form.emergency_contact_phone.errors.0 }}</div>
+                                {% endif %}
+                                <div class="form-text">
+                                    <i class="fas fa-info-circle"></i>
+                                    Include country code (e.g., +1234567890)
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Current Statistics (Edit Mode Only) -->
+                    {% if object %}
+                    <div class="mb-4">
+                        <div class="section-header">
+                            <i class="fas fa-chart-bar"></i>
+                            <h6>Performance Statistics</h6>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <div class="stat-card">
+                                    <div class="stat-value primary">
+                                        {{ object.shipments.count|default:0 }}
+                                    </div>
+                                    <div class="stat-label">
+                                        <i class="fas fa-shipping-fast me-1"></i>
+                                        Total Deliveries
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4 mb-3">
+                                <div class="stat-card">
+                                    <div class="stat-value success">
+                                        {{ completed_deliveries|default:0 }}
+                                    </div>
+                                    <div class="stat-label">
+                                        <i class="fas fa-check-circle me-1"></i>
+                                        Completed
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-4 mb-3">
+                                <div class="stat-card">
+                                    <div class="stat-value warning">
+                                        {{ active_deliveries|default:0 }}
+                                    </div>
+                                    <div class="stat-label">
+                                        <i class="fas fa-truck me-1"></i>
+                                        Active
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {% if object.vehicle %}
+                        <div class="info-box">
+                            <i class="fas fa-truck info-box-icon"></i>
+                            <div class="info-box-content">
+                                <div class="info-box-title">Assigned Vehicle</div>
+                                <p class="info-box-text">
+                                    {{ object.vehicle.plate_number }} - {{ object.vehicle.model }} ({{ object.vehicle.year }})
+                                </p>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
 
                     <!-- Form Actions -->
-                    <div class="row">
-                        <div class="col-12">
-                            <div class="d-flex justify-content-end gap-2">
-                                <a href="{% url 'logistics:driver_list' %}" class="btn btn-outline-secondary">
-                                    <i class="fas fa-times me-1"></i>
-                                    Cancel
-                                </a>
-                                <button type="submit" class="btn btn-primary">
-                                    <i class="fas fa-save me-1"></i>
-                                    {% if object %}Update Driver{% else %}Add Driver{% endif %}
-                                </button>
-                            </div>
-                        </div>
+                    <div class="d-flex justify-content-end gap-2 pt-3 border-top">
+                        <a href="{% url 'logistics:driver_list' %}" class="btn btn-modern btn-outline-modern">
+                            <i class="fas fa-times me-1"></i>
+                            Cancel
+                        </a>
+                        <button type="submit" class="btn btn-modern btn-primary-modern">
+                            <i class="fas fa-save me-1"></i>
+                            {% if object %}Update Driver{% else %}Add Driver{% endif %}
+                        </button>
                     </div>
                 </form>
             </div>
         </div>
     </div>
 </div>
-
-{% endblock %}
-
-{% block extra_css %}
-<style>
-    .form-control {
-        border-radius: 8px;
-        border: 1px solid #d1d5db;
-        padding: 12px 16px;
-    }
-    
-    .form-control:focus {
-        border-color: var(--primary-color);
-        box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.15);
-    }
-    
-    .form-label {
-        font-weight: 600;
-        color: #374151;
-        margin-bottom: 8px;
-    }
-    
-    .text-danger {
-        font-size: 14px;
-        margin-top: 4px;
-    }
-    
-    .form-text {
-        font-size: 12px;
-        color: #6b7280;
-        margin-top: 4px;
-    }
-    
-    .border-bottom {
-        border-color: #e5e7eb !important;
-    }
-</style>
 {% endblock %}
 
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Add Bootstrap classes to form fields
-    const inputs = document.querySelectorAll('input');
-    inputs.forEach(input => {
-        if (input.type === 'text' || input.type === 'email' || input.type === 'tel') {
-            input.classList.add('form-control');
+    // Add Bootstrap classes to Django-generated form fields
+    const form = document.getElementById('driverForm');
+
+    form.querySelectorAll('input[type="text"], input[type="email"], input[type="tel"], input[type="date"], textarea, select').forEach(field => {
+        if (!field.classList.contains('form-control') && !field.classList.contains('form-select')) {
+            if (field.tagName === 'SELECT') {
+                field.classList.add('form-select');
+            } else {
+                field.classList.add('form-control');
+            }
+        }
+
+        // Mark invalid fields
+        if (field.getAttribute('aria-invalid') === 'true') {
+            field.classList.add('is-invalid');
         }
     });
+
+    // Form validation feedback
+    form.addEventListener('submit', function(e) {
+        const requiredFields = form.querySelectorAll('[required]');
+        let isValid = true;
+
+        requiredFields.forEach(field => {
+            if (!field.value.trim()) {
+                field.classList.add('is-invalid');
+                isValid = false;
+            } else {
+                field.classList.remove('is-invalid');
+            }
+        });
+
+        if (!isValid) {
+            e.preventDefault();
+
+            // Scroll to first invalid field
+            const firstInvalid = form.querySelector('.is-invalid');
+            if (firstInvalid) {
+                firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                firstInvalid.focus();
+            }
+
+            // Show error message
+            alert('Please fill in all required fields marked with *');
+        }
+    });
+
+    // Remove invalid class on input
+    form.querySelectorAll('.form-control, .form-select').forEach(field => {
+        field.addEventListener('input', function() {
+            if (this.value.trim()) {
+                this.classList.remove('is-invalid');
+            }
+        });
+    });
+
+    // Email validation
+    const emailField = form.querySelector('input[type="email"]');
+    if (emailField) {
+        emailField.addEventListener('blur', function() {
+            const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (this.value && !emailPattern.test(this.value)) {
+                this.classList.add('is-invalid');
+
+                // Add custom error message if needed
+                let errorDiv = this.parentElement.nextElementSibling;
+                if (!errorDiv || !errorDiv.classList.contains('invalid-feedback')) {
+                    errorDiv = document.createElement('div');
+                    errorDiv.className = 'invalid-feedback';
+                    errorDiv.textContent = 'Please enter a valid email address';
+                    this.parentElement.after(errorDiv);
+                }
+            }
+        });
+    }
+
+    // Phone validation (basic)
+    const phoneField = form.querySelector('input[type="tel"]');
+    if (phoneField) {
+        phoneField.addEventListener('input', function() {
+            // Remove non-numeric characters except + and spaces
+            this.value = this.value.replace(/[^\d+\s]/g, '');
+        });
+    }
 });
 </script>
 {% endblock %}

@@ -1,225 +1,659 @@
 {% extends 'logistics/base.html' %}
+{% load static %}
 
-{% block title %}{{ warehouse.name }} - Warehouse Details{% endblock %}
+{% block title %}Warehouse Item #{{ item.id }} - {{ order.id }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        --success-gradient: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        --warning-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        --info-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    }
+
+    /* Page Header */
+    .detail-header {
+        background: white;
+        border-radius: 20px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .detail-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 5px;
+        background: var(--primary-gradient);
+    }
+
+    /* Breadcrumb */
+    .breadcrumb {
+        background: transparent;
+        padding: 0;
+        margin: 0;
+    }
+
+    .breadcrumb-item + .breadcrumb-item::before {
+        content: '›';
+        color: #a0aec0;
+    }
+
+    .breadcrumb-item a {
+        color: #667eea;
+        text-decoration: none;
+    }
+
+    .breadcrumb-item a:hover {
+        text-decoration: underline;
+    }
+
+    .breadcrumb-item.active {
+        color: #718096;
+    }
+
+    /* Cards */
+    .detail-card {
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        overflow: hidden;
+        margin-bottom: 1.5rem;
+    }
+
+    .detail-card-header {
+        background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+        padding: 1.25rem 1.5rem;
+        border-bottom: 2px solid #f1f3f5;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .detail-card-header h5, .detail-card-header h6 {
+        margin: 0;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    /* Product Display */
+    .product-image {
+        width: 120px;
+        height: 120px;
+        border-radius: 16px;
+        object-fit: cover;
+        border: 2px solid #e2e8f0;
+    }
+
+    .product-placeholder {
+        width: 120px;
+        height: 120px;
+        border-radius: 16px;
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #a0aec0;
+        font-size: 2rem;
+        border: 2px solid #e2e8f0;
+    }
+
+    /* Badges */
+    .badge-modern {
+        padding: 0.4rem 0.75rem;
+        border-radius: 12px;
+        font-weight: 600;
+        font-size: 0.75rem;
+    }
+
+    .badge-success-modern {
+        background: rgba(17, 153, 142, 0.15);
+        color: #11998e;
+    }
+
+    .badge-danger-modern {
+        background: rgba(239, 68, 68, 0.15);
+        color: #ef4444;
+    }
+
+    .badge-info-modern {
+        background: rgba(79, 172, 254, 0.15);
+        color: #4facfe;
+    }
+
+    .badge-secondary-modern {
+        background: rgba(100, 116, 139, 0.15);
+        color: #64748b;
+    }
+
+    /* Tables */
+    .modern-table {
+        margin: 0;
+    }
+
+    .modern-table thead th {
+        background: #f8f9fa;
+        color: #2d3748;
+        font-weight: 700;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 1rem 1.5rem;
+        border: none;
+    }
+
+    .modern-table tbody tr {
+        transition: all 0.2s ease;
+        border-bottom: 1px solid #f1f3f5;
+    }
+
+    .modern-table tbody tr:hover {
+        background: rgba(102, 126, 234, 0.05);
+    }
+
+    .modern-table tbody td {
+        padding: 1rem 1.5rem;
+        vertical-align: middle;
+        border: none;
+    }
+
+    /* Info Section */
+    .info-section {
+        background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+        border-radius: 12px;
+        padding: 1.25rem;
+        border: 2px solid #f1f3f5;
+    }
+
+    .info-section h6 {
+        font-weight: 700;
+        margin-bottom: 0.75rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    /* Empty State */
+    .empty-state {
+        text-align: center;
+        padding: 3rem 2rem;
+        color: #a0aec0;
+    }
+
+    .empty-state i {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+    }
+
+    /* Alert */
+    .alert-modern {
+        border-radius: 12px;
+        border: 2px solid;
+        padding: 1rem 1.25rem;
+        display: flex;
+        align-items: start;
+        gap: 0.75rem;
+    }
+
+    .alert-info-modern {
+        background: rgba(79, 172, 254, 0.1);
+        border-color: rgba(79, 172, 254, 0.3);
+        color: #0369a1;
+    }
+
+    .alert-warning-modern {
+        background: rgba(245, 87, 108, 0.1);
+        border-color: rgba(245, 87, 108, 0.3);
+        color: #b91c1c;
+    }
+
+    /* Status Badges */
+    .status-pending {
+        background: rgba(245, 158, 11, 0.15);
+        color: #d97706;
+    }
+
+    .status-shipped {
+        background: rgba(14, 165, 233, 0.15);
+        color: #0284c7;
+    }
+
+    .status-in_transit {
+        background: rgba(79, 172, 254, 0.15);
+        color: #0369a1;
+    }
+
+    .status-delivered {
+        background: rgba(17, 153, 142, 0.15);
+        color: #047857;
+    }
+
+    /* Buttons */
+    .btn-modern {
+        border-radius: 10px;
+        padding: 0.5rem 1rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+
+    .btn-outline-modern {
+        border: 2px solid #e2e8f0;
+        color: #64748b;
+    }
+
+    .btn-outline-modern:hover {
+        background: #f8f9fa;
+        border-color: #cbd5e0;
+    }
+
+    .btn-primary-modern {
+        background: var(--primary-gradient);
+        color: white;
+        border: none;
+    }
+
+    .btn-primary-modern:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        color: white;
+    }
+
+    /* Product Details */
+    .product-details {
+        display: flex;
+        gap: 1.5rem;
+    }
+
+    .product-meta {
+        flex: 1;
+    }
+
+    .product-meta h6 {
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+    }
+
+    .product-meta .sku {
+        color: #718096;
+        font-size: 0.85rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .product-pricing {
+        display: flex;
+        gap: 1.5rem;
+        flex-wrap: wrap;
+    }
+
+    .price-item {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .price-label {
+        font-weight: 600;
+        color: #718096;
+        font-size: 0.85rem;
+    }
+
+    .price-value {
+        font-weight: 700;
+        color: #2d3748;
+        font-size: 1.1rem;
+    }
+
+    /* Animation */
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .animate-in {
+        animation: fadeInUp 0.6s ease-out;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        .product-details {
+            flex-direction: column;
+        }
+
+        .product-pricing {
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="page-header d-flex justify-content-between align-items-center">
-    <div>
-        <h1 class="page-title">{{ warehouse.name }}</h1>
-        <p class="page-subtitle">Warehouse profile and shipment activity</p>
-    </div>
-    <div>
-        <a href="{% url 'logistics:warehouse_edit' warehouse.pk %}" class="btn btn-warning me-2">
-            <i class="fas fa-edit me-1"></i>
-            Edit Warehouse
-        </a>
-        <a href="{% url 'logistics:warehouse_list' %}" class="btn btn-outline-secondary">
-            <i class="fas fa-arrow-left me-1"></i>
-            Back to List
-        </a>
-    </div>
+<!-- Page Header -->
+<div class="detail-header animate-in">
+    <h1 class="h2 mb-2">
+        <i class="fas fa-warehouse me-2"></i>
+        Warehouse Item Detail
+    </h1>
+    <p class="text-muted mb-3">
+        Order item flagged as <strong class="text-success">Shipped to Warehouse</strong>
+    </p>
+
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'logistics:dashboard' %}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'logistics:dashboard' %}#warehouse-queue">Warehouse Queue</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Item #{{ item.id }}</li>
+        </ol>
+    </nav>
 </div>
 
-<!-- Warehouse Profile -->
-<div class="row mb-4">
-    <div class="col-lg-4 mb-4">
-        <div class="card h-100">
-            <div class="card-header">
-                <h6 class="m-0 font-weight-bold text-primary">
-                    <i class="fas fa-warehouse me-2"></i>
-                    Warehouse Information
-                </h6>
-            </div>
-            <div class="card-body text-center">
-                <div class="warehouse-icon-large mb-3">
-                    <i class="fas fa-warehouse fa-4x text-primary"></i>
+<div class="row">
+    <!-- Left Column: Item & Product Details -->
+    <div class="col-lg-7">
+        <!-- Order Item Card -->
+        <div class="detail-card animate-in" style="animation-delay: 0.1s">
+            <div class="detail-card-header">
+                <h5>
+                    <i class="fas fa-box"></i>
+                    Order Item #{{ item.id }}
+                </h5>
+                <div class="d-flex gap-2">
+                    <span class="badge-modern badge-success-modern">
+                        <i class="fas fa-warehouse me-1"></i>Shipped to Warehouse
+                    </span>
+                    {% if order.status == 'cancelled' %}
+                        <span class="badge-modern badge-danger-modern">
+                            <i class="fas fa-times-circle me-1"></i>Order Cancelled
+                        </span>
+                    {% elif order.status == 'shipped' %}
+                        <span class="badge-modern badge-info-modern">
+                            <i class="fas fa-shipping-fast me-1"></i>Order Shipped
+                        </span>
+                    {% endif %}
                 </div>
-                <h5 class="mb-1">{{ warehouse.name }}</h5>
-                <p class="text-muted mb-3">Storage Facility</p>
-                
-                <div class="row text-start">
-                    <div class="col-12 mb-3">
-                        <strong>Address:</strong>
-                        <div class="text-muted">{{ warehouse.address }}</div>
+            </div>
+            <div class="card-body p-4">
+                <div class="product-details">
+                    <!-- Product Image -->
+                    <div>
+                        {% if item.product and item.product.image %}
+                            <img src="{{ item.product.image.url }}" alt="{{ item.product.name }}" class="product-image">
+                        {% else %}
+                            <div class="product-placeholder">
+                                <i class="fas fa-image"></i>
+                            </div>
+                        {% endif %}
                     </div>
-                    <div class="col-12">
-                        <strong>Status:</strong>
-                        <div>
-                            {% if active_shipments > 0 %}
-                                <span class="badge bg-warning">{{ active_shipments }} Active</span>
+
+                    <!-- Product Meta -->
+                    <div class="product-meta">
+                        {% if item.product %}
+                            <h6>{{ item.product.name }}</h6>
+                            {% if item.product.sku %}
+                                <div class="sku">SKU: {{ item.product.sku }}</div>
+                            {% endif %}
+
+                            <div class="product-pricing mt-3">
+                                <div class="price-item">
+                                    <span class="price-label">Quantity</span>
+                                    <span class="price-value">{{ item.quantity }}</span>
+                                </div>
+                                <div class="price-item">
+                                    <span class="price-label">Unit Price</span>
+                                    <span class="price-value">D{{ item.product.price|floatformat:2 }}</span>
+                                </div>
+                                <div class="price-item">
+                                    <span class="price-label">Total</span>
+                                    <span class="price-value">D{{ item.get_total_price|floatformat:2 }}</span>
+                                </div>
+                            </div>
+                        {% else %}
+                            <h6 class="text-muted">Product unavailable</h6>
+                            <div class="product-pricing mt-3">
+                                <div class="price-item">
+                                    <span class="price-label">Quantity</span>
+                                    <span class="price-value">{{ item.quantity }}</span>
+                                </div>
+                                <div class="price-item">
+                                    <span class="price-label">Total</span>
+                                    <span class="price-value">D{{ item.get_total_price|floatformat:2 }}</span>
+                                </div>
+                            </div>
+                        {% endif %}
+
+                        {% if item.shipped_to_warehouse_at %}
+                            <div class="text-muted small mt-3">
+                                <i class="fas fa-clock me-1"></i>
+                                Marked for warehouse: {{ item.shipped_to_warehouse_at|date:"M d, Y H:i" }}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <hr class="my-4">
+
+                <!-- Shop & Buyer Info -->
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <div class="info-section">
+                            <h6>
+                                <i class="fas fa-store"></i>
+                                Shop Information
+                            </h6>
+                            {% if store %}
+                                <div class="fw-semibold mb-1">{{ store.name }}</div>
+                                {% if store.city %}
+                                    <div class="text-muted small">
+                                        <i class="fas fa-map-marker-alt me-1"></i>{{ store.city }}
+                                    </div>
+                                {% endif %}
+                                {% if store.phone %}
+                                    <div class="text-muted small">
+                                        <i class="fas fa-phone me-1"></i>{{ store.phone }}
+                                    </div>
+                                {% endif %}
                             {% else %}
-                                <span class="badge bg-success">Available</span>
+                                <div class="text-muted small">No store information available</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <div class="info-section">
+                            <h6>
+                                <i class="fas fa-user"></i>
+                                Buyer Information
+                            </h6>
+                            {% if buyer %}
+                                <div class="fw-semibold mb-1">{{ buyer.get_full_name|default:buyer.username }}</div>
+                                <div class="text-muted small">
+                                    <i class="fas fa-envelope me-1"></i>{{ buyer.email }}
+                                </div>
+                                {% if buyer.telephone %}
+                                    <div class="text-muted small">
+                                        <i class="fas fa-phone me-1"></i>{{ buyer.telephone }}
+                                    </div>
+                                {% endif %}
+                            {% else %}
+                                <div class="text-muted small">No buyer information available</div>
                             {% endif %}
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- Statistics -->
-    <div class="col-lg-8 mb-4">
-        <div class="row">
-            <div class="col-md-4 mb-4">
-                <div class="card">
-                    <div class="card-body">
-                        <div class="row align-items-center">
-                            <div class="col">
-                                <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                                    Total Shipments
-                                </div>
-                                <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                    {{ total_shipments }}
-                                </div>
-                            </div>
-                            <div class="col-auto">
-                                <i class="fas fa-shipping-fast fa-2x text-gray-300"></i>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="col-md-4 mb-4">
-                <div class="card">
-                    <div class="card-body">
-                        <div class="row align-items-center">
-                            <div class="col">
-                                <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
-                                    Active Shipments
-                                </div>
-                                <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                    {{ active_shipments }}
-                                </div>
-                            </div>
-                            <div class="col-auto">
-                                <i class="fas fa-clock fa-2x text-gray-300"></i>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-md-4 mb-4">
-                <div class="card">
-                    <div class="card-body">
-                        <div class="row align-items-center">
-                            <div class="col">
-                                <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
-                                    Completed
-                                </div>
-                                <div class="h5 mb-0 font-weight-bold text-gray-800">
-                                    {{ completed_shipments }}
-                                </div>
-                            </div>
-                            <div class="col-auto">
-                                <i class="fas fa-check-circle fa-2x text-gray-300"></i>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Activity Overview -->
-        <div class="card">
-            <div class="card-header">
-                <h6 class="m-0 font-weight-bold text-primary">
-                    <i class="fas fa-chart-line me-2"></i>
-                    Activity Overview
+        <!-- Box Placements Card -->
+        <div class="detail-card animate-in" style="animation-delay: 0.2s">
+            <div class="detail-card-header">
+                <h6>
+                    <i class="fas fa-boxes"></i>
+                    Box Placements
                 </h6>
             </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6">
-                        <p class="mb-1"><strong>Current Status:</strong></p>
-                        {% if active_shipments > 0 %}
-                            <p class="text-warning">{{ active_shipments }} shipments in progress</p>
-                        {% else %}
-                            <p class="text-success">No active shipments - Ready for new orders</p>
-                        {% endif %}
-                    </div>
-                    <div class="col-md-6">
-                        <p class="mb-1"><strong>Recent Activity:</strong></p>
-                        {% if recent_shipments %}
-                            <p class="text-muted">Last shipment on {{ recent_shipments.0.created_at|date:"M d, Y" }}</p>
-                        {% else %}
-                            <p class="text-muted">No recent activity</p>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Recent Shipments -->
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h6 class="m-0 font-weight-bold text-primary">
-                    <i class="fas fa-history me-2"></i>
-                    Recent Shipments
-                </h6>
-                <a href="{% url 'logistics:shipment_list' %}?warehouse={{ warehouse.pk }}" class="btn btn-sm btn-outline-primary">
-                    <i class="fas fa-eye me-1"></i>
-                    View All
-                </a>
-            </div>
-            <div class="card-body">
-                {% if recent_shipments %}
+            <div class="card-body p-0">
+                {% if boxed_in %}
                     <div class="table-responsive">
-                        <table class="table table-hover">
+                        <table class="modern-table table mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Shipment</th>
+                                    <th>Box #</th>
+                                    <th>Quantity</th>
+                                    <th>Placed</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for bi in boxed_in %}
+                                <tr>
+                                    <td>
+                                        {% if bi.box and bi.box.shipment %}
+                                            <a href="{% url 'logistics:shipment_detail' bi.box.shipment.pk %}" class="fw-semibold text-decoration-none">
+                                                #{{ bi.box.shipment.id }}
+                                            </a>
+                                            <br>
+                                            <span class="badge-modern status-{{ bi.box.shipment.status }}">
+                                                {{ bi.box.shipment.get_status_display }}
+                                            </span>
+                                        {% else %}
+                                            <span class="text-muted">—</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge-modern badge-secondary-modern">
+                                            Box {{ bi.box.box_number }}
+                                        </span>
+                                    </td>
+                                    <td>{{ bi.quantity }}</td>
+                                    <td>{{ bi.created_at|date:"M d, Y H:i" }}</td>
+                                    <td class="text-end">
+                                        {% if bi.box and bi.box.shipment %}
+                                            <a class="btn btn-sm btn-modern btn-outline-modern"
+                                               href="{% url 'logistics:shipment_detail' bi.box.shipment.pk %}">
+                                               <i class="fas fa-eye me-1"></i>View
+                                            </a>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="empty-state">
+                        <i class="fas fa-box-open"></i>
+                        <h6>No Box Placements</h6>
+                        <p class="text-muted mb-0">This item hasn't been placed into a box yet.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Column: Order & Shipments -->
+    <div class="col-lg-5">
+        <!-- Order Card -->
+        <div class="detail-card animate-in" style="animation-delay: 0.3s">
+            <div class="detail-card-header">
+                <h6>
+                    <i class="fas fa-receipt"></i>
+                    Order Details
+                </h6>
+            </div>
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div>
+                        <h5 class="fw-bold mb-1">#{{ order.id }}</h5>
+                        <div class="text-muted small">
+                            <i class="fas fa-calendar me-1"></i>
+                            Created: {{ order.created_at|date:"M d, Y H:i" }}
+                        </div>
+                    </div>
+                    <span class="badge-modern badge-secondary-modern">
+                        {{ order.get_status_display }}
+                    </span>
+                </div>
+
+                {% if order.shipping_address %}
+                <hr>
+                <div>
+                    <h6 class="mb-2">
+                        <i class="fas fa-map-marker-alt me-2"></i>
+                        Shipping Address
+                    </h6>
+                    <div class="text-muted small">
+                        {{ order.shipping_address.full_name }}<br>
+                        {{ order.shipping_address.street }}<br>
+                        {{ order.shipping_address.city }}, {{ order.shipping_address.region }} {{ order.shipping_address.geo_code }}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Shipments Card -->
+        <div class="detail-card animate-in" style="animation-delay: 0.4s">
+            <div class="detail-card-header">
+                <h6>
+                    <i class="fas fa-truck"></i>
+                    Shipments for this Order
+                </h6>
+                {% if can_create_shipment %}
+                    <a href="{% url 'logistics:shipment_create' %}?order={{ order.id }}"
+                       class="btn btn-sm btn-modern btn-primary-modern">
+                        <i class="fas fa-plus me-1"></i>Create Shipment
+                    </a>
+                {% endif %}
+            </div>
+            <div class="card-body p-0">
+                {% if shipments %}
+                    <div class="table-responsive">
+                        <table class="modern-table table mb-0">
                             <thead>
                                 <tr>
                                     <th>ID</th>
-                                    <th>Destination</th>
-                                    <th>Driver</th>
-                                    <th>Vehicle</th>
                                     <th>Status</th>
-                                    <th>Created</th>
+                                    <th>Driver</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for shipment in recent_shipments %}
+                                {% for s in shipments %}
                                 <tr>
-                                    <td><strong>#{{ shipment.id }}</strong></td>
                                     <td>
-                                        {{ shipment.shipping_address.city }}, {{ shipment.shipping_address.state }}
-                                        <br>
-                                        <small class="text-muted">{{ shipment.shipping_address.address|truncatechars:30 }}</small>
+                                        <a href="{% url 'logistics:shipment_detail' s.pk %}" class="fw-semibold text-decoration-none">
+                                            #{{ s.id }}
+                                        </a>
                                     </td>
                                     <td>
-                                        {% if shipment.driver %}
-                                            {{ shipment.driver.user.get_full_name }}
-                                        {% else %}
-                                            <span class="text-muted">Not assigned</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if shipment.vehicle %}
-                                            {{ shipment.vehicle.plate_number }}
-                                            <br>
-                                            <small class="text-muted">{{ shipment.vehicle.model }}</small>
-                                        {% else %}
-                                            <span class="text-muted">Not assigned</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <span class="status-badge status-{{ shipment.status }}">
-                                            {{ shipment.get_status_display }}
+                                        <span class="badge-modern status-{{ s.status }}">
+                                            {{ s.get_status_display }}
                                         </span>
                                     </td>
                                     <td>
-                                        {{ shipment.created_at|date:"M d, Y" }}
-                                        <br>
-                                        <small class="text-muted">{{ shipment.created_at|time:"H:i" }}</small>
+                                        {% if s.driver and s.driver.user %}
+                                            {{ s.driver.user.get_full_name|default:s.driver.user.username|truncatewords:2 }}
+                                        {% else %}
+                                            <span class="text-muted">—</span>
+                                        {% endif %}
                                     </td>
-                                    <td>
-                                        <a href="{% url 'logistics:shipment_detail' shipment.pk %}" 
-                                           class="btn btn-sm btn-outline-primary">
+                                    <td class="text-end">
+                                        <a href="{% url 'logistics:shipment_detail' s.pk %}" class="btn btn-sm btn-modern btn-outline-modern">
                                             <i class="fas fa-eye"></i>
                                         </a>
                                     </td>
@@ -228,43 +662,44 @@
                             </tbody>
                         </table>
                     </div>
-                {% else %}
-                    <div class="text-center text-muted py-4">
-                        <i class="fas fa-inbox fa-3x mb-3"></i>
-                        <p>No shipments processed through this warehouse yet.</p>
-                        <a href="{% url 'logistics:shipment_create' %}" class="btn btn-primary">
-                            <i class="fas fa-plus me-1"></i>
-                            Create Shipment
-                        </a>
+
+                    {% if can_add_to_shipment %}
+                    <div class="p-3">
+                        <div class="alert-modern alert-info-modern">
+                            <i class="fas fa-info-circle fs-5"></i>
+                            <div>
+                                <strong>Shipment Exists</strong><br>
+                                <small>A shipment already exists for this order. Place the item into a box on the shipment detail page.</small>
+                            </div>
+                        </div>
                     </div>
+                    {% endif %}
+                {% else %}
+                    <div class="empty-state">
+                        <i class="fas fa-truck"></i>
+                        <h6>No Shipments Yet</h6>
+                        <p class="text-muted mb-3">No shipments have been created for this order.</p>
+                        {% if can_create_shipment %}
+                            <a href="{% url 'logistics:shipment_create' %}?order={{ order.id }}" class="btn btn-modern btn-primary-modern">
+                                <i class="fas fa-plus me-1"></i>Create First Shipment
+                            </a>
+                        {% endif %}
+                    </div>
+
+                    {% if not can_create_shipment %}
+                    <div class="p-3">
+                        <div class="alert-modern alert-warning-modern">
+                            <i class="fas fa-exclamation-triangle fs-5"></i>
+                            <div>
+                                <strong>Cannot Create Shipment</strong><br>
+                                <small>Shipment creation is disabled because the order status is <strong>{{ order.get_status_display }}</strong>.</small>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
                 {% endif %}
             </div>
         </div>
     </div>
 </div>
-
-{% endblock %}
-
-{% block extra_css %}
-<style>
-    .warehouse-icon-large {
-        width: 80px;
-        height: 80px;
-        border-radius: 50%;
-        background-color: #f8fafc;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin: 0 auto;
-        border: 2px solid #e2e8f0;
-    }
-    
-    .text-gray-800 {
-        color: #5a5c69 !important;
-    }
-    
-    .text-gray-300 {
-        color: #dddfeb !important;
-    }
-</style>
 {% endblock %}

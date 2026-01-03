@@ -182,7 +182,10 @@ assignment_patterns = [
     path('assign/', views.assign_vehicle_to_driver, name='assign_vehicle_to_driver'),
     path('quick-assign/', views.quick_assign_vehicle, name='quick_assign_vehicle'),
     path('bulk-assign/', views.bulk_assign_vehicles, name='bulk_assign_vehicles'),
-    path('unassign/<int:vehicle_id>/', views.unassign_vehicle, name='unassign_vehicle'),
+    path('api/vehicles/unassigned/', views.api_unassigned_vehicles, name='api_unassigned_vehicles'),
+    path('api/vehicles/assign/', views.assign_vehicle_to_driver, name='assign_vehicle_to_driver'),
+    path('api/vehicles/<int:vehicle_id>/unassign/', views.unassign_vehicle, name='unassign_vehicle'),
+    path("api/unassigned-vehicles/", views.api_unassigned_vehicles, name="api_unassigned_vehicles"),
     path('reassign/<int:shipment_id>/', views.reassign_shipment, name='reassign_shipment'),
 
     # Export Operations

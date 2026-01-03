@@ -1,17 +1,395 @@
 {% extends 'logistics/base.html' %}
+{% load static %}
 
 {% block title %}Warehouses - Logistics Management{% endblock %}
 
+{% block extra_css %}
+<style>
+    :root {
+        --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        --success-gradient: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        --warning-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        --info-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    }
+
+    /* Page Header */
+    .warehouse-header {
+        background: white;
+        border-radius: 20px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .warehouse-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 5px;
+        background: var(--primary-gradient);
+    }
+
+    /* Warehouse Card */
+    .warehouse-card {
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        overflow: hidden;
+        transition: all 0.3s ease;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .warehouse-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+    }
+
+    .warehouse-card-header {
+        background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+        padding: 1.25rem 1.5rem;
+        border-bottom: 2px solid #f1f3f5;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .warehouse-card-header h6 {
+        margin: 0;
+        font-weight: 700;
+        font-size: 1.1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: #667eea;
+    }
+
+    .warehouse-card-body {
+        padding: 1.5rem;
+        flex: 1;
+    }
+
+    .warehouse-card-footer {
+        padding: 1rem 1.5rem;
+        background: #f8f9fa;
+        border-top: 1px solid #f1f3f5;
+    }
+
+    /* Statistics Section */
+    .stats-row {
+        display: flex;
+        gap: 1rem;
+        margin: 1.5rem 0;
+    }
+
+    .stat-box {
+        flex: 1;
+        text-align: center;
+        padding: 1rem;
+        background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+        border-radius: 12px;
+        border: 2px solid #f1f3f5;
+    }
+
+    .stat-value {
+        font-size: 1.75rem;
+        font-weight: 800;
+        line-height: 1;
+        margin-bottom: 0.25rem;
+    }
+
+    .stat-value.primary { color: #667eea; }
+    .stat-value.warning { color: #f5576c; }
+    .stat-value.success { color: #11998e; }
+
+    .stat-label {
+        font-size: 0.75rem;
+        color: #718096;
+        font-weight: 500;
+    }
+
+    /* Location Display */
+    .location-info {
+        display: flex;
+        align-items: start;
+        gap: 0.75rem;
+        padding: 1rem;
+        background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+        border-radius: 12px;
+        margin-bottom: 1rem;
+    }
+
+    .location-icon {
+        color: #667eea;
+        font-size: 1.1rem;
+        margin-top: 2px;
+    }
+
+    .location-text {
+        flex: 1;
+        color: #4a5568;
+        font-size: 0.9rem;
+        line-height: 1.4;
+    }
+
+    /* Recent Activity */
+    .activity-section {
+        margin-top: 1.5rem;
+        padding-top: 1.5rem;
+        border-top: 2px solid #f1f3f5;
+    }
+
+    .activity-label {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #718096;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 0.75rem;
+    }
+
+    .activity-item {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.75rem;
+        background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+        border-radius: 10px;
+        border: 1px solid #e2e8f0;
+    }
+
+    .activity-icon {
+        color: #667eea;
+        font-size: 1.25rem;
+    }
+
+    .activity-details {
+        flex: 1;
+    }
+
+    .activity-title {
+        font-weight: 600;
+        font-size: 0.9rem;
+        color: #2d3748;
+    }
+
+    .activity-date {
+        font-size: 0.75rem;
+        color: #a0aec0;
+    }
+
+    /* Status Badge */
+    .status-badge {
+        padding: 0.35rem 0.65rem;
+        border-radius: 10px;
+        font-weight: 600;
+        font-size: 0.7rem;
+    }
+
+    .status-pending {
+        background: rgba(245, 158, 11, 0.15);
+        color: #d97706;
+    }
+
+    .status-shipped {
+        background: rgba(14, 165, 233, 0.15);
+        color: #0284c7;
+    }
+
+    .status-in_transit {
+        background: rgba(79, 172, 254, 0.15);
+        color: #0369a1;
+    }
+
+    .status-delivered {
+        background: rgba(17, 153, 142, 0.15);
+        color: #047857;
+    }
+
+    /* Action Buttons */
+    .btn-modern {
+        border-radius: 10px;
+        padding: 0.5rem 1rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        font-size: 0.85rem;
+    }
+
+    .btn-outline-modern {
+        border: 2px solid #e2e8f0;
+        color: #64748b;
+    }
+
+    .btn-outline-modern:hover {
+        background: #f8f9fa;
+        border-color: #cbd5e0;
+        transform: translateY(-1px);
+    }
+
+    .btn-primary-modern {
+        background: var(--primary-gradient);
+        color: white;
+        border: none;
+    }
+
+    .btn-primary-modern:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        color: white;
+    }
+
+    /* Dropdown Menu */
+    .dropdown-toggle-modern {
+        border: 2px solid #e2e8f0;
+        background: white;
+        border-radius: 8px;
+        padding: 0.35rem 0.65rem;
+        transition: all 0.2s ease;
+    }
+
+    .dropdown-toggle-modern:hover {
+        background: #f8f9fa;
+        border-color: #cbd5e0;
+    }
+
+    /* Summary Card */
+    .summary-card {
+        background: white;
+        border-radius: 20px;
+        padding: 2rem;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        margin-top: 2rem;
+    }
+
+    .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 2rem;
+        text-align: center;
+    }
+
+    .summary-item h4 {
+        font-size: 2.5rem;
+        font-weight: 800;
+        margin-bottom: 0.5rem;
+        line-height: 1;
+    }
+
+    .summary-item p {
+        color: #718096;
+        font-weight: 500;
+        margin: 0;
+    }
+
+    /* Empty State */
+    .empty-state {
+        background: white;
+        border-radius: 20px;
+        padding: 4rem 2rem;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        text-align: center;
+    }
+
+    .empty-state i {
+        font-size: 5rem;
+        color: #cbd5e0;
+        margin-bottom: 2rem;
+    }
+
+    .empty-state h4 {
+        color: #4a5568;
+        margin-bottom: 1rem;
+    }
+
+    .empty-state p {
+        color: #a0aec0;
+        margin-bottom: 2rem;
+    }
+
+    /* Pagination */
+    .pagination-modern {
+        display: flex;
+        justify-content: center;
+        gap: 0.5rem;
+        margin-top: 2rem;
+    }
+
+    .pagination-modern .page-link {
+        border-radius: 10px;
+        border: 2px solid #e2e8f0;
+        color: #64748b;
+        padding: 0.5rem 0.75rem;
+        font-weight: 600;
+        transition: all 0.2s ease;
+    }
+
+    .pagination-modern .page-link:hover {
+        background: #f8f9fa;
+        border-color: #cbd5e0;
+    }
+
+    .pagination-modern .page-item.active .page-link {
+        background: var(--primary-gradient);
+        border-color: transparent;
+        color: white;
+    }
+
+    /* Animation */
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .animate-in {
+        animation: fadeInUp 0.6s ease-out;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        .stats-row {
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .summary-grid {
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        .summary-item h4 {
+            font-size: 2rem;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="page-header d-flex justify-content-between align-items-center">
-    <div>
-        <h1 class="page-title">Warehouses</h1>
-        <p class="page-subtitle">Manage storage facilities and locations</p>
+<!-- Page Header -->
+<div class="warehouse-header animate-in">
+    <div class="d-flex justify-content-between align-items-center">
+        <div>
+            <h1 class="h2 mb-1">
+                <i class="fas fa-warehouse me-2"></i>
+                Warehouses
+            </h1>
+            <p class="text-muted mb-0">Manage storage facilities and locations</p>
+        </div>
+        <a href="{% url 'logistics:warehouse_create' %}" class="btn btn-modern btn-primary-modern">
+            <i class="fas fa-plus me-1"></i>
+            Add Warehouse
+        </a>
     </div>
-    <a href="{% url 'logistics:warehouse_create' %}" class="btn btn-primary">
-        <i class="fas fa-plus me-2"></i>
-        Add Warehouse
-    </a>
 </div>
 
 <!-- Warehouses Grid -->
@@ -19,91 +397,100 @@
     {% if warehouses %}
         {% for warehouse in warehouses %}
         <div class="col-lg-6 col-xl-4 mb-4">
-            <div class="card h-100">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h6 class="m-0 font-weight-bold text-primary">
-                        <i class="fas fa-warehouse me-2"></i>
+            <div class="warehouse-card animate-in" style="animation-delay: {{ forloop.counter0|floatformat:1|add:"0.1" }}s">
+                <!-- Card Header -->
+                <div class="warehouse-card-header">
+                    <h6>
+                        <i class="fas fa-warehouse"></i>
                         {{ warehouse.name }}
                     </h6>
                     <div class="dropdown">
-                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" 
+                        <button class="btn btn-sm dropdown-toggle-modern" type="button"
                                 data-bs-toggle="dropdown" aria-expanded="false">
-                            <i class="fas fa-ellipsis-h"></i>
+                            <i class="fas fa-ellipsis-v"></i>
                         </button>
-                        <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="{% url 'logistics:warehouse_detail' warehouse.pk %}">
-                                <i class="fas fa-eye me-2"></i>View Details
-                            </a></li>
-                            <li><a class="dropdown-item" href="{% url 'logistics:warehouse_edit' warehouse.pk %}">
-                                <i class="fas fa-edit me-2"></i>Edit
-                            </a></li>
+                        <ul class="dropdown-menu dropdown-menu-end shadow">
+                            <li>
+                                <a class="dropdown-item" href="{% url 'logistics:warehouse_detail' warehouse.pk %}">
+                                    <i class="fas fa-eye me-2 text-info"></i>View Details
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="{% url 'logistics:warehouse_edit' warehouse.pk %}">
+                                    <i class="fas fa-edit me-2 text-primary"></i>Edit
+                                </a>
+                            </li>
                             <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item text-danger" href="#">
-                                <i class="fas fa-trash me-2"></i>Delete
-                            </a></li>
+                            <li>
+                                <a class="dropdown-item text-danger" href="#"
+                                   onclick="return confirm('Are you sure you want to delete this warehouse?')">
+                                    <i class="fas fa-trash me-2"></i>Delete
+                                </a>
+                            </li>
                         </ul>
                     </div>
                 </div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <i class="fas fa-map-marker-alt text-muted me-2"></i>
-                        <span class="text-muted">{{ warehouse.address }}</span>
+
+                <!-- Card Body -->
+                <div class="warehouse-card-body">
+                    <!-- Location -->
+                    <div class="location-info">
+                        <i class="fas fa-map-marker-alt location-icon"></i>
+                        <div class="location-text">{{ warehouse.address|truncatewords:15 }}</div>
                     </div>
 
                     <!-- Statistics -->
-                    <div class="row">
-                        <div class="col-6">
-                            <div class="text-center">
-                                <h5 class="mb-0 text-primary">
-                                    {{ warehouse.total_shipments_count }}
-                                </h5>
-                                <small class="text-muted">Total Shipments</small>
+                    <div class="stats-row">
+                        <div class="stat-box">
+                            <div class="stat-value primary">
+                                {{ warehouse.total_shipments_count|default:0 }}
                             </div>
+                            <div class="stat-label">Total</div>
                         </div>
-                        <div class="col-6">
-                            <div class="text-center">
-                                <h5 class="mb-0 text-warning">
-                                    {{ warehouse.active_shipments_count }}
-                                </h5>
-                                <small class="text-muted">Active</small>
+                        <div class="stat-box">
+                            <div class="stat-value warning">
+                                {{ warehouse.active_shipments_count|default:0 }}
                             </div>
+                            <div class="stat-label">Active</div>
                         </div>
                     </div>
 
                     <!-- Recent Activity -->
-                    <hr>
-                    <div class="mb-2">
-                        <small class="text-muted">Recent Activity:</small>
-                    </div>
-                    {% with recent_shipment=warehouse.shipment_set.first %}
-                        {% if recent_shipment %}
-                            <div class="d-flex align-items-center">
-                                <i class="fas fa-shipping-fast text-primary me-2"></i>
-                                <div class="flex-grow-1">
-                                    <small class="fw-bold">Shipment #{{ recent_shipment.id }}</small>
-                                    <br>
-                                    <small class="text-muted">{{ recent_shipment.created_at|date:"M d, Y" }}</small>
+                    <div class="activity-section">
+                        <div class="activity-label">Recent Activity</div>
+                        {% with recent_shipment=warehouse.shipment_set.first %}
+                            {% if recent_shipment %}
+                                <div class="activity-item">
+                                    <i class="fas fa-shipping-fast activity-icon"></i>
+                                    <div class="activity-details">
+                                        <div class="activity-title">Shipment #{{ recent_shipment.id }}</div>
+                                        <div class="activity-date">{{ recent_shipment.created_at|date:"M d, Y" }}</div>
+                                    </div>
+                                    <span class="status-badge status-{{ recent_shipment.status }}">
+                                        {{ recent_shipment.get_status_display }}
+                                    </span>
                                 </div>
-                                <span class="status-badge status-{{ recent_shipment.status }} small">
-                                    {{ recent_shipment.get_status_display }}
-                                </span>
-                            </div>
-                        {% else %}
-                            <div class="text-center text-muted py-2">
-                                <small>No recent activity</small>
-                            </div>
-                        {% endif %}
-                    {% endwith %}
+                            {% else %}
+                                <div class="text-center text-muted py-3">
+                                    <i class="fas fa-inbox fa-2x mb-2 d-block opacity-25"></i>
+                                    <small>No recent activity</small>
+                                </div>
+                            {% endif %}
+                        {% endwith %}
+                    </div>
                 </div>
-                <div class="card-footer bg-transparent">
-                    <div class="d-flex justify-content-between">
-                        <a href="{% url 'logistics:warehouse_detail' warehouse.pk %}" class="btn btn-sm btn-outline-primary">
+
+                <!-- Card Footer -->
+                <div class="warehouse-card-footer">
+                    <div class="d-flex gap-2">
+                        <a href="{% url 'logistics:warehouse_detail' warehouse.pk %}"
+                           class="btn btn-sm btn-modern btn-outline-modern flex-fill">
                             <i class="fas fa-eye me-1"></i>
-                            View Details
+                            Details
                         </a>
                         <a href="{% url 'logistics:shipment_list' %}?warehouse={{ warehouse.pk }}"
-                           class="btn btn-sm btn-outline-info">
-                            <i class="fas fa-shipping-fast me-1"></i>
+                           class="btn btn-sm btn-modern btn-outline-modern flex-fill">
+                            <i class="fas fa-truck me-1"></i>
                             Shipments
                         </a>
                     </div>
@@ -114,25 +501,23 @@
 
         <!-- Summary Card -->
         <div class="col-12">
-            <div class="card bg-light">
-                <div class="card-body">
-                    <div class="row text-center">
-                        <div class="col-md-3">
-                            <h4 class="text-primary">{{ warehouses|length }}</h4>
-                            <p class="text-muted mb-0">Total Warehouses</p>
-                        </div>
-                        <div class="col-md-3">
-                            <h4 class="text-info">{{ total_shipments_sum }}</h4>
-                            <p class="text-muted mb-0">Total Shipments</p>
-                        </div>
-                        <div class="col-md-3">
-                            <h4 class="text-warning">{{ active_shipments_sum }}</h4>
-                            <p class="text-muted mb-0">Active Shipments</p>
-                        </div>
-                        <div class="col-md-3">
-                            <h4 class="text-success">{{ completed_shipments_sum }}</h4>
-                            <p class="text-muted mb-0">Completed</p>
-                        </div>
+            <div class="summary-card animate-in" style="animation-delay: 0.5s">
+                <div class="summary-grid">
+                    <div class="summary-item">
+                        <h4 style="color: #667eea;">{{ warehouses|length }}</h4>
+                        <p>Total Warehouses</p>
+                    </div>
+                    <div class="summary-item">
+                        <h4 style="color: #4facfe;">{{ total_shipments_sum|default:0 }}</h4>
+                        <p>Total Shipments</p>
+                    </div>
+                    <div class="summary-item">
+                        <h4 style="color: #f5576c;">{{ active_shipments_sum|default:0 }}</h4>
+                        <p>Active Shipments</p>
+                    </div>
+                    <div class="summary-item">
+                        <h4 style="color: #11998e;">{{ completed_shipments_sum|default:0 }}</h4>
+                        <p>Completed</p>
                     </div>
                 </div>
             </div>
@@ -141,8 +526,8 @@
         <!-- Pagination -->
         {% if is_paginated %}
             <div class="col-12">
-                <nav aria-label="Warehouses pagination" class="mt-4">
-                    <ul class="pagination justify-content-center">
+                <nav aria-label="Warehouses pagination">
+                    <ul class="pagination pagination-modern">
                         {% if page_obj.has_previous %}
                             <li class="page-item">
                                 <a class="page-link" href="?page=1">
@@ -185,29 +570,18 @@
             </div>
         {% endif %}
     {% else %}
+        <!-- Empty State -->
         <div class="col-12">
-            <div class="card">
-                <div class="card-body text-center py-5">
-                    <i class="fas fa-warehouse fa-4x text-muted mb-4"></i>
-                    <h4 class="text-muted">No Warehouses Found</h4>
-                    <p class="text-muted mb-4">Start by adding your first warehouse location.</p>
-                    <a href="{% url 'logistics:warehouse_create' %}" class="btn btn-primary">
-                        <i class="fas fa-plus me-2"></i>
-                        Add First Warehouse
-                    </a>
-                </div>
+            <div class="empty-state animate-in">
+                <i class="fas fa-warehouse"></i>
+                <h4>No Warehouses Found</h4>
+                <p>Start by adding your first warehouse location to manage shipments effectively.</p>
+                <a href="{% url 'logistics:warehouse_create' %}" class="btn btn-modern btn-primary-modern btn-lg">
+                    <i class="fas fa-plus me-2"></i>
+                    Add First Warehouse
+                </a>
             </div>
         </div>
     {% endif %}
 </div>
-
-{% endblock %}
-
-{% block extra_css %}
-<style>
-    .status-badge.small {
-        font-size: 10px;
-        padding: 4px 8px;
-    }
-</style>
 {% endblock %}

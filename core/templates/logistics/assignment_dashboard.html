@@ -303,38 +303,45 @@
 </div>
 
 <!-- Assignment Modal -->
-<div class="modal fade" id="assignModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Assign Vehicle</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <form id="assignForm">
-                    {% csrf_token %}
-                    <input type="hidden" id="vehicleId" name="vehicle_id">
-                    <div class="mb-3">
-                        <label class="form-label">Vehicle</label>
-                        <input type="text" id="vehiclePlate" class="form-control" readonly>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Driver</label>
-                        <select id="driverId" name="driver_id" class="form-select">
-                            <option value="">Unassigned</option>
-                            {% for driver in drivers %}
-                            <option value="{{ driver.id }}">{{ driver.user.get_full_name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="assignVehicle()">Assign</button>
-            </div>
-        </div>
+<div class="modal fade" id="assignModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Assign Vehicle</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body">
+        <form id="assignForm">
+          {% csrf_token %}
+          <input type="hidden" id="vehicleId" name="vehicle_id">
+
+          <div class="mb-3">
+            <label class="form-label">Vehicle</label>
+            <input type="text" id="vehiclePlate" class="form-control" readonly>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Driver</label>
+            <select id="driverId" name="driver_id" class="form-select" required>
+              <option value="">Select Driver</option>
+              {% for driver in drivers %}
+                <option value="{{ driver.id }}">{{ driver.user.get_full_name }}</option>
+              {% endfor %}
+            </select>
+            <div class="form-text">Pick a driver to assign this vehicle.</div>
+          </div>
+        </form>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="assignVehicle()">
+          <i class="fas fa-save me-1"></i> Assign
+        </button>
+      </div>
     </div>
+  </div>
 </div>
 
 <!-- Bulk Assignment Modal -->
@@ -392,70 +399,63 @@
 {% block extra_js %}
 <script>
 function showAssignModal(vehicleId, vehiclePlate, currentDriverId) {
-    document.getElementById('vehicleId').value = vehicleId;
-    document.getElementById('vehiclePlate').value = vehiclePlate;
-    document.getElementById('driverId').value = currentDriverId || '';
-    
-    var modal = new bootstrap.Modal(document.getElementById('assignModal'));
-    modal.show();
+  document.getElementById('vehicleId').value = vehicleId;
+  document.getElementById('vehiclePlate').value = vehiclePlate;
+  document.getElementById('driverId').value = currentDriverId ? String(currentDriverId) : '';
+  new bootstrap.Modal(document.getElementById('assignModal')).show();
 }
 
 function assignVehicle() {
-    const form = document.getElementById('assignForm');
-    const formData = new FormData(form);
-    
-    fetch('{% url "logistics:assign_vehicle_to_driver" %}', {
-        method: 'POST',
-        body: formData,
-        headers: {
-            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert('Vehicle assigned successfully!');
-            location.reload();
-        } else {
-            alert('Error: ' + data.message);
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('An error occurred while assigning the vehicle');
-    });
+  const form = document.getElementById('assignForm');
+  const formData = new FormData(form);
+
+  fetch('{% url "logistics:assign_vehicle_to_driver" %}', {
+    method: 'POST',
+    body: formData,
+    headers: {
+      'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+    }
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      alert(data.message || 'Vehicle assignment updated!');
+      location.reload();
+    } else {
+      alert(data.message || 'Assignment failed');
+    }
+  })
+  .catch(err => {
+    console.error(err);
+    alert('An error occurred while assigning the vehicle');
+  });
 }
 
 function unassignVehicle(vehicleId, vehiclePlate) {
-    if (confirm(`Are you sure you want to unassign vehicle ${vehiclePlate}?`)) {
-        fetch(`{% url "logistics:unassign_vehicle" 0 %}`.replace('0', vehicleId), {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
-                'Content-Type': 'application/json'
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert('Vehicle unassigned successfully!');
-                location.reload();
-            } else {
-                alert('Error: ' + data.message);
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('An error occurred while unassigning the vehicle');
-        });
-    }
-}
+  if (!confirm(`Are you sure you want to unassign vehicle ${vehiclePlate}?`)) return;
 
-// Auto-refresh every 30 seconds
-setInterval(() => {
-    location.reload();
-}, 30000);
+  fetch(`{% url "logistics:unassign_vehicle" 0 %}`.replace('0', vehicleId), {
+    method: 'POST',
+    headers: {
+      'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+    }
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      alert(data.message || 'Vehicle unassigned!');
+      location.reload();
+    } else {
+      alert(data.message || 'Unassign failed');
+    }
+  })
+  .catch(err => {
+    console.error(err);
+    alert('An error occurred while unassigning the vehicle');
+  });
+}
 </script>
+
 {% endblock %}
 
 {% block extra_css %}
