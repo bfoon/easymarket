@@ -16,107 +16,131 @@ User = get_user_model()
 
 
 class DateTimeLocalWidget(forms.DateTimeInput):
-    """Custom widget for datetime-local input"""
-    input_type = 'datetime-local'
+    input_type = "datetime-local"
 
 
 class ShipmentForm(forms.ModelForm):
-    """Form for creating and updating shipments"""
-
     class Meta:
         model = Shipment
         fields = [
-            'shipping_address', 'warehouse', 'driver', 'vehicle', 'logistic_office',
-            'collect_time', 'estimated_dropoff_time', 'order', 'weight_kg',
-            'size_cubic_meters', 'material_type', 'shipment_type', 'packing_type',
-            'container_type', 'verification_photo',
-            'status'
+            "shipping_address", "warehouse", "driver", "vehicle", "logistic_office",
+            "collect_time", "estimated_dropoff_time", "order", "weight_kg",
+            "size_cubic_meters", "material_type", "shipment_type", "packing_type",
+            "container_type", "verification_photo", "status"
         ]
         widgets = {
-            'collect_time': DateTimeLocalWidget(attrs={'class': 'form-control'}),
-            'estimated_dropoff_time': DateTimeLocalWidget(attrs={'class': 'form-control'}),
-            'shipping_address': forms.Select(attrs={'class': 'form-select'}),
-            'warehouse': forms.Select(attrs={'class': 'form-select'}),
-            'driver': forms.Select(attrs={'class': 'form-select'}),
-            'vehicle': forms.Select(attrs={'class': 'form-select'}),
-            'logistic_office': forms.Select(attrs={'class': 'form-select'}),
-            'order': forms.Select(attrs={'class': 'form-select'}),
-            'weight_kg': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.1', 'min': '0'}),
-            'size_cubic_meters': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0'}),
-            'material_type': forms.Select(attrs={'class': 'form-select'}),
-            'shipment_type': forms.Select(attrs={'class': 'form-select'}),
-            'packing_type': forms.Select(attrs={'class': 'form-select'}),
-            'container_type': forms.Select(attrs={'class': 'form-select'}),
-            'verification_photo': forms.FileInput(attrs={'class': 'form-control'}),
-            'status': forms.Select(attrs={'class': 'form-select'}),
+            "collect_time": DateTimeLocalWidget(attrs={"class": "form-control"}),
+            "estimated_dropoff_time": DateTimeLocalWidget(attrs={"class": "form-control"}),
+            "shipping_address": forms.Select(attrs={"class": "form-select"}),
+            "warehouse": forms.Select(attrs={"class": "form-select"}),
+            "driver": forms.Select(attrs={"class": "form-select"}),
+            "vehicle": forms.Select(attrs={"class": "form-select"}),
+            "logistic_office": forms.Select(attrs={"class": "form-select"}),
+            "order": forms.Select(attrs={"class": "form-select"}),
+            "weight_kg": forms.NumberInput(attrs={"class": "form-control", "step": "0.1", "min": "0"}),
+            "size_cubic_meters": forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": "0"}),
+            "material_type": forms.Select(attrs={"class": "form-select"}),
+            "shipment_type": forms.Select(attrs={"class": "form-select"}),
+            "packing_type": forms.Select(attrs={"class": "form-select"}),
+            "container_type": forms.Select(attrs={"class": "form-select"}),
+            "verification_photo": forms.FileInput(attrs={"class": "form-control"}),
+            "status": forms.Select(attrs={"class": "form-select"}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.fields['warehouse'].queryset = Warehouse.objects.filter(is_active=True).order_by('name')
-        self.fields['driver'].queryset = Driver.objects.select_related('user').filter(
+        self.fields["warehouse"].queryset = Warehouse.objects.filter(is_active=True).order_by("name")
+        self.fields["driver"].queryset = Driver.objects.select_related("user").filter(
             is_active=True, user__is_active=True
-        ).order_by('user__first_name')
-        self.fields['vehicle'].queryset = Vehicle.objects.select_related('driver').filter(
+        ).order_by("user__first_name", "user__last_name")
+        self.fields["vehicle"].queryset = Vehicle.objects.select_related("driver").filter(
             is_active=True
-        ).order_by('plate_number')
-        self.fields['logistic_office'].queryset = LogisticOffice.objects.order_by('name')
+        ).order_by("plate_number")
+        self.fields["logistic_office"].queryset = LogisticOffice.objects.order_by("name")
 
-        is_new_shipment = not self.instance or not self.instance.pk
+        is_new = not self.instance or not self.instance.pk
 
-        if is_new_shipment:
-            self.fields['status'].initial = 'pending'
-            self.fields['order'].queryset = Order.objects.filter(status='processing').order_by('-created_at')
-            self.fields['order'].help_text = "Only orders with 'Processing' status are available for new shipments"
-            self.fields['shipping_address'].queryset = ShippingAddress.objects.filter(
-                order__status='processing'
-            ).distinct().order_by('-id')
+        if is_new:
+            # ✅ Only processing orders that DO NOT have any shipment yet
+            eligible_orders = (
+                Order.objects
+                .filter(status="processing")
+                .filter(shipments__isnull=True)
+                .distinct()
+                .order_by("-created_at")
+            )
+            self.fields["order"].queryset = eligible_orders
+            self.fields["order"].help_text = "Only 'Processing' orders without any shipment are available."
+
+            # ✅ Shipping addresses only for eligible orders
+            self.fields["shipping_address"].queryset = (
+                ShippingAddress.objects
+                .filter(order__in=eligible_orders)
+                .distinct()
+                .order_by("-id")
+            )
+
+            self.fields["status"].initial = "pending"
         else:
-            self.fields['order'].queryset = Order.objects.order_by('-created_at')
-            self.fields['order'].disabled = True
-            self.fields['shipping_address'].queryset = ShippingAddress.objects.order_by('-id')
-            self.fields['shipping_address'].disabled = True
+            # editing an existing shipment
+            self.fields["order"].queryset = Order.objects.order_by("-created_at")
+            self.fields["order"].disabled = True
+
+            self.fields["shipping_address"].queryset = ShippingAddress.objects.order_by("-id")
+            self.fields["shipping_address"].disabled = True
 
         # Optional fields
-        self.fields['warehouse'].required = False
-        self.fields['driver'].required = False
-        self.fields['vehicle'].required = False
-        self.fields['logistic_office'].required = False
-        self.fields['verification_photo'].required = False
+        for f in ["warehouse", "driver", "vehicle", "logistic_office", "verification_photo"]:
+            self.fields[f].required = False
 
         # Help texts
-        self.fields['weight_kg'].help_text = "Weight in kilograms"
-        self.fields['size_cubic_meters'].help_text = "Size in cubic meters"
-        self.fields['collect_time'].help_text = "When the shipment will be collected"
-        self.fields['estimated_dropoff_time'].help_text = "Estimated delivery time"
+        self.fields["weight_kg"].help_text = "Weight in kilograms"
+        self.fields["size_cubic_meters"].help_text = "Size in cubic meters"
+        self.fields["collect_time"].help_text = "When the shipment will be collected"
+        self.fields["estimated_dropoff_time"].help_text = "Estimated delivery time"
+
+    def clean_order(self):
+        order = self.cleaned_data.get("order")
+        if not order:
+            return order
+
+        # ✅ Safety check: prevent creating another shipment for same order
+        qs = order.shipments.all()
+        if self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+
+        if qs.exists():
+            raise ValidationError("This order already has a shipment.")
+        return order
 
     def clean(self):
         cleaned_data = super().clean()
-        collect_time = cleaned_data.get('collect_time')
-        estimated_dropoff_time = cleaned_data.get('estimated_dropoff_time')
-        driver = cleaned_data.get('driver')
-        vehicle = cleaned_data.get('vehicle')
-        weight_kg = cleaned_data.get('weight_kg')
+        collect_time = cleaned_data.get("collect_time")
+        estimated_dropoff_time = cleaned_data.get("estimated_dropoff_time")
+        driver = cleaned_data.get("driver")
+        vehicle = cleaned_data.get("vehicle")
+        weight_kg = cleaned_data.get("weight_kg")
 
-        # Validate time logic
         if collect_time and estimated_dropoff_time:
             if collect_time >= estimated_dropoff_time:
-                self.add_error('estimated_dropoff_time', "Estimated dropoff time must be after collection time.")
+                self.add_error("estimated_dropoff_time", "Estimated dropoff time must be after collection time.")
             if not self.instance.pk and collect_time < timezone.now():
-                self.add_error('collect_time', "Collection time cannot be in the past.")
+                self.add_error("collect_time", "Collection time cannot be in the past.")
 
-        # Validate driver-vehicle assignment
         if driver and vehicle:
             if vehicle.driver and vehicle.driver != driver:
-                self.add_error('vehicle',
-                               f"Vehicle {vehicle.plate_number} is assigned to {vehicle.driver.user.get_full_name()}.")
+                self.add_error(
+                    "vehicle",
+                    f"Vehicle {vehicle.plate_number} is assigned to {vehicle.driver.user.get_full_name()}."
+                )
 
-        # Validate vehicle capacity
-        if vehicle and weight_kg:
-            if hasattr(vehicle, 'capacity_kg') and vehicle.capacity_kg and weight_kg > vehicle.capacity_kg:
-                self.add_error('weight_kg',
-                               f"Weight ({weight_kg} kg) exceeds vehicle capacity ({vehicle.capacity_kg} kg).")
+        if vehicle and weight_kg and getattr(vehicle, "capacity_kg", None):
+            if vehicle.capacity_kg and weight_kg > vehicle.capacity_kg:
+                self.add_error(
+                    "weight_kg",
+                    f"Weight ({weight_kg} kg) exceeds vehicle capacity ({vehicle.capacity_kg} kg)."
+                )
 
         return cleaned_data
 

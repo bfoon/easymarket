@@ -161,6 +161,7 @@ TEMPLATES = [
                 "marketplace.context_processors.nav_categories",
                 "analytics.context_processors.analytics_metrics",
                 "analytics.context_processors.store_analytics_kpis",
+                "logistics.context_processors.logistics_nav_counts",
             ],
         },
     },

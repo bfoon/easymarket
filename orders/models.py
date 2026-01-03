@@ -66,26 +66,28 @@ class Order(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    # Payment information
-    # payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES, blank=True, null=True)
     payment_date = models.DateTimeField(blank=True, null=True)
 
-    # Financial fields
-    tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.0'))  # 8.5% default tax
+    tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('0.0'))
     shipping_cost = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
     discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
-    promo_code = models.ForeignKey(PromoCode, on_delete=models.SET_NULL, null=True, blank=True)
+    promo_code = models.ForeignKey('orders.PromoCode', on_delete=models.SET_NULL, null=True, blank=True)
 
-    # Delivery information
     expected_delivery_date = models.DateField(blank=True, null=True)
     shipped_date = models.DateTimeField(blank=True, null=True)
     delivered_date = models.DateTimeField(blank=True, null=True)
-    tracking_number = models.CharField(max_length=100, blank=True, null=True)
 
-    # Address information
-    shipping_address = models.ForeignKey('ShippingAddress', on_delete=models.SET_NULL, blank=True, null=True)
+    # ✅ Tracking number like EM0000000001
+    tracking_number = models.CharField(
+        max_length=12,
+        blank=True,
+        null=True,
+        unique=True,
+        db_index=True
+    )
 
-    # Notes
+    shipping_address = models.ForeignKey('orders.ShippingAddress', on_delete=models.SET_NULL, blank=True, null=True)
+
     order_notes = models.TextField(blank=True, null=True)
     admin_notes = models.TextField(blank=True, null=True)
 
@@ -107,11 +109,9 @@ class Order(models.Model):
         return f"Order #{self.id} - {self.buyer.username}"
 
     def get_subtotal(self):
-        """Calculate the subtotal (sum of all items)"""
         return sum(item.get_total_price() for item in self.items.all())
 
     def get_tax_amount(self):
-        """Calculate tax amount based on subtotal"""
         return self.get_subtotal() * (self.tax_rate / 100)
 
     @property
@@ -120,46 +120,35 @@ class Order(models.Model):
 
     @property
     def get_total(self):
-        """Calculate the final total including tax and shipping"""
         subtotal = Decimal(self.get_subtotal() or 0)
         tax = Decimal(self.get_tax_amount() or 0)
         shipping = Decimal(self.shipping_cost or 0)
         discount = Decimal(self.discount_amount or 0)
-
         total = subtotal + tax + shipping - discount
         return total.quantize(Decimal("0.01"))
 
     def get_item_count(self):
-        """Get total number of items in the order"""
         return sum(item.quantity for item in self.items.all())
 
     def can_be_cancelled(self):
-        """Check if order can be cancelled"""
         return self.status in ['pending', 'processing']
 
     def can_be_tracked(self):
-        """Check if order can be tracked based on status or related shipment"""
         return (
-                self.status in ['shipped', 'delivered'] or
-                self.shipments.filter(status='in_transit').exists()
-        ) and self.tracking_number
+            (self.status in ['shipped', 'delivered'] or self.shipments.filter(status='in_transit').exists())
+            and self.tracking_number
+        )
 
     def is_completed(self):
-        """Check if order is completed"""
         return self.status == 'delivered'
 
-    # In your Order model
     def get_subtotal_with_tax_and_shipping(self):
-        """Get subtotal + tax + shipping (before promo discount)"""
         subtotal = self.get_subtotal()
         tax = self.get_tax_amount()
         shipping = self.shipping_cost or Decimal('0')
         return subtotal + tax + shipping
 
     def get_payment_method_display(self):
-        """
-        Retrieve a human-readable payment method name from the related Payment model
-        """
         if hasattr(self, 'payment_record') and self.payment_record.method:
             method_map = {
                 'wave': 'Wave',
@@ -172,27 +161,39 @@ class Order(models.Model):
         return 'Not specified'
 
     def mark_as_shipped(self):
-        """Mark the order as shipped and set shipped_date if not already set."""
         self.status = 'shipped'
-        if not self.collect_time:
-            self.collect_time = timezone.now()
-        self.save()
+        # NOTE: your code references collect_time but the field isn't in the model you pasted.
+        # If you meant shipped_date, use this:
+        if not self.shipped_date:
+            self.shipped_date = timezone.now()
+        self.save(update_fields=['status', 'shipped_date', 'updated_at'])
 
     @property
     def is_in_transit(self):
         return self.shipments.filter(status='in_transit').exists()
 
     def save(self, *args, **kwargs):
-        # Auto-set dates based on status changes
-        if self.pk:  # Only for existing orders
-            old_order = Order.objects.get(pk=self.pk)
-            if old_order.status != self.status:
-                if self.status == 'shipped' and not self.collect_time:
-                    self.collect_time = timezone.now()
+        is_new = self.pk is None
+
+        # Status-based timestamps (only on updates)
+        if not is_new:
+            old = Order.objects.filter(pk=self.pk).only('status', 'shipped_date', 'delivered_date').first()
+            if old and old.status != self.status:
+                if self.status == 'shipped' and not self.shipped_date:
+                    self.shipped_date = timezone.now()
                 elif self.status == 'delivered' and not self.delivered_date:
                     self.delivered_date = timezone.now()
 
+        # First save to get an ID
         super().save(*args, **kwargs)
+
+        # ✅ Generate tracking number after we have self.pk
+        if not self.tracking_number:
+            tracking = f"EM{self.pk:010d}"  # EM0000000001
+
+            # Safe update (avoids recursion) and helps prevent overwriting
+            Order.objects.filter(pk=self.pk, tracking_number__isnull=True).update(tracking_number=tracking)
+            self.tracking_number = tracking
 
 
 class OrderItem(models.Model):

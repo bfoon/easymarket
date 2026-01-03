@@ -575,12 +575,20 @@ class ShipmentCreateView(LogisticsMixin, CreateView):
     template_name = 'logistics/shipment_form.html'
     form_class = ShipmentForm
 
-    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
+    def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+
+        eligible_orders = (
+            Order.objects
+            .filter(status='processing')
+            .filter(shipments__isnull=True)  # <-- only orders with NO shipments
+            .distinct()
+            .select_related('buyer')  # preload buyer if you display it
+        )
+
         context['title'] = 'Create New Shipment'
-        context['processing_orders_count'] = Order.objects.filter(
-            status='processing'
-        ).count()
+        context['processing_orders_count'] = eligible_orders.count()
+        context['eligible_orders'] = eligible_orders  # if your template needs it
         return context
 
     def get_success_url(self) -> str:
@@ -1020,23 +1028,27 @@ def generate_all_box_labels(request, shipment_id):
 # ============================================================================
 
 class BoxItemCreateView(LoginRequiredMixin, CreateView):
-    """Add items to a box"""
     model = BoxItem
-    fields = ['order_item', 'quantity', 'notes']
-    template_name = 'logistics/box_item_form.html'
+    fields = ["order_item", "quantity", "notes"]
+    template_name = "logistics/box_item_form.html"
+
+    def _box_pk(self):
+        return self.kwargs.get("box_pk") or self.kwargs.get("box_id")
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['box'] = get_object_or_404(ShipmentBox, pk=self.kwargs['box_pk'])
+        box = get_object_or_404(ShipmentBox, pk=self._box_pk())
+        context["box"] = box
+        context["shipment"] = box.shipment   # <-- THIS fixes shipment_detail reverse
+        context["action"] = "Add"
         return context
 
     def form_valid(self, form):
-        form.instance.box_id = self.kwargs['box_pk']
+        form.instance.box_id = self._box_pk()
         return super().form_valid(form)
 
     def get_success_url(self):
-        box = self.object.box
-        return reverse_lazy('logistics:shipment_detail', kwargs={'pk': box.shipment.pk})
+        return reverse_lazy("logistics:shipment_detail", kwargs={"pk": self.object.box.shipment.pk})
 
 
 class BoxItemDetailView(LoginRequiredMixin, DetailView):
