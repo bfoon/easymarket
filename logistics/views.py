@@ -31,7 +31,7 @@ from django.db.models import (
     Q, Count, Avg, Sum, F, ExpressionWrapper,
     DecimalField, Case, When, Value
 )
-from django.db.models.functions import TruncDate, Coalesce
+from django.db.models.functions import TruncDate, Coalesce, Cast
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.http import (
     HttpResponse, JsonResponse, HttpRequest,
@@ -1098,11 +1098,56 @@ class DriverListView(LoginRequiredMixin, ListView):
             )
         )
 
-
 class DriverDetailView(LoginRequiredMixin, DetailView):
+    """View driver details"""
     model = Driver
     template_name = 'logistics/driver_detail.html'
     context_object_name = 'driver'
+
+    def get_queryset(self):
+        # Make the base object fast + reliable
+        return (
+            Driver.objects
+            .select_related('user')
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        driver = self.object
+
+        # ✅ Assigned vehicles for this driver (your Vehicle FK uses related_name='vehicles')
+        vehicles_qs = (
+            driver.vehicles.filter(is_active=True)
+            .annotate(
+                active_shipments_count=Count(
+                    'shipments',
+                    filter=Q(shipments__status__in=ACTIVE_STATUSES)
+                )
+            )
+            .order_by('plate_number')
+        )
+
+        # ✅ Recent shipments for this driver (Shipment FK uses related_name='shipments')
+        recent_shipments_qs = (
+            driver.shipments
+            .select_related('shipping_address', 'order', 'vehicle')
+            .order_by('-created_at')[:10]
+        )
+
+        # ✅ Stats the template expects
+        total_shipments = driver.shipments.count()
+        active_shipments = driver.shipments.filter(status__in=ACTIVE_STATUSES).count()
+        completed_shipments = driver.shipments.filter(status='delivered').count()
+
+        context.update({
+            "vehicles": vehicles_qs,
+            "vehicle_count": vehicles_qs.count(),
+            "recent_shipments": recent_shipments_qs,
+            "total_shipments": total_shipments,
+            "active_shipments": active_shipments,
+            "completed_shipments": completed_shipments,
+        })
+        return context
 
 
 class DriverCreateView(LoginRequiredMixin, CreateView):
@@ -1563,19 +1608,88 @@ def update_driver_location(request, shipment_id):
 # VEHICLE VIEWS - Additional
 # ============================================================================
 
+DECIMAL = DecimalField(max_digits=12, decimal_places=2)
+
 class VehicleListView(LoginRequiredMixin, ListView):
-    """List all vehicles"""
     model = Vehicle
     template_name = 'logistics/vehicle_list.html'
     context_object_name = 'vehicles'
     paginate_by = 20
 
+    def get_queryset(self):
+        qs = (
+            Vehicle.objects
+            .select_related('driver__user')
+            .annotate(
+                active_shipments_count=Count(
+                    'shipments',
+                    filter=Q(shipments__status__in=ACTIVE_STATUSES),
+                    distinct=True
+                ),
+
+                # sum weight of active shipments (Decimal)
+                active_weight_kg=Coalesce(
+                    Sum('shipments__weight_kg', filter=Q(shipments__status__in=ACTIVE_STATUSES)),
+                    Value(Decimal('0.00')),
+                    output_field=DECIMAL
+                ),
+
+                # capacity_kg as Decimal (in case your field is IntegerField)
+                capacity_kg_dec=Coalesce(
+                    Cast('capacity_kg', DECIMAL),
+                    Value(Decimal('0.00')),
+                    output_field=DECIMAL
+                ),
+            )
+            .annotate(
+                # percent = (active_weight_kg * 100) / capacity
+                capacity_used_percent=ExpressionWrapper(
+                    # avoid division by 0: if capacity is 0, percent becomes 0
+                    Coalesce(
+                        (F('active_weight_kg') * Value(Decimal('100.00'))) /
+                        Coalesce(
+                            # if capacity is 0 => use 1 to avoid crash, then we handle below
+                            Cast('capacity_kg', DECIMAL),
+                            Value(Decimal('1.00')),
+                            output_field=DECIMAL
+                        ),
+                        Value(Decimal('0.00')),
+                        output_field=DECIMAL
+                    ),
+                    output_field=DECIMAL
+                )
+            )
+            .order_by('plate_number')
+        )
+        return qs
+
 
 class VehicleDetailView(LoginRequiredMixin, DetailView):
-    """View vehicle details"""
     model = Vehicle
     template_name = 'logistics/vehicle_detail.html'
+    context_object_name = 'vehicle'
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        vehicle = self.object
+
+        shipments_qs = (
+            vehicle.shipments.select_related('driver__user', 'shipping_address', 'order')
+            .order_by('-created_at')
+        )
+
+        context['recent_shipments'] = shipments_qs[:10]
+        context['total_shipments'] = shipments_qs.count()
+        context['active_shipments'] = shipments_qs.filter(status__in=ACTIVE_STATUSES).count()
+        context['completed_shipments'] = shipments_qs.filter(status='delivered').count()
+
+        # Simple “current utilization”
+        context['current_utilization'] = (
+            "In Use" if shipments_qs.filter(status__in=ACTIVE_STATUSES).exists()
+            else "Idle"
+        )
+
+        return context
 
 class VehicleCreateView(LoginRequiredMixin, CreateView):
     """Create new vehicle"""
