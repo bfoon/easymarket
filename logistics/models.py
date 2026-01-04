@@ -992,3 +992,16 @@ class BoxItem(TimeStampedModel):
                 raise ValidationError({
                     'quantity': _('Quantity cannot exceed order item quantity.')
                 })
+
+class DriverLocation(models.Model):
+    driver = models.ForeignKey("logistics.Driver", on_delete=models.CASCADE, related_name="locations")
+    latitude = models.DecimalField(max_digits=9, decimal_places=6)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6)
+    accuracy_m = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True)
+    speed_mps = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True)
+    heading = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    recorded_at = models.DateTimeField(default=timezone.now, db_index=True)
+
+    class Meta:
+        ordering = ["-recorded_at"]
+        indexes = [models.Index(fields=["driver", "-recorded_at"])]

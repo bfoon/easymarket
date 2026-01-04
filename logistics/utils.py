@@ -920,6 +920,15 @@ def get_shipment_location_data(shipment: Shipment) -> Dict[str, Any]:
     geo_code = getattr(address, 'geo_code', None)
     coordinates = None
 
+    # Best destination string for navigation/search
+    best_destination = geo_code if (geo_code and validate_plus_code(geo_code)) else result['address']['full_address']
+
+    result['best_destination'] = {
+        'value': best_destination,
+        'type': 'plus_code' if best_destination == geo_code else 'address'
+    }
+
+
     if geo_code and validate_plus_code(geo_code):
         # Decode Plus Code
         coords = decode_plus_code(geo_code)
@@ -1183,7 +1192,7 @@ def enhance_delivery_instructions(shipment) -> Dict[str, Any]:
     address = shipment.shipping_address
     if address:
         # Full address
-        full_address = f"{address.address}, {address.city}, {address.region}"
+        full_address = f"{address.street}, {address.city}, {address.region}"
         instructions['location'].append(f"📍 DESTINATION: {full_address}")
 
         # Plus Code if available

@@ -53,7 +53,7 @@ from openpyxl.styles import Font, PatternFill, Alignment
 # Local imports
 from .models import (
     Shipment, ShipmentBox, BoxItem, Driver, Vehicle,
-    Warehouse, LogisticOffice
+    Warehouse, LogisticOffice, DriverLocation
 )
 from .forms import (
     ShipmentForm, ShipmentBoxForm, BoxItemForm,
@@ -1099,55 +1099,47 @@ class DriverListView(LoginRequiredMixin, ListView):
         )
 
 class DriverDetailView(LoginRequiredMixin, DetailView):
-    """View driver details"""
     model = Driver
-    template_name = 'logistics/driver_detail.html'
-    context_object_name = 'driver'
-
-    def get_queryset(self):
-        # Make the base object fast + reliable
-        return (
-            Driver.objects
-            .select_related('user')
-        )
+    template_name = "logistics/driver_detail.html"
+    context_object_name = "driver"
 
     def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
+        ctx = super().get_context_data(**kwargs)
         driver = self.object
 
-        # ✅ Assigned vehicles for this driver (your Vehicle FK uses related_name='vehicles')
+        active_statuses = ["pending", "shipped", "in_transit"]
+
+        # Vehicles assigned to THIS driver
         vehicles_qs = (
-            driver.vehicles.filter(is_active=True)
+            Vehicle.objects
+            .filter(driver=driver)
             .annotate(
                 active_shipments_count=Count(
-                    'shipments',
-                    filter=Q(shipments__status__in=ACTIVE_STATUSES)
+                    "shipments",
+                    filter=Q(shipments__status__in=active_statuses),
+                    distinct=True
                 )
             )
-            .order_by('plate_number')
+            .order_by("-id")
         )
 
-        # ✅ Recent shipments for this driver (Shipment FK uses related_name='shipments')
+        # Shipments assigned to THIS driver (recent)
         recent_shipments_qs = (
-            driver.shipments
-            .select_related('shipping_address', 'order', 'vehicle')
-            .order_by('-created_at')[:10]
+            Shipment.objects
+            .filter(driver=driver)
+            .select_related("shipping_address", "vehicle", "order")
+            .order_by("-collect_time")[:10]
         )
 
-        # ✅ Stats the template expects
-        total_shipments = driver.shipments.count()
-        active_shipments = driver.shipments.filter(status__in=ACTIVE_STATUSES).count()
-        completed_shipments = driver.shipments.filter(status='delivered').count()
+        ctx["vehicles"] = vehicles_qs
+        ctx["vehicle_count"] = vehicles_qs.count()
 
-        context.update({
-            "vehicles": vehicles_qs,
-            "vehicle_count": vehicles_qs.count(),
-            "recent_shipments": recent_shipments_qs,
-            "total_shipments": total_shipments,
-            "active_shipments": active_shipments,
-            "completed_shipments": completed_shipments,
-        })
-        return context
+        ctx["recent_shipments"] = recent_shipments_qs
+        ctx["total_shipments"] = Shipment.objects.filter(driver=driver).count()
+        ctx["active_shipments"] = Shipment.objects.filter(driver=driver, status__in=active_statuses).count()
+        ctx["completed_shipments"] = Shipment.objects.filter(driver=driver, status="delivered").count()
+
+        return ctx
 
 
 class DriverCreateView(LoginRequiredMixin, CreateView):
@@ -1323,6 +1315,74 @@ def driver_profile(request):
 
     return render(request, 'logistics/driver_profile.html', context)
 
+@login_required
+@require_POST
+@driver_required
+def update_driver_location(request, shipment_id):
+    """
+    Driver sends GPS updates for a shipment they are assigned to.
+    """
+    shipment = get_object_or_404(Shipment, pk=shipment_id, driver=request.driver)
+
+    try:
+        data = json.loads(request.body.decode("utf-8"))
+    except Exception:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+
+    lat = data.get('latitude')
+    lng = data.get('longitude')
+
+    if lat is None or lng is None:
+        return JsonResponse({'success': False, 'error': 'latitude and longitude are required'}, status=400)
+
+    loc = DriverLocation.objects.create(
+        driver=request.driver,
+        shipment=shipment,
+        latitude=lat,
+        longitude=lng,
+        accuracy_m=data.get('accuracy_m'),
+        heading=data.get('heading'),
+        speed_mps=data.get('speed_mps'),
+    )
+
+    return JsonResponse({
+        'success': True,
+        'message': 'Location updated',
+        'recorded_at': loc.recorded_at.isoformat(),
+    })
+
+@login_required
+@require_GET
+def get_latest_driver_location(request, shipment_id):
+    """
+    Staff/driver/buyer can read latest driver location (you can tighten this later).
+    """
+    shipment = get_object_or_404(Shipment.objects.select_related('order__buyer', 'driver'), pk=shipment_id)
+
+    # permission: staff OR assigned driver OR buyer
+    allowed = (
+        request.user.is_staff or
+        (hasattr(request.user, 'driver') and shipment.driver_id == request.user.driver.id) or
+        (shipment.order and shipment.order.buyer_id == request.user.id)
+    )
+    if not allowed:
+        return JsonResponse({'success': False, 'error': 'Permission denied'}, status=403)
+
+    last = shipment.driver_locations.select_related('driver').first()
+    if not last:
+        return JsonResponse({'success': True, 'location': None})
+
+    return JsonResponse({
+        'success': True,
+        'location': {
+            'lat': float(last.latitude),
+            'lng': float(last.longitude),
+            'accuracy_m': float(last.accuracy_m) if last.accuracy_m is not None else None,
+            'heading': float(last.heading) if last.heading is not None else None,
+            'speed_mps': float(last.speed_mps) if last.speed_mps is not None else None,
+            'recorded_at': last.recorded_at.isoformat(),
+        }
+    })
 
 @login_required
 @driver_required

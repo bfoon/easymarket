@@ -77,19 +77,7 @@ box_patterns = [
 # ============================================================================
 # DRIVER MANAGEMENT URLS
 # ============================================================================
-
-driver_patterns = [
-    # List and Detail Views
-    path('', views.DriverListView.as_view(), name='driver_list'),
-    path('<int:pk>/', views.DriverDetailView.as_view(), name='driver_detail'),
-
-    # CRUD Operations
-    path('create/', views.DriverCreateView.as_view(), name='driver_create'),
-    path('<int:pk>/edit/', views.DriverUpdateView.as_view(), name='driver_edit'),
-    path('<int:pk>/delete/', views.DriverDeleteView.as_view(), name='driver_delete'),
-    path('<int:pk>/deactivate/', views.deactivate_driver, name='driver_deactivate'),
-    path('<int:pk>/activate/', views.activate_driver, name='driver_activate'),
-
+driver_portal_patterns = [
     # Driver Portal
     path('dashboard/', views.driver_dashboard, name='driver_dashboard'),
     path('profile/', views.driver_profile, name='driver_profile'),
@@ -102,9 +90,27 @@ driver_patterns = [
     path('shipment/<int:shipment_id>/location/', views.get_shipment_location, name='get_shipment_location'),
     path('shipment/<int:shipment_id>/update-location/', views.update_driver_location, name='update_driver_location'),
 
+]
+driver_patterns = [
+    # List and Detail Views
+    path('', views.DriverListView.as_view(), name='driver_list'),
+    path('<int:pk>/', views.DriverDetailView.as_view(), name='driver_detail'),
+
+    # CRUD Operations
+    path('create/', views.DriverCreateView.as_view(), name='driver_create'),
+    path('<int:pk>/edit/', views.DriverUpdateView.as_view(), name='driver_edit'),
+    path('<int:pk>/delete/', views.DriverDeleteView.as_view(), name='driver_delete'),
+    path('<int:pk>/deactivate/', views.deactivate_driver, name='driver_deactivate'),
+    path('<int:pk>/activate/', views.activate_driver, name='driver_activate'),
+
+
     # Performance & Stats
     path('<int:pk>/statistics/', views.driver_statistics, name='driver_statistics'),
     path('<int:pk>/performance/', views.driver_performance, name='driver_performance'),
+
+    path('driver/shipment/<int:shipment_id>/location/update/', views.update_driver_location, name='update_driver_location'),
+    path('driver/shipment/<int:shipment_id>/location/latest/', views.get_latest_driver_location, name='get_latest_driver_location'),
+
 ]
 
 # ============================================================================
@@ -262,6 +268,7 @@ urlpatterns = [
     path('shipments/', include(shipment_patterns)),
     path('shipments/', include(box_patterns)),  # Box patterns also under shipments
     path('drivers/', include(driver_patterns)),
+    path('driver/', include(driver_portal_patterns)),
     path('vehicles/', include(vehicle_patterns)),
     path('warehouses/', include(warehouse_patterns)),
     path('offices/', include(office_patterns)),

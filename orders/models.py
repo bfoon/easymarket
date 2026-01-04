@@ -283,7 +283,9 @@ class ShippingAddress(models.Model):
     street = models.CharField(max_length=255)
     city = models.CharField(max_length=100)
     region = models.CharField(max_length=100)
-    geo_code = models.CharField(max_length=20)
+    geo_code = models.CharField(max_length=64, blank=True, null=True, db_index=True)
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, blank=True, null=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, blank=True, null=True)
     country = models.CharField(max_length=100, default='Gambia')
     phone_number = models.CharField(max_length=20)
     is_default = models.BooleanField(default=False)
@@ -295,6 +297,9 @@ class ShippingAddress(models.Model):
 
     def __str__(self):
         return f"{self.full_name} - {self.street}, {self.city}"
+
+    def has_coords(self):
+        return self.latitude is not None and self.longitude is not None
 
     def save(self, *args, **kwargs):
         # Ensure only one default address per user

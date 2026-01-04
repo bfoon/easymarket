@@ -1,574 +1,1274 @@
-<!-- templates/logistics/shipment_detail_map.html -->
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Shipment #{{ shipment.id }} - Map View</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+{% extends 'logistics/driver_base.html' %}
+{% load static %}
 
-    <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css">
+{% block title %}Shipment #{{ shipment.id }} - Live Tracking{% endblock %}
 
-    <style>
+{% block extra_css %}
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css">
+
+<style>
+    :root {
+        --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        --success-gradient: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        --warning-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        --info-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        --danger-gradient: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+    }
+
+    /* Page Header */
+    .tracking-header {
+        background: white;
+        border-radius: 20px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .tracking-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 5px;
+        background: var(--primary-gradient);
+    }
+
+    /* Map Container */
+    #map {
+        height: 600px;
+        border-radius: 20px;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+        position: relative;
+        z-index: 1;
+    }
+
+    .map-container {
+        position: relative;
+        margin-bottom: 2rem;
+    }
+
+    .map-overlay {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        z-index: 1000;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    /* Info Cards */
+    .info-card {
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+        overflow: hidden;
+        transition: all 0.3s ease;
+        border: none;
+    }
+
+    .info-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+    }
+
+    .info-card-header {
+        padding: 1.5rem;
+        border: none;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .info-card-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+    }
+
+    .info-card-header.customer::before {
+        background: var(--primary-gradient);
+    }
+
+    .info-card-header.shipment::before {
+        background: var(--info-gradient);
+    }
+
+    .info-card-header.timeline::before {
+        background: var(--success-gradient);
+    }
+
+    .info-card-title {
+        font-weight: 700;
+        color: #2d3748;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .info-card-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+    }
+
+    .icon-primary {
+        background: rgba(102, 126, 234, 0.1);
+        color: #667eea;
+    }
+
+    .icon-info {
+        background: rgba(79, 172, 254, 0.1);
+        color: #4facfe;
+    }
+
+    .icon-success {
+        background: rgba(17, 153, 142, 0.1);
+        color: #11998e;
+    }
+
+    /* Info Items */
+    .info-item {
+        display: flex;
+        align-items: start;
+        gap: 0.75rem;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid #f1f3f5;
+    }
+
+    .info-item:last-child {
+        border-bottom: none;
+    }
+
+    .info-item-icon {
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #a0aec0;
+        flex-shrink: 0;
+    }
+
+    .info-item-content {
+        flex: 1;
+    }
+
+    .info-item-label {
+        font-size: 0.85rem;
+        color: #718096;
+        font-weight: 500;
+        margin-bottom: 0.25rem;
+    }
+
+    .info-item-value {
+        font-size: 0.95rem;
+        color: #2d3748;
+        font-weight: 600;
+    }
+
+    /* Status Badge */
+    .status-badge-large {
+        padding: 0.75rem 1.5rem;
+        border-radius: 12px;
+        font-weight: 700;
+        font-size: 0.95rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .status-pending {
+        background: rgba(245, 158, 11, 0.15);
+        color: #d97706;
+    }
+
+    .status-shipped {
+        background: rgba(14, 165, 233, 0.15);
+        color: #0284c7;
+    }
+
+    .status-in_transit {
+        background: rgba(79, 172, 254, 0.15);
+        color: #0369a1;
+    }
+
+    .status-delivered {
+        background: rgba(17, 153, 142, 0.15);
+        color: #047857;
+    }
+
+    /* Geo Code Badge */
+    .geo-code-badge {
+        background: var(--primary-gradient);
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: 10px;
+        font-weight: 700;
+        font-size: 1rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }
+
+    /* Buttons */
+    .btn-modern {
+        border-radius: 12px;
+        padding: 0.625rem 1.25rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        border: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .btn-primary-modern {
+        background: var(--primary-gradient);
+        color: white;
+    }
+
+    .btn-primary-modern:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        color: white;
+    }
+
+    .btn-success-modern {
+        background: var(--success-gradient);
+        color: white;
+    }
+
+    .btn-success-modern:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(17, 153, 142, 0.4);
+        color: white;
+    }
+
+    .btn-info-modern {
+        background: var(--info-gradient);
+        color: white;
+    }
+
+    .btn-info-modern:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(79, 172, 254, 0.4);
+        color: white;
+    }
+
+    .btn-outline-modern {
+        border: 2px solid #e2e8f0;
+        color: #64748b;
+        background: white;
+    }
+
+    .btn-outline-modern:hover {
+        background: #f8f9fa;
+        border-color: #cbd5e0;
+    }
+
+    /* Timeline */
+    .delivery-timeline {
+        position: relative;
+        padding: 1.5rem 0;
+    }
+
+    .timeline-item {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+        position: relative;
+    }
+
+    .timeline-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .timeline-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        font-size: 1rem;
+        position: relative;
+        z-index: 2;
+    }
+
+    .timeline-icon.active {
+        background: var(--success-gradient);
+        color: white;
+        box-shadow: 0 4px 12px rgba(17, 153, 142, 0.3);
+    }
+
+    .timeline-icon.pending {
+        background: #e2e8f0;
+        color: #a0aec0;
+    }
+
+    .timeline-line {
+        position: absolute;
+        left: 20px;
+        top: 40px;
+        width: 2px;
+        height: calc(100% - 40px);
+        background: #e2e8f0;
+    }
+
+    .timeline-line.active {
+        background: var(--success-gradient);
+    }
+
+    .timeline-content {
+        flex: 1;
+        padding-top: 0.25rem;
+    }
+
+    .timeline-title {
+        font-weight: 700;
+        color: #2d3748;
+        margin-bottom: 0.25rem;
+    }
+
+    .timeline-time {
+        font-size: 0.85rem;
+        color: #718096;
+    }
+
+    /* Map Controls */
+    .map-control-btn {
+        background: white;
+        border: none;
+        border-radius: 12px;
+        padding: 0.75rem;
+        width: 48px;
+        height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .map-control-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+    }
+
+    .map-control-btn.active {
+        background: var(--primary-gradient);
+        color: white;
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .stat-card {
+        background: white;
+        border-radius: 16px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+        border: 2px solid #f1f3f5;
+        transition: all 0.3s ease;
+    }
+
+    .stat-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+    }
+
+    .stat-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        margin-bottom: 1rem;
+    }
+
+    .stat-value {
+        font-size: 1.75rem;
+        font-weight: 800;
+        color: #2d3748;
+        line-height: 1;
+        margin-bottom: 0.5rem;
+    }
+
+    .stat-label {
+        font-size: 0.85rem;
+        color: #718096;
+        font-weight: 500;
+    }
+
+    /* Delivery Modal */
+    .modal-content {
+        border-radius: 20px;
+        border: none;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+
+    .modal-header {
+        border-bottom: 2px solid #f1f3f5;
+        padding: 1.5rem 2rem;
+    }
+
+    .modal-body {
+        padding: 2rem;
+    }
+
+    /* Photo Upload */
+    .photo-upload-area {
+        border: 2px dashed #cbd5e0;
+        border-radius: 12px;
+        padding: 2rem;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .photo-upload-area:hover {
+        border-color: #667eea;
+        background: rgba(102, 126, 234, 0.05);
+    }
+
+    .photo-upload-area.has-file {
+        border-color: #11998e;
+        background: rgba(17, 153, 142, 0.05);
+    }
+
+    /* Animation */
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .animate-in {
+        animation: fadeInUp 0.6s ease-out;
+    }
+
+    @keyframes pulse {
+        0%, 100% {
+            transform: scale(1);
+        }
+        50% {
+            transform: scale(1.05);
+        }
+    }
+
+    .pulse-animation {
+        animation: pulse 2s ease-in-out infinite;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
         #map {
             height: 400px;
-            border-radius: 10px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         }
-        .customer-info {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border-radius: 15px;
+
+        .map-overlay {
+            top: 10px;
+            right: 10px;
         }
-        .shipment-details {
-            background: #f8f9fa;
-            border-radius: 15px;
-            border: 1px solid #e9ecef;
+
+        .stats-grid {
+            grid-template-columns: 1fr 1fr;
         }
-        .status-badge {
-            font-size: 1em;
-            padding: 0.5rem 1rem;
+
+        .tracking-header {
+            padding: 1.5rem;
         }
-        .action-btn {
-            min-width: 120px;
-        }
-        .info-item {
-            margin-bottom: 0.5rem;
-        }
-        .info-item i {
-            width: 20px;
-        }
-        .box-item {
-            background: white;
-            border: 1px solid #dee2e6;
-            border-radius: 8px;
-        }
-    </style>
-</head>
-<body class="bg-light">
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
-        <div class="container">
-            <a class="navbar-brand" href="{% url 'logistics:driver_dashboard' %}">
-                <i class="fas fa-arrow-left"></i> Back to Dashboard
+    }
+
+    /* Custom Leaflet Popup */
+    .custom-popup .leaflet-popup-content-wrapper {
+        border-radius: 16px;
+        padding: 0;
+    }
+
+    .custom-popup .leaflet-popup-content {
+        margin: 0;
+        min-width: 250px;
+    }
+
+    .popup-header {
+        background: var(--primary-gradient);
+        color: white;
+        padding: 1rem;
+        font-weight: 700;
+    }
+
+    .popup-body {
+        padding: 1rem;
+    }
+
+    /* Loading Spinner */
+    .loading-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(255, 255, 255, 0.9);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 2000;
+        border-radius: 20px;
+    }
+
+    .spinner {
+        width: 60px;
+        height: 60px;
+        border: 4px solid #f3f4f6;
+        border-top: 4px solid #667eea;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Page Header -->
+<div class="tracking-header animate-in">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+        <div>
+            <h1 class="h2 mb-2">
+                <i class="fas fa-route me-2"></i>
+                Shipment #{{ shipment.id }}
+            </h1>
+            <p class="text-muted mb-0">Live tracking and delivery details</p>
+        </div>
+        <div class="d-flex align-items-center gap-3">
+            <span class="status-badge-large status-{{ shipment.status }}">
+                <i class="fas fa-circle"></i>
+                {{ shipment.get_status_display }}
+            </span>
+            <a href="{% url 'logistics:driver_dashboard' %}" class="btn btn-modern btn-outline-modern">
+                <i class="fas fa-arrow-left"></i>
+                Dashboard
             </a>
-            <div class="navbar-nav ms-auto">
-                <span class="navbar-text">
-                    <i class="fas fa-user"></i> {{ driver.user.get_full_name }}
-                </span>
+        </div>
+    </div>
+</div>
+
+<!-- Stats Grid -->
+<div class="stats-grid animate-in" style="animation-delay: 0.1s">
+    <div class="stat-card">
+        <div class="stat-icon icon-primary">
+            <i class="fas fa-weight-hanging"></i>
+        </div>
+        <div class="stat-value">{{ shipment.weight_kg|floatformat:1 }} kg</div>
+        <div class="stat-label">Total Weight</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon icon-info">
+            <i class="fas fa-cube"></i>
+        </div>
+        <div class="stat-value">{{ shipment.size_cubic_meters|floatformat:2 }} m³</div>
+        <div class="stat-label">Volume</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon icon-success">
+            <i class="fas fa-clock"></i>
+        </div>
+        <div class="stat-value">
+            {% if shipment.estimated_dropoff_time %}
+                {{ shipment.estimated_dropoff_time|date:"H:i" }}
+            {% else %}
+                --:--
+            {% endif %}
+        </div>
+        <div class="stat-label">Est. Delivery</div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon" style="background: rgba(245, 87, 108, 0.1); color: #f5576c;">
+            <i class="fas fa-box"></i>
+        </div>
+        <div class="stat-value">{{ shipment.boxes.count }}</div>
+        <div class="stat-label">Total Boxes</div>
+    </div>
+</div>
+
+<!-- Main Content -->
+<div class="row">
+    <!-- Map Column -->
+    <div class="col-lg-8">
+        <!-- Map Container -->
+        <div class="map-container animate-in" style="animation-delay: 0.2s">
+            <div id="mapLoading" class="loading-overlay">
+                <div>
+                    <div class="spinner mx-auto mb-3"></div>
+                    <p class="text-muted">Loading map...</p>
+                </div>
+            </div>
+            <div id="map"></div>
+
+            <!-- Map Overlay Controls -->
+            <div class="map-overlay">
+                <button class="map-control-btn" onclick="getCurrentLocation()" title="My Location">
+                    <i class="fas fa-crosshairs"></i>
+                </button>
+                <button class="map-control-btn" onclick="toggleTraffic()" title="Toggle Traffic" id="trafficBtn">
+                    <i class="fas fa-traffic-light"></i>
+                </button>
+                <button class="map-control-btn" onclick="recenterMap()" title="Recenter">
+                    <i class="fas fa-expand"></i>
+                </button>
             </div>
         </div>
-    </nav>
 
-    <div class="container my-4">
-        <!-- Header -->
-        <div class="row mb-4">
-            <div class="col-md-8">
-                <h2><i class="fas fa-map-marker-alt"></i> Shipment #{{ shipment.id }}</h2>
-                <p class="text-muted">Delivery Details and Navigation</p>
-            </div>
-            <div class="col-md-4 text-end">
-                <span class="badge status-badge
-                    {% if shipment.status == 'pending' %}bg-warning{% elif shipment.status == 'in_transit' %}bg-info{% else %}bg-success{% endif %}">
-                    {{ shipment.get_status_display }}
-                </span>
-            </div>
-        </div>
+        <!-- Quick Actions -->
+        <div class="info-card animate-in" style="animation-delay: 0.3s">
+            <div class="card-body p-4">
+                <h6 class="fw-bold mb-3">
+                    <i class="fas fa-directions me-2"></i>
+                    Quick Actions
+                </h6>
+                <div class="d-flex flex-wrap gap-2">
+                    <button class="btn btn-modern btn-primary-modern" onclick="openGoogleMaps()">
+                        <i class="fas fa-route"></i>
+                        Get Directions
+                    </button>
 
-        <!-- Customer Information -->
-        <div class="row mb-4">
-            <div class="col-md-6">
-                <div class="card customer-info h-100">
-                    <div class="card-body">
-                        <h5 class="card-title"><i class="fas fa-user"></i> Customer Information</h5>
-                        <div class="info-item">
-                            <i class="fas fa-user"></i> <strong>{{ shipping_address.full_name }}</strong>
-                        </div>
-                        <div class="info-item">
-                            <i class="fas fa-phone"></i> {{ shipping_address.phone_number }}
-                        </div>
-                        <div class="info-item">
-                            <i class="fas fa-map-marker-alt"></i> {{ shipping_address.street }}
-                        </div>
-                        <div class="info-item">
-                            <i class="fas fa-city"></i> {{ shipping_address.city }}, {{ shipping_address.region }}
-                        </div>
-                        {% if shipping_address.geo_code %}
-                        <div class="info-item">
+                    {% if shipment.shipping_address.phone_number %}
+                    <a href="tel:{{ shipment.shipping_address.phone_number }}" class="btn btn-modern btn-info-modern">
+                        <i class="fas fa-phone"></i>
+                        Call Customer
+                    </a>
+                    {% endif %}
+
+                    {% if shipment.status == 'pending' %}
+                        <button class="btn btn-modern btn-success-modern" onclick="startDelivery()">
+                            <i class="fas fa-play"></i>
+                            Start Delivery
+                        </button>
+                    {% elif shipment.status == 'in_transit' or shipment.status == 'shipped' %}
+                        <button class="btn btn-modern btn-success-modern" onclick="markDelivered()">
+                            <i class="fas fa-check-circle"></i>
+                            Mark Delivered
+                        </button>
+                    {% endif %}
+
+                    {% if shipment.shipping_address.geo_code %}
+                        <button class="btn btn-modern btn-outline-modern" onclick="openPlusCodeInMaps()">
                             <i class="fas fa-map-pin"></i>
-                            <strong>Plus Code:</strong>
-                            <span class="badge bg-primary">{{ shipping_address.geo_code }}</span>
-                            <button class="btn btn-link btn-sm p-0 ms-1" onclick="openPlusCodeInMaps()" title="Open Plus Code in Google Maps">
-                                <i class="fas fa-external-link-alt"></i>
-                            </button>
-                        </div>
-                        {% endif %}
-
-                        <div class="mt-3">
-                            <a href="tel:{{ shipping_address.phone_number }}" class="btn btn-light btn-sm me-2">
-                                <i class="fas fa-phone"></i> Call Customer
-                            </a>
-                        </div>
-                    </div>
+                            Open Plus Code
+                        </button>
+                    {% endif %}
                 </div>
-            </div>
-
-            <div class="col-md-6">
-                <div class="card shipment-details h-100">
-                    <div class="card-body">
-                        <h5 class="card-title"><i class="fas fa-box"></i> Shipment Details</h5>
-                        <div class="info-item">
-                            <i class="fas fa-weight-hanging"></i> Weight: {{ shipment.weight_kg }} kg
-                        </div>
-                        <div class="info-item">
-                            <i class="fas fa-cube"></i> Size: {{ shipment.size_cubic_meters }} m³
-                        </div>
-                        <div class="info-item">
-                            <i class="fas fa-tag"></i> Type: {{ shipment.get_shipment_type_display }}
-                        </div>
-                        <div class="info-item">
-                            <i class="fas fa-exclamation-triangle"></i> Material: {{ shipment.get_material_type_display }}
-                        </div>
-                        {% if shipment.estimated_dropoff_time %}
-                        <div class="info-item">
-                            <i class="fas fa-clock"></i> Est. Delivery: {{ shipment.estimated_dropoff_time|date:"M d, Y H:i" }}
-                        </div>
-                        {% endif %}
-
-                        {% if shipment.vehicle %}
-                        <div class="mt-3">
-                            <small class="text-muted">
-                                <i class="fas fa-truck"></i> Vehicle: {{ shipment.vehicle.plate_number }} ({{ shipment.vehicle.model }})
-                            </small>
-                        </div>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Map Section -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0"><i class="fas fa-map"></i> Delivery Location</h5>
-                        <div>
-                            <button class="btn btn-primary btn-sm" onclick="openGoogleMaps()">
-                                <i class="fas fa-directions"></i>
-                                {% if shipping_address.geo_code %}Plus Code{% else %}Address{% endif %} Directions
-                            </button>
-                            {% if shipping_address.geo_code %}
-                            <button class="btn btn-info btn-sm" onclick="openPlusCodeInMaps()">
-                                <i class="fas fa-map-pin"></i> View Plus Code
-                            </button>
-                            {% endif %}
-                            <button class="btn btn-secondary btn-sm" onclick="getCurrentLocation()">
-                                <i class="fas fa-location-arrow"></i> My Location
-                            </button>
-                        </div>
-                    </div>
-                    <div class="card-body">
-                        <div id="map"></div>
-                        <div class="mt-3 text-center">
-                            <p class="text-muted mb-0">
-                                <strong>Full Address:</strong> {{ shipping_address.street }}, {{ shipping_address.city }}, {{ shipping_address.region }}
-                            </p>
-                            {% if shipping_address.geo_code %}
-                            <p class="text-info mb-0">
-                                <strong>Plus Code:</strong> {{ shipping_address.geo_code }}
-                                <small class="d-block">Use this code for precise navigation in Google Maps</small>
-                            </p>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Boxes and Items -->
-        {% if boxes %}
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="mb-0"><i class="fas fa-boxes"></i> Shipment Boxes ({{ boxes.count }})</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="row">
-                            {% for box in boxes %}
-                            <div class="col-md-6 col-lg-4 mb-3">
-                                <div class="box-item p-3">
-                                    <h6><i class="fas fa-box"></i> Box #{{ box.box_number }}</h6>
-                                    {% if box.weight_kg %}
-                                    <p class="mb-2"><i class="fas fa-weight-hanging"></i> {{ box.weight_kg }} kg</p>
-                                    {% endif %}
-                                    <small class="text-muted">Items:</small>
-                                    <ul class="list-unstyled small mt-1">
-                                        {% for item in box.items.all %}
-                                        <li>• {{ item.quantity }}x {{ item.order_item.product.name }}</li>
-                                        {% endfor %}
-                                    </ul>
-                                </div>
-                            </div>
-                            {% endfor %}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- Action Buttons -->
-        <div class="row">
-            <div class="col-12 text-center">
-                {% if shipment.status == 'pending' %}
-                    <button class="btn btn-success btn-lg action-btn me-3" onclick="startDelivery()">
-                        <i class="fas fa-play"></i> Start Delivery
-                    </button>
-                {% elif shipment.status == 'in_transit' %}
-                    <button class="btn btn-success btn-lg action-btn me-3" onclick="markDelivered()">
-                        <i class="fas fa-check"></i> Mark as Delivered
-                    </button>
-                {% endif %}
-
-                <a href="{% url 'logistics:driver_dashboard' %}" class="btn btn-secondary btn-lg action-btn">
-                    <i class="fas fa-arrow-left"></i> Back to Dashboard
-                </a>
             </div>
         </div>
     </div>
 
-    <!-- Delivery Confirmation Modal -->
-        <div class="modal fade" id="deliveryModal" tabindex="-1">
-          <div class="modal-dialog">
-            <div class="modal-content">
-              <div class="modal-header">
-                <h5 class="modal-title">Confirm Delivery</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-              </div>
-              <div class="modal-body">
-                <p>Upload a delivery photo and add any notes:</p>
-
-                <!-- Photo Upload -->
-                <div class="mb-3">
-                  <label for="deliveryPhoto" class="form-label">Delivery Photo (Required)</label>
-                  <input type="file" id="deliveryPhoto" name="verification_photo" accept="image/*" capture="environment" class="form-control" />
-                  <small class="text-muted">Use your phone's camera to capture proof of delivery.</small>
-                </div>
-
-                <!-- Notes -->
-                <div class="mb-3">
-                  <label for="deliveryNotes" class="form-label">Delivery Notes (Optional)</label>
-                  <textarea class="form-control" id="deliveryNotes" rows="3" placeholder="Any additional notes about the delivery..."></textarea>
-                </div>
-
-                <!-- Preview -->
-                <div id="deliveryPreview" class="mt-2 text-center"></div>
-              </div>
-
-              <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-success" onclick="confirmDelivery()">
-                  <i class="fas fa-check"></i> Confirm Delivery
-                </button>
-              </div>
+    <!-- Info Column -->
+    <div class="col-lg-4">
+        <!-- Customer Information -->
+        <div class="info-card animate-in" style="animation-delay: 0.4s">
+            <div class="info-card-header customer">
+                <h5 class="info-card-title">
+                    <div class="info-card-icon icon-primary">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    Customer Details
+                </h5>
             </div>
-          </div>
-        </div>
-
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <!-- Leaflet JS -->
-    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
-
-            <script>
-        let map;
-        let deliveryMarker;
-        let currentLocationMarker;
-        const shipmentId = {{ shipment.id }};
-
-        // Customer address and Plus Code for the map
-        const customerAddress = "{{ shipping_address.street }}, {{ shipping_address.city }}, {{ shipping_address.region }}";
-        const plusCode = "{{ shipping_address.geo_code|default:'' }}";
-
-        // Initialize map
-        function initMap() {
-            // Default center (Gambia coordinates)
-            map = L.map('map').setView([13.4432, -15.3101], 10);
-
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap contributors'
-            }).addTo(map);
-
-            // Get enhanced location data from server
-            fetchShipmentLocation();
-        }
-
-        // Fetch shipment location data with Plus Code support
-        function fetchShipmentLocation() {
-            fetch(`/logistics/driver/shipment/${shipmentId}/location/`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success && data.coordinates) {
-                        const lat = data.coordinates.lat;
-                        const lng = data.coordinates.lng;
-
-                        // Add marker for delivery location
-                        deliveryMarker = L.marker([lat, lng]).addTo(map)
-                            .bindPopup(`
-                                <div style="min-width: 200px;">
-                                    <strong>Delivery Address:</strong><br>
-                                    {{ shipping_address.full_name }}<br>
-                                    {{ shipping_address.street }}<br>
-                                    {{ shipping_address.city }}, {{ shipping_address.region }}<br>
-                                    <strong>Phone:</strong> {{ shipping_address.phone_number }}<br>
-                                    ${data.plus_code && data.plus_code.is_valid ?
-                                        `<strong>Plus Code:</strong> <a href="${data.maps_urls.plus_code_url}" target="_blank">${data.plus_code.code}</a><br>` :
-                                        ''}
-                                    <strong>Geocoded via:</strong> ${data.coordinates.source}<br>
-                                    <div class="mt-2">
-                                        <a href="${data.maps_urls.directions}" target="_blank" class="btn btn-primary btn-sm">
-                                            <i class="fas fa-directions"></i> Directions
-                                        </a>
-                                    </div>
-                                </div>
-                            `).openPopup();
-
-                        // Center map on delivery location
-                        map.setView([lat, lng], 15);
-
-                        // Add accuracy circle if available
-                        if (data.coordinates.accuracy === 'plus_code') {
-                            // Plus codes are typically accurate to ~14m x 14m
-                            L.circle([lat, lng], {
-                                color: 'blue',
-                                fillColor: '#3086ff',
-                                fillOpacity: 0.1,
-                                radius: 14
-                            }).addTo(map);
-                        }
-
-                        // Display enhanced delivery instructions
-                        displayDeliveryInstructions(data);
-
-                    } else {
-                        console.log('Using fallback geocoding...');
-                        // Fallback to basic geocoding
-                        geocodeAddressFallback();
-                    }
-                })
-                .catch(error => {
-                    console.error('Error fetching location:', error);
-                    geocodeAddressFallback();
-                });
-        }
-
-        // Fallback geocoding using OpenStreetMap
-        function geocodeAddressFallback() {
-            let searchQuery = customerAddress;
-
-            // If we have a Plus Code, try that first
-            if (plusCode && plusCode.includes('+')) {
-                searchQuery = plusCode;
-            }
-
-            const encodedAddress = encodeURIComponent(searchQuery + ", Gambia");
-            fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodedAddress}&limit=1`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data && data.length > 0) {
-                        const lat = parseFloat(data[0].lat);
-                        const lon = parseFloat(data[0].lon);
-
-                        // Add marker for delivery location
-                        deliveryMarker = L.marker([lat, lon]).addTo(map)
-                            .bindPopup(`
-                                <div style="min-width: 200px;">
-                                    <strong>Delivery Address:</strong><br>
-                                    {{ shipping_address.full_name }}<br>
-                                    {{ shipping_address.street }}<br>
-                                    {{ shipping_address.city }}, {{ shipping_address.region }}<br>
-                                    <strong>Phone:</strong> {{ shipping_address.phone_number }}<br>
-                                    ${plusCode ? `<strong>Plus Code:</strong> ${plusCode}<br>` : ''}
-                                    <div class="mt-2">
-                                        <a href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}" target="_blank" class="btn btn-primary btn-sm">
-                                            <i class="fas fa-directions"></i> Directions
-                                        </a>
-                                    </div>
-                                </div>
-                            `).openPopup();
-
-                        // Center map on delivery location
-                        map.setView([lat, lon], 15);
-                    } else {
-                        console.log('Address not found in geocoding service');
-                        showLocationNotFoundMessage();
-                    }
-                })
-                .catch(error => {
-                    console.error('Geocoding error:', error);
-                    showLocationNotFoundMessage();
-                });
-        }
-
-        function showLocationNotFoundMessage() {
-            // Add a general marker for the city/region
-            const gambiaCenter = [13.4432, -15.3101];
-            L.marker(gambiaCenter).addTo(map)
-                .bindPopup(`
-                    <div style="min-width: 200px;">
-                        <strong>Delivery Address:</strong><br>
-                        {{ shipping_address.full_name }}<br>
-                        {{ shipping_address.street }}<br>
-                        {{ shipping_address.city }}, {{ shipping_address.region }}<br>
-                        <strong>Phone:</strong> {{ shipping_address.phone_number }}<br>
-                        ${plusCode ? `<strong>Plus Code:</strong> ${plusCode}<br>` : ''}
-                        <div class="alert alert-warning mt-2">
-                            <small>Exact location not found. Please call customer for directions.</small>
+            <div class="card-body p-4">
+                <div class="info-item">
+                    <div class="info-item-icon">
+                        <i class="fas fa-user-circle"></i>
+                    </div>
+                    <div class="info-item-content">
+                        <div class="info-item-label">Full Name</div>
+                        <div class="info-item-value">
+                            {{ shipment.shipping_address.full_name|default:"N/A" }}
                         </div>
                     </div>
-                `).openPopup();
-
-            map.setView(gambiaCenter, 10);
-        }
-
-        function displayDeliveryInstructions(locationData) {
-            // Add delivery instructions to the page
-            const instructionsHtml = `
-                <div class="alert alert-info mt-3">
-                    <h6><i class="fas fa-info-circle"></i> Delivery Instructions</h6>
-                    ${locationData.plus_code && locationData.plus_code.is_valid ?
-                        `<p><strong>Plus Code:</strong> ${locationData.plus_code.code}
-                         <a href="${locationData.maps_urls.plus_code_url}" target="_blank" class="btn btn-link btn-sm p-0">
-                            <i class="fas fa-external-link-alt"></i> Open in Maps
-                         </a></p>` : ''}
-                    <p><strong>Geocoded via:</strong> ${locationData.coordinates.source}</p>
-                    <p><strong>Accuracy:</strong> ${locationData.coordinates.accuracy === 'plus_code' ? 'High (±14m)' : 'Standard'}</p>
-                    ${locationData.special_instructions ?
-                        `<p><strong>Special Instructions:</strong> ${locationData.special_instructions}</p>` : ''}
                 </div>
-            `;
 
-            // Insert after the map
-            const mapCard = document.querySelector('#map').closest('.card');
-            mapCard.insertAdjacentHTML('afterend', instructionsHtml);
+                <div class="info-item">
+                    <div class="info-item-icon">
+                        <i class="fas fa-phone-alt"></i>
+                    </div>
+                    <div class="info-item-content">
+                        <div class="info-item-label">Phone Number</div>
+                        <div class="info-item-value">
+                            {{ shipment.shipping_address.phone_number|default:"N/A" }}
+                        </div>
+                    </div>
+                </div>
+
+                {% if shipment.shipping_address.geo_code %}
+                <div class="info-item">
+                    <div class="info-item-icon">
+                        <i class="fas fa-map-pin"></i>
+                    </div>
+                    <div class="info-item-content">
+                        <div class="info-item-label">Plus Code (Primary)</div>
+                        <div class="geo-code-badge mt-2">
+                            <i class="fas fa-location-dot"></i>
+                            {{ shipment.shipping_address.geo_code }}
+                        </div>
+                        <small class="text-muted d-block mt-2">
+                            <i class="fas fa-info-circle"></i>
+                            Use this for precise navigation (±14m accuracy)
+                        </small>
+                    </div>
+                </div>
+                {% endif %}
+
+                <div class="info-item">
+                    <div class="info-item-icon">
+                        <i class="fas fa-map-marker-alt"></i>
+                    </div>
+                    <div class="info-item-content">
+                        <div class="info-item-label">Delivery Address</div>
+                        <div class="info-item-value" style="font-weight: 400; line-height: 1.6;">
+                            {% if shipment.shipping_address %}
+                                {{ shipment.shipping_address.street|default:"" }}
+                                {% if shipment.shipping_address.city %}<br>{{ shipment.shipping_address.city }}{% endif %}
+                                {% if shipment.shipping_address.region %}<br>{{ shipment.shipping_address.region }}{% endif %}
+                            {% else %}
+                                <span class="text-muted">No address provided</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Shipment Details -->
+        <div class="info-card animate-in" style="animation-delay: 0.5s">
+            <div class="info-card-header shipment">
+                <h5 class="info-card-title">
+                    <div class="info-card-icon icon-info">
+                        <i class="fas fa-box-open"></i>
+                    </div>
+                    Shipment Info
+                </h5>
+            </div>
+            <div class="card-body p-4">
+                <div class="info-item">
+                    <div class="info-item-icon">
+                        <i class="fas fa-barcode"></i>
+                    </div>
+                    <div class="info-item-content">
+                        <div class="info-item-label">Tracking Number</div>
+                        <div class="info-item-value">{{ shipment.tracking_number }}</div>
+                    </div>
+                </div>
+
+                <div class="info-item">
+                    <div class="info-item-icon">
+                        <i class="fas fa-truck"></i>
+                    </div>
+                    <div class="info-item-content">
+                        <div class="info-item-label">Vehicle</div>
+                        <div class="info-item-value">
+                            {% if shipment.vehicle %}
+                                {{ shipment.vehicle.plate_number }} - {{ shipment.vehicle.model }}
+                            {% else %}
+                                Not assigned
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="info-item">
+                    <div class="info-item-icon">
+                        <i class="fas fa-layer-group"></i>
+                    </div>
+                    <div class="info-item-content">
+                        <div class="info-item-label">Shipment Type</div>
+                        <div class="info-item-value">{{ shipment.get_shipment_type_display }}</div>
+                    </div>
+                </div>
+
+                <div class="info-item">
+                    <div class="info-item-icon">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <div class="info-item-content">
+                        <div class="info-item-label">Material Type</div>
+                        <div class="info-item-value">{{ shipment.get_material_type_display }}</div>
+                    </div>
+                </div>
+
+                {% if shipment.collect_time %}
+                <div class="info-item">
+                    <div class="info-item-icon">
+                        <i class="fas fa-calendar-check"></i>
+                    </div>
+                    <div class="info-item-content">
+                        <div class="info-item-label">Collection Time</div>
+                        <div class="info-item-value">{{ shipment.collect_time|date:"M d, Y H:i" }}</div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Delivery Timeline -->
+        <div class="info-card animate-in" style="animation-delay: 0.6s">
+            <div class="info-card-header timeline">
+                <h5 class="info-card-title">
+                    <div class="info-card-icon icon-success">
+                        <i class="fas fa-tasks"></i>
+                    </div>
+                    Delivery Progress
+                </h5>
+            </div>
+            <div class="card-body p-4">
+                <div class="delivery-timeline">
+                    <div class="timeline-item">
+                        <div class="timeline-icon {% if shipment.status != 'pending' %}active{% else %}pending{% endif %}">
+                            <i class="fas fa-box"></i>
+                        </div>
+                        <div class="timeline-content">
+                            <div class="timeline-title">Package Ready</div>
+                            <div class="timeline-time">{{ shipment.created_at|date:"M d, Y H:i" }}</div>
+                        </div>
+                        {% if shipment.status != 'pending' %}
+                        <div class="timeline-line active"></div>
+                        {% endif %}
+                    </div>
+
+                    <div class="timeline-item">
+                        <div class="timeline-icon {% if shipment.status in 'shipped,in_transit,delivered' %}active{% else %}pending{% endif %}">
+                            <i class="fas fa-truck"></i>
+                        </div>
+                        <div class="timeline-content">
+                            <div class="timeline-title">In Transit</div>
+                            <div class="timeline-time">
+                                {% if shipment.status in 'shipped,in_transit,delivered' %}
+                                    In progress
+                                {% else %}
+                                    Pending
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% if shipment.status == 'delivered' %}
+                        <div class="timeline-line active"></div>
+                        {% endif %}
+                    </div>
+
+                    <div class="timeline-item">
+                        <div class="timeline-icon {% if shipment.status == 'delivered' %}active{% else %}pending{% endif %}">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <div class="timeline-content">
+                            <div class="timeline-title">Delivered</div>
+                            <div class="timeline-time">
+                                {% if shipment.actual_dropoff_time %}
+                                    {{ shipment.actual_dropoff_time|date:"M d, Y H:i" }}
+                                {% else %}
+                                    Pending
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delivery Confirmation Modal -->
+<div class="modal fade" id="deliveryModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-check-circle me-2" style="color: #11998e;"></i>
+                    Confirm Delivery
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="deliveryNotes" class="form-label fw-semibold">
+                        <i class="fas fa-comment-alt me-2"></i>
+                        Delivery Notes (Optional)
+                    </label>
+                    <textarea class="form-control" id="deliveryNotes" rows="3"
+                              placeholder="Add any notes about the delivery..."></textarea>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">
+                        <i class="fas fa-camera me-2"></i>
+                        Delivery Photo (Optional)
+                    </label>
+                    <div class="photo-upload-area" onclick="document.getElementById('deliveryPhoto').click()">
+                        <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
+                        <p class="mb-0 text-muted">Click to upload photo</p>
+                        <small class="text-muted">JPG, PNG up to 10MB</small>
+                        <input type="file" id="deliveryPhoto" accept="image/*" style="display: none;"
+                               onchange="handlePhotoSelect(this)">
+                        <div id="photoPreview" class="mt-3"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-modern btn-outline-modern" data-bs-dismiss="modal">
+                    <i class="fas fa-times"></i>
+                    Cancel
+                </button>
+                <button type="button" class="btn btn-modern btn-success-modern" onclick="confirmDelivery()">
+                    <i class="fas fa-check"></i>
+                    Confirm Delivery
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+
+<script>
+    // Configuration
+    const shipmentId = {{ shipment.id }};
+    const customerAddress = "{{ shipment.shipping_address.street|default:'' }}, {{ shipment.shipping_address.city|default:'' }}, {{ shipment.shipping_address.region|default:'' }}";
+    const plusCode = "{{ shipment.shipping_address.geo_code|default:'' }}";
+    const customerName = "{{ shipment.shipping_address.full_name|default:'Customer' }}";
+    const customerPhone = "{{ shipment.shipping_address.phone_number|default:'' }}";
+
+    // Map variables
+    let map;
+    let deliveryMarker;
+    let currentLocationMarker;
+    let routingControl;
+    let trafficLayer;
+    let isTrafficVisible = false;
+
+    // Initialize map
+    function initMap() {
+        // Create map centered on Gambia
+        const gambiaCenter = [13.4443, -16.6738];
+        map = L.map('map').setView(gambiaCenter, 11);
+
+        // Add modern tile layer
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 19
+        }).addTo(map);
+
+        // Fetch location data
+        fetchLocationData();
+    }
+
+    function fetchLocationData() {
+        fetch(`/logistics/api/geocode-address/${shipmentId}/`)
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('mapLoading').style.display = 'none';
+
+                if (data.coordinates && data.coordinates.lat && data.coordinates.lng) {
+                    placeDeliveryMarker(data.coordinates.lat, data.coordinates.lng, data);
+                } else {
+                    showFallbackLocation();
+                }
+            })
+            .catch(error => {
+                document.getElementById('mapLoading').style.display = 'none';
+                console.error('Geocoding error:', error);
+                showFallbackLocation();
+            });
+    }
+
+    function placeDeliveryMarker(lat, lng, locationData) {
+        // Custom delivery icon
+        const deliveryIcon = L.divIcon({
+            className: 'custom-marker',
+            html: `
+                <div style="position: relative;">
+                    <div style="
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        width: 50px;
+                        height: 50px;
+                        border-radius: 50% 50% 50% 0;
+                        transform: rotate(-45deg);
+                        border: 4px solid white;
+                        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                    ">
+                        <i class="fas fa-home" style="
+                            transform: rotate(45deg);
+                            color: white;
+                            font-size: 1.25rem;
+                        "></i>
+                    </div>
+                    <div class="pulse-animation" style="
+                        position: absolute;
+                        top: 50%;
+                        left: 50%;
+                        transform: translate(-50%, -50%);
+                        width: 70px;
+                        height: 70px;
+                        border-radius: 50%;
+                        background: rgba(102, 126, 234, 0.3);
+                    "></div>
+                </div>
+            `,
+            iconSize: [50, 50],
+            iconAnchor: [25, 50]
+        });
+
+        // Add delivery marker
+        deliveryMarker = L.marker([lat, lng], { icon: deliveryIcon })
+            .addTo(map)
+            .bindPopup(`
+                <div class="custom-popup">
+                    <div class="popup-header">
+                        <i class="fas fa-map-marker-alt me-2"></i>
+                        Delivery Location
+                    </div>
+                    <div class="popup-body">
+                        <p class="mb-2"><strong>Customer:</strong> ${customerName}</p>
+                        <p class="mb-2"><strong>Phone:</strong> ${customerPhone}</p>
+                        ${plusCode ? `<p class="mb-2"><strong>Plus Code:</strong> <span class="badge bg-primary">${plusCode}</span></p>` : ''}
+                        <p class="mb-0 small text-muted">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Accuracy: ${locationData.coordinates.accuracy === 'plus_code' ? 'High (±14m)' : 'Standard'}
+                        </p>
+                    </div>
+                </div>
+            `, {
+                className: 'custom-popup',
+                maxWidth: 300
+            });
+
+        // Center map on delivery location
+        map.setView([lat, lng], 15);
+
+        // Add circle to show accuracy
+        L.circle([lat, lng], {
+            color: '#667eea',
+            fillColor: '#667eea',
+            fillOpacity: 0.1,
+            radius: locationData.coordinates.accuracy === 'plus_code' ? 14 : 100
+        }).addTo(map);
+    }
+
+    function showFallbackLocation() {
+        const gambiaCenter = [13.4443, -16.6738];
+
+        deliveryMarker = L.marker(gambiaCenter)
+            .addTo(map)
+            .bindPopup(`
+                <div class="popup-body">
+                    <div class="alert alert-warning mb-0">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Location unavailable</strong><br>
+                        <small>Please call customer for directions:<br>
+                        ${customerPhone || 'No phone number available'}</small>
+                    </div>
+                </div>
+            `).openPopup();
+
+        map.setView(gambiaCenter, 10);
+    }
+
+    function getCurrentLocation() {
+        if (!navigator.geolocation) {
+            alert('Geolocation is not supported by your browser');
+            return;
         }
 
-        function getCurrentLocation() {
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(function(position) {
-                    const lat = position.coords.latitude;
-                    const lon = position.coords.longitude;
+        navigator.geolocation.getCurrentPosition(
+            position => {
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
 
-                    // Remove existing current location marker
-                    if (currentLocationMarker) {
-                        map.removeLayer(currentLocationMarker);
-                    }
+                // Remove existing marker
+                if (currentLocationMarker) {
+                    map.removeLayer(currentLocationMarker);
+                }
 
-                    // Add marker for current location
-                    currentLocationMarker = L.marker([lat, lon], {
-                        icon: L.icon({
-                            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
-                            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-                            iconSize: [25, 41],
-                            iconAnchor: [12, 41],
-                            popupAnchor: [1, -34],
-                            shadowSize: [41, 41]
-                        })
-                    }).addTo(map)
-                        .bindPopup('<strong>Your Current Location</strong>')
-                        .openPopup();
-
-                    // If we have both markers, fit the map to show both
-                    if (deliveryMarker) {
-                        const group = new L.featureGroup([currentLocationMarker, deliveryMarker]);
-                        map.fitBounds(group.getBounds().pad(0.1));
-                    } else {
-                        map.setView([lat, lon], 15);
-                    }
-                }, function(error) {
-                    alert('Unable to get your location: ' + error.message);
+                // Custom current location icon
+                const currentIcon = L.divIcon({
+                    className: 'current-location-marker',
+                    html: `
+                        <div style="
+                            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+                            width: 20px;
+                            height: 20px;
+                            border-radius: 50%;
+                            border: 4px solid white;
+                            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+                        "></div>
+                    `,
+                    iconSize: [20, 20],
+                    iconAnchor: [10, 10]
                 });
-            } else {
-                alert('Geolocation is not supported by this browser.');
+
+                // Add marker
+                currentLocationMarker = L.marker([lat, lng], { icon: currentIcon })
+                    .addTo(map)
+                    .bindPopup('<strong>Your Location</strong>');
+
+                // Show route if we have delivery location
+                if (deliveryMarker) {
+                    showRoute(lat, lng);
+                } else {
+                    map.setView([lat, lng], 15);
+                }
+            },
+            error => {
+                alert('Unable to get your location: ' + error.message);
             }
+        );
+    }
+
+    function showRoute(fromLat, fromLng) {
+        if (routingControl) {
+            map.removeControl(routingControl);
         }
 
-        function openGoogleMaps() {
-            // Prefer Plus Code if available and valid
-            if (plusCode && plusCode.includes('+')) {
-                const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(plusCode)}`;
-                window.open(url, '_blank');
-            } else {
-                // Fallback to address
-                const address = encodeURIComponent(customerAddress);
-                const url = `https://www.google.com/maps/dir/?api=1&destination=${address}`;
-                window.open(url, '_blank');
-            }
+        const deliveryPos = deliveryMarker.getLatLng();
+
+        routingControl = L.Routing.control({
+            waypoints: [
+                L.latLng(fromLat, fromLng),
+                L.latLng(deliveryPos.lat, deliveryPos.lng)
+            ],
+            routeWhileDragging: false,
+            lineOptions: {
+                styles: [{
+                    color: '#667eea',
+                    opacity: 0.8,
+                    weight: 6
+                }]
+            },
+            createMarker: () => null, // Don't create markers
+            show: false,
+            addWaypoints: false
+        }).addTo(map);
+
+        // Fit bounds to show route
+        routingControl.on('routesfound', e => {
+            const routes = e.routes;
+            const bounds = L.latLngBounds([
+                [fromLat, fromLng],
+                [deliveryPos.lat, deliveryPos.lng]
+            ]);
+            map.fitBounds(bounds.pad(0.1));
+        });
+    }
+
+    function toggleTraffic() {
+        // This would integrate with a traffic data provider
+        // For now, just toggle the button state
+        isTrafficVisible = !isTrafficVisible;
+        const btn = document.getElementById('trafficBtn');
+        
+        if (isTrafficVisible) {
+            btn.classList.add('active');
+            // Add traffic layer here
+        } else {
+            btn.classList.remove('active');
+            // Remove traffic layer here
         }
+    }
 
-        function openPlusCodeInMaps() {
-            if (plusCode && plusCode.includes('+')) {
-                const url = `https://www.google.com/maps/search/${encodeURIComponent(plusCode)}`;
-                window.open(url, '_blank');
-            }
+    function recenterMap() {
+        if (deliveryMarker && currentLocationMarker) {
+            const group = L.featureGroup([deliveryMarker, currentLocationMarker]);
+            map.fitBounds(group.getBounds().pad(0.1));
+        } else if (deliveryMarker) {
+            map.setView(deliveryMarker.getLatLng(), 15);
         }
+    }
 
-        function startDelivery() {
-            if (window.confirm('Are you sure you want to start this delivery?')) {
-                fetch(`/logistics/driver/shipment/${shipmentId}/start/`, {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRFToken': getCookie('csrftoken'),
-                        'Content-Type': 'application/json',
-                    },
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        showAlert('success', data.message);
-                        setTimeout(() => location.reload(), 1500);
-                    } else {
-                        showAlert('danger', data.error);
-                    }
-                })
-                .catch(error => {
-                    showAlert('danger', 'An error occurred');
-                    console.error('Error:', error);
-                });
-            }
+    function openGoogleMaps() {
+        const destination = plusCode || customerAddress;
+        const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
+        window.open(url, '_blank');
+    }
+
+    function openPlusCodeInMaps() {
+        if (plusCode) {
+            window.open(`https://www.google.com/maps/search/${encodeURIComponent(plusCode)}`, '_blank');
         }
+    }
 
-
-        function markDelivered() {
-            new bootstrap.Modal(document.getElementById('deliveryModal')).show();
+    function handlePhotoSelect(input) {
+        const area = input.parentElement;
+        const preview = document.getElementById('photoPreview');
+        
+        if (input.files && input.files[0]) {
+            area.classList.add('has-file');
+            const reader = new FileReader();
+            
+            reader.onload = e => {
+                preview.innerHTML = `
+                    <img src="${e.target.result}" class="img-fluid rounded" style="max-height: 200px;">
+                    <p class="mt-2 mb-0 small text-success">
+                        <i class="fas fa-check-circle me-1"></i>
+                        Photo selected
+                    </p>
+                `;
+            };
+            
+            reader.readAsDataURL(input.files[0]);
         }
+    }
 
-       function confirmDelivery() {
-            const notes = document.getElementById('deliveryNotes')?.value || '';
-            const photo = document.getElementById('deliveryPhoto')?.files[0];
-
-            const formData = new FormData();
-            formData.append('delivery_notes', notes);
-            if (photo) {
-                formData.append('verification_photo', photo);
-            }
-
-            fetch(`/logistics/driver/shipment/${shipmentId}/delivered/`, {
+    function startDelivery() {
+        if (confirm('Start this delivery? Status will be updated to "In Transit".')) {
+            fetch(`/logistics/driver/shipment/${shipmentId}/start/`, {
                 method: 'POST',
                 headers: {
                     'X-CSRFToken': getCookie('csrftoken'),
+                    'Content-Type': 'application/json',
                 },
-                body: formData
             })
             .then(response => response.json())
             .then(data => {
-                bootstrap.Modal.getInstance(document.getElementById('deliveryModal')).hide();
                 if (data.success) {
                     showAlert('success', data.message);
-                    setTimeout(() => window.location.href = "{% url 'logistics:driver_dashboard' %}", 2000);
+                    setTimeout(() => location.reload(), 1500);
                 } else {
                     showAlert('danger', data.error);
                 }
@@ -578,43 +1278,78 @@
                 console.error('Error:', error);
             });
         }
+    }
 
-        function showAlert(type, message) {
-            const alertDiv = document.createElement('div');
-            alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
-            alertDiv.style.top = '20px';
-            alertDiv.style.right = '20px';
-            alertDiv.style.zIndex = '9999';
-            alertDiv.innerHTML = `
-                ${message}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            `;
-            document.body.appendChild(alertDiv);
+    function markDelivered() {
+        new bootstrap.Modal(document.getElementById('deliveryModal')).show();
+    }
 
-            setTimeout(() => {
-                if (alertDiv.parentNode) {
-                    alertDiv.parentNode.removeChild(alertDiv);
-                }
-            }, 5000);
+    function confirmDelivery() {
+        const notes = document.getElementById('deliveryNotes')?.value || '';
+        const photo = document.getElementById('deliveryPhoto')?.files[0];
+
+        const formData = new FormData();
+        formData.append('delivery_notes', notes);
+        if (photo) {
+            formData.append('verification_photo', photo);
         }
 
-        function getCookie(name) {
-            let cookieValue = null;
-            if (document.cookie && document.cookie !== '') {
-                const cookies = document.cookie.split(';');
-                for (let i = 0; i < cookies.length; i++) {
-                    const cookie = cookies[i].trim();
-                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                        break;
-                    }
+        fetch(`/logistics/driver/shipment/${shipmentId}/delivered/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+            },
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            bootstrap.Modal.getInstance(document.getElementById('deliveryModal')).hide();
+            if (data.success) {
+                showAlert('success', data.message);
+                setTimeout(() => window.location.href = "{% url 'logistics:driver_dashboard' %}", 2000);
+            } else {
+                showAlert('danger', data.error);
+            }
+        })
+        .catch(error => {
+            showAlert('danger', 'An error occurred');
+            console.error('Error:', error);
+        });
+    }
+
+    function showAlert(type, message) {
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+        alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+        alertDiv.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        document.body.appendChild(alertDiv);
+
+        setTimeout(() => {
+            if (alertDiv.parentNode) {
+                alertDiv.remove();
+            }
+        }, 5000);
+    }
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
                 }
             }
-            return cookieValue;
         }
+        return cookieValue;
+    }
 
-        // Initialize map when page loads
-        document.addEventListener('DOMContentLoaded', initMap);
-    </script>
-</body>
-</html>
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', initMap);
+</script>
+{% endblock %}

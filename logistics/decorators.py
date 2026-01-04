@@ -60,7 +60,7 @@ def driver_required(view_func: Callable) -> Callable:
                 request,
                 "You don't have permission to access this page. Driver privileges required."
             )
-            return redirect('home')
+            return redirect('logistics:driver_dashboard')
 
         # Get or verify driver profile
         try:
@@ -75,7 +75,7 @@ def driver_required(view_func: Callable) -> Callable:
                     request,
                     "Your driver account is inactive. Please contact your supervisor."
                 )
-                return redirect('home')
+                return redirect('logistics:dashboard')
 
             # Check license validity
             if not driver.is_license_valid():
@@ -99,7 +99,7 @@ def driver_required(view_func: Callable) -> Callable:
                 request,
                 "Driver profile not found. Please contact the administrator."
             )
-            return redirect('home')
+            return redirect('logistics:dashboard')
 
         return view_func(request, *args, **kwargs)
 
@@ -140,7 +140,7 @@ def warehouse_manager_required(view_func: Callable) -> Callable:
                 request,
                 "You don't have warehouse manager permissions."
             )
-            return redirect('home')
+            return redirect('logistics:dashboard')
 
         # Add managed warehouses to request
         request.managed_warehouses = managed_warehouses
@@ -184,7 +184,7 @@ def logistics_staff_required(view_func: Callable) -> Callable:
                 request,
                 "You don't have logistics staff permissions."
             )
-            return redirect('home')
+            return redirect('logistics:dashboard')
 
         return view_func(request, *args, **kwargs)
 
@@ -224,7 +224,7 @@ def admin_or_manager_required(view_func: Callable) -> Callable:
                 request,
                 "You need administrator or manager privileges to access this page."
             )
-            return redirect('home')
+            return redirect('logistics:dashboard')
 
         return view_func(request, *args, **kwargs)
 
