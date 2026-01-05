@@ -7,7 +7,7 @@ from django.db.models import Q, Sum
 from django.core.paginator import Paginator
 from django.utils import timezone
 from datetime import timedelta
-from stock.utils import reduce_stock
+from stock.stock_utils_compatibility import reduce_stock
 from stock.models import Stock
 from stores.models import Store
 from .models import Order, OrderItem, PromoCode, ChatMessage

@@ -74,6 +74,7 @@ from .services import (
     AnalyticsService
 )
 from orders.models import Order, OrderItem, ShippingAddress, OrderStatusHistory
+from stock.models import Warehouse as StockWarehouse
 from marketplace.notifications import send_whatsapp, send_email
 
 # Configure logging
@@ -1888,7 +1889,11 @@ def warehouse_utilization(request, pk):
     warehouse.update_utilization()
     return render(request, 'logistics/warehouse_utilization.html', {'warehouse': warehouse})
 
-
+# Get all store warehouses
+store_warehouses = StockWarehouse.objects.filter(
+    store__isnull=False,
+    is_active=True
+)
 # ============================================================================
 # LOGISTIC OFFICE VIEWS
 # ============================================================================
@@ -2295,6 +2300,7 @@ class AssignmentAnalyticsView(LoginRequiredMixin, TemplateView):
         from .services import AnalyticsService
         context['analytics'] = AnalyticsService.get_vehicle_utilization_metrics()
         return context
+
 
 # ============================================================================
 # AJAX ENDPOINTS

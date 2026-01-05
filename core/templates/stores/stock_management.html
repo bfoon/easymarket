@@ -2,12 +2,119 @@
 {% load static %}
 {% load humanize %}
 
-{% block title %}Stock Management - {{ store.name }}{% endblock %}
+{% block title %}Warehouse & Stock Management - {{ store.name }}{% endblock %}
 
 {% block content %}
-<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
 <style>
+:root {
+    --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --success-gradient: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    --warning-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    --danger-gradient: linear-gradient(135deg, #ff6b6b 0%, #c92a2a 100%);
+    --info-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+/* Warehouse Management Section */
+.warehouse-section {
+    background: white;
+    border-radius: 1rem;
+    padding: 2rem;
+    box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.1);
+    margin-bottom: 2rem;
+}
+
+.warehouse-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid #e9ecef;
+}
+
+.warehouse-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-radius: 2rem;
+    font-weight: 600;
+    font-size: 0.875rem;
+}
+
+.warehouse-status.active {
+    background: #d4edda;
+    color: #155724;
+}
+
+.warehouse-status.inactive {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.warehouse-status.pending {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.warehouse-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.warehouse-info-card {
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.warehouse-info-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: var(--primary-gradient);
+}
+
+.warehouse-info-label {
+    font-size: 0.875rem;
+    color: #6c757d;
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+}
+
+.warehouse-info-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #2c3e50;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.warehouse-location-map {
+    background: #f8f9fa;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    text-align: center;
+    color: #6c757d;
+    min-height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+}
+
+/* Stock Summary Cards */
 .stock-summary-cards {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -16,52 +123,124 @@
 }
 
 .stock-card {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: var(--primary-gradient);
     color: white;
-    border-radius: 0.5rem;
+    border-radius: 0.75rem;
     padding: 1.5rem;
     text-align: center;
+    box-shadow: 0 0.25rem 0.5rem rgba(0,0,0,0.1);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    position: relative;
+    overflow: hidden;
 }
 
-.stock-card.warning {
-    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+.stock-card::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -50%;
+    width: 200%;
+    height: 200%;
+    background: rgba(255,255,255,0.1);
+    transform: rotate(45deg);
+    transition: all 0.6s ease;
 }
 
-.stock-card.danger {
-    background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
-    color: #333;
+.stock-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.2);
+}
+
+.stock-card:hover::before {
+    top: -100%;
+    right: -100%;
 }
 
 .stock-card.success {
-    background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
-    color: #333;
+    background: var(--success-gradient);
+}
+
+.stock-card.warning {
+    background: var(--warning-gradient);
+}
+
+.stock-card.danger {
+    background: var(--danger-gradient);
+}
+
+.stock-card.info {
+    background: var(--info-gradient);
+}
+
+.stock-card-icon {
+    font-size: 2.5rem;
+    opacity: 0.3;
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
 }
 
 .stock-number {
-    font-size: 2rem;
+    font-size: 2.5rem;
     font-weight: bold;
     margin-bottom: 0.5rem;
+    position: relative;
+    z-index: 1;
 }
 
+.stock-label {
+    font-size: 0.875rem;
+    opacity: 0.9;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    position: relative;
+    z-index: 1;
+}
+
+/* Filters */
 .stock-filters {
-    background: #f8f9fa;
-    border-radius: 0.5rem;
-    padding: 1rem;
+    background: white;
+    border-radius: 0.75rem;
+    padding: 1.5rem;
     margin-bottom: 2rem;
+    box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
 }
 
+/* Products Table */
 .stock-table {
     background: white;
-    border-radius: 0.5rem;
+    border-radius: 0.75rem;
     box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
     overflow: hidden;
 }
 
-.stock-level {
-    padding: 0.25rem 0.5rem;
-    border-radius: 0.25rem;
+.table thead th {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    font-weight: 600;
+    text-transform: uppercase;
     font-size: 0.875rem;
-    font-weight: 500;
+    letter-spacing: 0.5px;
+    border: none;
+    padding: 1rem;
+}
+
+.product-image {
+    width: 60px;
+    height: 60px;
+    object-fit: cover;
+    border-radius: 0.5rem;
+    box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.1);
+}
+
+.stock-level {
+    padding: 0.375rem 0.75rem;
+    border-radius: 2rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
 }
 
 .stock-level.high {
@@ -84,51 +263,221 @@
     color: #383d41;
 }
 
-.product-image {
-    width: 50px;
-    height: 50px;
-    object-fit: cover;
-    border-radius: 0.25rem;
+.stock-level i {
+    font-size: 0.75rem;
 }
 
+/* Stock Adjustment Form */
 .stock-adjustment-form {
     display: flex;
     gap: 0.5rem;
     align-items: center;
 }
 
-.stock-adjustment-form input {
-    width: 80px;
+.stock-adjustment-form input,
+.stock-adjustment-form select {
+    max-width: 90px;
 }
 
+/* Quick Actions */
 .quick-actions {
     display: flex;
     gap: 0.5rem;
+    flex-wrap: wrap;
 }
 
-.modal-stock-form {
-    max-width: 400px;
+.btn-icon {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
 }
 
-.bulk-actions {
-    background: #e9ecef;
+/* Modals */
+.modal-header {
+    background: var(--primary-gradient);
+    color: white;
+    border-radius: 0.5rem 0.5rem 0 0;
+}
+
+.modal-header .btn-close {
+    filter: brightness(0) invert(1);
+}
+
+.form-section {
+    background: #f8f9fa;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.form-section-title {
+    font-weight: 600;
+    margin-bottom: 1rem;
+    color: #2c3e50;
+    font-size: 1.1rem;
+}
+
+.stock-preview {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 1.5rem;
+    border-radius: 0.5rem;
+    text-align: center;
+    font-size: 1.25rem;
+    font-weight: bold;
+    margin: 1rem 0;
+}
+
+/* Warehouse Create/Edit Form */
+.warehouse-form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+}
+
+.geocode-info {
+    background: #e7f3ff;
+    border-left: 4px solid #2196F3;
     padding: 1rem;
     border-radius: 0.375rem;
+    margin-top: 0.5rem;
+}
+
+.geocode-info i {
+    color: #2196F3;
+    margin-right: 0.5rem;
+}
+
+/* Bulk Actions */
+.bulk-actions {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 1rem;
+    border-radius: 0.5rem;
     margin-bottom: 1rem;
     display: none;
+    animation: slideDown 0.3s ease;
 }
 
 .bulk-actions.show {
     display: block;
 }
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Movement Type Pills */
+.movement-type {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 2rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.movement-type.add {
+    background: #d4edda;
+    color: #155724;
+}
+
+.movement-type.subtract {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.movement-type.set {
+    background: #d1ecf1;
+    color: #0c5460;
+}
+
+.movement-type.transfer {
+    background: #fff3cd;
+    color: #856404;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .warehouse-info-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .stock-summary-cards {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .warehouse-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+}
+
+/* Loading State */
+.loading-spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(255,255,255,.3);
+    border-radius: 50%;
+    border-top-color: #fff;
+    animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Toast Notifications */
+.toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 9999;
+}
+
+.custom-toast {
+    min-width: 300px;
+    box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15);
+    border-radius: 0.5rem;
+    animation: slideInRight 0.3s ease;
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
 </style>
 
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
 <div class="container-fluid py-4">
     <!-- Header -->
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h1 class="h3 mb-0">Stock Management</h1>
-            <p class="text-muted">Monitor and manage inventory for {{ store.name }}</p>
+            <h1 class="h3 mb-0">
+                <i class="fas fa-warehouse me-2"></i>Warehouse & Stock Management
+            </h1>
+            <p class="text-muted mb-0">{{ store.name }}</p>
         </div>
         <div class="d-flex gap-2">
             <a href="{% url 'stores:inventory_history' store.id %}" class="btn btn-outline-primary">
@@ -140,342 +489,639 @@
         </div>
     </div>
 
-    <!-- Stock Summary Cards -->
-    <div class="stock-summary-cards">
-        <div class="stock-card">
-            <div class="stock-number">{{ total_products|intcomma }}</div>
-            <div>Total Products</div>
+    <!-- Warehouse Section -->
+    <div class="warehouse-section">
+        <div class="warehouse-header">
+            <div>
+                <h4 class="mb-2">
+                    <i class="fas fa-warehouse me-2"></i>Store Warehouse
+                </h4>
+                {% if warehouse %}
+                    <span class="warehouse-status active">
+                        <i class="fas fa-check-circle"></i>
+                        Active
+                    </span>
+                {% else %}
+                    <span class="warehouse-status pending">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        No Warehouse Configured
+                    </span>
+                {% endif %}
+            </div>
+            <div>
+                {% if warehouse %}
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#warehouseModal">
+                        <i class="fas fa-edit me-2"></i>Edit Warehouse
+                    </button>
+                {% else %}
+                    <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#warehouseModal">
+                        <i class="fas fa-plus me-2"></i>Create Warehouse
+                    </button>
+                {% endif %}
+            </div>
         </div>
-        <div class="stock-card success">
-            <div class="stock-number">{{ in_stock_count|default:0|intcomma }}</div>
-            <div>In Stock</div>
-        </div>
-        <div class="stock-card warning">
-            <div class="stock-number">{{ low_stock_count|intcomma }}</div>
-            <div>Low Stock</div>
-        </div>
-        <div class="stock-card danger">
-            <div class="stock-number">{{ out_of_stock_count|intcomma }}</div>
-            <div>Out of Stock</div>
-        </div>
-    </div>
 
-    <!-- Filters -->
-    <div class="stock-filters">
-        <form method="GET" class="row g-3 align-items-end">
-            <div class="col-md-3">
-                <label for="search" class="form-label">Search Products</label>
-                <input type="text" class="form-control" id="search" name="search"
-                       value="{{ search_query }}" placeholder="Product name...">
+        {% if warehouse %}
+            <div class="warehouse-info-grid">
+                <div class="warehouse-info-card">
+                    <div class="warehouse-info-label">
+                        <i class="fas fa-tag me-1"></i>Warehouse Code
+                    </div>
+                    <div class="warehouse-info-value">
+                        <strong>{{ warehouse.code }}</strong>
+                    </div>
+                </div>
+
+                <div class="warehouse-info-card">
+                    <div class="warehouse-info-label">
+                        <i class="fas fa-map-marker-alt me-1"></i>Location
+                    </div>
+                    <div class="warehouse-info-value">
+                        {{ warehouse.city|default:"N/A" }}, {{ warehouse.country|default:"N/A" }}
+                    </div>
+                </div>
+
+                <div class="warehouse-info-card">
+                    <div class="warehouse-info-label">
+                        <i class="fas fa-boxes me-1"></i>Total Products
+                    </div>
+                    <div class="warehouse-info-value">
+                        {{ warehouse.stock_items.count|intcomma }}
+                    </div>
+                </div>
+
+                <div class="warehouse-info-card">
+                    <div class="warehouse-info-label">
+                        <i class="fas fa-dollar-sign me-1"></i>Stock Value
+                    </div>
+                    <div class="warehouse-info-value">
+                        ${{ stock_value|floatformat:2|intcomma }}
+                    </div>
+                </div>
             </div>
-            <div class="col-md-2">
-                <label for="stock_filter" class="form-label">Stock Level</label>
-                <select class="form-select" id="stock_filter" name="stock_filter">
-                    <option value="all" {% if stock_filter == 'all' %}selected{% endif %}>All</option>
-                    <option value="available" {% if stock_filter == 'available' %}selected{% endif %}>Available</option>
-                    <option value="low" {% if stock_filter == 'low' %}selected{% endif %}>Low Stock</option>
-                    <option value="out" {% if stock_filter == 'out' %}selected{% endif %}>Out of Stock</option>
-                </select>
+
+            <div class="row">
+                <div class="col-md-8">
+                    <div class="mb-3">
+                        <strong><i class="fas fa-map-marked-alt me-2"></i>Address:</strong>
+                        <p class="mb-0">{{ warehouse.address }}</p>
+                        {% if warehouse.postal_code %}
+                            <small class="text-muted">Postal Code: {{ warehouse.postal_code }}</small>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    {% if warehouse.has_geocode %}
+                        <div class="geocode-info">
+                            <i class="fas fa-map-pin"></i>
+                            <strong>Geocoded Location</strong>
+                            <div class="small mt-1">
+                                Lat: {{ warehouse.latitude }}<br>
+                                Lon: {{ warehouse.longitude }}
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-info small mb-0">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Add coordinates for distance tracking
+                        </div>
+                    {% endif %}
+                </div>
             </div>
-            <div class="col-md-2">
-                <label for="category" class="form-label">Category</label>
-                <select class="form-select" id="category" name="category">
-                    <option value="">All Categories</option>
-                    {% for cat in categories %}
-                        <option value="{{ cat.category_id }}"
-                                {% if category_filter == cat.category_id|stringformat:"s" %}selected{% endif %}>
-                            {{ cat.category__name }}
-                        </option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-2">
-                <button type="submit" class="btn btn-primary">
-                    <i class="fas fa-search me-2"></i>Filter
+        {% else %}
+            <div class="text-center py-5">
+                <i class="fas fa-warehouse" style="font-size: 4rem; color: #dee2e6; margin-bottom: 1rem;"></i>
+                <h5 class="text-muted mb-3">No Warehouse Configured</h5>
+                <p class="text-muted mb-4">Create a warehouse to start managing your inventory efficiently.</p>
+                <button class="btn btn-primary btn-lg" data-bs-toggle="modal" data-bs-target="#warehouseModal">
+                    <i class="fas fa-plus me-2"></i>Create Warehouse Now
                 </button>
             </div>
-            <div class="col-md-3">
-                <div class="d-flex gap-2">
-                    <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#bulkUpdateModal">
-                        <i class="fas fa-edit me-2"></i>Bulk Update
+        {% endif %}
+    </div>
+
+    {% if warehouse %}
+        <!-- Stock Summary Cards -->
+        <div class="stock-summary-cards">
+            <div class="stock-card">
+                <i class="fas fa-box stock-card-icon"></i>
+                <div class="stock-number">{{ total_products|intcomma }}</div>
+                <div class="stock-label">Total Products</div>
+            </div>
+            <div class="stock-card success">
+                <i class="fas fa-check-circle stock-card-icon"></i>
+                <div class="stock-number">{{ in_stock_count|default:0|intcomma }}</div>
+                <div class="stock-label">In Stock</div>
+            </div>
+            <div class="stock-card warning">
+                <i class="fas fa-exclamation-triangle stock-card-icon"></i>
+                <div class="stock-number">{{ low_stock_count|intcomma }}</div>
+                <div class="stock-label">Low Stock</div>
+            </div>
+            <div class="stock-card danger">
+                <i class="fas fa-times-circle stock-card-icon"></i>
+                <div class="stock-number">{{ out_of_stock_count|intcomma }}</div>
+                <div class="stock-label">Out of Stock</div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="stock-filters">
+            <form method="GET" class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label for="search" class="form-label">
+                        <i class="fas fa-search me-1"></i>Search Products
+                    </label>
+                    <input type="text" class="form-control" id="search" name="search"
+                           value="{{ search_query }}" placeholder="Product name or SKU...">
+                </div>
+                <div class="col-md-2">
+                    <label for="stock_filter" class="form-label">
+                        <i class="fas fa-filter me-1"></i>Stock Level
+                    </label>
+                    <select class="form-select" id="stock_filter" name="stock_filter">
+                        <option value="all" {% if stock_filter == 'all' %}selected{% endif %}>All</option>
+                        <option value="available" {% if stock_filter == 'available' %}selected{% endif %}>Available</option>
+                        <option value="low" {% if stock_filter == 'low' %}selected{% endif %}>Low Stock</option>
+                        <option value="out" {% if stock_filter == 'out' %}selected{% endif %}>Out of Stock</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label for="category" class="form-label">
+                        <i class="fas fa-tags me-1"></i>Category
+                    </label>
+                    <select class="form-select" id="category" name="category">
+                        <option value="">All Categories</option>
+                        {% for cat in categories %}
+                            <option value="{{ cat.category_id }}"
+                                    {% if category_filter == cat.category_id|stringformat:"s" %}selected{% endif %}>
+                                {{ cat.category__name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-search me-2"></i>Apply Filters
                     </button>
-                    <button type="button" class="btn btn-outline-success" onclick="exportStock()">
-                        <i class="fas fa-download me-2"></i>Export
+                </div>
+                <div class="col-md-3">
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-outline-primary flex-fill" data-bs-toggle="modal" data-bs-target="#bulkUpdateModal">
+                            <i class="fas fa-edit me-2"></i>Bulk Update
+                        </button>
+                        <button type="button" class="btn btn-outline-success flex-fill" onclick="exportStock()">
+                            <i class="fas fa-download me-2"></i>Export
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- Bulk Actions -->
+        <div class="bulk-actions" id="bulkActions">
+            <div class="d-flex justify-content-between align-items-center">
+                <span><strong id="selectedCount">0</strong> products selected</span>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-light btn-sm" onclick="bulkUpdateStock()">
+                        <i class="fas fa-edit me-1"></i>Update Stock
+                    </button>
+                    <button class="btn btn-outline-light btn-sm" onclick="clearSelection()">
+                        <i class="fas fa-times me-1"></i>Clear
                     </button>
                 </div>
             </div>
-        </form>
-    </div>
-
-    <!-- Bulk Actions (hidden by default) -->
-    <div class="bulk-actions" id="bulkActions">
-        <div class="d-flex justify-content-between align-items-center">
-            <span><strong id="selectedCount">0</strong> products selected</span>
-            <div class="d-flex gap-2">
-                <button class="btn btn-sm btn-primary" onclick="bulkUpdateStock()">
-                    <i class="fas fa-edit me-1"></i>Update Stock
-                </button>
-                <button class="btn btn-sm btn-secondary" onclick="clearSelection()">
-                    <i class="fas fa-times me-1"></i>Clear Selection
-                </button>
-            </div>
         </div>
-    </div>
 
-    <!-- Products Table -->
-    <div class="stock-table">
-        <div class="table-responsive">
-            <table class="table table-hover mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th width="40">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="selectAll">
-                            </div>
-                        </th>
-                        <th width="80">Image</th>
-                        <th>Product</th>
-                        <th width="120">Category</th>
-                        <th width="100">Price</th>
-                        <th width="120">Current Stock</th>
-                        <th width="120">Stock Level</th>
-                        <th width="200">Quick Update</th>
-                        <th width="120">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for product in page_obj %}
-                    <tr data-product-id="{{ product.id }}">
-                        <td>
-                            <div class="form-check">
-                                <input class="form-check-input product-checkbox" type="checkbox"
-                                       value="{{ product.id }}">
-                            </div>
-                        </td>
-                        <td>
-                            {% if product.image %}
-                                <img src="{{ product.image.url }}" alt="{{ product.name }}" class="product-image">
-                            {% else %}
-                                <div class="product-image bg-light d-flex align-items-center justify-content-center">
-                                    <i class="fas fa-image text-muted"></i>
+        <!-- Products Table -->
+        <div class="stock-table">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th width="40">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="selectAll">
                                 </div>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <strong>{{ product.name|truncatechars:40 }}</strong>
-                            <br>
-                            <small class="text-muted">ID: {{ product.id }}</small>
-                        </td>
-                        <td>
-                            {% if product.category %}
-                                <span class="badge bg-secondary">{{ product.category.name }}</span>
-                            {% else %}
-                                <span class="text-muted">-</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <strong>D{{ product.price|floatformat:2 }}</strong>
-                        </td>
-                        <td>
-                            <span class="stock-quantity" data-product="{{ product.id }}">
-                                {{ product.stock_quantity|default:0 }}
-                            </span>
-                        </td>
-                        <td>
-                            {% if product.stock_quantity == 0 %}
-                                <span class="stock-level out">Out of Stock</span>
-                            {% elif product.stock_quantity <= 5 %}
-                                <span class="stock-level low">Low Stock</span>
-                            {% elif product.stock_quantity <= 20 %}
-                                <span class="stock-level medium">Medium</span>
-                            {% else %}
-                                <span class="stock-level high">Good</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <div class="stock-adjustment-form">
-                                <select class="form-select form-select-sm" id="adjustType{{ product.id }}">
-                                    <option value="set">Set</option>
-                                    <option value="add">Add</option>
-                                    <option value="subtract">Remove</option>
-                                </select>
-                                <input type="number" class="form-control form-control-sm"
-                                       id="adjustAmount{{ product.id }}" placeholder="0" min="0">
-                                <button class="btn btn-sm btn-primary"
-                                        onclick="quickUpdateStock({{ product.id }})">
-                                    <i class="fas fa-check"></i>
-                                </button>
-                            </div>
-                        </td>
-                        <td>
-                            <div class="quick-actions">
-                                <button class="btn btn-sm btn-outline-primary"
-                                        onclick="openStockModal({{ product.id }}, '{{ product.name|escapejs }}')">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-                                <a href="{% url 'stores:edit_product' store.id product.id %}" 
-                                   class="btn btn-sm btn-outline-secondary">
-                                    <i class="fas fa-cog"></i>
-                                </a>
-                            </div>
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="9" class="text-center py-4">
-                            <i class="fas fa-box fa-2x text-muted mb-2"></i>
-                            <br>
-                            <span class="text-muted">No products found matching your criteria.</span>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                            </th>
+                            <th width="80">Image</th>
+                            <th>Product</th>
+                            <th width="120">Current Stock</th>
+                            <th width="120">Status</th>
+                            <th width="120">Price</th>
+                            <th width="300">Quick Adjust</th>
+                            <th width="120">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for product in products %}
+                        <tr data-product-id="{{ product.id }}">
+                            <td>
+                                <div class="form-check">
+                                    <input class="form-check-input product-checkbox" type="checkbox"
+                                           value="{{ product.id }}">
+                                </div>
+                            </td>
+                            <td>
+                                {% if product.primary_image %}
+                                    <img src="{{ product.primary_image.url }}"
+                                         alt="{{ product.name }}"
+                                         class="product-image">
+                                {% else %}
+                                    <div class="product-image bg-light d-flex align-items-center justify-content-center">
+                                        <i class="fas fa-image text-muted"></i>
+                                    </div>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div>
+                                    <strong>{{ product.name }}</strong>
+                                    {% if product.sku %}
+                                        <div class="small text-muted">SKU: {{ product.sku }}</div>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td>
+                                <span class="stock-quantity fs-5 fw-bold" data-product="{{ product.id }}">
+                                    {{ product.stock_quantity|default:0 }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if product.stock_quantity == 0 %}
+                                    <span class="stock-level out">
+                                        <i class="fas fa-times-circle"></i>Out
+                                    </span>
+                                {% elif product.stock_quantity <= 5 %}
+                                    <span class="stock-level low">
+                                        <i class="fas fa-exclamation-triangle"></i>Low
+                                    </span>
+                                {% elif product.stock_quantity <= 20 %}
+                                    <span class="stock-level medium">
+                                        <i class="fas fa-exclamation-circle"></i>Medium
+                                    </span>
+                                {% else %}
+                                    <span class="stock-level high">
+                                        <i class="fas fa-check-circle"></i>High
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <strong>${{ product.price|floatformat:2 }}</strong>
+                            </td>
+                            <td>
+                                <div class="stock-adjustment-form">
+                                    <select class="form-select form-select-sm" id="adjustType{{ product.id }}">
+                                        <option value="add">Add</option>
+                                        <option value="subtract">Remove</option>
+                                        <option value="set">Set To</option>
+                                    </select>
+                                    <input type="number"
+                                           class="form-control form-control-sm"
+                                           id="adjustAmount{{ product.id }}"
+                                           min="0"
+                                           placeholder="Qty">
+                                    <button class="btn btn-primary btn-sm"
+                                            onclick="quickUpdateStock({{ product.id }})">
+                                        <i class="fas fa-check"></i>
+                                    </button>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="quick-actions">
+                                    <button class="btn btn-sm btn-outline-primary btn-icon"
+                                            onclick="openStockModal({{ product.id }}, '{{ product.name|escapejs }}')"
+                                            title="Detailed Update">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <a href="{% url 'marketplace:product_detail' product.id %}"
+                                       class="btn btn-sm btn-outline-info btn-icon"
+                                       title="View Product">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center py-5">
+                                <i class="fas fa-box-open" style="font-size: 3rem; color: #dee2e6; margin-bottom: 1rem;"></i>
+                                <p class="text-muted mb-0">No products found</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <!-- Pagination -->
-        {% if page_obj.has_other_pages %}
-        <div class="p-3 border-top">
-            <nav aria-label="Stock pagination">
-                <ul class="pagination justify-content-center mb-0">
-                    {% if page_obj.has_previous %}
-                        <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if stock_filter != 'all' %}&stock_filter={{ stock_filter }}{% endif %}{% if category_filter %}&category={{ category_filter }}{% endif %}">
-                                <i class="fas fa-chevron-left"></i>
-                            </a>
-                        </li>
-                    {% endif %}
+        {% if products.has_other_pages %}
+        <nav aria-label="Products pagination" class="mt-3">
+            <ul class="pagination justify-content-center">
+                {% if products.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ products.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if stock_filter %}&stock_filter={{ stock_filter }}{% endif %}{% if category_filter %}&category={{ category_filter }}{% endif %}">
+                            <i class="fas fa-chevron-left"></i>
+                        </a>
+                    </li>
+                {% endif %}
 
-                    {% for num in page_obj.paginator.page_range %}
-                        {% if page_obj.number == num %}
-                            <li class="page-item active">
-                                <span class="page-link">{{ num }}</span>
-                            </li>
-                        {% else %}
-                            <li class="page-item">
-                                <a class="page-link" href="?page={{ num }}{% if search_query %}&search={{ search_query }}{% endif %}{% if stock_filter != 'all' %}&stock_filter={{ stock_filter }}{% endif %}{% if category_filter %}&category={{ category_filter }}{% endif %}">{{ num }}</a>
-                            </li>
-                        {% endif %}
-                    {% endfor %}
+                <li class="page-item active">
+                    <span class="page-link">
+                        Page {{ products.number }} of {{ products.paginator.num_pages }}
+                    </span>
+                </li>
 
-                    {% if page_obj.has_next %}
-                        <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if stock_filter != 'all' %}&stock_filter={{ stock_filter }}{% endif %}{% if category_filter %}&category={{ category_filter }}{% endif %}">
-                                <i class="fas fa-chevron-right"></i>
-                            </a>
-                        </li>
-                    {% endif %}
-                </ul>
-            </nav>
-        </div>
+                {% if products.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ products.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if stock_filter %}&stock_filter={{ stock_filter }}{% endif %}{% if category_filter %}&category={{ category_filter }}{% endif %}">
+                            <i class="fas fa-chevron-right"></i>
+                        </a>
+                    </li>
+                {% endif %}
+            </ul>
+        </nav>
         {% endif %}
+    {% endif %}
+</div>
+
+<!-- Warehouse Create/Edit Modal -->
+<div class="modal fade" id="warehouseModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-warehouse me-2"></i>
+                    {% if warehouse %}Edit{% else %}Create{% endif %} Warehouse
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{% url 'stores:manage_warehouse' store.id %}" id="warehouseForm">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="form-section">
+                        <h6 class="form-section-title">
+                            <i class="fas fa-info-circle me-2"></i>Basic Information
+                        </h6>
+                        <div class="warehouse-form-grid">
+                            <div class="mb-3">
+                                <label for="warehouse_name" class="form-label">
+                                    Warehouse Name <span class="text-danger">*</span>
+                                </label>
+                                <input type="text" class="form-control" id="warehouse_name"
+                                       name="warehouse_name"
+                                       value="{{ warehouse.name|default:'' }}"
+                                       placeholder="e.g., {{ store.name }} Main Warehouse"
+                                       required>
+                                <small class="text-muted">Descriptive name for your warehouse</small>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="warehouse_code" class="form-label">
+                                    Warehouse Code <span class="text-danger">*</span>
+                                </label>
+                                <input type="text" class="form-control" id="warehouse_code"
+                                       name="warehouse_code"
+                                       value="{{ warehouse.code|default:'' }}"
+                                       placeholder="e.g., WH-{{ store.id }}"
+                                       required>
+                                <small class="text-muted">Unique identifier (letters, numbers, hyphens)</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <h6 class="form-section-title">
+                            <i class="fas fa-map-marked-alt me-2"></i>Location Details
+                        </h6>
+                        <div class="mb-3">
+                            <label for="address" class="form-label">
+                                Address <span class="text-danger">*</span>
+                            </label>
+                            <textarea class="form-control" id="address" name="address"
+                                      rows="2" required placeholder="Street address">{{ warehouse.address|default:'' }}</textarea>
+                        </div>
+
+                        <div class="warehouse-form-grid">
+                            <div class="mb-3">
+                                <label for="city" class="form-label">City <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="city"
+                                       name="city" value="{{ warehouse.city|default:'' }}"
+                                       required placeholder="City name">
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="state" class="form-label">State/Province</label>
+                                <input type="text" class="form-control" id="state"
+                                       name="state" value="{{ warehouse.state|default:'' }}"
+                                       placeholder="State or province">
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="country" class="form-label">Country <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="country"
+                                       name="country" value="{{ warehouse.country|default:'Gambia' }}"
+                                       required placeholder="Country name">
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="postal_code" class="form-label">Postal Code</label>
+                                <input type="text" class="form-control" id="postal_code"
+                                       name="postal_code" value="{{ warehouse.postal_code|default:'' }}"
+                                       placeholder="ZIP or postal code">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <h6 class="form-section-title">
+                            <i class="fas fa-map-pin me-2"></i>Geocode (Optional)
+                        </h6>
+                        <p class="small text-muted mb-3">
+                            Add geographic coordinates for distance tracking and route optimization
+                        </p>
+                        <div class="warehouse-form-grid">
+                            <div class="mb-3">
+                                <label for="latitude" class="form-label">Latitude</label>
+                                <input type="number" step="0.000001" class="form-control"
+                                       id="latitude" name="latitude"
+                                       value="{{ warehouse.latitude|default:'' }}"
+                                       placeholder="e.g., 13.4549">
+                                <small class="text-muted">Between -90 and 90</small>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="longitude" class="form-label">Longitude</label>
+                                <input type="number" step="0.000001" class="form-control"
+                                       id="longitude" name="longitude"
+                                       value="{{ warehouse.longitude|default:'' }}"
+                                       placeholder="e.g., -16.5790">
+                                <small class="text-muted">Between -180 and 180</small>
+                            </div>
+                        </div>
+                        <div class="alert alert-info small mb-0">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>Tip:</strong> You can find coordinates using Google Maps. Right-click on your location and select the coordinates to copy them.
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-2"></i>Cancel
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-2"></i>
+                        {% if warehouse %}Update{% else %}Create{% endif %} Warehouse
+                    </button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
 
 <!-- Stock Update Modal -->
-<div class="modal fade" id="stockUpdateModal" tabindex="-1" aria-labelledby="stockUpdateModalLabel" aria-hidden="true">
+<div class="modal fade" id="stockUpdateModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h1 class="modal-title fs-5" id="stockUpdateModalLabel">Update Stock</h1>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <h5 class="modal-title">
+                    <i class="fas fa-edit me-2"></i>Update Stock
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
-                <form id="stockUpdateForm" class="modal-stock-form">
-                    {% csrf_token %}
-                    <input type="hidden" id="modalProductId">
-                    
+            <form id="stockUpdateForm">
+                {% csrf_token %}
+                <input type="hidden" id="modalProductId" name="product_id">
+                <div class="modal-body">
                     <div class="mb-3">
                         <label class="form-label">Product</label>
-                        <div class="fw-bold" id="modalProductName"></div>
+                        <p class="form-control-plaintext fw-bold" id="modalProductName"></p>
                     </div>
 
                     <div class="mb-3">
                         <label class="form-label">Current Stock</label>
-                        <div class="fw-bold text-primary" id="modalCurrentStock"></div>
+                        <p class="form-control-plaintext">
+                            <span class="fs-4 fw-bold text-primary" id="modalCurrentStock">0</span> units
+                        </p>
                     </div>
 
                     <div class="mb-3">
-                        <label for="modalAdjustmentType" class="form-label">Adjustment Type</label>
-                        <select class="form-select" id="modalAdjustmentType" name="type">
-                            <option value="set">Set to specific amount</option>
-                            <option value="add">Add to current stock</option>
-                            <option value="subtract">Remove from current stock</option>
+                        <label for="modalAdjustmentType" class="form-label">
+                            Adjustment Type <span class="text-danger">*</span>
+                        </label>
+                        <select class="form-select" id="modalAdjustmentType"
+                                onchange="updateModalPreview()" required>
+                            <option value="set">Set To (replace current)</option>
+                            <option value="add">Add (increase stock)</option>
+                            <option value="subtract">Subtract (decrease stock)</option>
                         </select>
                     </div>
 
                     <div class="mb-3">
-                        <label for="modalQuantity" class="form-label">Quantity</label>
-                        <input type="number" class="form-control" id="modalQuantity" name="quantity" 
-                               min="0" required>
+                        <label for="modalQuantity" class="form-label">
+                            Quantity <span class="text-danger">*</span>
+                        </label>
+                        <input type="number" class="form-control" id="modalQuantity"
+                               min="0" required onchange="updateModalPreview()"
+                               placeholder="Enter quantity">
+                    </div>
+
+                    <div class="stock-preview" id="modalPreview">
+                        New stock will be: 0
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="modalShipToWarehouse" class="form-label">
+                            <i class="fas fa-truck me-1"></i>Ship to Logistics Warehouse
+                        </label>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox"
+                                   id="modalShipToWarehouse" name="ship_to_warehouse">
+                            <label class="form-check-label" for="modalShipToWarehouse">
+                                Create transfer to EasyMarket logistics warehouse
+                            </label>
+                        </div>
+                        <small class="text-muted">
+                            When enabled, this will create a stock movement record for shipment tracking
+                        </small>
                     </div>
 
                     <div class="mb-3">
                         <label for="modalNotes" class="form-label">Notes (Optional)</label>
-                        <textarea class="form-control" id="modalNotes" name="notes" rows="3" 
-                                  placeholder="Reason for stock adjustment..."></textarea>
+                        <textarea class="form-control" id="modalNotes" rows="3"
+                                  placeholder="Add notes about this stock update..."></textarea>
                     </div>
-
-                    <div class="alert alert-info">
-                        <i class="fas fa-info-circle me-2"></i>
-                        <span id="modalPreview">New stock will be: -</span>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="submitStockUpdate()">
-                    <i class="fas fa-save me-2"></i>Update Stock
-                </button>
-            </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-2"></i>Cancel
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="submitStockUpdate()">
+                        <i class="fas fa-save me-2"></i>Update Stock
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
 
 <!-- Bulk Update Modal -->
-<div class="modal fade" id="bulkUpdateModal" tabindex="-1" aria-labelledby="bulkUpdateModalLabel" aria-hidden="true">
+<div class="modal fade" id="bulkUpdateModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h1 class="modal-title fs-5" id="bulkUpdateModalLabel">Bulk Stock Update</h1>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <h5 class="modal-title">
+                    <i class="fas fa-edit me-2"></i>Bulk Stock Update
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <form id="bulkUpdateForm">
-                    {% csrf_token %}
-                    
-                    <div class="mb-3">
-                        <label class="form-label">Selected Products</label>
-                        <div id="bulkProductList" class="border rounded p-2 mb-2" style="max-height: 150px; overflow-y: auto;">
-                            <!-- Will be populated by JavaScript -->
-                        </div>
-                    </div>
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Selected Products:</strong>
+                    <div id="bulkProductList" class="mt-2"></div>
+                </div>
 
-                    <div class="mb-3">
-                        <label for="bulkAdjustmentType" class="form-label">Adjustment Type</label>
-                        <select class="form-select" id="bulkAdjustmentType">
-                            <option value="set">Set all to specific amount</option>
-                            <option value="add">Add to all current stock</option>
-                            <option value="subtract">Remove from all current stock</option>
-                        </select>
-                    </div>
+                <div class="mb-3">
+                    <label for="bulkAdjustmentType" class="form-label">Adjustment Type</label>
+                    <select class="form-select" id="bulkAdjustmentType">
+                        <option value="add">Add to current stock</option>
+                        <option value="subtract">Subtract from current stock</option>
+                        <option value="set">Set to specific amount</option>
+                    </select>
+                </div>
 
-                    <div class="mb-3">
-                        <label for="bulkQuantity" class="form-label">Quantity</label>
-                        <input type="number" class="form-control" id="bulkQuantity" min="0" required>
-                    </div>
+                <div class="mb-3">
+                    <label for="bulkQuantity" class="form-label">Quantity</label>
+                    <input type="number" class="form-control" id="bulkQuantity"
+                           min="0" placeholder="Enter quantity">
+                </div>
 
-                    <div class="mb-3">
-                        <label for="bulkNotes" class="form-label">Notes</label>
-                        <textarea class="form-control" id="bulkNotes" rows="2" 
-                                  placeholder="Reason for bulk stock adjustment..."></textarea>
+                <div class="mb-3">
+                    <label for="bulkShipToWarehouse" class="form-label">
+                        <i class="fas fa-truck me-1"></i>Ship to Logistics Warehouse
+                    </label>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox"
+                               id="bulkShipToWarehouse">
+                        <label class="form-check-label" for="bulkShipToWarehouse">
+                            Create transfer records for all products
+                        </label>
                     </div>
-                </form>
+                </div>
+
+                <div class="mb-3">
+                    <label for="bulkNotes" class="form-label">Notes</label>
+                    <textarea class="form-control" id="bulkNotes" rows="2"
+                              placeholder="Bulk stock update notes..."></textarea>
+                </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-2"></i>Cancel
+                </button>
                 <button type="button" class="btn btn-primary" onclick="submitBulkUpdate()">
-                    <i class="fas fa-save me-2"></i>Update All Selected
+                    <i class="fas fa-save me-2"></i>Update All
                 </button>
             </div>
         </div>
@@ -483,63 +1129,68 @@
 </div>
 
 <script>
+// Global variables
 let selectedProducts = new Set();
 let currentModalProductId = null;
 let currentModalStock = 0;
 
-// Selection management
+// Selection handlers
 document.addEventListener('DOMContentLoaded', function() {
-    const selectAllCheckbox = document.getElementById('selectAll');
-    const productCheckboxes = document.querySelectorAll('.product-checkbox');
-    
-    selectAllCheckbox.addEventListener('change', function() {
-        productCheckboxes.forEach(checkbox => {
-            checkbox.checked = this.checked;
+    // Select all checkbox
+    document.getElementById('selectAll')?.addEventListener('change', function() {
+        const checkboxes = document.querySelectorAll('.product-checkbox');
+        checkboxes.forEach(cb => {
+            cb.checked = this.checked;
             if (this.checked) {
-                selectedProducts.add(checkbox.value);
+                selectedProducts.add(parseInt(cb.value));
             } else {
-                selectedProducts.delete(checkbox.value);
+                selectedProducts.delete(parseInt(cb.value));
             }
         });
         updateBulkActions();
     });
-    
-    productCheckboxes.forEach(checkbox => {
+
+    // Individual checkboxes
+    document.querySelectorAll('.product-checkbox').forEach(checkbox => {
         checkbox.addEventListener('change', function() {
             if (this.checked) {
-               selectedProducts.add(String(checkbox.value));
+                selectedProducts.add(parseInt(this.value));
             } else {
-                selectedProducts.delete(this.value);
+                selectedProducts.delete(parseInt(this.value));
             }
             updateBulkActions();
-            
-            // Update select all checkbox
-            const allChecked = Array.from(productCheckboxes).every(cb => cb.checked);
-            const noneChecked = Array.from(productCheckboxes).every(cb => !cb.checked);
-            selectAllCheckbox.indeterminate = !allChecked && !noneChecked;
-            selectAllCheckbox.checked = allChecked;
+            updateSelectAllState();
         });
-    });
-    
-    // Modal preview updates
-    const modalTypeSelect = document.getElementById('modalAdjustmentType');
-    const modalQuantityInput = document.getElementById('modalQuantity');
-    
-    [modalTypeSelect, modalQuantityInput].forEach(element => {
-        element.addEventListener('change', updateModalPreview);
-        element.addEventListener('input', updateModalPreview);
     });
 });
 
 function updateBulkActions() {
     const bulkActions = document.getElementById('bulkActions');
     const selectedCount = document.getElementById('selectedCount');
-    
+
+    selectedCount.textContent = selectedProducts.size;
+
     if (selectedProducts.size > 0) {
         bulkActions.classList.add('show');
-        selectedCount.textContent = selectedProducts.size;
     } else {
         bulkActions.classList.remove('show');
+    }
+}
+
+function updateSelectAllState() {
+    const selectAll = document.getElementById('selectAll');
+    const checkboxes = document.querySelectorAll('.product-checkbox');
+    const checkedCount = document.querySelectorAll('.product-checkbox:checked').length;
+
+    if (checkedCount === 0) {
+        selectAll.checked = false;
+        selectAll.indeterminate = false;
+    } else if (checkedCount === checkboxes.length) {
+        selectAll.checked = true;
+        selectAll.indeterminate = false;
+    } else {
+        selectAll.checked = false;
+        selectAll.indeterminate = true;
     }
 }
 
@@ -555,19 +1206,17 @@ function clearSelection() {
 function quickUpdateStock(productId) {
     const type = document.getElementById(`adjustType${productId}`).value;
     const amount = document.getElementById(`adjustAmount${productId}`).value;
-    
+
     if (!amount || amount < 0) {
-        alert('Please enter a valid amount');
+        showToast('error', 'Please enter a valid amount');
         return;
     }
-    
+
     updateStock(productId, type, amount);
 }
 
 function openStockModal(productId, productName) {
     currentModalProductId = productId;
-
-    // Grab the stock value from the DOM
     const stockElement = document.querySelector(`tr[data-product-id="${productId}"] .stock-quantity`);
     currentModalStock = stockElement ? parseInt(stockElement.textContent) || 0 : 0;
 
@@ -577,6 +1226,7 @@ function openStockModal(productId, productName) {
     document.getElementById('modalQuantity').value = '';
     document.getElementById('modalNotes').value = '';
     document.getElementById('modalAdjustmentType').value = 'set';
+    document.getElementById('modalShipToWarehouse').checked = false;
 
     updateModalPreview();
 
@@ -584,35 +1234,46 @@ function openStockModal(productId, productName) {
     modal.show();
 }
 
-
 function updateModalPreview() {
     const type = document.getElementById('modalAdjustmentType').value;
     const quantity = parseInt(document.getElementById('modalQuantity').value) || 0;
     const preview = document.getElementById('modalPreview');
-    
+
     let newStock;
+    let movementType;
+
     switch(type) {
         case 'set':
             newStock = quantity;
+            movementType = 'set';
             break;
         case 'add':
             newStock = currentModalStock + quantity;
+            movementType = 'add';
             break;
         case 'subtract':
             newStock = Math.max(0, currentModalStock - quantity);
+            movementType = 'subtract';
             break;
     }
-    
-    preview.textContent = `New stock will be: ${newStock}`;
+
+    preview.innerHTML = `
+        <div>New stock will be: <strong>${newStock}</strong> units</div>
+        <div class="small mt-2">
+            <span class="movement-type ${movementType}">
+                ${type === 'add' ? '+' : type === 'subtract' ? '-' : '='} ${quantity} units
+            </span>
+        </div>
+    `;
 }
 
 function submitStockUpdate() {
-    const form = document.getElementById('stockUpdateForm');
-    const formData = new FormData(form);
+    const formData = new FormData(document.getElementById('stockUpdateForm'));
     formData.append('quantity', document.getElementById('modalQuantity').value);
     formData.append('type', document.getElementById('modalAdjustmentType').value);
     formData.append('notes', document.getElementById('modalNotes').value);
-    
+    formData.append('ship_to_warehouse', document.getElementById('modalShipToWarehouse').checked);
+
     fetch(`/stores/manage/{{ store.id }}/stock/${currentModalProductId}/update/`, {
         method: 'POST',
         body: formData,
@@ -631,7 +1292,7 @@ function submitStockUpdate() {
             bootstrap.Modal.getInstance(document.getElementById('stockUpdateModal')).hide();
             showToast('success', data.message);
 
-            setTimeout(() => window.location.reload(), 1000);
+            setTimeout(() => window.location.reload(), 1500);
         } else {
             showToast('error', data.message);
         }
@@ -641,7 +1302,6 @@ function submitStockUpdate() {
         console.error('Error:', error);
     });
 }
-
 
 function updateStock(productId, type, amount, notes = '') {
     const formData = new FormData();
@@ -649,7 +1309,8 @@ function updateStock(productId, type, amount, notes = '') {
     formData.append('quantity', amount);
     formData.append('type', type);
     formData.append('notes', notes);
-    
+    formData.append('ship_to_warehouse', false);
+
     fetch(`/stores/manage/{{ store.id }}/stock/${productId}/update/`, {
         method: 'POST',
         body: formData
@@ -657,48 +1318,43 @@ function updateStock(productId, type, amount, notes = '') {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            // Update the stock display
             const stockElement = document.querySelector(`[data-product="${productId}"] .stock-quantity`);
             if (stockElement) {
                 stockElement.textContent = data.new_quantity;
             }
-            
-            // Clear the input
+
             document.getElementById(`adjustAmount${productId}`).value = '';
-            
             showToast('success', data.message);
-            
-            // Refresh page to update stock levels
-            setTimeout(() => window.location.reload(), 1000);
+
+            setTimeout(() => window.location.reload(), 1500);
         } else {
             showToast('error', data.message);
         }
     })
     .catch(error => {
-        showToast('error', 'An error occurred while updating stock');
+        showToast('error', 'An error occurred');
         console.error('Error:', error);
     });
 }
 
 function bulkUpdateStock() {
     if (selectedProducts.size === 0) {
-        alert('Please select products to update');
+        showToast('error', 'Please select products to update');
         return;
     }
-    
-    // Populate bulk modal with selected products
+
     const productList = document.getElementById('bulkProductList');
     productList.innerHTML = '';
-    
+
     selectedProducts.forEach(productId => {
         const row = document.querySelector(`tr[data-product-id="${productId}"]`);
         const productName = row.querySelector('strong').textContent;
         const div = document.createElement('div');
         div.className = 'small mb-1';
-        div.textContent = productName;
+        div.innerHTML = `<i class="fas fa-box me-1"></i>${productName}`;
         productList.appendChild(div);
     });
-    
+
     const modal = new bootstrap.Modal(document.getElementById('bulkUpdateModal'));
     modal.show();
 }
@@ -707,13 +1363,13 @@ function submitBulkUpdate() {
     const type = document.getElementById('bulkAdjustmentType').value;
     const quantity = document.getElementById('bulkQuantity').value;
     const notes = document.getElementById('bulkNotes').value;
-    
+    const shipToWarehouse = document.getElementById('bulkShipToWarehouse').checked;
+
     if (!quantity || quantity < 0) {
-        alert('Please enter a valid quantity');
+        showToast('error', 'Please enter a valid quantity');
         return;
     }
-    
-    // Update each selected product
+
     let updatePromises = [];
     selectedProducts.forEach(productId => {
         const formData = new FormData();
@@ -721,32 +1377,32 @@ function submitBulkUpdate() {
         formData.append('quantity', quantity);
         formData.append('type', type);
         formData.append('notes', notes || 'Bulk stock update');
-        
+        formData.append('ship_to_warehouse', shipToWarehouse);
+
         updatePromises.push(
-            fetch(`{% url 'stores:update_stock' store.id 0 %}`.replace('0', productId), {
+            fetch(`/stores/manage/{{ store.id }}/stock/${productId}/update/`, {
                 method: 'POST',
                 body: formData
             })
         );
     });
-    
+
     Promise.all(updatePromises)
         .then(responses => Promise.all(responses.map(r => r.json())))
         .then(results => {
             const successCount = results.filter(r => r.success).length;
             const failCount = results.length - successCount;
-            
+
             bootstrap.Modal.getInstance(document.getElementById('bulkUpdateModal')).hide();
-            
+
             if (failCount === 0) {
                 showToast('success', `Successfully updated ${successCount} products`);
             } else {
                 showToast('warning', `Updated ${successCount} products, ${failCount} failed`);
             }
-            
-            // Clear selection and refresh
+
             clearSelection();
-            setTimeout(() => window.location.reload(), 1000);
+            setTimeout(() => window.location.reload(), 1500);
         })
         .catch(error => {
             showToast('error', 'An error occurred during bulk update');
@@ -755,25 +1411,28 @@ function submitBulkUpdate() {
 }
 
 function exportStock() {
-    // Implement stock export functionality
-    showToast('info', 'Stock export feature coming soon');
+    showToast('info', 'Exporting stock data...');
+    window.location.href = `/stores/manage/{{ store.id }}/stock/export/`;
 }
 
 function showToast(type, message) {
-    // Simple toast notification
     const toast = document.createElement('div');
-    toast.className = `alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show position-fixed`;
-    toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    toast.className = `alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show custom-toast`;
+    toast.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
     toast.innerHTML = `
-        ${message}
+        <div class="d-flex align-items-center">
+            <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'} me-2"></i>
+            <div>${message}</div>
+        </div>
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     `;
-    
+
     document.body.appendChild(toast);
-    
+
     setTimeout(() => {
         if (toast.parentNode) {
-            toast.parentNode.removeChild(toast);
+            toast.classList.remove('show');
+            setTimeout(() => toast.remove(), 300);
         }
     }, 5000);
 }

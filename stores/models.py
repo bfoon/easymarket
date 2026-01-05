@@ -177,7 +177,14 @@ class Store(models.Model):
         choices=STORE_STATUS_CHOICES,
         default='pending'
     )
-
+    warehouse = models.OneToOneField(
+        'stock.Warehouse',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='store',
+        help_text="Store's inventory warehouse"
+    )
     email = models.EmailField()
     email_verified = models.BooleanField(default=False)
 

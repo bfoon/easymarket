@@ -39,7 +39,7 @@ from orders.models import Order, OrderItem, PromoCode
 from django.http import HttpResponseForbidden
 from functools import wraps
 from .forms import ProductForm, ProductImageForm
-from stock.models import Stock
+from stock.models import Warehouse, Stock, StockMovement
 import csv
 import threading
 from django.conf import settings
@@ -2577,195 +2577,419 @@ def store_settings(request, store_id):
 
 @login_required
 @store_owner_required
+@login_required
+@store_owner_required
 def stock_management(request, store_id):
-    """Comprehensive stock management for store products"""
-    store = get_object_or_404(Store, id=store_id, owner=request.user)
+    """
+    Main stock management view with warehouse management.
+    """
+    store = get_object_or_404(Store, id=store_id)
 
-    # Use prefetch_related for reverse relation 'stock_records'
-    products = Product.objects.filter(seller=store.owner).select_related('category', 'store').prefetch_related('stock_records')
+    # ✅ Your architecture: Store -> OneToOne -> Warehouse
+    warehouse = getattr(store, "warehouse", None)
 
-    # Apply filters
-    search_query = request.GET.get('search', '')
-    stock_filter = request.GET.get('stock_filter', 'all')
-    category_filter = request.GET.get('category', '')
+    # Only show stock if warehouse exists
+    if warehouse:
+        products = Product.objects.filter(store=store, is_active=True)
 
-    if search_query:
-        products = products.filter(
-            Q(name__icontains=search_query) |
-            Q(description__icontains=search_query)
-        )
+        # Filters
+        search_query = request.GET.get('search', '')
+        stock_filter = request.GET.get('stock_filter', 'all')
+        category_filter = request.GET.get('category', '')
 
-    if stock_filter == 'low':
-        products = products.filter(stock_records__quantity__lte=10, stock_records__quantity__gt=0)
-    elif stock_filter == 'out':
-        products = products.filter(stock_records__quantity=0)
-    elif stock_filter == 'available':
-        products = products.filter(stock_records__quantity__gt=0)
+        if search_query:
+            products = products.filter(
+                Q(name__icontains=search_query) |
+                Q(sku__icontains=search_query)
+            )
 
-    if category_filter:
-        products = products.filter(category_id=category_filter)
+        products_with_stock = []
 
-    # Pagination
-    paginator = Paginator(products, 20)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
+        for product in products:
+            # ✅ Don’t assign to product.stock_quantity (it’s a property)
+            qty = (
+                Stock.objects
+                .filter(product=product, warehouse=warehouse)
+                .values_list("quantity", flat=True)
+                .first()
+            ) or 0
 
-    # Stock summary
-    total_products = products.count()
-    low_stock_count = Product.objects.filter(
-        seller=store.owner,
-        stock_records__quantity__lte=10,
-        stock_records__quantity__gt=0
-    ).count()
-    out_of_stock_count = Product.objects.filter(
-        seller=store.owner,
-        stock_records__quantity=0
-    ).count()
+            # ✅ attach a safe temporary attribute for template display
+            setattr(product, "warehouse_stock_qty", qty)
 
-    in_stock_count = Product.objects.filter(
-        seller=store.owner,
-        stock_records__quantity__gte=10,
-        stock_records__quantity__gt=0
-    ).count()
+            # Apply stock level filter using qty
+            if stock_filter == 'available' and qty == 0:
+                continue
+            elif stock_filter == 'low' and qty > 5:
+                continue
+            elif stock_filter == 'out' and qty > 0:
+                continue
 
-    # Categories for filter
-    categories = products.values('category__name', 'category_id').distinct()
+            products_with_stock.append(product)
+
+        # Category filter
+        if category_filter:
+            products_with_stock = [
+                p for p in products_with_stock
+                if str(p.category_id) == category_filter
+            ]
+
+        # Pagination
+        paginator = Paginator(products_with_stock, 20)
+        page_number = request.GET.get('page', 1)
+        products_page = paginator.get_page(page_number)
+
+        categories = products.values('category_id', 'category__name').distinct()
+
+        # Stats (use warehouse_stock_qty)
+        total_products = len(products_with_stock)
+        in_stock_count = len([p for p in products_with_stock if p.warehouse_stock_qty > 5])
+        low_stock_count = len([p for p in products_with_stock if 0 < p.warehouse_stock_qty <= 5])
+        out_of_stock_count = len([p for p in products_with_stock if p.warehouse_stock_qty == 0])
+
+        stock_value = (
+            Stock.objects
+            .filter(warehouse=warehouse)
+            .aggregate(total=Sum(F('quantity') * F('unit_cost')))['total']
+        ) or Decimal('0.00')
+
+    else:
+        products_page = []
+        categories = []
+        total_products = in_stock_count = low_stock_count = out_of_stock_count = 0
+        stock_value = Decimal('0.00')
+        search_query = stock_filter = category_filter = ''
 
     context = {
         'store': store,
-        'page_obj': page_obj,
+        'warehouse': warehouse,
+        'products': products_page,
+        'categories': categories,
         'total_products': total_products,
-        'low_stock_count': low_stock_count,
         'in_stock_count': in_stock_count,
+        'low_stock_count': low_stock_count,
         'out_of_stock_count': out_of_stock_count,
+        'stock_value': stock_value,
         'search_query': search_query,
         'stock_filter': stock_filter,
         'category_filter': category_filter,
-        'categories': categories,
     }
 
     return render(request, 'stores/stock_management.html', context)
 
 @login_required
 @require_POST
-def update_stock(request, store_id, product_id):
-    """Update stock quantity for a specific product"""
-    store = get_object_or_404(Store, id=store_id, owner=request.user)
-    product = get_object_or_404(Product, id=product_id, seller=store.owner)
+@transaction.atomic
+def manage_warehouse(request, store_id):
+    """
+    Create or update store warehouse (one per store).
+    """
+    store = get_object_or_404(Store, id=store_id)
 
-    try:
-        new_quantity = int(request.POST.get('quantity', 0))
-        adjustment_type = request.POST.get('type', 'set')  # 'set', 'add', 'subtract'
-        notes = request.POST.get('notes', '')
+    warehouse_name = request.POST.get('warehouse_name', '').strip()
+    warehouse_code = request.POST.get('warehouse_code', '').strip()
+    address = request.POST.get('address', '').strip()
+    city = request.POST.get('city', '').strip()
+    state = request.POST.get('state', '').strip()
+    country = request.POST.get('country', '').strip()
+    postal_code = request.POST.get('postal_code', '').strip()
+    latitude = request.POST.get('latitude', '').strip()
+    longitude = request.POST.get('longitude', '').strip()
 
-        stock, created = Stock.objects.get_or_create(product=product)
-        old_quantity = stock.quantity
+    # Validation
+    if not all([warehouse_name, warehouse_code, address, city, country]):
+        messages.error(request, 'Please fill in all required fields.')
+        return redirect('stores:stock_management', store_id=store_id)
 
-        if adjustment_type == 'set':
-            stock.quantity = new_quantity
-            quantity_change = new_quantity - old_quantity
-        elif adjustment_type == 'add':
-            stock.quantity += new_quantity
-            quantity_change = new_quantity
-        elif adjustment_type == 'subtract':
-            stock.quantity = max(0, stock.quantity - new_quantity)
-            quantity_change = -(new_quantity)
+    current_warehouse = store.warehouse  # ✅ OneToOne via Store
 
-        stock.save()
+    # Warehouse code must be unique (exclude current warehouse if updating)
+    existing = Warehouse.objects.filter(code=warehouse_code)
+    if current_warehouse:
+        existing = existing.exclude(pk=current_warehouse.pk)
 
-        # Create inventory tracking record
-        StoreInventoryTracking.objects.create(
-            store=store,
-            product=product,
-            transaction_type='adjustment',
-            quantity_change=quantity_change,
-            notes=notes or f'Stock {adjustment_type}: {new_quantity}',
-            performed_by=request.user
+    if existing.exists():
+        messages.error(request, f'Warehouse code "{warehouse_code}" is already in use.')
+        return redirect('stores:stock_management', store_id=store_id)
+
+    # Create or update
+    if not current_warehouse:
+        warehouse = Warehouse.objects.create(
+            name=warehouse_name,
+            code=warehouse_code,
+            address=address,
+            city=city,
+            state=state,
+            country=country,
+            postal_code=postal_code,
+            manager=request.user,
+            is_active=True,
         )
+        store.warehouse = warehouse
+        store.save(update_fields=["warehouse"])
+        created = True
+    else:
+        warehouse = current_warehouse
+        warehouse.name = warehouse_name
+        warehouse.code = warehouse_code
+        warehouse.address = address
+        warehouse.city = city
+        warehouse.state = state
+        warehouse.country = country
+        warehouse.postal_code = postal_code
+        warehouse.manager = warehouse.manager or request.user
+        created = False
 
+    # Geocode
+    if latitude and longitude:
+        try:
+            warehouse.latitude = Decimal(latitude)
+            warehouse.longitude = Decimal(longitude)
+        except (ValueError, TypeError, InvalidOperation):
+            messages.warning(request, 'Invalid geocode coordinates provided.')
+
+    warehouse.save()
+
+    messages.success(
+        request,
+        f'Warehouse "{warehouse_name}" {"created" if created else "updated"} successfully!'
+    )
+    return redirect('stores:stock_management', store_id=store_id)
+
+@login_required
+@require_POST
+@transaction.atomic
+def update_stock(request, store_id, product_id):
+    """
+    Update stock for a product with optional shipping to logistics warehouse.
+    """
+    store = get_object_or_404(Store, id=store_id, user=request.user)
+    product = get_object_or_404(Product, id=product_id, store=store)
+
+    # Get warehouse
+    try:
+        warehouse = Warehouse.objects.get(store=store)
+    except Warehouse.DoesNotExist:
         return JsonResponse({
-            'success': True,
-            'new_quantity': stock.quantity,
-            'message': f'Stock updated successfully. New quantity: {stock.quantity}'
+            'success': False,
+            'message': 'Please create a warehouse first.'
         })
 
+    # Get form data
+    adjustment_type = request.POST.get('type', 'set')
+    quantity = request.POST.get('quantity', '0')
+    notes = request.POST.get('notes', '').strip()
+    ship_to_warehouse = request.POST.get('ship_to_warehouse', 'false').lower() == 'true'
+
+    try:
+        quantity = int(quantity)
+        if quantity < 0:
+            raise ValueError("Quantity cannot be negative")
     except (ValueError, TypeError):
         return JsonResponse({
             'success': False,
-            'message': 'Invalid quantity provided'
+            'message': 'Invalid quantity provided.'
         })
+
+    # Get or create stock record
+    stock_record, created = Stock.objects.get_or_create(
+        product=product,
+        warehouse=warehouse,
+        defaults={
+            'quantity': 0,
+            'unit_cost': product.price * Decimal('0.6')  # Default cost
+        }
+    )
+
+    old_quantity = stock_record.quantity
+    new_quantity = old_quantity
+    movement_quantity = 0
+    movement_type = 'ADJUSTMENT'
+
+    # Calculate new quantity based on adjustment type
+    if adjustment_type == 'set':
+        new_quantity = quantity
+        movement_quantity = quantity - old_quantity
+        movement_type = 'ADJUSTMENT'
+    elif adjustment_type == 'add':
+        new_quantity = old_quantity + quantity
+        movement_quantity = quantity
+        movement_type = 'PURCHASE'
+    elif adjustment_type == 'subtract':
+        new_quantity = max(0, old_quantity - quantity)
+        movement_quantity = -(min(quantity, old_quantity))
+        movement_type = 'SALE'
+
+    # Update stock
+    stock_record.quantity = new_quantity
+    stock_record.save()
+
+    # Create stock movement record
+    movement_notes = notes or f"Stock {adjustment_type}: {abs(movement_quantity)} units"
+
+    StockMovement.objects.create(
+        product=product,
+        warehouse=warehouse,
+        movement_type=movement_type,
+        quantity=movement_quantity,
+        reference_number=f'ADJ-{stock_record.id}-{timezone.now().timestamp()}',
+        unit_cost=stock_record.unit_cost,
+        notes=movement_notes,
+        created_by=request.user
+    )
+
+    # Handle shipping to logistics warehouse
+    if ship_to_warehouse and movement_quantity < 0:  # Only for reductions/dispatches
+        try:
+            # Find primary logistics warehouse
+            from supply_chain.models import WarehouseLinkage
+
+            linkage = WarehouseLinkage.objects.filter(
+                store_warehouse=warehouse,
+                is_primary=True,
+                is_active=True
+            ).first()
+
+            if linkage:
+                # Create transfer to logistics warehouse
+                from supply_chain.utils import initiate_transfer
+
+                transfer = initiate_transfer(
+                    store_warehouse=warehouse,
+                    logistics_warehouse=linkage.logistics_warehouse,
+                    product=product,
+                    quantity=abs(movement_quantity),
+                    user=request.user,
+                    notes=f"Stock update transfer: {notes}"
+                )
+
+                movement_notes += f" | Transfer created: {transfer.transfer_number}"
+            else:
+                movement_notes += " | No logistics warehouse linked for transfer"
+
+        except Exception as e:
+            # If supply chain not set up, just log it
+            movement_notes += f" | Note: Transfer not created ({str(e)})"
+
+    return JsonResponse({
+        'success': True,
+        'message': f'Stock updated successfully. New quantity: {new_quantity}',
+        'new_quantity': new_quantity,
+        'old_quantity': old_quantity,
+        'movement_created': True,
+        'shipped_to_warehouse': ship_to_warehouse and movement_quantity < 0
+    })
 
 
 @login_required
-@store_owner_required
 def inventory_history(request, store_id):
-    """View inventory transaction history"""
-    store = get_object_or_404(Store, id=store_id, owner=request.user)
+    """
+    View stock movement history for the store.
+    """
+    store = get_object_or_404(Store, id=store_id, user=request.user)
 
-    transactions = StoreInventoryTracking.objects.filter(
-        store=store
-    ).select_related('product', 'performed_by').order_by('-timestamp')
+    try:
+        warehouse = Warehouse.objects.get(store=store)
+    except Warehouse.DoesNotExist:
+        messages.warning(request, 'Please create a warehouse first.')
+        return redirect('stores:stock_management', store_id=store_id)
+
+    # Get all movements for this warehouse
+    movements = StockMovement.objects.filter(
+        warehouse=warehouse
+    ).select_related('product', 'created_by').order_by('-created_at')
 
     # Apply filters
     product_filter = request.GET.get('product')
-    transaction_type = request.GET.get('type')
+    movement_type_filter = request.GET.get('movement_type')
     date_from = request.GET.get('date_from')
     date_to = request.GET.get('date_to')
 
-    # Get filter display names
-    selected_product_name = None
-    selected_type_name = None
-
     if product_filter:
-        transactions = transactions.filter(product_id=product_filter)
-        try:
-            selected_product = Product.objects.get(id=product_filter, seller=store.owner)
-            selected_product_name = selected_product.name
-        except Product.DoesNotExist:
-            pass
+        movements = movements.filter(product_id=product_filter)
 
-    if transaction_type:
-        transactions = transactions.filter(transaction_type=transaction_type)
-        # Get display name for transaction type
-        type_choices = dict(StoreInventoryTracking.TRANSACTION_TYPES)
-        selected_type_name = type_choices.get(transaction_type, transaction_type)
+    if movement_type_filter:
+        movements = movements.filter(movement_type=movement_type_filter)
 
     if date_from:
-        transactions = transactions.filter(timestamp__date__gte=date_from)
+        movements = movements.filter(created_at__date__gte=date_from)
 
     if date_to:
-        transactions = transactions.filter(timestamp__date__lte=date_to)
+        movements = movements.filter(created_at__date__lte=date_to)
 
     # Pagination
-    paginator = Paginator(transactions, 25)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
+    paginator = Paginator(movements, 50)
+    page_number = request.GET.get('page', 1)
+    movements_page = paginator.get_page(page_number)
 
     # Get products for filter dropdown
-    products = Product.objects.filter(seller=store.owner).values('id', 'name')
+    products = Product.objects.filter(store=store, is_active=True).order_by('name')
 
-    # Calculate summary stats
-    positive_transactions = transactions.filter(quantity_change__gt=0).count()
-    negative_transactions = transactions.filter(quantity_change__lt=0).count()
+    # Get movement types
+    movement_types = StockMovement.MOVEMENT_TYPES
 
     context = {
         'store': store,
-        'page_obj': page_obj,
+        'warehouse': warehouse,
+        'movements': movements_page,
         'products': products,
-        'transaction_types': StoreInventoryTracking.TRANSACTION_TYPES,
-        'filters': {
-            'product': product_filter,
-            'product_name': selected_product_name,
-            'type': transaction_type,
-            'type_name': selected_type_name,
-            'date_from': date_from,
-            'date_to': date_to,
-        },
-        'positive_transactions': positive_transactions,
-        'negative_transactions': negative_transactions,
+        'movement_types': movement_types,
+        'product_filter': product_filter,
+        'movement_type_filter': movement_type_filter,
+        'date_from': date_from,
+        'date_to': date_to,
     }
 
     return render(request, 'stores/inventory_history.html', context)
+
+
+@login_required
+def export_stock(request, store_id):
+    """
+    Export stock data as CSV.
+    """
+    import csv
+    from django.http import HttpResponse
+    from django.utils import timezone
+
+    store = get_object_or_404(Store, id=store_id, user=request.user)
+
+    try:
+        warehouse = Warehouse.objects.get(store=store)
+    except Warehouse.DoesNotExist:
+        messages.error(request, 'No warehouse found.')
+        return redirect('stores:stock_management', store_id=store_id)
+
+    # Create CSV response
+    response = HttpResponse(content_type='text/csv')
+    response[
+        'Content-Disposition'] = f'attachment; filename="stock_{store.slug}_{timezone.now().strftime("%Y%m%d")}.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow([
+        'Product Name', 'SKU', 'Category', 'Current Stock',
+        'Unit Cost', 'Stock Value', 'Reorder Level', 'Status'
+    ])
+
+    # Get all stock records
+    stocks = Stock.objects.filter(warehouse=warehouse).select_related('product')
+
+    for stock in stocks:
+        status = 'Out of Stock' if stock.quantity == 0 else 'Low Stock' if stock.quantity <= 5 else 'In Stock'
+
+        writer.writerow([
+            stock.product.name,
+            stock.product.sku or 'N/A',
+            stock.product.category.name if stock.product.category else 'N/A',
+            stock.quantity,
+            f"${stock.unit_cost:.2f}",
+            f"${stock.stock_value:.2f}",
+            stock.reorder_level,
+            status
+        ])
+
+    return response
+
 
 @login_required
 @store_owner_required

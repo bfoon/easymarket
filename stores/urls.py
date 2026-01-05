@@ -131,4 +131,11 @@ urlpatterns = [
     path('manage/<uuid:store_id>/theme/reset/', views.reset_theme, name='reset_theme'),
     path('manage/<uuid:store_id>/theme/duplicate/<uuid:target_store_id>/', views.duplicate_theme,
          name='duplicate_theme'),
+
+# Warehouse & Stock Management
+    path('manage/<uuid:store_id>/stock/', views.stock_management, name='stock_management'),
+    path('manage/<uuid:store_id>/warehouse/', views.manage_warehouse, name='manage_warehouse'),
+    path('manage/<uuid:store_id>/stock/<int:product_id>/update/', views.update_stock, name='update_stock'),
+    path('manage/<uuid:store_id>/stock/history/', views.inventory_history, name='inventory_history'),
+    path('manage/<uuid:store_id>/stock/export/', views.export_stock, name='export_stock'),
 ]

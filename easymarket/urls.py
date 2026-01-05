@@ -34,6 +34,7 @@ urlpatterns = [
     path('finance/', include('finance.urls')),
     path('auction/', include('auction.urls')),
     path('analytics/', include('analytics.urls')),
+    path('supply_chain/', include('supply_chain.urls')),
     path("helpdesk/", include("helpdesk.urls", namespace="helpdesk")),
     path('', include(('orders.urls_returns', 'returns'), namespace='returns')),
     path("b2b/", include(("stores.b2b.urls", "stores_b2b"), namespace="stores_b2b")),
