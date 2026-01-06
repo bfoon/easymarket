@@ -38,6 +38,11 @@ urlpatterns = [
     path('manage/<uuid:store_id>/stock/', views.stock_management, name='stock_management'),
     path('manage/<uuid:store_id>/stock/<int:product_id>/update/', views.update_stock, name='update_stock'),
     path('manage/<uuid:store_id>/inventory/history/', views.inventory_history, name='inventory_history'),
+    path(
+        "manage/<uuid:store_id>/stock/history/<int:product_id>/",
+        views.stock_history,
+        name="stock_history"
+    ),
 
     # Financial management
     path('manage/<uuid:store_id>/financial/', views.financial_dashboard, name='financial_dashboard'),

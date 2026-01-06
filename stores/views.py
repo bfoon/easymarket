@@ -45,6 +45,7 @@ import threading
 from django.conf import settings
 from django.core.mail import send_mail
 from itertools import groupby
+from django.views.decorators.csrf import csrf_exempt
 from operator import attrgetter
 from django.apps import apps
 
@@ -2577,8 +2578,6 @@ def store_settings(request, store_id):
 
 @login_required
 @store_owner_required
-@login_required
-@store_owner_required
 def stock_management(request, store_id):
     """
     Main stock management view with warehouse management.
@@ -2677,6 +2676,68 @@ def stock_management(request, store_id):
 
     return render(request, 'stores/stock_management.html', context)
 
+
+@login_required
+def stock_history(request, store_id, product_id):
+    store = get_object_or_404(Store, id=store_id)
+    product = get_object_or_404(Product, id=product_id, store=store)
+
+    # 🔐 Permission check
+    if request.user != store.owner and not request.user.is_superuser:
+        return render(request, "403.html", status=403)
+
+    # 🏬 Warehouse (single active)
+    warehouse = Warehouse.objects.filter(
+        Q(store=store) | Q(manager=request.user),
+        is_active=True
+    ).first()
+
+    # 📦 Base stock movement queryset (AUDIT TRAIL)
+    movements = (
+        StockMovement.objects
+        .select_related("product", "warehouse", "created_by")
+        .filter(
+            product=product,
+            product__store=store
+        )
+        .order_by("-created_at")
+    )
+
+    if warehouse:
+        movements = movements.filter(warehouse=warehouse)
+
+    # 🔍 Optional filters
+    movement_type = request.GET.get("type")
+    start_date = request.GET.get("start_date")
+    end_date = request.GET.get("end_date")
+
+    if movement_type:
+        movements = movements.filter(movement_type=movement_type)
+
+    if start_date:
+        movements = movements.filter(created_at__date__gte=start_date)
+
+    if end_date:
+        movements = movements.filter(created_at__date__lte=end_date)
+
+    # 📄 Pagination
+    paginator = Paginator(movements, 25)
+    page_obj = paginator.get_page(request.GET.get("page"))
+
+    context = {
+        "store": store,
+        "product": product,
+        "warehouse": warehouse,
+        "movements": page_obj,
+
+        # filters (keep state)
+        "selected_type": movement_type,
+        "start_date": start_date,
+        "end_date": end_date,
+    }
+
+    return render(request, "stores/stock_history.html", context)
+
 @login_required
 @require_POST
 @transaction.atomic
@@ -2758,12 +2819,13 @@ def manage_warehouse(request, store_id):
 
 @login_required
 @require_POST
+@csrf_exempt
 @transaction.atomic
 def update_stock(request, store_id, product_id):
     """
     Update stock for a product with optional shipping to logistics warehouse.
     """
-    store = get_object_or_404(Store, id=store_id, user=request.user)
+    store = get_object_or_404(Store, id=store_id, owner=request.user)
     product = get_object_or_404(Product, id=product_id, store=store)
 
     # Get warehouse
@@ -2952,7 +3014,7 @@ def export_stock(request, store_id):
     from django.http import HttpResponse
     from django.utils import timezone
 
-    store = get_object_or_404(Store, id=store_id, user=request.user)
+    store = get_object_or_404(Store, id=store_id)
 
     try:
         warehouse = Warehouse.objects.get(store=store)

@@ -1,0 +1,816 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Stock History - {{ product.name }} - {{ store.name }}{% endblock %}
+
+{% block content %}
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+<style>
+:root {
+    --b2b-primary: #1a5f9e;
+    --b2b-secondary: #2d8ccc;
+    --b2b-accent: #ff6b35;
+    --b2b-success: #2ed573;
+    --b2b-danger: #ff4757;
+    --b2b-warning: #f59e0b;
+    --b2b-soft: #f6f8fb;
+    --b2b-dark: #0f172a;
+    --b2b-gray: #64748b;
+}
+
+/* Page Header */
+.page-header {
+    background: white;
+    border-radius: 1rem;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+    border: 1px solid #e9ecef;
+}
+
+.page-header h2 {
+    color: var(--b2b-dark);
+    font-weight: 900;
+    margin: 0 0 0.5rem 0;
+}
+
+.breadcrumb {
+    background: transparent;
+    padding: 0;
+    margin: 0;
+    font-size: 0.875rem;
+}
+
+.breadcrumb-item + .breadcrumb-item::before {
+    content: "›";
+    color: var(--b2b-gray);
+}
+
+.breadcrumb-item a {
+    color: var(--b2b-primary);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.breadcrumb-item a:hover {
+    text-decoration: underline;
+}
+
+.breadcrumb-item.active {
+    color: var(--b2b-gray);
+}
+
+/* Product Info Card */
+.product-info-card {
+    background: linear-gradient(135deg, var(--b2b-soft) 0%, #e9ecef 100%);
+    border-radius: 1rem;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    border: 1px solid rgba(26, 95, 158, 0.1);
+    position: relative;
+    overflow: hidden;
+}
+
+.product-info-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: linear-gradient(135deg, var(--b2b-primary), var(--b2b-secondary));
+}
+
+.product-info-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 2rem;
+    align-items: start;
+}
+
+.product-image-wrapper {
+    width: 120px;
+    height: 120px;
+    border-radius: 0.75rem;
+    overflow: hidden;
+    box-shadow: 0 0.25rem 0.5rem rgba(0,0,0,0.1);
+    background: white;
+}
+
+.product-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.product-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--b2b-soft);
+    color: var(--b2b-gray);
+}
+
+.product-details h3 {
+    color: var(--b2b-dark);
+    font-weight: 900;
+    margin-bottom: 0.5rem;
+}
+
+.product-meta {
+    display: flex;
+    gap: 2rem;
+    margin-top: 1rem;
+}
+
+.product-meta-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.product-meta-label {
+    font-size: 0.875rem;
+    color: var(--b2b-gray);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.25rem;
+}
+
+.product-meta-value {
+    font-size: 1.25rem;
+    font-weight: 900;
+    color: var(--b2b-dark);
+}
+
+/* Filters Card */
+.filters-card {
+    background: white;
+    border-radius: 1rem;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+    border: 1px solid #e9ecef;
+}
+
+.filters-card h5 {
+    color: var(--b2b-dark);
+    font-weight: 900;
+    margin-bottom: 1.5rem;
+}
+
+.form-label {
+    font-weight: 700;
+    color: var(--b2b-dark);
+    margin-bottom: 0.5rem;
+    font-size: 0.9375rem;
+}
+
+.form-control,
+.form-select {
+    border: 1px solid #e9ecef;
+    border-radius: 0.5rem;
+    padding: 0.625rem 0.875rem;
+    font-size: 0.9375rem;
+    transition: all 0.2s ease;
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--b2b-primary);
+    box-shadow: 0 0 0 0.2rem rgba(26, 95, 158, 0.15);
+}
+
+/* Button Styling */
+.btn-action {
+    padding: 0.625rem 1.25rem;
+    font-size: 0.9375rem;
+    font-weight: 700;
+    border-radius: 0.5rem;
+    transition: all 0.2s ease;
+}
+
+.btn-action.btn-primary {
+    background: linear-gradient(135deg, var(--b2b-primary), var(--b2b-secondary));
+    border: none;
+    color: white;
+}
+
+.btn-action.btn-primary:hover {
+    background: linear-gradient(135deg, #164d82, #2576ad);
+    transform: translateY(-2px);
+    box-shadow: 0 0.25rem 0.5rem rgba(26, 95, 158, 0.3);
+}
+
+.btn-action.btn-secondary {
+    background: var(--b2b-gray);
+    border: none;
+    color: white;
+}
+
+.btn-action.btn-secondary:hover {
+    background: #475569;
+    transform: translateY(-2px);
+}
+
+.btn-action.btn-success {
+    background: var(--b2b-success);
+    border: none;
+    color: white;
+}
+
+.btn-action.btn-success:hover {
+    background: #26be64;
+    transform: translateY(-2px);
+}
+
+/* History Table */
+.history-table-card {
+    background: white;
+    border-radius: 1rem;
+    box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+    overflow: hidden;
+    border: 1px solid #e9ecef;
+}
+
+.table thead th {
+    background: linear-gradient(135deg, var(--b2b-primary), var(--b2b-secondary));
+    color: white;
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.875rem;
+    letter-spacing: 0.5px;
+    border: none;
+    padding: 1rem;
+}
+
+.table tbody tr {
+    transition: background-color 0.2s ease;
+}
+
+.table tbody tr:hover {
+    background-color: rgba(26, 95, 158, 0.04);
+}
+
+.table tbody td {
+    padding: 1rem;
+    vertical-align: middle;
+}
+
+/* Movement Type Badges */
+.movement-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-radius: 2rem;
+    font-size: 0.875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.movement-badge.restock {
+    background: rgba(46, 213, 115, 0.12);
+    color: var(--b2b-success);
+    border: 1px solid rgba(46, 213, 115, 0.25);
+}
+
+.movement-badge.adjustment {
+    background: rgba(26, 95, 158, 0.12);
+    color: var(--b2b-primary);
+    border: 1px solid rgba(26, 95, 158, 0.25);
+}
+
+.movement-badge.sale {
+    background: rgba(255, 107, 53, 0.12);
+    color: var(--b2b-accent);
+    border: 1px solid rgba(255, 107, 53, 0.25);
+}
+
+.movement-badge.damage {
+    background: rgba(255, 71, 87, 0.12);
+    color: var(--b2b-danger);
+    border: 1px solid rgba(255, 71, 87, 0.25);
+}
+
+.movement-badge.return {
+    background: rgba(245, 158, 11, 0.12);
+    color: var(--b2b-warning);
+    border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.movement-badge.transfer {
+    background: rgba(100, 116, 139, 0.12);
+    color: var(--b2b-gray);
+    border: 1px solid rgba(100, 116, 139, 0.25);
+}
+
+/* Quantity Change */
+.quantity-change {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 900;
+    font-size: 1.1rem;
+}
+
+.quantity-change.positive {
+    color: var(--b2b-success);
+}
+
+.quantity-change.negative {
+    color: var(--b2b-danger);
+}
+
+.quantity-change.neutral {
+    color: var(--b2b-gray);
+}
+
+/* Stock Level Badge */
+.stock-level-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.75rem;
+    border-radius: 2rem;
+    font-size: 0.875rem;
+    font-weight: 700;
+}
+
+.stock-level-badge.high {
+    background: rgba(46, 213, 115, 0.12);
+    color: var(--b2b-success);
+}
+
+.stock-level-badge.low {
+    background: rgba(255, 71, 87, 0.12);
+    color: var(--b2b-danger);
+}
+
+/* User Info */
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.user-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--b2b-primary), var(--b2b-secondary));
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 900;
+    font-size: 0.875rem;
+}
+
+.user-details {
+    display: flex;
+    flex-direction: column;
+}
+
+.user-name {
+    font-weight: 700;
+    color: var(--b2b-dark);
+}
+
+.user-role {
+    font-size: 0.8125rem;
+    color: var(--b2b-gray);
+}
+
+/* Notes Section */
+.movement-notes {
+    background: var(--b2b-soft);
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+    border: 1px solid #e9ecef;
+    font-size: 0.9375rem;
+    color: var(--b2b-dark);
+    margin-top: 0.5rem;
+}
+
+/* Empty State */
+.empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+}
+
+.empty-state i {
+    color: var(--b2b-gray);
+    opacity: 0.5;
+    margin-bottom: 1.5rem;
+}
+
+.empty-state h4 {
+    color: var(--b2b-dark);
+    font-weight: 900;
+    margin-bottom: 0.5rem;
+}
+
+.empty-state p {
+    color: var(--b2b-gray);
+    margin-bottom: 0;
+}
+
+/* Pagination */
+.pagination {
+    margin-top: 2rem;
+}
+
+.page-link {
+    color: var(--b2b-primary);
+    border: 1px solid #e9ecef;
+    font-weight: 700;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    margin: 0 0.25rem;
+}
+
+.page-link:hover {
+    background: var(--b2b-soft);
+    border-color: var(--b2b-primary);
+}
+
+.page-item.active .page-link {
+    background: linear-gradient(135deg, var(--b2b-primary), var(--b2b-secondary));
+    border-color: var(--b2b-primary);
+}
+
+/* Export Button */
+.export-section {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 1.5rem;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .product-info-grid {
+        grid-template-columns: 1fr;
+        text-align: center;
+    }
+
+    .product-image-wrapper {
+        margin: 0 auto;
+    }
+
+    .product-meta {
+        flex-direction: column;
+        gap: 1rem;
+    }
+}
+</style>
+
+<div class="container-fluid py-4">
+    <!-- Page Header -->
+    <div class="page-header">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item">
+                    <a href="{% url 'stores:store_dashboard' store.id %}">
+                        <i class="fas fa-home me-1"></i>Dashboard
+                    </a>
+                </li>
+                <li class="breadcrumb-item">
+                    <a href="{% url 'stores:stock_management' store.id %}">
+                        <i class="fas fa-boxes me-1"></i>Stock Management
+                    </a>
+                </li>
+                <li class="breadcrumb-item active">Stock History</li>
+            </ol>
+        </nav>
+        <h2>
+            <i class="fas fa-history me-2" style="color: var(--b2b-primary);"></i>
+            Stock Movement History
+        </h2>
+    </div>
+
+    <!-- Product Info Card -->
+    <div class="product-info-card">
+        <div class="product-info-grid">
+            <div class="product-image-wrapper">
+                {% if product.image %}
+                    <img src="{{ product.image.url }}" alt="{{ product.name }}" class="product-image">
+                {% else %}
+                    <div class="product-placeholder">
+                        <i class="fas fa-box fa-3x"></i>
+                    </div>
+                {% endif %}
+            </div>
+            <div class="product-details">
+                <h3>{{ product.name }}</h3>
+                <p class="text-muted mb-0">{{ product.description|truncatewords:20|default:"No description available" }}</p>
+                
+                <div class="product-meta">
+                    <div class="product-meta-item">
+                        <span class="product-meta-label">SKU</span>
+                        <span class="product-meta-value">
+                            <code style="background: white; padding: 0.25rem 0.5rem; border-radius: 0.25rem;">
+                                {{ product.sku|default:"N/A" }}
+                            </code>
+                        </span>
+                    </div>
+                    <div class="product-meta-item">
+                        <span class="product-meta-label">Current Stock</span>
+                        <span class="product-meta-value" style="color: var(--b2b-primary);">
+                            {{ product.stock_quantity|intcomma }}
+                        </span>
+                    </div>
+                    <div class="product-meta-item">
+                        <span class="product-meta-label">Price</span>
+                        <span class="product-meta-value" style="color: var(--b2b-success);">
+                            D{{ product.price|floatformat:2 }}
+                        </span>
+                    </div>
+                    {% if warehouse %}
+                    <div class="product-meta-item">
+                        <span class="product-meta-label">Warehouse</span>
+                        <span class="product-meta-value" style="font-size: 1rem;">
+                            <i class="fas fa-warehouse me-1" style="color: var(--b2b-accent);"></i>
+                            {{ warehouse.name }}
+                        </span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters Card -->
+    <div class="filters-card">
+        <h5>
+            <i class="fas fa-filter me-2"></i>
+            Filter History
+        </h5>
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">Movement Type</label>
+                <select name="type" class="form-select">
+                    <option value="">All Types</option>
+                    <option value="restock" {% if selected_type == 'restock' %}selected{% endif %}>Restock</option>
+                    <option value="sale" {% if selected_type == 'sale' %}selected{% endif %}>Sale</option>
+                    <option value="adjustment" {% if selected_type == 'adjustment' %}selected{% endif %}>Adjustment</option>
+                    <option value="damage" {% if selected_type == 'damage' %}selected{% endif %}>Damage</option>
+                    <option value="return" {% if selected_type == 'return' %}selected{% endif %}>Return</option>
+                    <option value="transfer" {% if selected_type == 'transfer' %}selected{% endif %}>Transfer</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Start Date</label>
+                <input type="date" name="start_date" class="form-control" value="{{ start_date }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">End Date</label>
+                <input type="date" name="end_date" class="form-control" value="{{ end_date }}">
+            </div>
+            <div class="col-md-3 d-flex align-items-end gap-2">
+                <button type="submit" class="btn btn-action btn-primary flex-grow-1">
+                    <i class="fas fa-search me-2"></i>Apply Filters
+                </button>
+                <a href="{% url 'stores:stock_history' store.id product.id %}" class="btn btn-action btn-secondary">
+                    <i class="fas fa-redo"></i>
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Export Section -->
+    <div class="export-section">
+        <button class="btn btn-action btn-success" onclick="exportHistory()">
+            <i class="fas fa-file-export me-2"></i>Export to CSV
+        </button>
+    </div>
+
+    <!-- History Table -->
+    <div class="history-table-card">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th style="width: 120px;">Date & Time</th>
+                        <th style="width: 150px;">Movement Type</th>
+                        <th style="width: 100px;">Quantity</th>
+                        <th style="width: 120px;">Before / After</th>
+                        <th>Performed By</th>
+                        <th>Notes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for movement in movements %}
+                    <tr>
+                        <td>
+                            <div class="d-flex flex-column">
+                                <strong style="color: var(--b2b-dark);">
+                                    {{ movement.created_at|date:"M d, Y" }}
+                                </strong>
+                                <small class="text-muted">
+                                    {{ movement.created_at|time:"g:i A" }}
+                                </small>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="movement-badge {{ movement.movement_type }}">
+                                {% if movement.movement_type == 'restock' %}
+                                    <i class="fas fa-plus-circle"></i>
+                                    Restock
+                                {% elif movement.movement_type == 'sale' %}
+                                    <i class="fas fa-shopping-cart"></i>
+                                    Sale
+                                {% elif movement.movement_type == 'adjustment' %}
+                                    <i class="fas fa-edit"></i>
+                                    Adjustment
+                                {% elif movement.movement_type == 'damage' %}
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                    Damage
+                                {% elif movement.movement_type == 'return' %}
+                                    <i class="fas fa-undo"></i>
+                                    Return
+                                {% elif movement.movement_type == 'transfer' %}
+                                    <i class="fas fa-exchange-alt"></i>
+                                    Transfer
+                                {% else %}
+                                    <i class="fas fa-circle"></i>
+                                    {{ movement.movement_type|title }}
+                                {% endif %}
+                            </span>
+                        </td>
+                        <td>
+                            {% if movement.quantity_change > 0 %}
+                                <span class="quantity-change positive">
+                                    <i class="fas fa-arrow-up"></i>
+                                    +{{ movement.quantity_change|intcomma }}
+                                </span>
+                            {% elif movement.quantity_change < 0 %}
+                                <span class="quantity-change negative">
+                                    <i class="fas fa-arrow-down"></i>
+                                    {{ movement.quantity_change|intcomma }}
+                                </span>
+                            {% else %}
+                                <span class="quantity-change neutral">
+                                    <i class="fas fa-minus"></i>
+                                    0
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="d-flex align-items-center gap-2">
+                                <span style="font-weight: 700; color: var(--b2b-gray);">
+                                    {{ movement.quantity_before|intcomma }}
+                                </span>
+                                <i class="fas fa-arrow-right" style="color: var(--b2b-primary); font-size: 0.75rem;"></i>
+                                <span style="font-weight: 900; color: var(--b2b-dark);">
+                                    {{ movement.quantity_after|intcomma }}
+                                </span>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="user-info">
+                                <div class="user-avatar">
+                                    {{ movement.created_by.username|slice:":1"|upper|default:"?" }}
+                                </div>
+                                <div class="user-details">
+                                    <span class="user-name">
+                                        {{ movement.created_by.get_full_name|default:movement.created_by.username }}
+                                    </span>
+                                    <span class="user-role">
+                                        {% if movement.created_by == store.owner %}
+                                            Store Owner
+                                        {% elif movement.created_by.is_staff %}
+                                            Staff
+                                        {% else %}
+                                            User
+                                        {% endif %}
+                                    </span>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            {% if movement.notes %}
+                                <div class="movement-notes">
+                                    <i class="fas fa-sticky-note me-1"></i>
+                                    {{ movement.notes }}
+                                </div>
+                            {% else %}
+                                <span class="text-muted">
+                                    <i class="fas fa-minus"></i>
+                                    No notes
+                                </span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center py-5">
+                            <div class="empty-state">
+                                <i class="fas fa-history fa-4x"></i>
+                                <h4>No Movement History</h4>
+                                <p>There are no stock movements recorded for this product yet.</p>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Pagination -->
+    {% if movements.has_other_pages %}
+    <nav>
+        <ul class="pagination justify-content-center">
+            {% if movements.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ movements.previous_page_number }}{% if selected_type %}&type={{ selected_type }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}">
+                    <i class="fas fa-chevron-left me-1"></i>Previous
+                </a>
+            </li>
+            {% endif %}
+
+            {% for num in movements.paginator.page_range %}
+                {% if movements.number == num %}
+                <li class="page-item active">
+                    <span class="page-link">{{ num }}</span>
+                </li>
+                {% elif num > movements.number|add:'-3' and num < movements.number|add:'3' %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ num }}{% if selected_type %}&type={{ selected_type }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}">
+                        {{ num }}
+                    </a>
+                </li>
+                {% endif %}
+            {% endfor %}
+
+            {% if movements.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ movements.next_page_number }}{% if selected_type %}&type={{ selected_type }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}">
+                    Next<i class="fas fa-chevron-right ms-1"></i>
+                </a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+
+<script>
+function exportHistory() {
+    const params = new URLSearchParams(window.location.search);
+    params.set('export', 'csv');
+    
+    // Show loading message
+    const toast = document.createElement('div');
+    toast.className = 'alert alert-info alert-dismissible fade show';
+    toast.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    toast.innerHTML = `
+        <div class="d-flex align-items-center">
+            <i class="fas fa-spinner fa-spin me-2"></i>
+            <div>Exporting stock history...</div>
+        </div>
+    `;
+    document.body.appendChild(toast);
+    
+    // Download the file
+    window.location.href = `{% url 'stores:stock_history' store.id product.id %}?${params.toString()}`;
+    
+    // Remove toast after a delay
+    setTimeout(() => {
+        if (toast.parentNode) {
+            toast.classList.remove('show');
+            setTimeout(() => toast.remove(), 300);
+        }
+    }, 3000);
+}
+
+// Show success message if redirected from update
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get('updated') === 'true') {
+    const toast = document.createElement('div');
+    toast.className = 'alert alert-success alert-dismissible fade show';
+    toast.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    toast.innerHTML = `
+        <div class="d-flex align-items-center">
+            <i class="fas fa-check-circle me-2"></i>
+            <div>Stock updated successfully!</div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        if (toast.parentNode) {
+            toast.classList.remove('show');
+            setTimeout(() => toast.remove(), 300);
+        }
+    }, 5000);
+}
+</script>
+{% endblock %}
