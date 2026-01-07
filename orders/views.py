@@ -8,7 +8,7 @@ from django.core.paginator import Paginator
 from django.utils import timezone
 from datetime import timedelta
 from stock.stock_utils_compatibility import reduce_stock
-from stock.models import Stock
+from stock.models import Stock, StockMovement
 from stores.models import Store
 from .models import Order, OrderItem, PromoCode, ChatMessage
 from marketplace.models import Cart, CartItem, Product
@@ -31,7 +31,8 @@ from django.contrib.auth import get_user_model
 import threading
 from marketplace.notifications import send_whatsapp, send_email
 from analytics.services import track_event
-
+import logging
+logger = logging.getLogger(__name__)
 
 def _ensure_session(request):
     """Make sure guests also have a session_key for tracking."""
@@ -130,6 +131,103 @@ def checkout_redirect(request):
     return redirect('marketplace:cart_view')
 
 
+# ---------------------------------------------------------
+# ✅ STOCK UTILS (put in orders/views.py or import from stock utils)
+# ---------------------------------------------------------
+def _safe_selected_features(value):
+    """
+    Normalize selected_features coming from CartItem.
+
+    Handles:
+    - None
+    - dict
+    - JSON string
+    - empty string
+    - invalid JSON (fails silently)
+
+    Always returns:
+    - dict (preferred)
+    - or None
+    """
+    if value in (None, "", {}, []):
+        return None
+
+    # Already a dict → OK
+    if isinstance(value, dict):
+        return value
+
+    # JSON stored as string
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+            return parsed if isinstance(parsed, dict) else None
+        except json.JSONDecodeError:
+            return None
+
+    # Any other type → discard safely
+    return None
+
+@transaction.atomic
+def reduce_stock_for_checkout(*, product, quantity, warehouse, user=None, reference_prefix="ORDER", notes="Checkout sale"):
+    """
+    Reduce stock safely from Stock table (NOT Product.stock_quantity property).
+    - Locks stock row (select_for_update)
+    - Prevents negative stock
+    - Records StockMovement as SALE
+    """
+    qty = int(quantity or 0)
+    if qty <= 0:
+        raise ValidationError("Invalid quantity.")
+
+    if warehouse is None:
+        raise ValidationError(f"Store '{product.store.name}' has no warehouse configured.")
+
+    stock_row, _ = Stock.objects.select_for_update().get_or_create(
+        product=product,
+        warehouse=warehouse,
+        defaults={
+            "quantity": 0,
+            "unit_cost": Decimal("0.00"),
+        },
+    )
+
+    available = int(stock_row.quantity or 0)
+    if available < qty:
+        raise ValidationError(
+            f"Insufficient stock for '{product.name}'. Available: {available}, requested: {qty}"
+        )
+
+    stock_row.quantity = available - qty
+    stock_row.save(update_fields=["quantity", "updated_at"])
+
+    StockMovement.objects.create(
+        product=product,
+        warehouse=warehouse,
+        movement_type="SALE",
+        quantity=-qty,
+        reference_number=f"{reference_prefix}-{product.id}-{int(timezone.now().timestamp())}",
+        unit_cost=stock_row.unit_cost,
+        notes=notes,
+        created_by=user if user and getattr(user, "is_authenticated", False) else None,
+    )
+
+
+def get_available_stock(*, product, warehouse):
+    """
+    Helper for quick checks (no lock). Real enforcement happens in reduce_stock_for_checkout().
+    """
+    if not warehouse:
+        return 0
+    return int(
+        Stock.objects.filter(product=product, warehouse=warehouse)
+        .values_list("quantity", flat=True)
+        .first() or 0
+    )
+
+
+# ---------------------------------------------------------
+# ✅ CHECKOUT CART
+# ---------------------------------------------------------
 @require_http_methods(["POST"])
 @csrf_protect
 def checkout_cart(request):
@@ -141,42 +239,45 @@ def checkout_cart(request):
     - paid: When order is successfully created (split by store)
     """
     if not request.user.is_authenticated:
-        request.session['checkout_after_login'] = True
+        request.session["checkout_after_login"] = True
         return redirect(f"{reverse('accounts:sign_in')}?next={reverse('orders:checkout_redirect')}")
 
     # Migrate session cart to user cart
     from marketplace.utils import migrate_session_cart_to_user
     migrate_session_cart_to_user(request, request.user)
 
-    promo_code_str = request.POST.get('promo_code', '').strip()
+    promo_code_str = (request.POST.get("promo_code") or "").strip()
     promo = None
-    discount_amount = Decimal('0')
+    discount_amount = Decimal("0")
 
     try:
         cart = Cart.objects.get(user=request.user)
-        cart_items = CartItem.objects.filter(cart=cart).select_related('product', 'product__store')
+        cart_items = (
+            CartItem.objects.filter(cart=cart)
+            .select_related("product", "product__store")
+        )
 
         if not cart_items.exists():
             messages.error(request, "Your cart is empty.")
-            return redirect('marketplace:cart_view')
+            return redirect("marketplace:cart_view")
 
-        subtotal = Decimal('0')
-        eligible_discount = Decimal('0')
+        subtotal = Decimal("0")
+        eligible_discount = Decimal("0")
 
-        # Handle Promo Code
+        # Promo Code
         if promo_code_str:
             try:
                 promo = PromoCode.objects.get(code__iexact=promo_code_str, is_active=True)
                 if not promo.is_valid():
                     messages.error(request, "Promo code is invalid or expired.")
-                    return redirect('marketplace:cart_view')
+                    return redirect("marketplace:cart_view")
             except PromoCode.DoesNotExist:
                 messages.error(request, "Promo code not found.")
-                return redirect('marketplace:cart_view')
+                return redirect("marketplace:cart_view")
 
         # Calculate totals
         for item in cart_items:
-            line_total = item.product.price * item.quantity
+            line_total = (item.product.price or Decimal("0")) * int(item.quantity or 0)
             subtotal += line_total
 
             if promo and promo.applies_to_product(item.product):
@@ -184,8 +285,7 @@ def checkout_cart(request):
 
         discount_amount = eligible_discount
 
-        # ✅ ANALYTICS: Track checkout initiation (before order creation)
-        # Track one checkout event per unique store in cart
+        # ✅ ANALYTICS: Track checkout initiation (per store)
         stores_in_cart = set()
         for item in cart_items:
             if item.product.store:
@@ -202,39 +302,46 @@ def checkout_cart(request):
                 path=request.path,
             )
 
-        # Create Order
+        # ✅ Create Order + Reduce Stock (atomic)
         with transaction.atomic():
             order = Order.objects.create(
                 buyer=request.user,
                 promo_code=promo,
-                discount_amount=discount_amount
+                discount_amount=discount_amount,
             )
 
-            # Create order items and reduce stock
+            # Lock each product row, and lock stock row inside reduce_stock_for_checkout
+            # reduce stock + create order items
             for item in cart_items:
-                product = item.product.__class__.objects.select_for_update().get(id=item.product.id)
-                reduce_stock(product, item.quantity)
+                # ✅ lock only the product row (no joins)
+                locked_product = Product.objects.select_for_update().get(id=item.product.id)
+
+                # Warehouse for that store
+                warehouse = getattr(locked_product.store, "warehouse", None)
+
+                reduce_stock_for_checkout(
+                    product=locked_product,
+                    quantity=item.quantity,
+                    warehouse=warehouse,
+                    user=request.user,
+                    reference_prefix=f"ORDER{order.id}",
+                    notes=f"Checkout cart sale (Order #{order.id})",
+                )
 
                 OrderItem.objects.create(
                     order=order,
-                    product=product,
+                    product=locked_product,
                     quantity=item.quantity,
-                    selected_features=item.selected_features
+                    selected_features=_safe_selected_features(getattr(item, "selected_features", None)),
                 )
 
-            # ✅ ANALYTICS: Track paid event (order successfully created)
-            # Group by store for accurate per-store tracking
+            # ✅ ANALYTICS: Track paid event per store + product
             store_items = {}
             for item in cart_items:
                 store = item.product.store
-                if store not in store_items:
-                    store_items[store] = []
-                store_items[store].append(item)
+                store_items.setdefault(store, []).append(item)
 
-            # Track paid event per store
             for store, items in store_items.items():
-                # You can track the first product as representative,
-                # or create multiple events (one per product)
                 for item in items:
                     track_event(
                         session_key=session_key,
@@ -253,39 +360,43 @@ def checkout_cart(request):
             if promo:
                 promo.increment_usage()
 
-            # Send notifications
+            # Notifications
             notify_store_new_order_async(order)
 
-            messages.success(request, "Order placed successfully!")
-            return redirect('orders:order_detail', order_id=order.id)
+        messages.success(request, "Order placed successfully!")
+        return redirect("orders:order_detail", order_id=order.id)
 
     except Cart.DoesNotExist:
         messages.error(request, "You don't have any cart to checkout.")
-        return redirect('marketplace:cart_view')
+        return redirect("marketplace:cart_view")
 
     except ValidationError as e:
         messages.error(request, f"Failed to checkout: {str(e)}")
-        return redirect('marketplace:cart_view')
+        return redirect("marketplace:cart_view")
 
     except Exception as e:
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.error(f"Checkout error for user {request.user.id}: {str(e)}")
+        logger.exception("Checkout error for user %s: %s", getattr(request.user, "id", None), str(e))
         messages.error(request, "An error occurred during checkout. Please try again.")
-        return redirect('marketplace:cart_view')
+        return redirect("marketplace:cart_view")
 
 
+# ---------------------------------------------------------
+# ✅ QUICK CHECKOUT (BUY NOW)
+# ---------------------------------------------------------
 @require_http_methods(["POST"])
 @csrf_protect
-@login_required
 def quick_checkout(request):
     """
     Quick checkout (buy now) - bypasses cart.
 
-    Analytics: Tracks checkout and paid events for single product
+    ✅ Analytics: Tracks checkout and paid events for single product
     """
-    product_id = request.POST.get('product')
-    quantity = request.POST.get('quantity', 1)
+    if not request.user.is_authenticated:
+        request.session["checkout_after_login"] = True
+        return redirect(f"{reverse('accounts:sign_in')}?next={request.path}")
+
+    product_id = request.POST.get("product")
+    quantity = request.POST.get("quantity", 1)
 
     try:
         quantity = int(quantity)
@@ -293,13 +404,16 @@ def quick_checkout(request):
             raise ValueError
     except (ValueError, TypeError):
         messages.error(request, "Invalid quantity selected.")
-        return redirect('marketplace:all_products')
+        return redirect("marketplace:all_products")
 
-    product = get_object_or_404(Product.objects.select_related('store'), id=product_id)
+    product = get_object_or_404(Product.objects.select_related("store"), id=product_id)
+    warehouse = getattr(product.store, "warehouse", None)
 
-    if product.stock_quantity < quantity:
-        messages.error(request, "Insufficient stock available.")
-        return redirect('marketplace:product_detail', product_id=product.id)
+    # ✅ quick pre-check (real enforcement is inside atomic reduce_stock_for_checkout)
+    available = get_available_stock(product=product, warehouse=warehouse)
+    if available < quantity:
+        messages.error(request, f"Insufficient stock available. Available: {available}")
+        return redirect("marketplace:product_detail", product_id=product.id)
 
     try:
         session_key = request.session.session_key or request.user.username
@@ -318,20 +432,28 @@ def quick_checkout(request):
             order = Order.objects.create(
                 buyer=request.user,
                 promo_code=None,
-                discount_amount=Decimal('0')
+                discount_amount=Decimal("0"),
             )
 
-            # Lock product to avoid race conditions
-            locked_product = Product.objects.select_for_update().get(id=product.id)
-            reduce_stock(locked_product, quantity)
+            locked_product = Product.objects.select_for_update().select_related("store").get(id=product.id)
+            locked_warehouse = getattr(locked_product.store, "warehouse", None)
+
+            reduce_stock_for_checkout(
+                product=locked_product,
+                quantity=quantity,
+                warehouse=locked_warehouse,
+                user=request.user,
+                reference_prefix=f"ORDER{order.id}",
+                notes=f"Quick checkout sale (Order #{order.id})",
+            )
 
             OrderItem.objects.create(
                 order=order,
                 product=locked_product,
-                quantity=quantity
+                quantity=quantity,
             )
 
-            # ANALYTICS: Track paid event (order created successfully)
+            # ANALYTICS: Track paid event
             track_event(
                 session_key=session_key,
                 event_type="paid",
@@ -342,23 +464,19 @@ def quick_checkout(request):
                 path=request.path,
             )
 
-            # Send notifications
             notify_store_new_order_async(order)
 
-            messages.success(request, "Quick checkout successful!")
-            return redirect('orders:order_detail', order_id=order.id)
+        messages.success(request, "Quick checkout successful!")
+        return redirect("orders:order_detail", order_id=order.id)
 
     except ValidationError as e:
         messages.error(request, f"Checkout failed: {str(e)}")
-        return redirect('marketplace:product_detail', product_id=product.id)
+        return redirect("marketplace:product_detail", product_id=product.id)
 
     except Exception as e:
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.error(f"Quick checkout error for user {request.user.id}: {str(e)}")
+        logger.exception("Quick checkout error for user %s: %s", getattr(request.user, "id", None), str(e))
         messages.error(request, "An error occurred during quick checkout.")
-        return redirect('marketplace:product_detail', product_id=product.id)
-
+        return redirect("marketplace:product_detail", product_id=product.id)
 
 # ============================================================================
 # SOCIAL CART CHECKOUT (if applicable)
@@ -984,47 +1102,85 @@ def reorder_items(request, order_id):
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
 
-
 @login_required
 @require_POST
 def cancel_order(request, order_id):
     order = get_object_or_404(Order, id=order_id, buyer=request.user)
 
-    # Detect AJAX request
-    is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest'
+    is_ajax = request.headers.get("x-requested-with") == "XMLHttpRequest"
 
-    if order.status not in ['pending', 'processing']:
+    if order.status not in ["pending", "processing"]:
+        msg = "Only pending or processing orders can be cancelled."
         if is_ajax:
-            return JsonResponse({'success': False, 'error': "Only pending or processing orders can be cancelled."})
-
-        messages.error(request, "Only pending or processing orders can be cancelled.")
-        return redirect('orders:order_detail', order_id=order.id)
+            return JsonResponse({"success": False, "error": msg}, status=400)
+        messages.error(request, msg)
+        return redirect("orders:order_detail", order_id=order.id)
 
     try:
-        for item in order.items.all():
-            try:
-                stock = item.product.stock  # Only works if OneToOneField
-            except Stock.DoesNotExist:
-                stock = Stock.objects.create(product=item.product, quantity=0)
+        with transaction.atomic():
+            # Optional: lock order row to avoid double-cancel from multiple clicks
+            order = Order.objects.select_for_update().get(id=order.id)
 
-            stock.quantity += item.quantity
-            stock.save()
+            # Restore stock for each item
+            for item in order.items.select_related("product", "product__store").all():
+                product = item.product
+                qty = int(item.quantity or 0)
 
-        order.status = 'cancelled'
-        order.save()
+                if qty <= 0:
+                    continue
+
+                warehouse = getattr(product.store, "warehouse", None)
+                if not warehouse:
+                    raise ValidationError(
+                        f"Store '{product.store.name}' has no warehouse configured. Cannot restore stock."
+                    )
+
+                stock_row, _ = Stock.objects.select_for_update().get_or_create(
+                    product=product,
+                    warehouse=warehouse,
+                    defaults={
+                        "quantity": 0,
+                        "unit_cost": Decimal("0.00"),
+                    },
+                )
+
+                # Add back the cancelled quantity
+                stock_row.quantity = int(stock_row.quantity or 0) + qty
+                stock_row.save(update_fields=["quantity", "updated_at"])
+
+                # ✅ Create movement record (stock IN)
+                StockMovement.objects.create(
+                    product=product,
+                    warehouse=warehouse,
+                    movement_type="RETURN_IN",  # you can also use "ADJUSTMENT" if you prefer
+                    quantity=qty,  # positive because stock is coming back
+                    reference_number=f"CANCEL-{order.id}-{product.id}-{int(timezone.now().timestamp())}",
+                    unit_cost=stock_row.unit_cost,
+                    notes=f"Order #{order.id} cancelled — stock restored (+{qty}).",
+                    created_by=request.user,
+                )
+
+            order.status = "cancelled"
+            order.save(update_fields=["status", "updated_at"] if hasattr(order, "updated_at") else ["status"])
 
         if is_ajax:
-            return JsonResponse({'success': True})
+            return JsonResponse({"success": True})
 
-        messages.success(request, "Order cancelled successfully.")
-        return redirect('orders:order_detail', order_id=order.id)
+        messages.success(request, "Order cancelled successfully and stock was restored.")
+        return redirect("orders:order_detail", order_id=order.id)
+
+    except ValidationError as e:
+        if is_ajax:
+            return JsonResponse({"success": False, "error": str(e)}, status=400)
+        messages.error(request, str(e))
+        return redirect("orders:order_detail", order_id=order.id)
 
     except Exception as e:
         if is_ajax:
-            return JsonResponse({'success': False, 'error': str(e)})
+            return JsonResponse({"success": False, "error": str(e)}, status=500)
 
         messages.error(request, f"Error cancelling order: {str(e)}")
-        return redirect('orders:order_detail', order_id=order.id)
+        return redirect("orders:order_detail", order_id=order.id)
 
 @login_required
 def order_invoice(request, order_id):

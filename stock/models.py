@@ -14,6 +14,7 @@ class Warehouse(models.Model):
     city = models.CharField(max_length=100, blank=True)
     state = models.CharField(max_length=100, blank=True)
     country = models.CharField(max_length=100, blank=True)
+    capacity = models.CharField(max_length=100, blank=True)
     postal_code = models.CharField(max_length=20, blank=True)
 
     # Geocode fields

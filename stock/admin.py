@@ -43,7 +43,7 @@ class WarehouseAdmin(admin.ModelAdmin):
         total = obj.stock_items.annotate(
             value=F('quantity') * F('unit_cost')
         ).aggregate(total=Sum('value'))['total'] or 0
-        return f"${total:,.2f}"
+        return f"D{total:,.2f}"
 
     total_stock_value.short_description = 'Total Stock Value'
 
@@ -121,7 +121,7 @@ class StockAdmin(admin.ModelAdmin):
     stock_status.short_description = 'Status'
 
     def stock_value_display(self, obj):
-        return f"${obj.stock_value:,.2f}"
+        return f"D{obj.stock_value:,.2f}"
 
     stock_value_display.short_description = 'Stock Value'
 
@@ -164,7 +164,7 @@ class StockMovementAdmin(admin.ModelAdmin):
     quantity_display.short_description = 'Quantity'
 
     def total_value_display(self, obj):
-        return f"${obj.total_value:,.2f}"
+        return f"D{obj.total_value:,.2f}"
 
     total_value_display.short_description = 'Total Value'
 
@@ -506,7 +506,7 @@ class PurchaseOrderAdmin(admin.ModelAdmin):
     status_display.short_description = 'Status'
 
     def total_amount_display(self, obj):
-        return f"${obj.total_amount:,.2f}"
+        return f"D{obj.total_amount:,.2f}"
 
     total_amount_display.short_description = 'Total Amount'
 
@@ -523,7 +523,7 @@ class PurchaseOrderItemAdmin(admin.ModelAdmin):
     readonly_fields = ('quantity_pending', 'line_total', 'is_fully_received')
 
     def line_total_display(self, obj):
-        return f"${obj.line_total:,.2f}"
+        return f"D{obj.line_total:,.2f}"
 
     line_total_display.short_description = 'Line Total'
 
