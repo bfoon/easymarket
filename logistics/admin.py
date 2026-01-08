@@ -4,7 +4,7 @@ from django.utils.html import format_html
 
 from .models import (
     LogisticOffice, Warehouse, Driver, Vehicle,
-    Shipment, ShipmentBox, BoxItem
+    Shipment, ShipmentBox, BoxItem, WarehouseShipmentNotification
 )
 
 
@@ -341,3 +341,27 @@ class BoxItemAdmin(admin.ModelAdmin):
     @admin.display(description="Unit Price")
     def order_item_price(self, obj):
         return f"${obj.order_item.price}"
+
+@admin.register(WarehouseShipmentNotification)
+class NotificationAdmin(admin.ModelAdmin):
+    list_display = [
+        'id',
+        'recipient',
+        'notification_type',
+        'order',
+        'store',
+        'items_count',
+        'is_read',
+        'created_at'
+    ]
+    list_filter = [
+        'notification_type',
+        'is_read',
+        'created_at'
+    ]
+    search_fields = [
+        'recipient__username',
+        'order__id',
+        'store__name'
+    ]
+    readonly_fields = ['created_at', 'read_at']

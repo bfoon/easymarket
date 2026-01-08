@@ -53,7 +53,9 @@ from openpyxl.styles import Font, PatternFill, Alignment
 # Local imports
 from .models import (
     Shipment, ShipmentBox, BoxItem, Driver, Vehicle,
-    Warehouse, LogisticOffice, DriverLocation
+    Warehouse, LogisticOffice, DriverLocation, WarehouseShipmentNotification
+
+
 )
 from .forms import (
     ShipmentForm, ShipmentBoxForm, BoxItemForm,
@@ -196,6 +198,132 @@ class NotificationManager:
             daemon=True
         )
         thread.start()
+
+
+@login_required
+def notifications_list(request):
+    """
+    Display all notifications for the logged-in logistics user.
+    """
+    # Get filter parameters
+    filter_type = request.GET.get('type', 'all')
+    is_read = request.GET.get('read')
+
+    # Base queryset
+    notifications = WarehouseShipmentNotification.objects.filter(
+        recipient=request.user
+    ).select_related('order', 'store')
+
+    # Apply filters
+    if filter_type != 'all':
+        notifications = notifications.filter(notification_type=filter_type)
+
+    if is_read == 'true':
+        notifications = notifications.filter(is_read=True)
+    elif is_read == 'false':
+        notifications = notifications.filter(is_read=False)
+
+    # Pagination
+    paginator = Paginator(notifications, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    # Get counts for filters
+    context = {
+        'notifications': page_obj,
+        'total_count': notifications.count(),
+        'unread_count': WarehouseShipmentNotification.get_unread_count(request.user),
+        'filter_type': filter_type,
+        'is_read': is_read,
+    }
+
+    return render(request, 'logistics/notifications_list.html', context)
+
+
+@login_required
+@require_POST
+def notification_mark_as_read(request, notification_id):
+    """Mark a single notification as read."""
+    notification = get_object_or_404(
+        WarehouseShipmentNotification,
+        id=notification_id,
+        recipient=request.user
+    )
+
+    notification.mark_as_read()
+
+    return JsonResponse({
+        'success': True,
+        'message': 'Notification marked as read'
+    })
+
+
+@login_required
+@require_POST
+def notification_mark_all_as_read(request):
+    """Mark all notifications as read for current user."""
+    count = WarehouseShipmentNotification.mark_all_as_read(request.user)
+
+    return JsonResponse({
+        'success': True,
+        'message': f'{count} notification(s) marked as read',
+        'count': count
+    })
+
+
+@login_required
+def notification_dropdown(request):
+    """
+    AJAX endpoint for notification dropdown in navbar.
+    Returns JSON with recent notifications.
+    """
+    notifications = WarehouseShipmentNotification.get_recent_notifications(
+        request.user,
+        limit=10
+    )
+
+    notifications_data = [
+        {
+            'id': notif.id,
+            'type': notif.notification_type,
+            'title': notif.title,
+            'message': notif.message,
+            'order_id': notif.order.id,
+            'store_name': notif.store.name if notif.store else 'N/A',
+            'items_count': notif.items_count,
+            'time_since': notif.get_time_since(),
+            'is_read': notif.is_read,
+            'url': notif.get_absolute_url(),
+            'created_at': notif.created_at.isoformat()
+        }
+        for notif in notifications
+    ]
+
+    return JsonResponse({
+        'success': True,
+        'notifications': notifications_data,
+        'unread_count': WarehouseShipmentNotification.get_unread_count(request.user),
+        'total_count': WarehouseShipmentNotification.objects.filter(recipient=request.user).count()
+    })
+
+
+@login_required
+def notification_detail(request, notification_id):
+    """
+    View notification detail and mark as read.
+    Redirects to the related order page.
+    """
+    notification = get_object_or_404(
+        WarehouseShipmentNotification,
+        id=notification_id,
+        recipient=request.user
+    )
+
+    # Mark as read
+    notification.mark_as_read()
+
+    # Redirect to order detail page
+    return redirect(notification.get_absolute_url())
 
 
 # ============================================================================
@@ -405,291 +533,319 @@ class DashboardView(LogisticsMixin, TemplateView):
 # SHIPMENT VIEWS
 # ============================================================================
 
-class ShipmentListView(LogisticsMixin, SearchMixin, FilterMixin, ListView):
+class ShipmentCreateView(LoginRequiredMixin, CreateView):
     """
-    Display paginated list of all shipments with search and filtering.
+    Enhanced shipment creation view with warehouse shipping integration.
+
+    Features:
+    - Shows only orders with warehouse-shipped items
+    - Automatically includes shipped items in shipment
+    - Sets sequential shipment number
+    - Updates order status on first shipment
     """
     model = Shipment
-    template_name = 'logistics/shipment_list.html'
-    context_object_name = 'shipments'
-    paginate_by = 25
+    form_class = ShipmentForm
+    template_name = 'logistics/shipment_form.html'
+    success_url = reverse_lazy('logistics:shipment_list')
 
-    search_fields = [
-        'tracking_number',
-        'id',
-        'shipping_address__address',
-        'shipping_address__city',
-        'driver__user__first_name',
-        'driver__user__last_name',
-        'order__id',
-    ]
-
-    filter_fields = {
-        'status': 'status',
-        'order_status': 'order__status',
-        'warehouse': 'warehouse_id',
-        'driver': 'driver_id',
-        'shipment_type': 'shipment_type',
-        'material_type': 'material_type',
-    }
-
-    def get_queryset(self):
-        """Get optimized queryset with related objects."""
-        queryset = super().get_queryset().select_related(
-            'shipping_address',
-            'warehouse',
-            'driver__user',
-            'vehicle',
-            'order',
-            'logistic_office'
-        ).prefetch_related(
-            'boxes'
-        ).order_by('-created_at')
-
-        # Date range filter
-        date_from = self.request.GET.get('date_from')
-        date_to = self.request.GET.get('date_to')
-
-        if date_from:
-            queryset = queryset.filter(created_at__date__gte=date_from)
-        if date_to:
-            queryset = queryset.filter(created_at__date__lte=date_to)
-
-        return queryset
-
-    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
+    def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
 
-        # Add filter options
-        context['status_choices'] = Shipment.STATUS_CHOICES
-        context['shipment_type_choices'] = Shipment.SHIPMENT_TYPE_CHOICES
-        context['material_type_choices'] = Shipment.MATERIAL_TYPE_CHOICES
-        context['warehouses'] = Warehouse.objects.filter(is_active=True)
-        context['drivers'] = Driver.objects.filter(is_active=True).select_related('user')
+        # Count orders with items ready for shipment
+        ready_order_ids = OrderItem.objects.filter(
+            shipped_to_warehouse=True,
+            current_shipment__isnull=True
+        ).values_list('order_id', flat=True).distinct()
 
-        # Add statistics
-        queryset = self.get_queryset()
-        context['total_count'] = queryset.count()
-        context['pending_count'] = queryset.filter(status='pending').count()
-        context['in_transit_count'] = queryset.filter(status='in_transit').count()
-        context['delivered_count'] = queryset.filter(status='delivered').count()
+        context['orders_with_ready_items_count'] = Order.objects.filter(
+            id__in=ready_order_ids,
+            status__in=['processing', 'shipped']
+        ).count()
 
         return context
 
+    def form_valid(self, form):
+        shipment = form.save(commit=False)
+        order = shipment.order
 
-class ShipmentDetailView(LogisticsMixin, DetailView):
+        # Set shipment number
+        shipment.shipment_number = order.get_next_shipment_number()
+        shipment.save()
+
+        # Get items marked as shipped but not yet in a shipment
+        available_items = OrderItem.objects.filter(
+            order=order,
+            shipped_to_warehouse=True,
+            current_shipment__isnull=True
+        )
+
+        # Create ShipmentItem entries
+        items_added = 0
+        for order_item in available_items:
+            ShipmentItem.objects.create(
+                shipment=shipment,
+                order_item=order_item,
+                quantity=order_item.quantity
+            )
+
+            # Link item to this shipment
+            order_item.current_shipment = shipment
+            order_item.save(update_fields=['current_shipment'])
+            items_added += 1
+
+        # Update order status to 'shipped' if first shipment
+        if shipment.shipment_number == 1 and order.status == 'processing':
+            old_status = order.status
+            order.status = 'shipped'
+            order.save(update_fields=['status'])
+            logger.info(f"Order {order.id} status updated from '{old_status}' to 'shipped'")
+
+        messages.success(
+            self.request,
+            f'Shipment #{shipment.shipment_number} created successfully with {items_added} item(s). '
+            f'Order #{order.id} now has {order.get_shipment_count()} shipment(s).'
+        )
+
+        return redirect(self.get_success_url())
+
+
+class ShipmentUpdateView(LoginRequiredMixin, UpdateView):
+    """Enhanced shipment update view."""
+    model = Shipment
+    form_class = ShipmentForm
+    template_name = 'logistics/shipment_form.html'
+
+    def get_success_url(self):
+        return reverse_lazy('logistics:shipment_detail', kwargs={'pk': self.object.pk})
+
+    def form_valid(self, form):
+        messages.success(self.request, f'Shipment #{self.object.id} updated successfully.')
+        return super().form_valid(form)
+
+
+class ShipmentDetailView(LoginRequiredMixin, DetailView):
     """
-    Display detailed information about a single shipment.
+    Enhanced shipment detail view showing warehouse-shipped items.
     """
     model = Shipment
     template_name = 'logistics/shipment_detail.html'
     context_object_name = 'shipment'
 
-    def get_queryset(self):
-        """Get optimized queryset."""
-        return super().get_queryset().select_related(
-            'shipping_address',
-            'warehouse',
-            'driver__user',
-            'vehicle',
-            'order__buyer',
-            'logistic_office'
-        ).prefetch_related(
-            'boxes__items__order_item__product__store'
-        )
-
-    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
+    def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        shipment = self.get_object()
+        shipment = self.object
 
-        # Box information
-        context['boxes'] = shipment.boxes.all()
-        context['total_boxes'] = shipment.boxes.count()
-        context['total_items'] = sum(
-            box.get_total_items_count() for box in context['boxes']
-        )
+        # Get items in this shipment
+        context['shipment_items'] = shipment.shipment_items.select_related(
+            'order_item__product'
+        ).all()
+
+        # Calculate totals
+        context['total_items'] = sum(item.quantity for item in context['shipment_items'])
+        context['total_value'] = sum(item.get_total_price() for item in context['shipment_items'])
 
         # Order information
         if shipment.order:
-            order = shipment.order
-            context['order'] = order
-            context['order_status'] = order.status
-            context['order_status_display'] = order.get_status_display()
-            context['is_order_delivered'] = order.status == 'delivered'
-            context['can_mark_delivered'] = (
-                    order.status == 'shipped' and
-                    shipment.status == 'shipped'
-            )
-            context['delivered_date'] = order.delivered_date
-            context['boxes_readonly'] = order.status == 'delivered'
+            context['order'] = shipment.order
+            context['total_shipments'] = shipment.order.get_shipment_count()
+            context['has_more_items'] = shipment.order.has_unshipped_items()
 
-            # Get unique stores from order items
-            stores = set()
-            for item in order.items.select_related('product__store').all():
-                if item.product and item.product.store:
-                    stores.add(item.product.store)
-            context['stores'] = stores
-        else:
-            context['boxes_readonly'] = False
-            context['stores'] = []
-
-        # Timeline/History
-        context['status_history'] = self._get_shipment_history(shipment)
-
-        # Route information
-        if shipment.warehouse and shipment.shipping_address:
-            context['route_info'] = self._get_route_info(shipment)
+        # Get boxes for this shipment (if any)
+        context['boxes'] = shipment.boxes.prefetch_related('items').all()
 
         return context
 
-    def _get_shipment_history(self, shipment: Shipment) -> List[Dict[str, Any]]:
-        """Get shipment status history."""
-        history = []
 
-        # Created
-        history.append({
-            'status': 'created',
-            'timestamp': shipment.created_at,
-            'description': 'Shipment created'
+@login_required
+def get_shipment_items_preview(request, order_id):
+    """
+    Get a preview of items ready to be added to a new shipment.
+    Used in both store and logistics interfaces.
+    """
+    order = get_object_or_404(Order, pk=order_id)
+
+    # Get items ready for shipment
+    items = OrderItem.objects.filter(
+        order=order,
+        shipped_to_warehouse=True,
+        current_shipment__isnull=True
+    ).select_related('product')
+
+    items_data = [
+        {
+            'id': item.id,
+            'product_name': item.product.name,
+            'sku': getattr(item.product, 'sku', 'N/A'),
+            'quantity': item.quantity,
+            'price': float(item.get_total_price()),
+            'shipped_at': item.shipped_at.isoformat() if item.shipped_at else None
+        }
+        for item in items
+    ]
+
+    total_value = sum(item.get_total_price() for item in items)
+
+    return JsonResponse({
+        'success': True,
+        'items': items_data,
+        'items_count': len(items_data),
+        'total_value': float(total_value),
+        'next_shipment_number': order.get_next_shipment_number(),
+        'existing_shipments_count': order.get_shipment_count(),
+        'order_id': order.id,
+        'order_status': order.status,
+        'order_status_display': order.get_status_display()
+    })
+
+
+@login_required
+@transaction.atomic
+def quick_create_shipment(request, order_id):
+    """
+    Quick shipment creation from store order page.
+    Creates shipment with all warehouse-shipped items.
+    """
+    order = get_object_or_404(Order, pk=order_id)
+
+    # Security check - only logistics users
+    if not getattr(request.user, 'is_logistic', False):
+        return JsonResponse({
+            'success': False,
+            'message': 'Only logistics users can create shipments.'
+        }, status=403)
+
+    # Check if order has items available
+    available_items = order.get_shipped_items_without_shipment()
+
+    if not available_items.exists():
+        return JsonResponse({
+            'success': False,
+            'message': 'No items available for shipment.'
+        }, status=400)
+
+    try:
+        # Get next shipment number
+        shipment_number = order.get_next_shipment_number()
+
+        # Create shipment
+        shipment = Shipment.objects.create(
+            order=order,
+            shipping_address=getattr(order, 'shipping_address', None),
+            shipment_number=shipment_number,
+            status='pending',
+            weight_kg=0.00,
+            size_cubic_meters=0.00,
+            notes=f"Quick-created shipment #{shipment_number}"
+        )
+
+        # Add items
+        items_added = 0
+        for order_item in available_items:
+            ShipmentItem.objects.create(
+                shipment=shipment,
+                order_item=order_item,
+                quantity=order_item.quantity
+            )
+            order_item.current_shipment = shipment
+            order_item.save(update_fields=['current_shipment'])
+            items_added += 1
+
+        # Update order status if first shipment
+        if shipment_number == 1 and order.status == 'processing':
+            order.status = 'shipped'
+            order.save(update_fields=['status'])
+
+        return JsonResponse({
+            'success': True,
+            'shipment_id': shipment.id,
+            'shipment_number': shipment_number,
+            'items_count': items_added,
+            'message': f'Shipment #{shipment_number} created with {items_added} item(s).'
         })
 
-        # Add other status changes from audit log if available
-        # This would require an audit/history model
+    except Exception as e:
+        logger.error(f"Error creating quick shipment: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'message': f'Error creating shipment: {str(e)}'
+        }, status=500)
 
-        return history
 
-    def _get_route_info(self, shipment: Shipment) -> Dict[str, Any]:
-        """Get route information between warehouse and destination."""
-        # This would integrate with a routing API
-        return {
-            'distance_km': 0,  # Calculate actual distance
-            'estimated_duration': 0,  # Calculate duration
-            'route_points': []  # Get route coordinates
+@login_required
+def shipment_items_ajax(request, shipment_id):
+    """
+    AJAX endpoint to get items for a specific shipment.
+    Used for box packing interface.
+    """
+    shipment = get_object_or_404(Shipment, pk=shipment_id)
+
+    items = shipment.shipment_items.select_related(
+        'order_item__product'
+    ).all()
+
+    items_data = [
+        {
+            'id': item.id,
+            'order_item_id': item.order_item.id,
+            'product_id': item.order_item.product.id,
+            'product_name': item.order_item.product.name,
+            'sku': getattr(item.order_item.product, 'sku', 'N/A'),
+            'quantity': item.quantity,
+            'price': float(item.get_total_price()),
+            'shipped_at': item.order_item.shipped_at.isoformat() if item.order_item.shipped_at else None
         }
+        for item in items
+    ]
+
+    return JsonResponse({
+        'success': True,
+        'shipment_id': shipment.id,
+        'shipment_number': shipment.shipment_number,
+        'items': items_data,
+        'items_count': len(items_data)
+    })
 
 
-class ShipmentCreateView(LogisticsMixin, CreateView):
-    """
-    Create a new shipment with comprehensive validation.
-    """
+class ShipmentListView(LoginRequiredMixin, ListView):
+    """Enhanced shipment list view."""
     model = Shipment
-    template_name = 'logistics/shipment_form.html'
-    form_class = ShipmentForm
+    template_name = 'logistics/shipment_list.html'
+    context_object_name = 'shipments'
+    paginate_by = 20
+
+    def get_queryset(self):
+        queryset = Shipment.objects.select_related(
+            'order', 'warehouse', 'driver', 'vehicle'
+        ).prefetch_related('shipment_items').order_by('-created_at')
+
+        # Filter by status if provided
+        status = self.request.GET.get('status')
+        if status:
+            queryset = queryset.filter(status=status)
+
+        # Search by order ID or shipment number
+        search = self.request.GET.get('search')
+        if search:
+            queryset = queryset.filter(
+                Q(order__id__icontains=search) |
+                Q(shipment_number__icontains=search)
+            )
+
+        return queryset
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
 
-        eligible_orders = (
-            Order.objects
-            .filter(status='processing')
-            .filter(shipments__isnull=True)  # <-- only orders with NO shipments
-            .distinct()
-            .select_related('buyer')  # preload buyer if you display it
-        )
+        # Add filter options
+        context['status_filter'] = self.request.GET.get('status', '')
+        context['search_query'] = self.request.GET.get('search', '')
 
-        context['title'] = 'Create New Shipment'
-        context['processing_orders_count'] = eligible_orders.count()
-        context['eligible_orders'] = eligible_orders  # if your template needs it
+        # Count by status
+        context['pending_count'] = Shipment.objects.filter(status='pending').count()
+        context['in_transit_count'] = Shipment.objects.filter(status='in_transit').count()
+        context['delivered_count'] = Shipment.objects.filter(status='delivered').count()
+
         return context
-
-    def get_success_url(self) -> str:
-        """Redirect to shipment detail after creation."""
-        return reverse_lazy('logistics:shipment_detail', kwargs={'pk': self.object.pk})
-
-    @transaction.atomic
-    def form_valid(self, form):
-        """Handle successful form submission."""
-        response = super().form_valid(form)
-        shipment = self.object
-
-        # Auto-calculate shipping cost if not set
-        if not shipment.shipping_cost:
-            shipment.shipping_cost = calculate_shipping_cost(shipment)
-            shipment.save(update_fields=['shipping_cost'])
-
-        # Send notifications
-        if shipment.order and shipment.order.buyer:
-            NotificationManager.run_in_background(
-                'notify_buyer_order_shipped',
-                shipment.order
-            )
-
-        if shipment.driver:
-            NotificationManager.run_in_background(
-                'notify_driver_delivery_assigned',
-                shipment.driver,
-                shipment
-            )
-
-        # Log activity
-        logger.info(
-            f"Shipment {shipment.tracking_number} created by {self.request.user.username}"
-        )
-
-        messages.success(
-            self.request,
-            f'Shipment {shipment.tracking_number} created successfully!'
-        )
-
-        return response
-
-    def form_invalid(self, form):
-        """Handle form errors."""
-        logger.warning(
-            f"Shipment creation failed. Errors: {form.errors}"
-        )
-        messages.error(
-            self.request,
-            'Please correct the errors below and try again.'
-        )
-        return super().form_invalid(form)
-
-
-class ShipmentUpdateView(LogisticsMixin, UpdateView):
-    """
-    Update existing shipment information.
-    """
-    model = Shipment
-    template_name = 'logistics/shipment_form.html'
-    form_class = ShipmentForm
-
-    def get_context_data(self, **kwargs: Any) -> Dict[str, Any]:
-        context = super().get_context_data(**kwargs)
-        context['title'] = f'Edit Shipment {self.object.tracking_number}'
-        context['is_edit'] = True
-        return context
-
-    def get_success_url(self) -> str:
-        """Redirect to shipment detail after update."""
-        return reverse_lazy('logistics:shipment_detail', kwargs={'pk': self.object.pk})
-
-    @transaction.atomic
-    def form_valid(self, form):
-        """Handle successful form submission."""
-        # Track changes
-        old_instance = Shipment.objects.get(pk=self.object.pk)
-        response = super().form_valid(form)
-
-        # Check for significant changes
-        if old_instance.driver != self.object.driver and self.object.driver:
-            # Driver changed - notify new driver
-            NotificationManager.run_in_background(
-                'notify_driver_delivery_assigned',
-                self.object.driver,
-                self.object
-            )
-
-        # Log activity
-        logger.info(
-            f"Shipment {self.object.tracking_number} updated by {self.request.user.username}"
-        )
-
-        messages.success(
-            self.request,
-            f'Shipment {self.object.tracking_number} updated successfully!'
-        )
-
-        return response
 
 
 class ShipmentDeleteView(LogisticsMixin, PermissionRequiredMixin, DeleteView):

@@ -1,0 +1,335 @@
+{% extends 'logistics/base.html' %}
+
+{% block title %}Notifications - EM Logistics{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h1 class="page-title">
+      <i class="fas fa-bell me-2 text-primary"></i>
+      Warehouse Notifications
+    </h1>
+    <p class="page-subtitle text-muted">
+      Items shipped to warehouse by store owners
+    </p>
+  </div>
+  
+  {% if unread_count > 0 %}
+  <button class="btn btn-primary" onclick="markAllAsRead()">
+    <i class="fas fa-check-double me-1"></i>
+    Mark All as Read ({{ unread_count }})
+  </button>
+  {% endif %}
+</div>
+
+<!-- Stats Cards -->
+<div class="row mb-4">
+  <div class="col-md-4">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <div class="d-flex align-items-center">
+          <div class="stat-icon bg-primary bg-opacity-10 text-primary me-3">
+            <i class="fas fa-bell fs-4"></i>
+          </div>
+          <div>
+            <h3 class="mb-0 fw-bold">{{ total_count }}</h3>
+            <small class="text-muted">Total Notifications</small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-md-4">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <div class="d-flex align-items-center">
+          <div class="stat-icon bg-warning bg-opacity-10 text-warning me-3">
+            <i class="fas fa-exclamation-circle fs-4"></i>
+          </div>
+          <div>
+            <h3 class="mb-0 fw-bold">{{ unread_count }}</h3>
+            <small class="text-muted">Unread</small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-md-4">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <div class="d-flex align-items-center">
+          <div class="stat-icon bg-success bg-opacity-10 text-success me-3">
+            <i class="fas fa-check-circle fs-4"></i>
+          </div>
+          <div>
+            <h3 class="mb-0 fw-bold">{{ total_count|add:"-"|add:unread_count }}</h3>
+            <small class="text-muted">Read</small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="get" class="row g-3">
+      <div class="col-md-4">
+        <label class="form-label fw-semibold">Filter by Type</label>
+        <select name="type" class="form-select" onchange="this.form.submit()">
+          <option value="all" {% if filter_type == 'all' %}selected{% endif %}>All Types</option>
+          <option value="item_shipped" {% if filter_type == 'item_shipped' %}selected{% endif %}>Item Shipped</option>
+          <option value="all_items_shipped" {% if filter_type == 'all_items_shipped' %}selected{% endif %}>All Items Shipped</option>
+          <option value="shipment_created" {% if filter_type == 'shipment_created' %}selected{% endif %}>Shipment Created</option>
+        </select>
+      </div>
+      
+      <div class="col-md-4">
+        <label class="form-label fw-semibold">Filter by Status</label>
+        <select name="read" class="form-select" onchange="this.form.submit()">
+          <option value="" {% if not is_read %}selected{% endif %}>All Status</option>
+          <option value="false" {% if is_read == 'false' %}selected{% endif %}>Unread Only</option>
+          <option value="true" {% if is_read == 'true' %}selected{% endif %}>Read Only</option>
+        </select>
+      </div>
+      
+      <div class="col-md-4 d-flex align-items-end">
+        <a href="{% url 'logistics:notifications_list' %}" class="btn btn-outline-secondary">
+          <i class="fas fa-redo me-1"></i>
+          Reset Filters
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Notifications List -->
+<div class="card">
+  <div class="card-body p-0">
+    {% if notifications %}
+      <div class="list-group list-group-flush">
+        {% for notification in notifications %}
+        <a href="{% url 'logistics:notification_detail' notification.id %}" 
+           class="list-group-item list-group-item-action notification-item-row {% if not notification.is_read %}unread{% endif %}">
+          <div class="d-flex gap-3 align-items-start">
+            <!-- Icon -->
+            <div class="notification-icon-large {{ notification.notification_type }}">
+              {% if notification.notification_type == 'item_shipped' %}
+                <i class="fas fa-box"></i>
+              {% elif notification.notification_type == 'all_items_shipped' %}
+                <i class="fas fa-check-circle"></i>
+              {% elif notification.notification_type == 'shipment_created' %}
+                <i class="fas fa-truck"></i>
+              {% endif %}
+            </div>
+            
+            <!-- Content -->
+            <div class="flex-grow-1">
+              <!-- Title -->
+              <div class="d-flex justify-content-between align-items-start mb-2">
+                <h6 class="mb-0 fw-bold">
+                  {{ notification.title }}
+                  {% if not notification.is_read %}
+                    <span class="badge bg-primary ms-2">New</span>
+                  {% endif %}
+                </h6>
+                <small class="text-muted">
+                  <i class="fas fa-clock me-1"></i>
+                  {{ notification.created_at|timesince }} ago
+                </small>
+              </div>
+              
+              <!-- Message -->
+              <p class="mb-2 text-muted">{{ notification.message }}</p>
+              
+              <!-- Details -->
+              <div class="d-flex gap-2 flex-wrap">
+                <span class="badge bg-light text-dark">
+                  <i class="fas fa-shopping-cart me-1"></i>
+                  Order #{{ notification.order.id }}
+                </span>
+                
+                {% if notification.store %}
+                <span class="badge bg-light text-dark">
+                  <i class="fas fa-store me-1"></i>
+                  {{ notification.store.name }}
+                </span>
+                {% endif %}
+                
+                <span class="badge bg-primary">
+                  <i class="fas fa-box me-1"></i>
+                  {{ notification.items_count }} item{{ notification.items_count|pluralize }}
+                </span>
+                
+                <span class="badge bg-light text-dark">
+                  <i class="fas fa-calendar me-1"></i>
+                  {{ notification.created_at|date:"M d, Y" }}
+                </span>
+              </div>
+            </div>
+            
+            <!-- Arrow -->
+            <div class="text-muted">
+              <i class="fas fa-chevron-right"></i>
+            </div>
+          </div>
+        </a>
+        {% endfor %}
+      </div>
+      
+      <!-- Pagination -->
+      {% if notifications.has_other_pages %}
+      <div class="card-footer bg-light">
+        <nav aria-label="Notifications pagination">
+          <ul class="pagination justify-content-center mb-0">
+            {% if notifications.has_previous %}
+              <li class="page-item">
+                <a class="page-link" href="?page={{ notifications.previous_page_number }}{% if filter_type != 'all' %}&type={{ filter_type }}{% endif %}{% if is_read %}&read={{ is_read }}{% endif %}">
+                  <i class="fas fa-chevron-left me-1"></i> Previous
+                </a>
+              </li>
+            {% endif %}
+            
+            <li class="page-item active">
+              <span class="page-link">
+                Page {{ notifications.number }} of {{ notifications.paginator.num_pages }}
+              </span>
+            </li>
+            
+            {% if notifications.has_next %}
+              <li class="page-item">
+                <a class="page-link" href="?page={{ notifications.next_page_number }}{% if filter_type != 'all' %}&type={{ filter_type }}{% endif %}{% if is_read %}&read={{ is_read }}{% endif %}">
+                  Next <i class="fas fa-chevron-right ms-1"></i>
+                </a>
+              </li>
+            {% endif %}
+          </ul>
+        </nav>
+      </div>
+      {% endif %}
+      
+    {% else %}
+      <!-- Empty State -->
+      <div class="text-center py-5">
+        <div class="empty-state-icon mb-3">
+          <i class="fas fa-bell-slash text-muted" style="font-size: 4rem;"></i>
+        </div>
+        <h5 class="text-muted">No Notifications Found</h5>
+        <p class="text-muted mb-0">
+          {% if is_read == 'false' %}
+            You have no unread notifications.
+          {% elif filter_type != 'all' %}
+            No notifications of this type.
+          {% else %}
+            You'll see notifications here when stores mark items as shipped to warehouse.
+          {% endif %}
+        </p>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<style>
+.stat-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notification-icon-large {
+  width: 50px;
+  height: 50px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.notification-icon-large.item_shipped {
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  color: #3b82f6;
+}
+
+.notification-icon-large.all_items_shipped {
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+  color: #10b981;
+}
+
+.notification-icon-large.shipment_created {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  color: #f59e0b;
+}
+
+.notification-item-row {
+  padding: 1.25rem 1.5rem;
+  border-left: 3px solid transparent;
+  transition: all 0.3s ease;
+}
+
+.notification-item-row:hover {
+  background: #f8fafc;
+  border-left-color: var(--primary-color);
+}
+
+.notification-item-row.unread {
+  background: #eff6ff;
+  border-left-color: #3b82f6;
+}
+
+.notification-item-row.unread:hover {
+  background: #dbeafe;
+}
+</style>
+
+<script>
+async function markAllAsRead() {
+  if (!confirm('Mark all notifications as read?')) {
+    return;
+  }
+  
+  try {
+    const response = await fetch('{% url "logistics:notification_mark_all_as_read" %}', {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': getCookie('csrftoken'),
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      location.reload();
+    } else {
+      alert('Failed to mark notifications as read');
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    alert('An error occurred');
+  }
+}
+
+function getCookie(name) {
+  let cookieValue = null;
+  if (document.cookie && document.cookie !== '') {
+    const cookies = document.cookie.split(';');
+    for (let i = 0; i < cookies.length; i++) {
+      const cookie = cookies[i].trim();
+      if (cookie.substring(0, name.length + 1) === (name + '=')) {
+        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+        break;
+      }
+    }
+  }
+  return cookieValue;
+}
+</script>
+{% endblock %}

@@ -5,7 +5,7 @@ from django.urls import reverse
 from django.db.models import Avg
 from decimal import Decimal
 from django.utils import timezone
-import os, uuid, secrets
+import os, uuid, secrets, string
 from django.utils.text import slugify
 from django.db import transaction
 from django.db.models.functions import Lower
@@ -322,6 +322,12 @@ class Product(models.Model):
         null=True,
         blank=True
     )
+    sku = models.CharField(
+        max_length=50,
+        unique=True,
+        editable=False,
+        help_text="Auto-generated SKU in format: EM-XXXXXXXX"
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -509,6 +515,57 @@ class Product(models.Model):
     def has_color_images(self):
         # assumes ProductImage has related_name="images"
         return self.images.filter(color__isnull=False).exists()
+
+    def save(self, *args, **kwargs):
+        # Generate SKU if it doesn't exist
+        if not self.sku:
+            self.sku = self.generate_sku()
+        super().save(*args, **kwargs)
+
+    # ---------- GENERATE SKU ----------
+    @staticmethod
+    def generate_sku():
+        """
+        Generate a unique SKU in format: EM-XXXXXXXX
+        Where X is a random alphanumeric character (uppercase)
+        """
+        while True:
+            # Generate 8 random alphanumeric characters (uppercase)
+            random_part = ''.join(
+                secrets.choice(string.ascii_uppercase + string.digits)
+                for _ in range(8)
+            )
+            sku = f"EM-{random_part}"
+
+            # Check if SKU already exists
+            if not Product.objects.filter(sku=sku).exists():
+                return sku
+
+    # Alternative: If you want letters only (no numbers)
+    @staticmethod
+    def generate_sku_letters_only():
+        """Generate SKU with only letters: EM-ABCDEFGH"""
+        while True:
+            random_part = ''.join(
+                secrets.choice(string.ascii_uppercase)
+                for _ in range(8)
+            )
+            sku = f"EM-{random_part}"
+            if not Product.objects.filter(sku=sku).exists():
+                return sku
+
+    # Alternative: If you want to include product ID
+    def generate_sku_with_id(self):
+        """Generate SKU with ID: EM-12345-ABC"""
+        if self.id:
+            random_part = ''.join(
+                secrets.choice(string.ascii_uppercase)
+                for _ in range(3)
+            )
+            return f"EM-{self.id}-{random_part}"
+        else:
+            # Fallback to random if no ID yet
+            return self.generate_sku()
 
     # ---------- SAVE OVERRIDE (NOTIFICATIONS, PRICE HISTORY, WISHLIST) ----------
 

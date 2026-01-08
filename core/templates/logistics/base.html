@@ -448,6 +448,108 @@
       border-radius: 50%;
       animation: spin 1s linear infinite;
     }
+    .notification-dropdown {
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  padding: 0;
+}
+
+.notification-dropdown::-webkit-scrollbar {
+  width: 6px;
+}
+
+.notification-dropdown::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+.notification-dropdown::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+.notification-item {
+  padding: 0.875rem 1rem;
+  border-bottom: 1px solid #f1f5f9;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.notification-item:hover {
+  background: #f8fafc;
+}
+
+.notification-item.unread {
+  background: #eff6ff;
+  border-left: 3px solid #3b82f6;
+}
+
+.notification-item.unread::before {
+  content: '';
+  position: absolute;
+  left: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 8px;
+  height: 8px;
+  background: #3b82f6;
+  border-radius: 50%;
+}
+
+.notification-item:last-child {
+  border-bottom: none;
+}
+
+.notification-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+}
+
+.notification-icon.item-shipped {
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  color: #3b82f6;
+}
+
+.notification-icon.all-items-shipped {
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+  color: #10b981;
+}
+
+.notification-icon.shipment-created {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  color: #f59e0b;
+}
+
+.notification-time {
+  font-size: 0.7rem;
+  color: #94a3b8;
+}
+
+.notification-badge-count {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 0.125rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.empty-notifications {
+  padding: 3rem 2rem;
+  text-align: center;
+  color: #94a3b8;
+}
+
+.empty-notifications i {
+  font-size: 3rem;
+  color: #cbd5e1;
+  margin-bottom: 1rem;
+}
 
     @keyframes spin {
       to { transform: rotate(360deg); }
@@ -485,25 +587,64 @@
 
     <!-- Right Side Items -->
     <div class="d-flex align-items-center gap-3">
-      <!-- Notifications -->
-      <div class="navbar-notifications position-relative">
-        <button class="btn btn-link text-secondary" data-bs-toggle="dropdown">
-          <i class="fas fa-bell fs-5"></i>
-          <span class="notification-badge">3</span>
+     <!-- Notifications Dropdown -->
+<div class="navbar-notifications position-relative">
+  <button class="btn btn-link text-secondary position-relative" id="notificationDropdownBtn" data-bs-toggle="dropdown" aria-expanded="false">
+    <i class="fas fa-bell fs-5"></i>
+    {% if notification_unread_count > 0 %}
+    <span class="notification-badge">{{ notification_unread_count }}</span>
+    {% endif %}
+  </button>
+
+  <div class="dropdown-menu dropdown-menu-end notification-dropdown" style="min-width: 380px; max-height: 500px; overflow-y: auto;">
+    <!-- Dropdown Header -->
+    <div class="notification-header px-3 py-2 border-bottom bg-light d-flex justify-content-between align-items-center">
+      <h6 class="mb-0 fw-bold">
+        <i class="fas fa-warehouse me-2 text-primary"></i>
+        Warehouse Notifications
+      </h6>
+      {% if notification_unread_count > 0 %}
+      <button class="btn btn-sm btn-link text-primary p-0" id="markAllReadBtn" onclick="markAllAsRead()">
+        <small>Mark all read</small>
+      </button>
+      {% endif %}
+    </div>
+
+    <!-- Filter Tabs -->
+    <div class="px-2 py-2 border-bottom">
+      <div class="btn-group btn-group-sm w-100" role="group">
+        <button type="button" class="btn btn-outline-primary active" data-filter="all" onclick="filterNotifications('all')">
+          All
         </button>
-        <div class="dropdown-menu dropdown-menu-end" style="min-width: 300px;">
-          <div class="px-3 py-2 border-bottom">
-            <h6 class="mb-0">Notifications</h6>
-          </div>
-          <div class="list-group list-group-flush">
-            <a href="#" class="list-group-item list-group-item-action">
-              <div class="d-flex w-100 justify-content-between">
-                <small class="text-muted">New shipment assigned</small>
-                <small class="text-muted">2m ago</small>
-              </div>
-            </a>
-          </div>
+        <button type="button" class="btn btn-outline-primary" data-filter="unread" onclick="filterNotifications('unread')">
+          Unread
+          {% if notification_unread_count > 0 %}
+          <span class="badge bg-primary ms-1">{{ notification_unread_count }}</span>
+          {% endif %}
+        </button>
+      </div>
+    </div>
+
+    <!-- Notifications List -->
+    <div id="notificationsList" class="notification-list">
+      <!-- Will be populated by JavaScript -->
+      <div class="text-center py-4 text-muted">
+        <div class="spinner-border spinner-border-sm" role="status">
+          <span class="visually-hidden">Loading...</span>
         </div>
+        <p class="mt-2 mb-0">Loading notifications...</p>
+      </div>
+    </div>
+
+    <!-- Dropdown Footer -->
+    <div class="notification-footer px-3 py-2 border-top bg-light text-center">
+      <a href="{% url 'logistics:notifications_list' %}" class="btn btn-sm btn-primary w-100">
+        <i class="fas fa-list me-1"></i>
+        View All Notifications
+      </a>
+    </div>
+  </div>
+</div>
       </div>
 
       <!-- User Menu -->
@@ -710,6 +851,222 @@
       loader.classList.add('active');
     }
   });
+</script>
+<script>
+// Current filter
+let currentFilter = 'all';
+
+// Load notifications when dropdown opens
+document.getElementById('notificationDropdownBtn')?.addEventListener('show.bs.dropdown', function () {
+  loadNotifications();
+});
+
+// Load notifications from API
+async function loadNotifications() {
+  const list = document.getElementById('notificationsList');
+
+  try {
+    const response = await fetch('/logistics/notifications/dropdown/');
+    const data = await response.json();
+
+    if (data.success) {
+      displayNotifications(data.notifications, data.unread_count);
+    } else {
+      showError('Failed to load notifications');
+    }
+  } catch (error) {
+    console.error('Error loading notifications:', error);
+    showError('Error loading notifications');
+  }
+}
+
+// Display notifications in list
+function displayNotifications(notifications, unreadCount) {
+  const list = document.getElementById('notificationsList');
+
+  // Filter notifications based on current filter
+  let filtered = notifications;
+  if (currentFilter === 'unread') {
+    filtered = notifications.filter(n => !n.is_read);
+  }
+
+  if (filtered.length === 0) {
+    list.innerHTML = `
+      <div class="empty-notifications">
+        <i class="fas fa-bell-slash"></i>
+        <p class="mb-0">${currentFilter === 'unread' ? 'No unread notifications' : 'No notifications yet'}</p>
+      </div>
+    `;
+    return;
+  }
+
+  list.innerHTML = filtered.map(notif => `
+    <div class="notification-item ${notif.is_read ? '' : 'unread'}"
+         onclick="handleNotificationClick(${notif.id}, '${notif.url}')">
+      <div class="d-flex gap-3">
+        <!-- Icon -->
+        <div class="notification-icon ${notif.type}">
+          ${getNotificationIcon(notif.type)}
+        </div>
+
+        <!-- Content -->
+        <div class="flex-grow-1">
+          <!-- Title -->
+          <div class="fw-semibold text-dark mb-1" style="font-size: 0.875rem;">
+            ${notif.title}
+          </div>
+
+          <!-- Details -->
+          <div class="d-flex gap-2 mb-1 flex-wrap">
+            <span class="badge bg-light text-dark" style="font-size: 0.7rem;">
+              <i class="fas fa-shopping-cart me-1"></i>
+              Order #${notif.order_id}
+            </span>
+            <span class="badge bg-light text-dark" style="font-size: 0.7rem;">
+              <i class="fas fa-store me-1"></i>
+              ${notif.store_name}
+            </span>
+            <span class="badge bg-primary" style="font-size: 0.7rem;">
+              <i class="fas fa-box me-1"></i>
+              ${notif.items_count} item${notif.items_count > 1 ? 's' : ''}
+            </span>
+          </div>
+
+          <!-- Time -->
+          <div class="notification-time">
+            <i class="fas fa-clock me-1"></i>
+            ${notif.time_since} ago
+          </div>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// Get icon based on notification type
+function getNotificationIcon(type) {
+  const icons = {
+    'item_shipped': '<i class="fas fa-box"></i>',
+    'all_items_shipped': '<i class="fas fa-check-circle"></i>',
+    'shipment_created': '<i class="fas fa-truck"></i>'
+  };
+  return icons[type] || '<i class="fas fa-bell"></i>';
+}
+
+// Handle notification click
+async function handleNotificationClick(notificationId, url) {
+  try {
+    // Mark as read
+    await fetch(`/logistics/notifications/${notificationId}/mark-read/`, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': getCookie('csrftoken'),
+        'Content-Type': 'application/json'
+      }
+    });
+
+    // Navigate to URL
+    window.location.href = url;
+  } catch (error) {
+    console.error('Error marking notification as read:', error);
+    // Still navigate even if marking fails
+    window.location.href = url;
+  }
+}
+
+// Mark all as read
+async function markAllAsRead() {
+  try {
+    const response = await fetch('/logistics/notifications/mark-all-read/', {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': getCookie('csrftoken'),
+        'Content-Type': 'application/json'
+      }
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      // Reload notifications
+      loadNotifications();
+
+      // Update badge
+      const badge = document.querySelector('.notification-badge');
+      if (badge) {
+        badge.remove();
+      }
+
+      // Show success message
+      showSuccess('All notifications marked as read');
+    }
+  } catch (error) {
+    console.error('Error marking all as read:', error);
+    showError('Failed to mark notifications as read');
+  }
+}
+
+// Filter notifications
+function filterNotifications(filter) {
+  currentFilter = filter;
+
+  // Update active button
+  document.querySelectorAll('[data-filter]').forEach(btn => {
+    btn.classList.remove('active');
+  });
+  document.querySelector(`[data-filter="${filter}"]`)?.classList.add('active');
+
+  // Reload notifications
+  loadNotifications();
+}
+
+// Helper: Get CSRF token
+function getCookie(name) {
+  let cookieValue = null;
+  if (document.cookie && document.cookie !== '') {
+    const cookies = document.cookie.split(';');
+    for (let i = 0; i < cookies.length; i++) {
+      const cookie = cookies[i].trim();
+      if (cookie.substring(0, name.length + 1) === (name + '=')) {
+        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+        break;
+      }
+    }
+  }
+  return cookieValue;
+}
+
+// Helper: Show success message
+function showSuccess(message) {
+  // You can implement your own toast/alert system here
+  console.log('Success:', message);
+}
+
+// Helper: Show error message
+function showError(message) {
+  console.error('Error:', message);
+  const list = document.getElementById('notificationsList');
+  list.innerHTML = `
+    <div class="empty-notifications text-danger">
+      <i class="fas fa-exclamation-circle"></i>
+      <p class="mb-0">${message}</p>
+    </div>
+  `;
+}
+
+// Auto-refresh notifications every 30 seconds (when dropdown is open)
+let refreshInterval;
+document.getElementById('notificationDropdownBtn')?.addEventListener('shown.bs.dropdown', function () {
+  refreshInterval = setInterval(() => {
+    loadNotifications();
+  }, 30000);
+});
+
+document.getElementById('notificationDropdownBtn')?.addEventListener('hidden.bs.dropdown', function () {
+  if (refreshInterval) {
+    clearInterval(refreshInterval);
+  }
+});
 </script>
 
 {% block extra_js %}{% endblock %}

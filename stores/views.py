@@ -104,6 +104,139 @@ def notify_logistics_shipment_to_warehouse(order, store, items):
     send_whatsapp(logistics_whatsapp, msg)
 
 
+def send_logistics_notification_async(notification_func, *args, **kwargs):
+    """Execute a notification function in a background thread."""
+    thread = threading.Thread(target=notification_func, args=args, kwargs=kwargs)
+    thread.daemon = True
+    thread.start()
+    logger.info(f"Started background thread for {notification_func.__name__}")
+
+
+def notify_logistics_item_shipped_to_warehouse(order, store, item):
+    """
+    Notify logistics team when an item is marked as shipped to warehouse.
+    NOTE: This function is called in a background thread.
+    """
+    try:
+        logistics_users = User.objects.filter(is_logistic=True, is_active=True)
+
+        item_details = (
+            f"Product: {item.product.name}\n"
+            f"Quantity: {item.quantity}\n"
+            f"SKU: {getattr(item.product, 'sku', 'N/A')}\n"
+            f"Price: D{item.get_total_price()}"
+        )
+
+        subject = f"📦 Item Shipped to Warehouse - Order #{order.id}"
+        message = (
+            f"A new item has been marked as shipped to warehouse:\n\n"
+            f"Store: {store.name}\n"
+            f"Order ID: #{order.id}\n"
+            f"Order Status: {order.get_status_display()}\n"
+            f"Buyer: {order.buyer.get_full_name()}\n\n"
+            f"Item Details:\n{item_details}\n\n"
+            f"Shipped at: {timezone.now().strftime('%Y-%m-%d %H:%M')}\n\n"
+            f"⚠️ ACTION REQUIRED:\n"
+            f"Please ensure the item is received and processed in the warehouse system.\n\n"
+            f"View order: {settings.SITE_URL}/stores/manage/{store.id}/orders/{order.id}/\n\n"
+            f"- EasyMarket Logistics System"
+        )
+
+        logistics_emails = list(logistics_users.values_list('email', flat=True))
+        if hasattr(settings, 'LOGISTICS_EMAIL') and settings.LOGISTICS_EMAIL:
+            logistics_emails.append(settings.LOGISTICS_EMAIL)
+
+        logistics_emails = list(set(filter(None, logistics_emails)))
+
+        if logistics_emails:
+            send_email(subject, message, logistics_emails)
+            logger.info(
+                f"[BACKGROUND] Sent warehouse shipment notification to {len(logistics_emails)} logistics users for item {item.id}")
+
+        if hasattr(settings, 'LOGISTICS_PHONE') and settings.LOGISTICS_PHONE:
+            whatsapp_msg = (
+                f"📦 Item Shipped to Warehouse\n\n"
+                f"Store: {store.name}\n"
+                f"Order: #{order.id}\n"
+                f"Status: {order.get_status_display()}\n"
+                f"Item: {item.product.name} x{item.quantity}\n"
+                f"Time: {timezone.now().strftime('%H:%M %d/%m/%Y')}"
+            )
+            send_whatsapp(settings.LOGISTICS_PHONE, whatsapp_msg)
+            logger.info(f"[BACKGROUND] Sent WhatsApp notification for item {item.id}")
+
+    except Exception as e:
+        logger.error(f"[BACKGROUND] Failed to send logistics notification for item {item.id}: {str(e)}")
+
+
+def notify_logistics_shipment_created(shipment, order, store, items):
+    """
+    Notify logistics team when a shipment is created.
+    NOTE: This function is called in a background thread.
+    """
+    try:
+        logistics_users = User.objects.filter(is_logistic=True, is_active=True)
+
+        item_list = "\n".join([
+            f"  • {item.order_item.product.name} - Qty: {item.quantity} - SKU: {getattr(item.order_item.product, 'sku', 'N/A')}"
+            for item in items
+        ])
+
+        total_items = sum(item.quantity for item in items)
+        total_value = sum(item.get_total_price() for item in items)
+
+        subject = f"🚚 New Shipment #{shipment.shipment_number} Created - Order #{order.id}"
+        message = (
+            f"A new shipment has been created:\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"Shipment Information:\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"Shipment: #{shipment.shipment_number} (Total shipments: {order.get_shipment_count()})\n"
+            f"Order ID: #{order.id}\n"
+            f"Store: {store.name}\n"
+            f"Buyer: {order.buyer.get_full_name()}\n"
+            f"Warehouse: {shipment.warehouse.name if shipment.warehouse else 'Not assigned'}\n"
+            f"Order Status: {order.get_status_display()}\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"Items ({items.count()} products, {total_items} units):\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"{item_list}\n\n"
+            f"Total Value: D{total_value:.2f}\n\n"
+            f"Created at: {timezone.now().strftime('%Y-%m-%d %H:%M')}\n\n"
+            f"⚠️ ACTION REQUIRED:\n"
+            f"1. Verify all items in the shipment\n"
+            f"2. Assign driver and vehicle\n"
+            f"3. Prepare items for delivery\n"
+            f"4. Update shipment status when dispatched\n\n"
+            f"Manage shipment: {settings.SITE_URL}/logistics/shipments/{shipment.id}/\n\n"
+            f"- EasyMarket Logistics System"
+        )
+
+        logistics_emails = list(logistics_users.values_list('email', flat=True))
+        if hasattr(settings, 'LOGISTICS_EMAIL') and settings.LOGISTICS_EMAIL:
+            logistics_emails.append(settings.LOGISTICS_EMAIL)
+
+        logistics_emails = list(set(filter(None, logistics_emails)))
+
+        if logistics_emails:
+            send_email(subject, message, logistics_emails)
+            logger.info(f"[BACKGROUND] Sent shipment #{shipment.shipment_number} creation notification")
+
+        if hasattr(settings, 'LOGISTICS_PHONE') and settings.LOGISTICS_PHONE:
+            whatsapp_msg = (
+                f"🚚 Shipment #{shipment.shipment_number} Created\n\n"
+                f"Order: #{order.id}\n"
+                f"Store: {store.name}\n"
+                f"Items: {items.count()} products ({total_items} units)\n"
+                f"Value: D{total_value:.2f}\n"
+                f"Status: {order.get_status_display()}\n"
+                f"Time: {timezone.now().strftime('%H:%M %d/%m/%Y')}\n\n"
+                f"Please prepare for delivery."
+            )
+            send_whatsapp(settings.LOGISTICS_PHONE, whatsapp_msg)
+
+    except Exception as e:
+        logger.error(f"[BACKGROUND] Failed to send shipment creation notification: {str(e)}")
 def group_store_hours(hours):
     grouped = []
     # Prepare hours with display names
@@ -787,6 +920,319 @@ def set_shipping_cost(request, store_id, order_id):
             messages.error(request, f"Failed to update shipping cost: {e}")
 
         return redirect('stores:store_order_detail', store_id=store.id, order_id=order.id)
+
+
+@login_required
+@require_POST
+@transaction.atomic
+def toggle_item_warehouse_shipped(request, item_id):
+    """
+    Toggle the shipped_to_warehouse status for an OrderItem.
+
+    Enhanced features:
+    - Only works if order status is 'processing'
+    - Action is IRREVERSIBLE once confirmed
+    - Does NOT automatically create shipment (manual trigger required)
+    - Updates shipped_at timestamp
+    """
+    item = get_object_or_404(OrderItem, pk=item_id)
+    order = item.order
+    store = item.product.store
+
+    # Security check
+    if request.user != store.owner:
+        return JsonResponse({
+            'success': False,
+            'message': 'You do not have permission to update this item.'
+        }, status=403)
+
+    # Check order status
+    if order.status != 'processing':
+        status_messages = {
+            'pending': 'Order must be in "Processing" status before shipping to warehouse.',
+            'shipped': 'Order is already shipped. Items are locked.',
+            'delivered': 'Order is already delivered. Items are locked.',
+            'cancelled': 'Order is cancelled. Cannot ship items.'
+        }
+        return JsonResponse({
+            'success': False,
+            'message': status_messages.get(
+                order.status,
+                f'Cannot ship to warehouse when order status is "{order.get_status_display()}".'
+            ),
+            'current_status': order.status
+        }, status=400)
+
+    # Check if already shipped
+    if item.shipped_to_warehouse:
+        return JsonResponse({
+            'success': False,
+            'message': 'This item has already been shipped to warehouse. This action cannot be reversed.',
+            'shipped_to_warehouse': True
+        }, status=400)
+
+    try:
+        # Mark as shipped (IRREVERSIBLE)
+        item.shipped_to_warehouse = True
+        item.shipped_at = timezone.now()
+        item.save(update_fields=['shipped_to_warehouse', 'shipped_at'])
+
+        logger.info(f"Item {item.id} marked as shipped to warehouse for order {order.id}")
+
+        # Check how many items are shipped vs total
+        total_items = order.items.filter(product__store=store).count()
+        shipped_items = order.items.filter(
+            product__store=store,
+            shipped_to_warehouse=True
+        ).count()
+
+        # Check if there are items ready for shipment (shipped but not in a shipment)
+        items_ready_for_shipment = order.get_shipped_items_without_shipment().count()
+
+        return JsonResponse({
+            'success': True,
+            'item_id': item.id,
+            'shipped_to_warehouse': True,
+            'shipped_at': item.shipped_at.isoformat() if item.shipped_at else None,
+            'total_items': total_items,
+            'shipped_items_count': shipped_items,
+            'items_ready_for_shipment': items_ready_for_shipment,
+            'can_create_shipment': items_ready_for_shipment > 0,
+            'message': 'Item successfully marked as shipped to warehouse.',
+            'irreversible': True
+        })
+
+    except Exception as e:
+        logger.error(f"Error toggling warehouse shipped status: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'message': 'An error occurred while updating the item.'
+        }, status=500)
+
+
+@login_required
+@require_POST
+@transaction.atomic
+def toggle_item_warehouse_shipped(request, item_id):
+    """
+    Toggle the shipped_to_warehouse status for an OrderItem.
+
+    Enhanced features:
+    - Only works if order status is 'processing'
+    - Action is IRREVERSIBLE once confirmed
+    - Does NOT automatically create shipment (manual trigger required)
+    - Updates shipped_at timestamp
+    """
+    item = get_object_or_404(OrderItem, pk=item_id)
+    order = item.order
+    store = item.product.store
+
+    # Security check
+    if request.user != store.owner:
+        return JsonResponse({
+            'success': False,
+            'message': 'You do not have permission to update this item.'
+        }, status=403)
+
+    # Check order status
+    if order.status != 'processing':
+        status_messages = {
+            'pending': 'Order must be in "Processing" status before shipping to warehouse.',
+            'shipped': 'Order is already shipped. Items are locked.',
+            'delivered': 'Order is already delivered. Items are locked.',
+            'cancelled': 'Order is cancelled. Cannot ship items.'
+        }
+        return JsonResponse({
+            'success': False,
+            'message': status_messages.get(
+                order.status,
+                f'Cannot ship to warehouse when order status is "{order.get_status_display()}".'
+            ),
+            'current_status': order.status
+        }, status=400)
+
+    # Check if already shipped
+    if item.shipped_to_warehouse:
+        return JsonResponse({
+            'success': False,
+            'message': 'This item has already been shipped to warehouse. This action cannot be reversed.',
+            'shipped_to_warehouse': True
+        }, status=400)
+
+    try:
+        # Mark as shipped (IRREVERSIBLE)
+        item.shipped_to_warehouse = True
+        item.shipped_at = timezone.now()
+        item.save(update_fields=['shipped_to_warehouse', 'shipped_at'])
+
+        logger.info(f"Item {item.id} marked as shipped to warehouse for order {order.id}")
+
+        # Check how many items are shipped vs total
+        total_items = order.items.filter(product__store=store).count()
+        shipped_items = order.items.filter(
+            product__store=store,
+            shipped_to_warehouse=True
+        ).count()
+
+        # Check if there are items ready for shipment (shipped but not in a shipment)
+        items_ready_for_shipment = order.get_shipped_items_without_shipment().count()
+
+        return JsonResponse({
+            'success': True,
+            'item_id': item.id,
+            'shipped_to_warehouse': True,
+            'shipped_at': item.shipped_at.isoformat() if item.shipped_at else None,
+            'total_items': total_items,
+            'shipped_items_count': shipped_items,
+            'items_ready_for_shipment': items_ready_for_shipment,
+            'can_create_shipment': items_ready_for_shipment > 0,
+            'message': 'Item successfully marked as shipped to warehouse.',
+            'irreversible': True
+        })
+
+    except Exception as e:
+        logger.error(f"Error toggling warehouse shipped status: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'message': 'An error occurred while updating the item.'
+        }, status=500)
+
+
+@login_required
+@require_POST
+@transaction.atomic
+def toggle_item_warehouse_shipped(request, item_id):
+    """
+    Toggle the shipped_to_warehouse status for an OrderItem.
+
+    Enhanced features:
+    - Only works if order status is 'processing'
+    - Action is IRREVERSIBLE once confirmed
+    - Does NOT automatically create shipment (manual trigger required)
+    - Updates shipped_at timestamp
+    """
+    item = get_object_or_404(OrderItem, pk=item_id)
+    order = item.order
+    store = item.product.store
+
+    # Security check
+    if request.user != store.owner:
+        return JsonResponse({
+            'success': False,
+            'message': 'You do not have permission to update this item.'
+        }, status=403)
+
+    # Check order status
+    if order.status != 'processing':
+        status_messages = {
+            'pending': 'Order must be in "Processing" status before shipping to warehouse.',
+            'shipped': 'Order is already shipped. Items are locked.',
+            'delivered': 'Order is already delivered. Items are locked.',
+            'cancelled': 'Order is cancelled. Cannot ship items.'
+        }
+        return JsonResponse({
+            'success': False,
+            'message': status_messages.get(
+                order.status,
+                f'Cannot ship to warehouse when order status is "{order.get_status_display()}".'
+            ),
+            'current_status': order.status
+        }, status=400)
+
+    # Check if already shipped
+    if item.shipped_to_warehouse:
+        return JsonResponse({
+            'success': False,
+            'message': 'This item has already been shipped to warehouse. This action cannot be reversed.',
+            'shipped_to_warehouse': True
+        }, status=400)
+
+    try:
+        # Mark as shipped (IRREVERSIBLE)
+        item.shipped_to_warehouse = True
+        item.shipped_at = timezone.now()
+        item.save(update_fields=['shipped_to_warehouse', 'shipped_at'])
+
+        logger.info(f"Item {item.id} marked as shipped to warehouse for order {order.id}")
+
+        # Check how many items are shipped vs total
+        total_items = order.items.filter(product__store=store).count()
+        shipped_items = order.items.filter(
+            product__store=store,
+            shipped_to_warehouse=True
+        ).count()
+
+        # Check if there are items ready for shipment (shipped but not in a shipment)
+        items_ready_for_shipment = order.get_shipped_items_without_shipment().count()
+
+        return JsonResponse({
+            'success': True,
+            'item_id': item.id,
+            'shipped_to_warehouse': True,
+            'shipped_at': item.shipped_at.isoformat() if item.shipped_at else None,
+            'total_items': total_items,
+            'shipped_items_count': shipped_items,
+            'items_ready_for_shipment': items_ready_for_shipment,
+            'can_create_shipment': items_ready_for_shipment > 0,
+            'message': 'Item successfully marked as shipped to warehouse.',
+            'irreversible': True
+        })
+
+    except Exception as e:
+        logger.error(f"Error toggling warehouse shipped status: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'message': 'An error occurred while updating the item.'
+        }, status=500)
+
+
+@login_required
+@require_POST
+def update_order_status_to_processing(request, order_id):
+    """
+    Update order status from 'pending' to 'processing'.
+    Required before items can be shipped to warehouse.
+    """
+    order = get_object_or_404(Order, pk=order_id)
+
+    # Check if user has permission (store owner or staff)
+    store_orders = order.items.values_list('product__store', flat=True).distinct()
+    user_stores = request.user.owned_stores.values_list('id', flat=True)
+
+    if not any(store_id in user_stores for store_id in store_orders):
+        return JsonResponse({
+            'success': False,
+            'message': 'You do not have permission to update this order.'
+        }, status=403)
+
+    # Check current status
+    if order.status != 'pending':
+        return JsonResponse({
+            'success': False,
+            'message': f'Order status is already "{order.get_status_display()}". Can only update from "Pending" to "Processing".',
+            'current_status': order.status
+        }, status=400)
+
+    try:
+        with transaction.atomic():
+            order.status = 'processing'
+            order.save(update_fields=['status'])
+
+            logger.info(f"Order {order.id} status updated from 'pending' to 'processing' by user {request.user.id}")
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Order status updated to "Processing". You can now ship items to warehouse.',
+            'new_status': 'processing',
+            'new_status_display': order.get_status_display()
+        })
+
+    except Exception as e:
+        logger.error(f"Error updating order status: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'message': 'An error occurred while updating order status.'
+        }, status=500)
 
 
 def product_detail(request, product_id):
@@ -1864,12 +2310,16 @@ def store_order_detail(request, store_id, order_id):
     ).aggregate(total=Sum('item_total'))
     subtotal = subtotal_qs['total'] or 0
 
+    # Check if all items are shipped to warehouse
+    all_items_shipped = not store_order_items.filter(shipped_to_warehouse=False).exists()
+
     context = {
         'store': store,
         'order': order,
         'order_items': store_order_items,
         'buyer': order.buyer,
         'store_subtotal': subtotal,
+        'all_items_shipped': all_items_shipped,
     }
     return render(request, 'stores/store_order_detail.html', context)
 
@@ -2012,38 +2462,6 @@ def chat_thread_detail(request, store_id, thread_id):
         "messages": messages,
         "thread_id": order.id,
     })
-
-
-@login_required
-def store_order_detail(request, store_id, order_id):
-    store = get_object_or_404(Store, id=store_id, owner=request.user)
-    order = get_object_or_404(Order, id=order_id)
-
-    store_order_items = (
-        order.items
-        .filter(product__seller=store.owner)
-        .select_related('product')
-    )
-
-    if not store_order_items.exists():
-        raise Http404("No items in this order belong to your store.")
-
-    chat_messages = order.chat_messages.all().select_related('sender')
-
-    store_subtotal = sum(
-        (Decimal(item.get_total_price()) for item in store_order_items),
-        Decimal("0.00")
-    )
-
-    context = {
-        "store": store,
-        "order": order,
-        "order_items": store_order_items,
-        "buyer": order.buyer,
-        "store_subtotal": store_subtotal,
-        "chat_messages": chat_messages,
-    }
-    return render(request, "stores/store_order_detail.html", context)
 
 
 def _get_order_seller_users(order):

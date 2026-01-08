@@ -1,4 +1,4 @@
-from .models import Shipment
+from .models import Shipment, WarehouseShipmentNotification
 
 def logistics_nav_counts(request):
     """
@@ -13,4 +13,18 @@ def logistics_nav_counts(request):
 
     return {
         'nav_active_shipments_count': active_shipments_count,
+    }
+
+
+def notification_context(request):
+    """
+    Add notification count to all templates.
+    """
+    if request.user.is_authenticated and hasattr(request.user, 'is_logistic') and request.user.is_logistic:
+        unread_count = WarehouseShipmentNotification.get_unread_count(request.user)
+        return {
+            'notification_unread_count': unread_count,
+        }
+    return {
+        'notification_unread_count': 0,
     }

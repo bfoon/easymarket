@@ -3,8 +3,8 @@ from django.db import transaction
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
-from logistics.models import Shipment
-from orders.models import Order
+from logistics.models import Shipment, WarehouseShipmentNotification
+from orders.models import Order, OrderItem
 
 
 def generate_tracking_number_from_order_id(order_id: int) -> str:
@@ -67,3 +67,27 @@ def shipment_post_save_handler(sender, instance: Shipment, created: bool, **kwar
             order.save(update_fields=list(set(changed_fields)))
 
     transaction.on_commit(_on_commit)
+
+@receiver(post_save, sender=OrderItem)
+def create_warehouse_shipping_notification(sender, instance, created, **kwargs):
+    """
+    Automatically create notification when item marked as shipped to warehouse.
+    """
+    # Only create notification if shipped_to_warehouse changed to True
+    if not created and instance.shipped_to_warehouse:
+        # Check if this is a new shipment (not already notified)
+        try:
+            old_instance = OrderItem.objects.get(pk=instance.pk)
+            if not old_instance.shipped_to_warehouse:
+                # Item just marked as shipped - create notification
+                store = instance.product.store
+                order = instance.order
+
+                # Create notification for all logistics users
+                WarehouseShipmentNotification.create_item_shipped_notification(
+                    order=order,
+                    store=store,
+                    items_count=1
+                )
+        except OrderItem.DoesNotExist:
+            pass

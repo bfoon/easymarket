@@ -254,6 +254,13 @@ notification_patterns = [
     path('<int:pk>/mark-read/', views.mark_notification_read, name='mark_notification_read'),
     path('mark-all-read/', views.mark_all_notifications_read, name='mark_all_read'),
     path('settings/', views.notification_settings, name='notification_settings'),
+    # Notifications
+    path('notifications/', views.notifications_list, name='notifications_list'),
+    path('notifications/dropdown/', views.notification_dropdown, name='notification_dropdown'),
+    path('notifications/<int:notification_id>/mark-read/', views.notification_mark_as_read,
+         name='notification_mark_as_read'),
+    path('notifications/mark-all-read/', views.notification_mark_all_as_read, name='notification_mark_all_as_read'),
+    path('notifications/<int:notification_id>/', views.notification_detail, name='notification_detail'),
 ]
 
 # ============================================================================

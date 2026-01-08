@@ -22,6 +22,7 @@ from django.utils.translation import gettext_lazy as _
 import qrcode
 from io import BytesIO
 from django.core.files.base import ContentFile
+from django.urls import reverse
 
 from orders.models import Order, ShippingAddress, OrderItem
 
@@ -553,6 +554,39 @@ class Vehicle(TimeStampedModel, ActiveModel):
 # SHIPMENT MODELS
 # ============================================================================
 
+class ShipmentItem(models.Model):
+    """
+    Tracks which OrderItems are included in which Shipment.
+    Allows multiple shipments for the same order with different items.
+    """
+    shipment = models.ForeignKey(
+        'logistics.Shipment',
+        on_delete=models.CASCADE,
+        related_name='shipment_items'
+    )
+    order_item = models.ForeignKey(
+        'orders.OrderItem',
+        on_delete=models.CASCADE,
+        related_name='shipment_items'
+    )
+    quantity = models.PositiveIntegerField()  # Quantity in this specific shipment
+
+    # Track when this item was added to the shipment
+    added_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['shipment', 'order_item']
+        verbose_name = 'Shipment Item'
+        verbose_name_plural = 'Shipment Items'
+        ordering = ['added_at']
+
+    def __str__(self):
+        return f"{self.order_item.product.name} x{self.quantity} - Shipment #{self.shipment.id}"
+
+    def get_total_price(self):
+        """Calculate total price for this item in the shipment"""
+        return self.order_item.discounted_unit_price * self.quantity
+
 class Shipment(TimeStampedModel):
     """
     Core shipment model representing a delivery from warehouse to customer.
@@ -647,6 +681,10 @@ class Shipment(TimeStampedModel):
         null=True,
         blank=True,
         verbose_name=_("Order")
+    )
+    shipment_number = models.PositiveIntegerField(
+        default=1,
+        help_text="Sequential number for this order's shipments"
     )
 
     # Tracking Information
@@ -754,9 +792,16 @@ class Shipment(TimeStampedModel):
         verbose_name=_("Shipping Cost")
     )
 
+    def save(self, *args, **kwargs):
+        """Generate tracking number if not provided."""
+        if not self.tracking_number:
+            self.tracking_number = self._generate_tracking_number()
+        super().save(*args, **kwargs)
+
     class Meta:
         verbose_name = _("Shipment")
         verbose_name_plural = _("Shipments")
+        unique_together = ['order', 'shipment_number']
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['tracking_number']),
@@ -767,14 +812,9 @@ class Shipment(TimeStampedModel):
             models.Index(fields=['-collect_time']),
         ]
 
+
     def __str__(self) -> str:
         return f"Shipment {self.tracking_number or f'#{self.id}'}"
-
-    def save(self, *args, **kwargs):
-        """Generate tracking number if not provided."""
-        if not self.tracking_number:
-            self.tracking_number = self._generate_tracking_number()
-        super().save(*args, **kwargs)
 
     def _generate_tracking_number(self) -> str:
         """Generate unique tracking number."""
@@ -843,6 +883,31 @@ class Shipment(TimeStampedModel):
             'returned': 'secondary',
         }
         return status_colors.get(self.status, 'secondary')
+
+    def __str__(self):
+        if self.order:
+            return f"Shipment #{self.shipment_number} for Order #{self.order.id}"
+        return f"Shipment #{self.id}"
+
+    def get_items_count(self):
+        """Get count of items in this shipment"""
+        return self.shipment_items.count()
+
+    def get_total_value(self):
+        """Calculate total value of all items in this shipment"""
+        return sum(item.get_total_price() for item in self.shipment_items.all())
+
+    def get_items_list(self):
+        """Get list of items with details"""
+        return [
+            {
+                'product_name': item.order_item.product.name,
+                'sku': getattr(item.order_item.product, 'sku', 'N/A'),
+                'quantity': item.quantity,
+                'price': item.get_total_price()
+            }
+            for item in self.shipment_items.all()
+        ]
 
 
 class ShipmentBox(TimeStampedModel):
@@ -1005,3 +1070,155 @@ class DriverLocation(models.Model):
     class Meta:
         ordering = ["-recorded_at"]
         indexes = [models.Index(fields=["driver", "-recorded_at"])]
+
+
+class WarehouseShipmentNotification(models.Model):
+    """
+    Notifications for items marked as shipped to warehouse.
+    Sent to logistics users when store owners mark items.
+    """
+
+    NOTIFICATION_TYPES = [
+        ('item_shipped', 'Item Shipped to Warehouse'),
+        ('all_items_shipped', 'All Items Shipped'),
+        ('shipment_created', 'Shipment Created'),
+    ]
+
+    # Recipients
+    recipient = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='warehouse_notifications'
+    )
+
+    # Notification details
+    notification_type = models.CharField(
+        max_length=20,
+        choices=NOTIFICATION_TYPES,
+        default='item_shipped'
+    )
+
+    # Related objects
+    order = models.ForeignKey(
+        'orders.Order',
+        on_delete=models.CASCADE,
+        related_name='warehouse_notifications'
+    )
+    store = models.ForeignKey(
+        'stores.Store',
+        on_delete=models.CASCADE,
+        related_name='warehouse_notifications',
+        null=True,
+        blank=True
+    )
+
+    # Notification content
+    title = models.CharField(max_length=255)
+    message = models.TextField()
+    items_count = models.PositiveIntegerField(default=1)
+
+    # Status tracking
+    is_read = models.BooleanField(default=False)
+    read_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['recipient', 'is_read', '-created_at']),
+            models.Index(fields=['order', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.notification_type} - Order #{self.order.id} ({self.recipient.username})"
+
+    def mark_as_read(self):
+        """Mark notification as read"""
+        if not self.is_read:
+            self.is_read = True
+            self.read_at = timezone.now()
+            self.save(update_fields=['is_read', 'read_at'])
+
+    def get_absolute_url(self):
+        """Get URL to view this notification's order"""
+        return reverse('logistics:order_detail', kwargs={'order_id': self.order.id})
+
+    def get_time_since(self):
+        """Get human-readable time since creation"""
+        from django.utils.timesince import timesince
+        return timesince(self.created_at)
+
+    @staticmethod
+    def create_item_shipped_notification(order, store, items_count=1):
+        """
+        Create notifications for all logistics users when item(s) shipped.
+
+        Args:
+            order: Order instance
+            store: Store instance
+            items_count: Number of items in this notification
+        """
+        logistics_users = User.objects.filter(is_logistic=True, is_active=True)
+
+        notifications = []
+        for user in logistics_users:
+            notification = WarehouseShipmentNotification.objects.create(
+                recipient=user,
+                notification_type='item_shipped',
+                order=order,
+                store=store,
+                title=f"Items shipped to warehouse - Order #{order.id}",
+                message=f"{store.name} marked {items_count} item(s) as shipped to warehouse for Order #{order.id}",
+                items_count=items_count
+            )
+            notifications.append(notification)
+
+        return notifications
+
+    @staticmethod
+    def create_all_items_shipped_notification(order, store, items_count):
+        """Create notification when all items in order are shipped."""
+        logistics_users = User.objects.filter(is_logistic=True, is_active=True)
+
+        notifications = []
+        for user in logistics_users:
+            notification = WarehouseShipmentNotification.objects.create(
+                recipient=user,
+                notification_type='all_items_shipped',
+                order=order,
+                store=store,
+                title=f"All items ready - Order #{order.id}",
+                message=f"All {items_count} item(s) from {store.name} are now shipped to warehouse",
+                items_count=items_count
+            )
+            notifications.append(notification)
+
+        return notifications
+
+    @staticmethod
+    def get_unread_count(user):
+        """Get count of unread notifications for user"""
+        return WarehouseShipmentNotification.objects.filter(
+            recipient=user,
+            is_read=False
+        ).count()
+
+    @staticmethod
+    def get_recent_notifications(user, limit=10):
+        """Get recent notifications for user"""
+        return WarehouseShipmentNotification.objects.filter(
+            recipient=user
+        ).select_related('order', 'store')[:limit]
+
+    @staticmethod
+    def mark_all_as_read(user):
+        """Mark all notifications as read for user"""
+        return WarehouseShipmentNotification.objects.filter(
+            recipient=user,
+            is_read=False
+        ).update(
+            is_read=True,
+            read_at=timezone.now()
+        )
+

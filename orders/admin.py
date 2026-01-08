@@ -39,16 +39,37 @@ class OrderAdmin(admin.ModelAdmin):
     inlines = [OrderItemInline]
     readonly_fields = ('created_at', 'updated_at', 'shipped_date', 'delivered_date', 'payment_date')
 
-# orders/admin.py
-@admin.register(OrderItem)
-class OrderItemAdmin(admin.ModelAdmin):
-    list_display = ("order", "product", "quantity", "base_unit_price", "discount_type", "discount_value", "discounted_unit_price")
-    list_filter = ("discount_type",)
-    fields = ("order", "product", "quantity", "selected_features", "price_at_time",
-              "discount_type", "discount_value",
-              "shipped_to_warehouse", "shipped_at")
-    readonly_fields = ()
 
+@admin.register(OrderItem)
+
+class OrderItemAdmin(admin.ModelAdmin):
+    list_display = [
+        'product',
+        'order',
+        'quantity',
+        'shipped_to_warehouse',
+        'shipped_at',
+        'current_shipment'
+    ]
+    list_filter = ['shipped_to_warehouse', 'created_at']
+    search_fields = ['product__name', 'order__id']
+    readonly_fields = ['shipped_at', 'created_at']  # Make shipped_at readonly
+
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('order', 'product', 'quantity', 'price_at_time')
+        }),
+        ('Discount', {
+            'fields': ('discount_type', 'discount_value')
+        }),
+        ('Warehouse Shipping', {
+            'fields': ('shipped_to_warehouse', 'shipped_at', 'current_shipment'),
+            'description': 'shipped_at is automatically set when shipped_to_warehouse becomes True'
+        }),
+        ('Timestamps', {
+            'fields': ('created_at',)
+        })
+    )
 
 @admin.register(OrderStatusHistory)
 class OrderStatusHistoryAdmin(admin.ModelAdmin):

@@ -20,23 +20,33 @@ class DateTimeLocalWidget(forms.DateTimeInput):
 
 
 class ShipmentForm(forms.ModelForm):
+    """
+    Enhanced shipment form that integrates with warehouse shipping system.
+
+    Features:
+    - Shows only orders with items marked as "shipped to warehouse"
+    - Supports multiple shipments per order
+    - Automatically includes only warehouse-shipped items
+    - Sequential shipment numbering
+    """
+
     class Meta:
         model = Shipment
         fields = [
-            "shipping_address", "warehouse", "driver", "vehicle", "logistic_office",
-            "collect_time", "estimated_dropoff_time", "order", "weight_kg",
-            "size_cubic_meters", "material_type", "shipment_type", "packing_type",
-            "container_type", "verification_photo", "status"
+            "order", "shipping_address", "warehouse", "driver", "vehicle",
+            "logistic_office", "collect_time", "estimated_dropoff_time",
+            "weight_kg", "size_cubic_meters", "material_type", "shipment_type",
+            "packing_type", "container_type", "verification_photo", "status"
         ]
         widgets = {
             "collect_time": DateTimeLocalWidget(attrs={"class": "form-control"}),
             "estimated_dropoff_time": DateTimeLocalWidget(attrs={"class": "form-control"}),
+            "order": forms.Select(attrs={"class": "form-select"}),
             "shipping_address": forms.Select(attrs={"class": "form-select"}),
             "warehouse": forms.Select(attrs={"class": "form-select"}),
             "driver": forms.Select(attrs={"class": "form-select"}),
             "vehicle": forms.Select(attrs={"class": "form-select"}),
             "logistic_office": forms.Select(attrs={"class": "form-select"}),
-            "order": forms.Select(attrs={"class": "form-select"}),
             "weight_kg": forms.NumberInput(attrs={"class": "form-control", "step": "0.1", "min": "0"}),
             "size_cubic_meters": forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": "0"}),
             "material_type": forms.Select(attrs={"class": "form-select"}),
@@ -50,6 +60,7 @@ class ShipmentForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        # Set up querysets for related fields
         self.fields["warehouse"].queryset = Warehouse.objects.filter(is_active=True).order_by("name")
         self.fields["driver"].queryset = Driver.objects.select_related("user").filter(
             is_active=True, user__is_active=True
@@ -62,18 +73,31 @@ class ShipmentForm(forms.ModelForm):
         is_new = not self.instance or not self.instance.pk
 
         if is_new:
-            # ✅ Only processing orders that DO NOT have any shipment yet
+            # NEW LOGIC: Show orders that have items marked as "shipped to warehouse"
+            # that are not yet in a shipment
+
+            # Get order IDs that have items ready for shipment
+            ready_order_ids = OrderItem.objects.filter(
+                shipped_to_warehouse=True,
+                current_shipment__isnull=True
+            ).values_list('order_id', flat=True).distinct()
+
+            # Filter orders to only those with ready items and in processing or shipped status
             eligible_orders = (
                 Order.objects
-                .filter(status="processing")
-                .filter(shipments__isnull=True)
+                .filter(id__in=ready_order_ids)
+                .filter(status__in=['processing', 'shipped'])
                 .distinct()
                 .order_by("-created_at")
             )
-            self.fields["order"].queryset = eligible_orders
-            self.fields["order"].help_text = "Only 'Processing' orders without any shipment are available."
 
-            # ✅ Shipping addresses only for eligible orders
+            self.fields["order"].queryset = eligible_orders
+            self.fields["order"].help_text = (
+                "Only orders with items marked 'shipped to warehouse' are available. "
+                "Multiple shipments can be created for the same order."
+            )
+
+            # Shipping addresses for eligible orders
             self.fields["shipping_address"].queryset = (
                 ShippingAddress.objects
                 .filter(order__in=eligible_orders)
@@ -82,8 +106,9 @@ class ShipmentForm(forms.ModelForm):
             )
 
             self.fields["status"].initial = "pending"
+
         else:
-            # editing an existing shipment
+            # Editing existing shipment
             self.fields["order"].queryset = Order.objects.order_by("-created_at")
             self.fields["order"].disabled = True
 
@@ -99,19 +124,30 @@ class ShipmentForm(forms.ModelForm):
         self.fields["size_cubic_meters"].help_text = "Size in cubic meters"
         self.fields["collect_time"].help_text = "When the shipment will be collected"
         self.fields["estimated_dropoff_time"].help_text = "Estimated delivery time"
+        self.fields["order"].help_text += " Items marked 'shipped to warehouse' will be automatically included."
 
     def clean_order(self):
+        """
+        Validate that order has items available for shipment.
+        Allow multiple shipments for same order (NEW BEHAVIOR).
+        """
         order = self.cleaned_data.get("order")
         if not order:
             return order
 
-        # ✅ Safety check: prevent creating another shipment for same order
-        qs = order.shipments.all()
-        if self.instance.pk:
-            qs = qs.exclude(pk=self.instance.pk)
+        # Check if order has items ready for shipment
+        available_items = OrderItem.objects.filter(
+            order=order,
+            shipped_to_warehouse=True,
+            current_shipment__isnull=True
+        )
 
-        if qs.exists():
-            raise ValidationError("This order already has a shipment.")
+        if not available_items.exists():
+            raise ValidationError(
+                "This order has no items available for shipment. "
+                "Items must be marked as 'shipped to warehouse' first."
+            )
+
         return order
 
     def clean(self):
@@ -122,12 +158,14 @@ class ShipmentForm(forms.ModelForm):
         vehicle = cleaned_data.get("vehicle")
         weight_kg = cleaned_data.get("weight_kg")
 
+        # Time validations
         if collect_time and estimated_dropoff_time:
             if collect_time >= estimated_dropoff_time:
                 self.add_error("estimated_dropoff_time", "Estimated dropoff time must be after collection time.")
             if not self.instance.pk and collect_time < timezone.now():
                 self.add_error("collect_time", "Collection time cannot be in the past.")
 
+        # Driver/Vehicle validations
         if driver and vehicle:
             if vehicle.driver and vehicle.driver != driver:
                 self.add_error(
@@ -135,6 +173,7 @@ class ShipmentForm(forms.ModelForm):
                     f"Vehicle {vehicle.plate_number} is assigned to {vehicle.driver.user.get_full_name()}."
                 )
 
+        # Weight capacity validation
         if vehicle and weight_kg and getattr(vehicle, "capacity_kg", None):
             if vehicle.capacity_kg and weight_kg > vehicle.capacity_kg:
                 self.add_error(
@@ -143,6 +182,109 @@ class ShipmentForm(forms.ModelForm):
                 )
 
         return cleaned_data
+
+    def save(self, commit=True):
+        """
+        Override save to:
+        1. Set shipment_number automatically
+        2. Create ShipmentItem entries
+        3. Update order status if needed
+        """
+        shipment = super().save(commit=False)
+        order = shipment.order
+
+        # Set shipment number if new
+        if not shipment.pk:
+            shipment.shipment_number = order.get_next_shipment_number()
+
+        if commit:
+            shipment.save()
+
+            # Create ShipmentItem entries for items marked as shipped
+            if not shipment.pk:  # Only on creation
+                available_items = OrderItem.objects.filter(
+                    order=order,
+                    shipped_to_warehouse=True,
+                    current_shipment__isnull=True
+                )
+
+                for order_item in available_items:
+                    ShipmentItem.objects.create(
+                        shipment=shipment,
+                        order_item=order_item,
+                        quantity=order_item.quantity
+                    )
+
+                    # Link item to this shipment
+                    order_item.current_shipment = shipment
+                    order_item.save(update_fields=['current_shipment'])
+
+                # Update order status to 'shipped' if first shipment
+                if shipment.shipment_number == 1 and order.status == 'processing':
+                    order.status = 'shipped'
+                    order.save(update_fields=['status'])
+
+        return shipment
+
+
+# Additional form for creating shipment directly from order page
+class QuickShipmentForm(forms.ModelForm):
+    """
+    Simplified form for creating shipment from store order page.
+    Pre-fills order and only asks for essential details.
+    """
+
+    class Meta:
+        model = Shipment
+        fields = ["warehouse", "driver", "vehicle", "collect_time", "estimated_dropoff_time"]
+        widgets = {
+            "collect_time": DateTimeLocalWidget(attrs={"class": "form-control"}),
+            "estimated_dropoff_time": DateTimeLocalWidget(attrs={"class": "form-control"}),
+            "warehouse": forms.Select(attrs={"class": "form-select"}),
+            "driver": forms.Select(attrs={"class": "form-select"}),
+            "vehicle": forms.Select(attrs={"class": "form-select"}),
+        }
+
+    def __init__(self, order=None, *args, **kwargs):
+        self.order = order
+        super().__init__(*args, **kwargs)
+
+        self.fields["warehouse"].queryset = Warehouse.objects.filter(is_active=True)
+        self.fields["driver"].queryset = Driver.objects.filter(is_active=True)
+        self.fields["vehicle"].queryset = Vehicle.objects.filter(is_active=True)
+
+        # Make all fields optional for quick creation
+        for field in self.fields.values():
+            field.required = False
+
+    def save(self, commit=True):
+        shipment = super().save(commit=False)
+        shipment.order = self.order
+        shipment.shipping_address = getattr(self.order, 'shipping_address', None)
+        shipment.shipment_number = self.order.get_next_shipment_number()
+        shipment.status = 'pending'
+
+        if commit:
+            shipment.save()
+
+            # Create ShipmentItem entries
+            available_items = self.order.get_shipped_items_without_shipment()
+            for order_item in available_items:
+                ShipmentItem.objects.create(
+                    shipment=shipment,
+                    order_item=order_item,
+                    quantity=order_item.quantity
+                )
+                order_item.current_shipment = shipment
+                order_item.save(update_fields=['current_shipment'])
+
+            # Update order status if first shipment
+            if shipment.shipment_number == 1 and self.order.status == 'processing':
+                self.order.status = 'shipped'
+                self.order.save(update_fields=['status'])
+
+        return shipment
+
 
 class DriverForm(forms.ModelForm):
     """

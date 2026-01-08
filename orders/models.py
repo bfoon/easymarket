@@ -172,6 +172,29 @@ class Order(models.Model):
     def is_in_transit(self):
         return self.shipments.filter(status='in_transit').exists()
 
+    def get_shipment_count(self):
+        """Get total number of shipments for this order"""
+        return self.shipments.count()
+
+    def get_next_shipment_number(self):
+        """Get the next shipment number for this order (1, 2, 3, etc.)"""
+        return self.shipments.count() + 1
+
+    def has_unshipped_items(self):
+        """Check if there are items not yet shipped to warehouse"""
+        return self.items.filter(shipped_to_warehouse=False).exists()
+
+    def get_shipped_items_without_shipment(self):
+        """Get items marked as shipped but not yet in a shipment"""
+        return self.items.filter(
+            shipped_to_warehouse=True,
+            current_shipment__isnull=True
+        )
+
+    def can_create_shipment(self):
+        """Check if a new shipment can be created"""
+        return self.get_shipped_items_without_shipment().exists()
+
     def save(self, *args, **kwargs):
         is_new = self.pk is None
 
@@ -197,13 +220,18 @@ class Order(models.Model):
 
 
 class OrderItem(models.Model):
+    """
+    Order item with automatic shipped_at timestamp.
+    When shipped_to_warehouse changes to True, shipped_at is automatically set.
+    """
+
     order = models.ForeignKey('orders.Order', on_delete=models.CASCADE, related_name='items')
     product = models.ForeignKey('marketplace.Product', related_name='order_items', on_delete=models.CASCADE)
     quantity = models.PositiveIntegerField()
     selected_features = models.JSONField(blank=True, null=True)
     price_at_time = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
 
-    # NEW: per-item discount
+    # Discount fields
     DISCOUNT_NONE = 'none'
     DISCOUNT_PERCENT = 'percent'
     DISCOUNT_AMOUNT = 'amount'
@@ -215,67 +243,86 @@ class OrderItem(models.Model):
     discount_type = models.CharField(max_length=10, choices=DISCOUNT_CHOICES, default=DISCOUNT_NONE)
     discount_value = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
 
+    # Warehouse shipping tracking
     shipped_to_warehouse = models.BooleanField(default=False)
-    shipped_at = models.DateTimeField(null=True, blank=True)
+    shipped_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Automatically set when shipped_to_warehouse becomes True"
+    )
+
+    # Track which shipment this item is in
+    current_shipment = models.ForeignKey(
+        'logistics.Shipment',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='current_items',
+        help_text="The shipment this item is currently assigned to"
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ['order', 'product']  # NOTE: If you ever need same product twice (different features/discounts),
-                                                # remove this, or include features in uniqueness.
+        unique_together = ['order', 'product']
 
     def __str__(self):
         return f"{self.product.name} x {self.quantity}"
 
-    # ---- Pricing helpers ----
+    def save(self, *args, **kwargs):
+        """
+        Override save to automatically set shipped_at when shipped_to_warehouse becomes True.
+        """
+        # Check if this is an update (has pk) and shipped_to_warehouse changed to True
+        if self.pk:
+            try:
+                # Get the old instance from database
+                old_instance = OrderItem.objects.get(pk=self.pk)
+
+                # If shipped_to_warehouse changed from False to True
+                if not old_instance.shipped_to_warehouse and self.shipped_to_warehouse:
+                    # Automatically set shipped_at timestamp
+                    if not self.shipped_at:
+                        self.shipped_at = timezone.now()
+
+            except OrderItem.DoesNotExist:
+                # New instance, skip check
+                pass
+        else:
+            # New instance being created
+            # If already marked as shipped, set timestamp
+            if self.shipped_to_warehouse and not self.shipped_at:
+                self.shipped_at = timezone.now()
+
+        # Lock in snapshot price if missing
+        if self.price_at_time is None:
+            self.price_at_time = self.product.price
+
+        # Run validations
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    # Pricing helpers
     @property
     def base_unit_price(self) -> Decimal:
-        # Always work with a Decimal
         p = self.price_at_time if self.price_at_time is not None else self.product.price
-        return (p if isinstance(p, Decimal) else Decimal(str(p))).quantize(Decimal('0.01'), ROUND_HALF_UP)
+        return (p if isinstance(p, Decimal) else Decimal(str(p))).quantize(Decimal('0.01'))
 
     def get_unit_discount_amount(self) -> Decimal:
         if self.discount_type == self.DISCOUNT_PERCENT:
             pct = max(Decimal('0'), min(Decimal('100'), self.discount_value or Decimal('0')))
-            return (self.base_unit_price * pct / Decimal('100')).quantize(Decimal('0.01'), ROUND_HALF_UP)
+            return (self.base_unit_price * pct / Decimal('100')).quantize(Decimal('0.01'))
         elif self.discount_type == self.DISCOUNT_AMOUNT:
             amt = max(Decimal('0.00'), self.discount_value or Decimal('0.00'))
-            # Never allow discount > base price
-            return min(amt, self.base_unit_price).quantize(Decimal('0.01'), ROUND_HALF_UP)
+            return min(amt, self.base_unit_price).quantize(Decimal('0.01'))
         return Decimal('0.00')
 
     @property
     def discounted_unit_price(self) -> Decimal:
-        return (self.base_unit_price - self.get_unit_discount_amount()).quantize(Decimal('0.01'), ROUND_HALF_UP)
+        return (self.base_unit_price - self.get_unit_discount_amount()).quantize(Decimal('0.01'))
 
     def get_total_price(self) -> Decimal:
-        return (self.discounted_unit_price * self.quantity).quantize(Decimal('0.01'), ROUND_HALF_UP)
-
-    # ---- Validation & defaults ----
-    def clean(self):
-        # Basic validation for discount values
-        if self.discount_type == self.DISCOUNT_PERCENT:
-            if self.discount_value is None:
-                raise ValidationError({'discount_value': 'Percent discount is required.'})
-            if self.discount_value < 0 or self.discount_value > 100:
-                raise ValidationError({'discount_value': 'Percent must be between 0 and 100.'})
-        elif self.discount_type == self.DISCOUNT_AMOUNT:
-            if self.discount_value is None:
-                raise ValidationError({'discount_value': 'Amount discount is required.'})
-            if self.discount_value < 0:
-                raise ValidationError({'discount_value': 'Amount cannot be negative.'})
-
-        # Ensure discounted price not below zero
-        if self.discounted_unit_price < 0:
-            raise ValidationError('Discounted unit price cannot be negative.')
-
-    def save(self, *args, **kwargs):
-        # lock in snapshot price if missing
-        if self.price_at_time is None:
-            self.price_at_time = self.product.price
-        # run validations (optional but recommended)
-        self.full_clean()
-        super().save(*args, **kwargs)
+        return (self.discounted_unit_price * self.quantity).quantize(Decimal('0.01'))
 
 class ShippingAddress(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='shipping_addresses')

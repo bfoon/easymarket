@@ -143,4 +143,12 @@ urlpatterns = [
     path('manage/<uuid:store_id>/stock/<int:product_id>/update/', views.update_stock, name='update_stock'),
     path('manage/<uuid:store_id>/stock/history/', views.inventory_history, name='inventory_history'),
     path('manage/<uuid:store_id>/stock/export/', views.export_stock, name='export_stock'),
+    # Warehouse shipping toggle
+    path('items/<int:item_id>/toggle-warehouse-shipped/',
+         views.toggle_item_warehouse_shipped,
+         name='toggle_item_warehouse_shipped'),
+    path('orders/<int:order_id>/update-status-processing/',
+         views.update_order_status_to_processing,
+         name='update_order_status_to_processing'),
+
 ]

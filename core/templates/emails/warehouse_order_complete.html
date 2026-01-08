@@ -1,0 +1,317 @@
+<!-- templates/emails/warehouse_order_complete.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Complete Order Shipped to Warehouse</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 650px;
+            margin: 20px auto;
+            background: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #22c55e 0%, #059669 100%);
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 26px;
+            font-weight: 700;
+        }
+        .header .icon {
+            font-size: 56px;
+            margin-bottom: 10px;
+        }
+        .header .badge {
+            display: inline-block;
+            background: rgba(255,255,255,0.2);
+            padding: 5px 15px;
+            border-radius: 20px;
+            margin-top: 10px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .content {
+            padding: 30px 20px;
+        }
+        .summary-box {
+            background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+            border: 2px solid #22c55e;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 25px;
+            text-align: center;
+        }
+        .summary-box h2 {
+            margin: 0 0 10px 0;
+            color: #166534;
+            font-size: 20px;
+        }
+        .summary-stats {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 15px;
+        }
+        .stat {
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: #166534;
+            display: block;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+        .info-section {
+            margin: 25px 0;
+            border-left: 4px solid #1a5f9e;
+            padding-left: 15px;
+        }
+        .info-section h3 {
+            margin: 0 0 10px 0;
+            color: #1a5f9e;
+            font-size: 16px;
+        }
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .info-label {
+            color: #666;
+            font-weight: 500;
+        }
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background: #f8f9fa;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .items-table thead {
+            background: #1a5f9e;
+            color: white;
+        }
+        .items-table th {
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 13px;
+        }
+        .items-table td {
+            padding: 12px;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .items-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+        .items-table tbody tr:hover {
+            background: #e9ecef;
+        }
+        .total-row {
+            background: #1a5f9e;
+            color: white;
+            font-weight: 700;
+            font-size: 16px;
+        }
+        .total-row td {
+            border-bottom: none !important;
+        }
+        .alert-box {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 25px 0;
+        }
+        .alert-box strong {
+            color: #856404;
+            display: block;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+        .alert-box ul {
+            margin: 10px 0 0 0;
+            padding-left: 20px;
+            color: #856404;
+        }
+        .alert-box li {
+            margin: 5px 0;
+        }
+        .button {
+            display: inline-block;
+            background: #1a5f9e;
+            color: white;
+            padding: 14px 35px;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            margin: 20px 0;
+            font-size: 16px;
+        }
+        .footer {
+            background: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+        }
+        .timestamp {
+            color: #999;
+            font-size: 14px;
+            margin-top: 25px;
+            text-align: center;
+            padding-top: 20px;
+            border-top: 2px solid #eee;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="icon">✅</div>
+            <h1>Complete Order Shipped to Warehouse</h1>
+            <div class="badge">ALL ITEMS RECEIVED</div>
+        </div>
+
+        <div class="content">
+            <div class="summary-box">
+                <h2>Order Summary</h2>
+                <div class="summary-stats">
+                    <div class="stat">
+                        <span class="stat-value">{{ items.count }}</span>
+                        <span class="stat-label">Products</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-value">{{ total_items }}</span>
+                        <span class="stat-label">Total Units</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-value">D{{ total_value }}</span>
+                        <span class="stat-label">Total Value</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="info-section">
+                <h3>📋 Order Information</h3>
+                <div class="info-row">
+                    <span class="info-label">Order ID:</span>
+                    <strong>#{{ order.id }}</strong>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Store:</span>
+                    <strong>{{ store.name }}</strong>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Buyer:</span>
+                    <span>{{ order.buyer.get_full_name }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Buyer Email:</span>
+                    <span>{{ order.buyer.email }}</span>
+                </div>
+                {% if order.buyer.phone %}
+                <div class="info-row">
+                    <span class="info-label">Buyer Phone:</span>
+                    <span>{{ order.buyer.phone }}</span>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="info-section">
+                <h3>📦 Items Shipped to Warehouse</h3>
+            </div>
+
+            <table class="items-table">
+                <thead>
+                    <tr>
+                        <th>Product</th>
+                        <th style="text-align: center;">Quantity</th>
+                        <th style="text-align: right;">Unit Price</th>
+                        <th style="text-align: right;">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in items %}
+                    <tr>
+                        <td>
+                            <strong>{{ item.product.name }}</strong>
+                            {% if item.product.sku %}
+                            <br><small style="color: #666;">SKU: {{ item.product.sku }}</small>
+                            {% endif %}
+                        </td>
+                        <td style="text-align: center;">{{ item.quantity }}</td>
+                        <td style="text-align: right;">D{{ item.price_per_unit }}</td>
+                        <td style="text-align: right;"><strong>D{{ item.get_total_price }}</strong></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr class="total-row">
+                        <td colspan="3">TOTAL VALUE</td>
+                        <td style="text-align: right;">D{{ total_value }}</td>
+                    </tr>
+                </tfoot>
+            </table>
+
+            <div class="alert-box">
+                <strong>⚠️ Action Required - Warehouse Team</strong>
+                <p style="margin: 5px 0;">Please complete the following tasks:</p>
+                <ul>
+                    <li>Verify all {{ total_items }} units have been physically received</li>
+                    <li>Inspect items for damage or discrepancies</li>
+                    <li>Update warehouse management system with received quantities</li>
+                    <li>Assign storage locations for all items</li>
+                    <li>Report any issues or shortages immediately</li>
+                    <li>Confirm receipt in the EasyMarket system</li>
+                </ul>
+            </div>
+
+            <center>
+                <a href="{{ site_url }}/stores/manage/{{ store.id }}/orders/{{ order.id }}/" class="button">
+                    View Complete Order Details →
+                </a>
+            </center>
+
+            <div class="timestamp">
+                <strong>All items completed at:</strong><br>
+                {{ completed_at|date:"F d, Y at g:i A" }}
+            </div>
+        </div>
+
+        <div class="footer">
+            <p><strong>EasyMarket Logistics System</strong></p>
+            <p>This is an automated notification for complete order receipt.</p>
+            <p>For urgent issues, contact: <strong>{{ logistics_contact }}</strong></p>
+            <hr style="border: none; border-top: 1px solid #ddd; margin: 15px 0;">
+            <p style="font-size: 11px; color: #999;">
+                Order #{{ order.id }} | Store: {{ store.name }}<br>
+                Generated: {{ completed_at|date:"Y-m-d H:i:s" }}
+            </p>
+        </div>
+    </div>
+</body>
+</html>
