@@ -6,4 +6,4 @@ class LogisticsConfig(AppConfig):
     name = 'logistics'
 
     def ready(self):
-        import logistics.signals
+        from . import signals

@@ -1,0 +1,279 @@
+{% extends 'logistics/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container py-4">
+
+  <!-- Header -->
+  <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+    <div>
+      <div class="d-flex align-items-center gap-2">
+        <span class="badge bg-dark"><i class="fas fa-warehouse me-1"></i> Warehouse</span>
+        <span class="badge bg-light text-dark border">
+          <i class="fas fa-receipt me-1"></i> Order #{{ order.id }}
+        </span>
+        <span class="badge bg-info text-dark">
+          <i class="fas fa-info-circle me-1"></i> {{ order.get_status_display }}
+        </span>
+      </div>
+
+      <h3 class="mt-2 mb-1">Warehouse Order Detail</h3>
+      <div class="text-muted small">
+        Focus: items marked <strong>Shipped to Warehouse</strong>, shipments, and warehouse processing.
+      </div>
+    </div>
+
+    <div class="d-flex gap-2">
+      <a href="{% url 'logistics:shipment_create' %}?order={{ order.id }}"
+         class="btn btn-primary">
+        <i class="fas fa-truck-loading me-1"></i> Create Shipment
+      </a>
+
+      <a href="{% url 'logistics:notifications_list' %}" class="btn btn-outline-secondary">
+        <i class="fas fa-bell me-1"></i> Notifications
+      </a>
+    </div>
+  </div>
+
+  <!-- KPI Cards -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-4">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <div class="d-flex justify-content-between">
+            <div>
+              <div class="text-muted small">Ready Quantity</div>
+              <div class="fs-4 fw-bold">{{ total_ready_qty|intcomma }}</div>
+            </div>
+            <div class="fs-3 text-primary"><i class="fas fa-box"></i></div>
+          </div>
+          <div class="small text-muted mt-2">Total items marked shipped-to-warehouse.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <div class="d-flex justify-content-between">
+            <div>
+              <div class="text-muted small">Unassigned Ready</div>
+              <div class="fs-4 fw-bold">{{ unassigned_qty|intcomma }}</div>
+            </div>
+            <div class="fs-3 text-warning"><i class="fas fa-hourglass-half"></i></div>
+          </div>
+          <div class="small text-muted mt-2">Ready items not yet added to a shipment.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="card shadow-sm border-0 h-100">
+        <div class="card-body">
+          <div class="d-flex justify-content-between">
+            <div>
+              <div class="text-muted small">Shipments</div>
+              <div class="fs-4 fw-bold">{{ shipments_count|intcomma }}</div>
+            </div>
+            <div class="fs-3 text-success"><i class="fas fa-truck"></i></div>
+          </div>
+          <div class="small text-muted mt-2">Shipments created for this order.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Layout -->
+  <div class="row g-4">
+
+    <!-- Left: Items -->
+    <div class="col-lg-8">
+
+      <!-- Unassigned Ready Items -->
+      <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
+          <div class="fw-semibold">
+            <i class="fas fa-box-open me-2 text-warning"></i> Ready Items (Not in Shipment)
+          </div>
+          <span class="badge bg-warning text-dark">{{ unassigned_ready_items.count }} line(s)</span>
+        </div>
+
+        <div class="card-body p-0">
+          {% if unassigned_ready_items %}
+            <div class="table-responsive">
+              <table class="table align-middle mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Product</th>
+                    <th>Store</th>
+                    <th class="text-center">Qty</th>
+                    <th class="text-end">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for item in unassigned_ready_items %}
+                  <tr>
+                    <td>
+                      <div class="fw-semibold">{{ item.product.name }}</div>
+                      <div class="small text-muted">SKU: {{ item.product.sku|default:"—" }}</div>
+                    </td>
+                    <td>
+                      <span class="badge bg-light text-dark border">
+                        <i class="fas fa-store me-1"></i>
+                        {{ item.product.store.name|default:"Unknown" }}
+                      </span>
+                    </td>
+                    <td class="text-center">
+                      <span class="badge bg-dark">{{ item.quantity }}</span>
+                    </td>
+                    <td class="text-end">
+                      <a class="btn btn-sm btn-outline-primary"
+                         href="{% url 'logistics:shipment_create' %}?order={{ order.id }}">
+                        <i class="fas fa-plus me-1"></i> Add to Shipment
+                      </a>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <div class="p-4 text-center text-muted">
+              <i class="fas fa-check-circle fs-3 text-success mb-2"></i>
+              <div class="fw-semibold">No unassigned ready items.</div>
+              <div class="small">Everything ready is already assigned or nothing has been marked ready yet.</div>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Assigned Ready Items -->
+      <div class="card shadow-sm border-0">
+        <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
+          <div class="fw-semibold">
+            <i class="fas fa-layer-group me-2 text-primary"></i> Ready Items (Already in Shipment)
+          </div>
+          <span class="badge bg-primary">{{ assigned_ready_items.count }} line(s)</span>
+        </div>
+
+        <div class="card-body p-0">
+          {% if assigned_ready_items %}
+            <div class="table-responsive">
+              <table class="table align-middle mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Product</th>
+                    <th>Store</th>
+                    <th class="text-center">Qty</th>
+                    <th>Shipment</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for item in assigned_ready_items %}
+                  <tr>
+                    <td>
+                      <div class="fw-semibold">{{ item.product.name }}</div>
+                      <div class="small text-muted">SKU: {{ item.product.sku|default:"—" }}</div>
+                    </td>
+                    <td>
+                      <span class="badge bg-light text-dark border">
+                        <i class="fas fa-store me-1"></i>
+                        {{ item.product.store.name|default:"Unknown" }}
+                      </span>
+                    </td>
+                    <td class="text-center"><span class="badge bg-dark">{{ item.quantity }}</span></td>
+                    <td>
+                      {% if item.current_shipment %}
+                        <a class="text-decoration-none"
+                           href="{% url 'logistics:shipment_detail' item.current_shipment.id %}">
+                          <span class="badge bg-success">
+                            <i class="fas fa-truck me-1"></i>
+                            Shipment #{{ item.current_shipment.shipment_number }}
+                          </span>
+                        </a>
+                      {% else %}
+                        <span class="text-muted">—</span>
+                      {% endif %}
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <div class="p-4 text-center text-muted">
+              <i class="fas fa-inbox fs-3 mb-2"></i>
+              <div class="fw-semibold">No assigned items yet.</div>
+              <div class="small">Create a shipment to start grouping ready items.</div>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Right: Shipments + Store breakdown -->
+    <div class="col-lg-4">
+
+      <!-- Shipments Timeline -->
+      <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-white border-0 fw-semibold">
+          <i class="fas fa-truck me-2 text-success"></i> Shipments Timeline
+        </div>
+        <div class="card-body">
+          {% if shipments %}
+            <div class="d-grid gap-2">
+              {% for s in shipments %}
+                <a href="{% url 'logistics:shipment_detail' s.id %}"
+                   class="btn btn-outline-dark text-start">
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                      <div class="fw-semibold">Shipment #{{ s.shipment_number }}</div>
+                      <div class="small text-muted">
+                        Status: {{ s.get_status_display }}{% if s.tracking_number %} • {{ s.tracking_number }}{% endif %}
+                      </div>
+                    </div>
+                    <i class="fas fa-chevron-right"></i>
+                  </div>
+                </a>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="text-muted text-center">
+              <i class="fas fa-route fs-3 mb-2"></i>
+              <div class="fw-semibold">No shipments yet.</div>
+              <div class="small">Create the first shipment when items are ready.</div>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Store Breakdown -->
+      <div class="card shadow-sm border-0">
+        <div class="card-header bg-white border-0 fw-semibold">
+          <i class="fas fa-store me-2 text-primary"></i> Store Breakdown
+        </div>
+        <div class="card-body">
+          {% if store_breakdown %}
+            {% for store_name, data in store_breakdown.items %}
+              <div class="border rounded-3 p-3 mb-3">
+                <div class="d-flex justify-content-between align-items-center">
+                  <div class="fw-semibold">{{ store_name }}</div>
+                  <span class="badge bg-dark">{{ data.qty }} qty</span>
+                </div>
+                <div class="small text-muted mt-1">{{ data.items|length }} line(s)</div>
+              </div>
+            {% endfor %}
+          {% else %}
+            <div class="text-muted text-center">
+              <i class="fas fa-store-slash fs-3 mb-2"></i>
+              <div class="fw-semibold">No ready items yet.</div>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}

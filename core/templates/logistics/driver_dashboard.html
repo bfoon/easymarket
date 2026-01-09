@@ -619,9 +619,12 @@
                     <a href="{% url 'logistics:shipment_detail_map' shipment.id %}" class="btn btn-primary-custom btn-custom">
                       <i class="fas fa-map-location-dot"></i> View Map
                     </a>
-                    <button class="btn btn-success-custom btn-custom btn-start-delivery" data-shipment-id="{{ shipment.id }}">
-                      <i class="fas fa-play"></i> Start
-                    </button>
+                   <button type="button"
+        class="btn btn-success btn-sm"
+        onclick="openStartDeliveryModal({{ shipment.id }})">
+  <i class="fas fa-play-circle me-1"></i> Start
+</button>
+
                   </div>
                 </div>
               </div>
@@ -767,217 +770,337 @@
   </div>
 </div>
 
+<!-- Delivery Confirmation Modal -->
+<div class="modal fade" id="deliveryModal" tabindex="-1" aria-labelledby="deliveryModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="deliveryModalLabel">
+          <i class="fas fa-circle-check text-success"></i> Confirm Delivery
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="alert alert-warning d-flex align-items-start gap-2" role="alert">
+          <i class="fas fa-camera mt-1"></i>
+          <div>
+            <div class="fw-semibold">Delivery proof required</div>
+            <div class="small">Take or upload a clear photo (package at destination / receiver / drop-off point).</div>
+          </div>
+        </div>
+
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Delivery Photo <span class="text-danger">*</span></label>
+            <input type="file"
+                   id="deliveryPhoto"
+                   class="form-control"
+                   accept="image/*"
+                   capture="environment" />
+            <div class="form-text">
+              On mobile, this opens the camera. On desktop, choose an image.
+            </div>
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Preview</label>
+            <div class="border rounded-3 p-2 bg-light" style="min-height: 160px;">
+              <img id="deliveryPhotoPreview" src="" alt="Preview"
+                   style="max-width:100%; max-height:220px; display:none; border-radius:12px;" />
+              <div id="deliveryPhotoEmpty" class="text-muted small">
+                No photo selected yet.
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12">
+            <label class="form-label fw-semibold">Delivery Notes (optional)</label>
+            <textarea id="deliveryNotes" class="form-control" rows="3"
+                      placeholder="Receiver name, exact location, any issues..."></textarea>
+          </div>
+        </div>
+
+        <div id="deliveryModalError" class="mt-3 text-danger small" style="display:none;"></div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+          <i class="fas fa-times"></i> Cancel
+        </button>
+
+        <button type="button" id="confirmDeliveredBtn" class="btn btn-success"
+                onclick="confirmDelivery()">
+          <i class="fas fa-circle-check"></i> Confirm Delivered
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-  let currentShipmentId = null;
-  let refreshing = true;
+let currentShipmentId = null;
 
-  // Update last refresh time
-  function updateLastRefreshTime() {
-    const now = new Date();
-    const timeString = now.toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-    const element = document.getElementById('lastUpdate');
-    if (element) {
-      element.textContent = timeString;
-    }
+// Open modal
+function markDelivered(shipmentId) {
+  currentShipmentId = shipmentId;
+
+  const el = document.getElementById('deliveryModal');
+  if (!el) {
+    console.error('deliveryModal not found');
+    alert('Delivery modal missing.');
+    return;
   }
 
-  document.addEventListener('DOMContentLoaded', function () {
-    // Set initial update time
-    updateLastRefreshTime();
+  // reset fields
+  document.getElementById('deliveryNotes').value = '';
+  const fileInput = document.getElementById('deliveryPhoto');
+  fileInput.value = '';
+  resetDeliveryPreview();
+  hideDeliveryError();
 
-    // Restore active tab from localStorage
-    const activeTab = localStorage.getItem('activeTab');
-    if (activeTab) {
-      const targetButton = document.querySelector(`[data-bs-target="#${activeTab}"]`);
-      const targetPane = document.getElementById(activeTab);
+  new bootstrap.Modal(el).show();
+}
 
-      if (targetButton && targetPane) {
-        // Remove active classes from all
-        document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
-        document.querySelectorAll('.tab-pane').forEach(pane => {
-          pane.classList.remove('show', 'active');
-        });
+// Preview handler
+document.addEventListener('DOMContentLoaded', () => {
+  const input = document.getElementById('deliveryPhoto');
+  if (!input) return;
 
-        // Add active classes to target
-        targetButton.classList.add('active');
-        targetPane.classList.add('show', 'active');
+  input.addEventListener('change', () => {
+    const file = input.files && input.files[0];
+    if (!file) {
+      resetDeliveryPreview();
+      return;
+    }
+
+    // basic validation (optional)
+    if (!file.type.startsWith('image/')) {
+      showDeliveryError('Please select an image file.');
+      input.value = '';
+      resetDeliveryPreview();
+      return;
+    }
+
+    const url = URL.createObjectURL(file);
+    const img = document.getElementById('deliveryPhotoPreview');
+    const empty = document.getElementById('deliveryPhotoEmpty');
+
+    img.src = url;
+    img.style.display = 'block';
+    empty.style.display = 'none';
+    hideDeliveryError();
+  });
+});
+
+function resetDeliveryPreview() {
+  const img = document.getElementById('deliveryPhotoPreview');
+  const empty = document.getElementById('deliveryPhotoEmpty');
+
+  if (img) {
+    img.src = '';
+    img.style.display = 'none';
+  }
+  if (empty) empty.style.display = 'block';
+}
+
+function showDeliveryError(msg) {
+  const el = document.getElementById('deliveryModalError');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+function hideDeliveryError() {
+  const el = document.getElementById('deliveryModalError');
+  if (!el) return;
+  el.textContent = '';
+  el.style.display = 'none';
+}
+
+async function confirmDelivery() {
+  if (!currentShipmentId) return;
+
+  const btn = document.getElementById('confirmDeliveredBtn');
+  const notes = document.getElementById('deliveryNotes').value;
+  const photoInput = document.getElementById('deliveryPhoto');
+  const file = photoInput.files && photoInput.files[0];
+
+  if (!file) {
+    showDeliveryError('Delivery photo is required.');
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('notes', notes);
+  formData.append('delivery_photo', file);
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
+
+  try {
+    const res = await fetch(`/logistics/driver/shipment/${currentShipmentId}/delivered/`, {
+
+      method: 'POST',
+      headers: { 'X-CSRFToken': getCookie('csrftoken') },
+      body: formData
+    });
+
+    let payload = null;
+    try { payload = await res.json(); } catch(e) {}
+
+    if (!res.ok || !payload?.success) {
+      const msg = payload?.error || `Failed (HTTP ${res.status})`;
+      showDeliveryError(msg);
+      return;
+    }
+
+    // close modal
+    const modalEl = document.getElementById('deliveryModal');
+    bootstrap.Modal.getInstance(modalEl)?.hide();
+
+    // reload / update UI
+    window.location.reload();
+
+  } catch (e) {
+    console.error(e);
+    showDeliveryError('Network error. Please try again.');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-circle-check"></i> Confirm Delivered';
+  }
+}
+</script>
+<script>
+/**
+ * Persist active tab so reload keeps same view
+ */
+function saveActiveTab(tabId) {
+  try {
+    localStorage.setItem('driverDashboardActiveTab', tabId);
+  } catch (e) {
+    console.warn('Could not save active tab', e);
+  }
+}
+
+/**
+ * Restore active tab on load
+ */
+document.addEventListener('DOMContentLoaded', function () {
+  const savedTab = localStorage.getItem('driverDashboardActiveTab');
+  if (!savedTab) return;
+
+  const tabTrigger = document.querySelector(`[data-bs-target="${savedTab}"], [href="${savedTab}"]`);
+  if (tabTrigger) {
+    new bootstrap.Tab(tabTrigger).show();
+  }
+});
+</script>
+<script>
+/**
+ * Get cookie value by name (Django CSRF helper)
+ */
+function getCookie(name) {
+  let cookieValue = null;
+  if (document.cookie && document.cookie !== '') {
+    const cookies = document.cookie.split(';');
+    for (let i = 0; i < cookies.length; i++) {
+      const cookie = cookies[i].trim();
+      if (cookie.substring(0, name.length + 1) === (name + '=')) {
+        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+        break;
       }
     }
+  }
+  return cookieValue;
+}
+</script>
+<script>
+let currentStartShipmentId = null;
 
-    // Attach event listeners to "Start Delivery" buttons
-    document.querySelectorAll('.btn-start-delivery').forEach(btn => {
-      btn.addEventListener('click', function() {
-        currentShipmentId = this.dataset.shipmentId;
-        const modal = new bootstrap.Modal(document.getElementById('startDeliveryModal'));
-        modal.show();
-      });
-    });
+function openStartDeliveryModal(shipmentId) {
+  currentStartShipmentId = shipmentId;
 
-    // Handle confirm start delivery
-    document.getElementById('confirmStartBtn').addEventListener('click', function() {
-      if (!currentShipmentId) return;
-
-      const button = this;
-      const originalContent = button.innerHTML;
-
-      // Show loading state
-      button.disabled = true;
-      button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Starting...';
-
-      fetch(`/logistics/driver/shipment/${currentShipmentId}/start/`, {
-        method: 'POST',
-        headers: {
-          'X-CSRFToken': getCookie('csrftoken'),
-          'Content-Type': 'application/json'
-        },
-        credentials: 'same-origin'
-      })
-      .then(response => response.json())
-      .then(data => {
-        const modal = bootstrap.Modal.getInstance(document.getElementById('startDeliveryModal'));
-        modal.hide();
-
-        const alertType = data.success ? 'success' : 'danger';
-        const message = data.message || data.error || 'An error occurred';
-        showAlert(alertType, message);
-
-        if (data.success) {
-          setTimeout(() => location.reload(), 1500);
-        } else {
-          button.disabled = false;
-          button.innerHTML = originalContent;
-        }
-      })
-      .catch(error => {
-        console.error('Error:', error);
-        showAlert('danger', 'Failed to start delivery. Please try again.');
-        button.disabled = false;
-        button.innerHTML = originalContent;
-      });
-    });
-  });
-
-  // Save active tab to localStorage
-  function saveActiveTab(tabId) {
-    localStorage.setItem('activeTab', tabId);
+  const modalEl = document.getElementById('startDeliveryModal');
+  if (!modalEl) {
+    console.error('startDeliveryModal not found in DOM');
+    alert('Start modal is missing on this page.');
+    return;
   }
 
-  // Mark shipment as delivered
-  function markDelivered(shipmentId) {
-    currentShipmentId = shipmentId;
-    const modal = new bootstrap.Modal(document.getElementById('deliveryModal'));
-    modal.show();
+  // Ensure button works
+  const confirmBtn = document.getElementById('confirmStartBtn');
+  if (confirmBtn) {
+    confirmBtn.onclick = confirmStartDelivery;
   }
 
-  // Confirm delivery with notes
-  function confirmDelivery() {
-    if (!currentShipmentId) return;
+  // Show modal
+  const modal = new bootstrap.Modal(modalEl);
+  modal.show();
+}
 
-    const notes = document.getElementById('deliveryNotes').value;
-    const modal = bootstrap.Modal.getInstance(document.getElementById('deliveryModal'));
+async function confirmStartDelivery() {
+  if (!currentStartShipmentId) return;
 
-    fetch(`/logistics/driver/shipment/${currentShipmentId}/deliver/`, {
+  const confirmBtn = document.getElementById('confirmStartBtn');
+  const modalEl = document.getElementById('startDeliveryModal');
+
+  try {
+    confirmBtn.disabled = true;
+    confirmBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Starting...';
+
+    const res = await fetch(`/logistics/driver/shipment/${currentStartShipmentId}/start/`, {
       method: 'POST',
       headers: {
         'X-CSRFToken': getCookie('csrftoken'),
-        'Content-Type': 'application/json'
-      },
-      credentials: 'same-origin',
-      body: JSON.stringify({ notes: notes })
-    })
-    .then(response => response.json())
-    .then(data => {
-      modal.hide();
-
-      const alertType = data.success ? 'success' : 'danger';
-      const message = data.message || data.error || 'An error occurred';
-      showAlert(alertType, message);
-
-      if (data.success) {
-        document.getElementById('deliveryNotes').value = '';
-        setTimeout(() => location.reload(), 1500);
-      }
-    })
-    .catch(error => {
-      console.error('Error:', error);
-      showAlert('danger', 'Failed to confirm delivery. Please try again.');
-    });
-  }
-
-  // Get CSRF token from cookies
-  function getCookie(name) {
-    let value = null;
-    document.cookie.split(';').forEach(cookie => {
-      const [key, val] = cookie.trim().split('=');
-      if (key === name) {
-        value = decodeURIComponent(val);
+        'Accept': 'application/json'
       }
     });
-    return value;
-  }
 
-  // Show custom alert notification
-  function showAlert(type, message) {
-    const alertDiv = document.createElement('div');
-    alertDiv.className = `alert alert-${type} alert-dismissible fade show custom-alert position-fixed`;
-    alertDiv.style.top = '20px';
-    alertDiv.style.right = '20px';
-    alertDiv.style.zIndex = '9999';
-    alertDiv.style.minWidth = '300px';
-    alertDiv.style.maxWidth = '500px';
+    let data = null;
+    try { data = await res.json(); } catch(e) {}
 
-    const icon = type === 'success' ? 'fa-circle-check' : 'fa-circle-exclamation';
-    alertDiv.innerHTML = `
-      <div class="d-flex align-items-center">
-        <i class="fas ${icon} me-2"></i>
-        <span>${message}</span>
-      </div>
-      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    `;
-
-    document.body.appendChild(alertDiv);
-
-    // Auto-remove after 5 seconds
-    setTimeout(() => {
-      alertDiv.classList.remove('show');
-      setTimeout(() => alertDiv.remove(), 150);
-    }, 5000);
-  }
-
-  // Auto-refresh every 30 seconds (only when no modal is open)
-  setInterval(() => {
-    if (refreshing) {
-      location.reload();
+    if (!res.ok || !data?.success) {
+      const msg = data?.error || `Failed (HTTP ${res.status})`;
+      alert(msg);
+      return;
     }
-  }, 30000);
 
-  // Pause auto-refresh when modal is shown
-  document.addEventListener('show.bs.modal', () => {
-    refreshing = false;
-  });
+    // Close modal
+    bootstrap.Modal.getInstance(modalEl)?.hide();
 
-  // Resume auto-refresh when modal is hidden
-  document.addEventListener('hidden.bs.modal', () => {
-    refreshing = true;
-  });
+    // Refresh UI
+    window.location.reload();
 
-  // Add fade-in animation on page load
-  document.addEventListener('DOMContentLoaded', () => {
-    document.querySelectorAll('.shipment-card').forEach((card, index) => {
-      card.style.opacity = '0';
-      card.style.transform = 'translateY(20px)';
-      setTimeout(() => {
-        card.style.transition = 'all 0.5s ease';
-        card.style.opacity = '1';
-        card.style.transform = 'translateY(0)';
-      }, index * 50);
-    });
-  });
+  } catch (err) {
+    console.error(err);
+    alert('Network error. Please try again.');
+  } finally {
+    confirmBtn.disabled = false;
+    confirmBtn.innerHTML = '<i class="fas fa-circle-check"></i> Confirm Start';
+  }
+}
+
+// CSRF helper (make sure it exists once on the page)
+function getCookie(name) {
+  let cookieValue = null;
+  if (document.cookie && document.cookie !== '') {
+    const cookies = document.cookie.split(';');
+    for (let i = 0; i < cookies.length; i++) {
+      const cookie = cookies[i].trim();
+      if (cookie.substring(0, name.length + 1) === (name + '=')) {
+        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+        break;
+      }
+    }
+  }
+  return cookieValue;
+}
 </script>
+
 
 </body>
 </html>

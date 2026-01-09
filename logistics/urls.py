@@ -156,6 +156,7 @@ warehouse_patterns = [
     path('queue/item/<int:pk>/', views.WarehouseQueueItemDetailView.as_view(), name='warehouse_item_detail'),
     path('<int:pk>/inventory/', views.warehouse_inventory, name='warehouse_inventory'),
     path('<int:pk>/utilization/', views.warehouse_utilization, name='warehouse_utilization'),
+    path("warehouse/orders/<int:order_id>/", views.warehouse_order_detail, name="warehouse_order_detail"),
 ]
 
 # ============================================================================
@@ -291,4 +292,7 @@ urlpatterns = [
 
     # Notifications
     path('notifications/', include(notification_patterns)),
+
+    path('orders/<int:order_id>/items-preview/', views.order_items_preview, name='order_items_preview'),
+
 ]

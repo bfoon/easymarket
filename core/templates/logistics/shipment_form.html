@@ -36,28 +36,42 @@
         <i class="fas fa-info-circle me-2"></i>
         Warehouse Shipping Integration
     </h5>
+
     <p class="mb-2">
         This form shows <strong>only orders with items marked as "shipped to warehouse"</strong> by store owners.
         When you create a shipment:
     </p>
+
     <ul class="mb-2">
         <li>Only warehouse-shipped items will be included automatically</li>
         <li>Multiple shipments can be created for the same order</li>
         <li>Shipments are numbered sequentially (#1, #2, #3, etc.)</li>
         <li>Order status will be updated to "Shipped" on first shipment</li>
     </ul>
-    {% if orders_with_ready_items_count %}
-    <p class="mb-0">
-        <strong><i class="fas fa-box me-1"></i>{{ orders_with_ready_items_count }} order(s)</strong>
-        currently have items ready for shipment.
-    </p>
-    {% else %}
-    <p class="mb-0 text-warning">
-        <i class="fas fa-exclamation-triangle me-1"></i>
-        No orders with warehouse-shipped items available. Store owners must mark items as "shipped to warehouse" first.
-    </p>
+
+    {% if orders_with_ready_items_count is not None %}
+        <div class="mt-2">
+            {% if orders_with_ready_items_count %}
+                <div class="small">
+                    <strong>
+                        <i class="fas fa-box me-1"></i>
+                        {{ orders_with_ready_items_count }} order{{ orders_with_ready_items_count|pluralize }}
+                    </strong>
+                    currently have items ready for shipment.
+                </div>
+            {% else %}
+                <div class="small text-warning">
+                    <i class="fas fa-exclamation-triangle me-1"></i>
+                    No orders with warehouse-shipped items available.
+                    <span class="d-block text-muted">
+                        Store owners must mark items as <em>“shipped to warehouse”</em> first.
+                    </span>
+                </div>
+            {% endif %}
+        </div>
     {% endif %}
-    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
 </div>
 {% endif %}
 
@@ -395,78 +409,154 @@
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const orderSelect = document.getElementById('{{ form.order.id_for_label }}');
+document.addEventListener('DOMContentLoaded', function () {
+  const orderSelect = document.getElementById('{{ form.order.id_for_label }}');
 
-    if (orderSelect) {
-        orderSelect.addEventListener('change', function() {
-            const orderId = this.value;
+  if (orderSelect) {
+    orderSelect.addEventListener('change', function () {
+      const orderId = this.value;
 
-            if (orderId) {
-                // Fetch items preview
-                fetch(`/logistics/orders/${orderId}/items-preview/`)
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.success && data.items_count > 0) {
-                            displayItemsPreview(data);
-                        } else {
-                            hideItemsPreview();
-                        }
-                    })
-                    .catch(err => {
-                        console.error('Error fetching items:', err);
-                        hideItemsPreview();
-                    });
-            } else {
-                hideItemsPreview();
-            }
-        });
+      if (!orderId) {
+        hideItemsPreview();
+        return;
+      }
+
+      fetchItemsPreview(orderId);
+    });
+  }
+
+  async function fetchItemsPreview(orderId) {
+    try {
+      const res = await fetch(`/logistics/orders/${orderId}/items-preview/`, {
+        headers: { 'Accept': 'application/json' }
+      });
+
+      // ✅ avoid JSON.parse crashing when Django returns HTML (404/500)
+      if (!res.ok) {
+        const text = await res.text();
+        console.error('Items preview HTTP error:', res.status, text.slice(0, 200));
+        hideItemsPreview();
+        return;
+      }
+
+      const data = await res.json();
+
+      if (data && data.success && (data.items_count || 0) > 0) {
+        displayItemsPreview(data);
+      } else {
+        hideItemsPreview();
+      }
+    } catch (err) {
+      console.error('Error fetching items:', err);
+      hideItemsPreview();
     }
+  }
 
-    function displayItemsPreview(data) {
-        const section = document.getElementById('itemsPreviewSection');
-        const content = document.getElementById('itemsPreviewContent');
+  function displayItemsPreview(data) {
+    const section = document.getElementById('itemsPreviewSection');
+    const content = document.getElementById('itemsPreviewContent');
+    if (!section || !content) return;
 
-        let html = `
-            <p class="mb-2">
-                <strong>Shipment #${data.next_shipment_number}</strong> will include
-                <strong>${data.items_count} item(s)</strong>
-                (Total Value: <strong>D${data.total_value.toFixed(2)}</strong>)
+    const items = data.items || [];
+    const itemsCount = Number(data.items_count || items.length || 0);
+    const totalQty = Number(data.total_qty || 0);
+
+    // Compute total value if prices exist (optional)
+    let totalValue = 0;
+    let hasPrices = false;
+
+    items.forEach(it => {
+      const qty = Number(it.quantity || 0);
+      const priceNum = parseFloat(it.price);
+      if (!Number.isNaN(priceNum)) {
+        totalValue += priceNum * qty;
+        hasPrices = true;
+      }
+    });
+
+    let html = `
+      <div class="d-flex align-items-start justify-content-between flex-wrap gap-2">
+        <div>
+          <p class="mb-1">
+            <strong>${itemsCount} item(s)</strong> ready for shipment
+            <span class="text-muted">(Total Qty: <strong>${totalQty}</strong>)</span>
+          </p>
+          ${hasPrices ? `
+            <p class="mb-0 text-success small">
+              <i class="fas fa-coins me-1"></i>
+              Estimated Total Value: <strong>D${totalValue.toFixed(2)}</strong>
             </p>
-        `;
+          ` : `
+            <p class="mb-0 text-muted small">
+              <i class="fas fa-info-circle me-1"></i>
+              Prices not available for valuation preview.
+            </p>
+          `}
+        </div>
 
-        if (data.existing_shipments_count > 0) {
-            html += `
-                <p class="mb-2 text-info">
-                    <i class="fas fa-info-circle me-1"></i>
-                    This order already has ${data.existing_shipments_count} shipment(s).
-                </p>
-            `;
-        }
+        <span class="badge bg-primary">
+          <i class="fas fa-box-open me-1"></i> Ready Items
+        </span>
+      </div>
+    `;
 
-        html += '<div class="table-responsive mt-2"><table class="table table-sm table-bordered mb-0">';
-        html += '<thead class="table-light"><tr><th>Product</th><th>SKU</th><th>Qty</th><th>Price</th></tr></thead><tbody>';
+    html += `
+      <div class="table-responsive mt-3">
+        <table class="table table-sm table-bordered mb-0 align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>Product</th>
+              <th>Store</th>
+              <th class="text-center">Qty</th>
+              <th class="text-end">Price</th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
 
-        data.items.forEach(item => {
-            html += `
-                <tr>
-                    <td>${item.product_name}</td>
-                    <td><small>${item.sku}</small></td>
-                    <td>${item.quantity}</td>
-                    <td>D${item.price.toFixed(2)}</td>
-                </tr>
-            `;
-        });
+    items.forEach(item => {
+      const productName = item.product_name || '—';
+      const storeName = item.store_name || '—';
+      const qty = Number(item.quantity || 0);
 
-        html += '</tbody></table></div>';
+      const priceNum = parseFloat(item.price);
+      const priceDisplay = Number.isNaN(priceNum) ? '—' : `D${priceNum.toFixed(2)}`;
 
-        content.innerHTML = html;
-        section.style.display = 'block';
-    }
+      html += `
+        <tr>
+          <td>${escapeHtml(productName)}</td>
+          <td><span class="badge bg-light text-dark border">${escapeHtml(storeName)}</span></td>
+          <td class="text-center"><span class="badge bg-dark">${qty}</span></td>
+          <td class="text-end">${priceDisplay}</td>
+        </tr>
+      `;
+    });
 
-    function hideItemsPreview() {
-        document.getElementById('itemsPreviewSection').style.display = 'none';
-    }
+    html += `
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    content.innerHTML = html;
+    section.style.display = 'block';
+  }
+
+  function hideItemsPreview() {
+    const section = document.getElementById('itemsPreviewSection');
+    if (section) section.style.display = 'none';
+  }
+
+  // ✅ Prevent HTML injection from product/store names
+  function escapeHtml(str) {
+    return String(str)
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#039;');
+  }
 });
 </script>
+
 {% endblock %}

@@ -52,7 +52,7 @@ from openpyxl.styles import Font, PatternFill, Alignment
 
 # Local imports
 from .models import (
-    Shipment, ShipmentBox, BoxItem, Driver, Vehicle,
+    Shipment, ShipmentBox, BoxItem, Driver, Vehicle, ShipmentItem,
     Warehouse, LogisticOffice, DriverLocation, WarehouseShipmentNotification
 
 
@@ -199,77 +199,74 @@ class NotificationManager:
         )
         thread.start()
 
+def _is_ajax(request):
+    return (
+        request.headers.get("x-requested-with") == "XMLHttpRequest"
+        or "application/json" in (request.headers.get("accept") or "")
+        or request.GET.get("format") == "json"
+    )
 
 @login_required
 def notifications_list(request):
     """
     Display all notifications for the logged-in logistics user.
     """
-    # Get filter parameters
-    filter_type = request.GET.get('type', 'all')
-    is_read = request.GET.get('read')
+    qs = (
+        WarehouseShipmentNotification.objects
+        .filter(recipient=request.user)
+        .select_related("order", "store")
+        .order_by("-created_at")
+    )
 
-    # Base queryset
-    notifications = WarehouseShipmentNotification.objects.filter(
-        recipient=request.user
-    ).select_related('order', 'store')
+    if _is_ajax(request):
+        unread_count = qs.filter(is_read=False).count()
+        notifications = []
+        for n in qs[:50]:
+            notifications.append({
+                "id": n.id,
+                "type": n.notification_type,
+                "title": n.title,
+                "message": n.message,
+                "items_count": n.items_count,
+                "is_read": n.is_read,
+                "created_at": n.created_at.isoformat(),
+                "order_id": n.order_id,
+                "store_name": n.store.name if n.store else None,
+            })
 
-    # Apply filters
-    if filter_type != 'all':
-        notifications = notifications.filter(notification_type=filter_type)
+        return JsonResponse({
+            "success": True,
+            "unread_count": unread_count,
+            "notifications": notifications,
+        })
 
-    if is_read == 'true':
-        notifications = notifications.filter(is_read=True)
-    elif is_read == 'false':
-        notifications = notifications.filter(is_read=False)
-
-    # Pagination
-    paginator = Paginator(notifications, 20)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-
-    # Get counts for filters
-    context = {
-        'notifications': page_obj,
-        'total_count': notifications.count(),
-        'unread_count': WarehouseShipmentNotification.get_unread_count(request.user),
-        'filter_type': filter_type,
-        'is_read': is_read,
-    }
-
-    return render(request, 'logistics/notifications_list.html', context)
-
+    # normal page view
+    return render(request, "logistics/notification_list.html", {
+        "notifications": qs[:50],
+        "unread_count": qs.filter(is_read=False).count(),
+    })
 
 @login_required
 @require_POST
-def notification_mark_as_read(request, notification_id):
+def notification_mark_as_read(request, pk):
     """Mark a single notification as read."""
-    notification = get_object_or_404(
-        WarehouseShipmentNotification,
-        id=notification_id,
-        recipient=request.user
-    )
-
-    notification.mark_as_read()
-
-    return JsonResponse({
-        'success': True,
-        'message': 'Notification marked as read'
-    })
+    n = get_object_or_404(WarehouseShipmentNotification, pk=pk, recipient=request.user)
+    if not n.is_read:
+        n.is_read = True
+        n.read_at = timezone.now()
+        n.save(update_fields=["is_read", "read_at"])
+    return JsonResponse({"success": True})
 
 
 @login_required
 @require_POST
 def notification_mark_all_as_read(request):
     """Mark all notifications as read for current user."""
-    count = WarehouseShipmentNotification.mark_all_as_read(request.user)
-
-    return JsonResponse({
-        'success': True,
-        'message': f'{count} notification(s) marked as read',
-        'count': count
-    })
-
+    WarehouseShipmentNotification.objects.filter(
+        recipient=request.user,
+        is_read=False
+    ).update(is_read=True, read_at=timezone.now())
+    return JsonResponse({"success": True})
 
 @login_required
 def notification_dropdown(request):
@@ -545,67 +542,51 @@ class ShipmentCreateView(LoginRequiredMixin, CreateView):
     """
     model = Shipment
     form_class = ShipmentForm
-    template_name = 'logistics/shipment_form.html'
-    success_url = reverse_lazy('logistics:shipment_list')
+    template_name = "logistics/shipment_form.html"
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-
-        # Count orders with items ready for shipment
-        ready_order_ids = OrderItem.objects.filter(
-            shipped_to_warehouse=True,
-            current_shipment__isnull=True
-        ).values_list('order_id', flat=True).distinct()
-
-        context['orders_with_ready_items_count'] = Order.objects.filter(
-            id__in=ready_order_ids,
-            status__in=['processing', 'shipped']
-        ).count()
-
-        return context
+    def get_success_url(self):
+        return reverse("logistics:shipment_detail", kwargs={"pk": self.object.pk})
 
     def form_valid(self, form):
-        shipment = form.save(commit=False)
-        order = shipment.order
+        with transaction.atomic():
+            shipment = form.save(commit=False)
+            order = shipment.order
 
-        # Set shipment number
-        shipment.shipment_number = order.get_next_shipment_number()
-        shipment.save()
+            # Set shipment number
+            shipment.shipment_number = order.get_next_shipment_number()
+            shipment.save()
 
-        # Get items marked as shipped but not yet in a shipment
-        available_items = OrderItem.objects.filter(
-            order=order,
-            shipped_to_warehouse=True,
-            current_shipment__isnull=True
-        )
+            # ✅ IMPORTANT: set self.object so CreateView has it
+            self.object = shipment
 
-        # Create ShipmentItem entries
-        items_added = 0
-        for order_item in available_items:
-            ShipmentItem.objects.create(
-                shipment=shipment,
-                order_item=order_item,
-                quantity=order_item.quantity
+            # Items marked as shipped but not yet assigned
+            available_items = OrderItem.objects.select_for_update().filter(
+                order=order,
+                shipped_to_warehouse=True,
+                current_shipment__isnull=True
             )
 
-            # Link item to this shipment
-            order_item.current_shipment = shipment
-            order_item.save(update_fields=['current_shipment'])
-            items_added += 1
+            items_added = 0
+            for order_item in available_items:
+                ShipmentItem.objects.create(
+                    shipment=shipment,
+                    order_item=order_item,
+                    quantity=order_item.quantity
+                )
 
-        # Update order status to 'shipped' if first shipment
-        if shipment.shipment_number == 1 and order.status == 'processing':
-            old_status = order.status
-            order.status = 'shipped'
-            order.save(update_fields=['status'])
-            logger.info(f"Order {order.id} status updated from '{old_status}' to 'shipped'")
+                order_item.current_shipment = shipment
+                order_item.save(update_fields=["current_shipment"])
+                items_added += 1
+
+            # Optional: update order status
+            if items_added > 0 and order.status != "shipped":
+                order.status = "shipped"
+                order.save(update_fields=["status"])
 
         messages.success(
             self.request,
-            f'Shipment #{shipment.shipment_number} created successfully with {items_added} item(s). '
-            f'Order #{order.id} now has {order.get_shipment_count()} shipment(s).'
+            f"Shipment #{shipment.shipment_number} created successfully with {items_added} item(s)."
         )
-
         return redirect(self.get_success_url())
 
 
@@ -1608,58 +1589,47 @@ def shipment_detail_map(request, shipment_id):
 @driver_required
 @require_POST
 def start_delivery(request, shipment_id):
-    """
-    Mark shipment as in transit when driver starts delivery.
-    Updates status and records start time.
-    """
     driver = request.driver
 
     try:
-        # Get shipment - ensure it belongs to this driver
-        shipment = get_object_or_404(
-            Shipment,
-            pk=shipment_id,
-            driver=driver
-        )
+        shipment = get_object_or_404(Shipment, pk=shipment_id, driver=driver)
 
-        # Validate status transition
-        from .utils import validate_shipment_transition
-        if not validate_shipment_transition(shipment.status, 'in_transit'):
+        if not validate_shipment_transition(shipment.status, "in_transit"):
             return JsonResponse({
-                'success': False,
-                'error': f'Cannot start delivery from status: {shipment.get_status_display()}'
+                "success": False,
+                "error": f"Cannot start delivery from status: {shipment.get_status_display()}"
             }, status=400)
 
-        # Update shipment
         with transaction.atomic():
-            shipment.status = 'in_transit'
-            shipment.save()
+            shipment.status = "in_transit"
+            shipment.save(update_fields=["status"])  # ✅ reduce side effects
 
-            # Create history entry
             create_delivery_history(
                 shipment=shipment,
-                status='in_transit',
+                status="in_transit",
                 user=request.user,
-                notes=f"Driver {driver.employee_id} started delivery"
+                notes=f"Driver {getattr(driver, 'employee_id', driver.id)} started delivery"
             )
 
-            # Send notification to buyer
-            send_delivery_notification(
-                shipment=shipment,
-                status='in_transit',
-                driver=driver
-            )
+        # ✅ send notification AFTER commit (no crashes during atomic exit)
+        transaction.on_commit(lambda: send_delivery_notification(
+            shipment=shipment,
+            status="in_transit",
+            driver=driver
+        ))
 
         return JsonResponse({
-            'success': True,
-            'message': 'Delivery started successfully!',
-            'shipment_status': shipment.get_status_display()
+            "success": True,
+            "message": "Delivery started successfully!",
+            "shipment_status": shipment.get_status_display()
         })
 
     except Exception as e:
+        # ✅ return error message so frontend can show it
         return JsonResponse({
-            'success': False,
-            'error': str(e)
+            "success": False,
+            "error": str(e),
+            "shipment_id": shipment_id
         }, status=500)
 
 
@@ -1669,75 +1639,130 @@ def start_delivery(request, shipment_id):
 def mark_delivered(request, shipment_id):
     """
     Mark shipment as delivered when driver completes delivery.
-    Records delivery time, notes, and signature if provided.
+
+    Supports:
+    - multipart/form-data (FormData): notes, recipient_name, delivery_photo
+    - JSON body: {notes, recipient_name, signature} (signature optional)
+
+    Requires delivery photo proof if field exists / policy requires.
     """
     driver = request.driver
 
-    try:
-        # Get shipment - ensure it belongs to this driver
-        shipment = get_object_or_404(
-            Shipment,
-            pk=shipment_id,
-            driver=driver
-        )
+    # Get shipment - ensure it belongs to this driver
+    shipment = get_object_or_404(Shipment, pk=shipment_id, driver=driver)
 
-        # Validate status transition
-        from .utils import validate_shipment_transition
-        if not validate_shipment_transition(shipment.status, 'delivered'):
+    # Validate status transition
+    if not validate_shipment_transition(shipment.status, "delivered"):
+        return JsonResponse({
+            "success": False,
+            "error": f"Cannot mark as delivered from status: {shipment.get_status_display()}"
+        }, status=400)
+
+    # ---------- Extract input safely ----------
+    content_type = (request.content_type or "").lower()
+
+    if "application/json" in content_type:
+        try:
+            data = json.loads(request.body.decode("utf-8") or "{}")
+        except json.JSONDecodeError:
+            data = {}
+        delivery_notes = (data.get("notes") or "").strip()
+        recipient_name = (data.get("recipient_name") or "").strip()
+        signature = data.get("signature") or ""  # optional base64
+        delivery_photo = None
+    else:
+        # FormData / multipart
+        delivery_notes = (request.POST.get("notes") or "").strip()
+        recipient_name = (request.POST.get("recipient_name") or "").strip()
+        signature = request.POST.get("signature") or ""  # optional
+        delivery_photo = request.FILES.get("delivery_photo")
+
+    # Require photo proof if you need it
+    if hasattr(shipment, "delivery_photo"):
+        if not delivery_photo and not shipment.delivery_photo:
             return JsonResponse({
-                'success': False,
-                'error': f'Cannot mark as delivered from status: {shipment.get_status_display()}'
+                "success": False,
+                "error": "Delivery photo is required."
             }, status=400)
 
-        # Get delivery notes from request
-        data = json.loads(request.body) if request.body else {}
-        delivery_notes = data.get('notes', '')
-        recipient_name = data.get('recipient_name', '')
-        signature = data.get('signature', '')  # Base64 encoded signature
+    delivered_at = timezone.now()
+    employee_id = getattr(driver, "employee_id", None) or str(getattr(driver, "id", "")) or "Driver"
 
-        # Update shipment
+    # ---------- Save safely ----------
+    def _after_commit():
+        # Notify buyer AFTER commit (avoid breaking the transaction)
+        try:
+            send_delivery_notification(
+                shipment=shipment,
+                status="delivered",
+                driver=driver
+            )
+        except Exception:
+            # Don't crash user flow because notification failed
+            pass
+
+    try:
         with transaction.atomic():
-            shipment.status = 'delivered'
-            shipment.actual_dropoff_time = timezone.now()
+            shipment.status = "delivered"
 
-            # Store additional delivery info if you have these fields
-            if hasattr(shipment, 'delivery_notes'):
+            # set time field if it exists
+            if hasattr(shipment, "actual_dropoff_time"):
+                shipment.actual_dropoff_time = delivered_at
+            elif hasattr(shipment, "delivered_at"):
+                shipment.delivered_at = delivered_at
+
+            # optional fields
+            if hasattr(shipment, "delivery_notes"):
                 shipment.delivery_notes = delivery_notes
-            if hasattr(shipment, 'recipient_name'):
+            if hasattr(shipment, "recipient_name"):
                 shipment.recipient_name = recipient_name
 
+            # save photo if model supports it
+            if hasattr(shipment, "delivery_photo") and delivery_photo:
+                shipment.delivery_photo = delivery_photo
+
+            # signature (if you have a field for it)
+            if signature and hasattr(shipment, "signature_data"):
+                shipment.signature_data = signature
+
+            # Save shipment
             shipment.save()
 
             # Update order status if linked
-            if shipment.order:
-                shipment.order.status = 'delivered'
-                shipment.order.save()
+            if shipment.order_id:
+                # safer than loading full order object
+                shipment.order.status = "delivered"
+                shipment.order.save(update_fields=["status"])
 
-            # Create history entry
+            # History entry
             create_delivery_history(
                 shipment=shipment,
-                status='delivered',
+                status="delivered",
                 user=request.user,
-                notes=f"Delivered by {driver.employee_id}. {delivery_notes}"
+                notes=f"Delivered by {employee_id}. {delivery_notes}".strip()
             )
 
-            # Send notification to buyer
-            send_delivery_notification(
-                shipment=shipment,
-                status='delivered',
-                driver=driver
-            )
+            transaction.on_commit(_after_commit)
+
+        # Determine delivered timestamp to return
+        delivered_time = None
+        if hasattr(shipment, "actual_dropoff_time") and shipment.actual_dropoff_time:
+            delivered_time = shipment.actual_dropoff_time
+        elif hasattr(shipment, "delivered_at") and getattr(shipment, "delivered_at", None):
+            delivered_time = shipment.delivered_at
+        else:
+            delivered_time = delivered_at
 
         return JsonResponse({
-            'success': True,
-            'message': 'Delivery marked as complete!',
-            'delivered_at': shipment.actual_dropoff_time.isoformat()
+            "success": True,
+            "message": "Delivery marked as complete!",
+            "delivered_at": delivered_time.isoformat(),
         })
 
     except Exception as e:
         return JsonResponse({
-            'success': False,
-            'error': str(e)
+            "success": False,
+            "error": str(e),
         }, status=500)
 
 
@@ -2050,6 +2075,116 @@ store_warehouses = StockWarehouse.objects.filter(
     store__isnull=False,
     is_active=True
 )
+
+@login_required
+def warehouse_order_detail(request, order_id):
+    """
+    Logistics-only warehouse view of an order:
+    - shows ONLY warehouse-ready items
+    - shows shipment linkage and status
+    - gives quick shipment actions
+    """
+    if not getattr(request.user, "is_logistic", False):
+        messages.error(request, "Access denied. Logistics users only.")
+        return render(request, "403.html", status=403)
+
+    order = get_object_or_404(Order, pk=order_id)
+
+    # Items that are ready (store marked shipped_to_warehouse)
+    ready_items_qs = (
+        OrderItem.objects
+        .filter(order=order, shipped_to_warehouse=True)
+        .select_related("product", "product__store")
+        .order_by("product__store__name", "product__name")
+    )
+
+    # Split by whether already assigned to a shipment
+    unassigned_ready_items = ready_items_qs.filter(current_shipment__isnull=True)
+    assigned_ready_items = ready_items_qs.filter(current_shipment__isnull=False).select_related("current_shipment")
+
+    # Shipments for this order
+    shipments = (
+        Shipment.objects
+        .filter(order=order)
+        .select_related("driver", "vehicle", "warehouse", "logistic_office")
+        .order_by("-created_at")
+    )
+
+    # Totals
+    total_ready_qty = ready_items_qs.aggregate(total=Sum("quantity"))["total"] or 0
+    unassigned_qty = unassigned_ready_items.aggregate(total=Sum("quantity"))["total"] or 0
+    assigned_qty = assigned_ready_items.aggregate(total=Sum("quantity"))["total"] or 0
+
+    # Store breakdown (simple grouping in Python; no custom template filters needed)
+    store_breakdown = {}
+    for item in ready_items_qs:
+        store = getattr(item.product, "store", None)
+        store_name = store.name if store else "Unknown Store"
+        if store_name not in store_breakdown:
+            store_breakdown[store_name] = {
+                "store": store,
+                "items": [],
+                "qty": 0,
+            }
+        store_breakdown[store_name]["items"].append(item)
+        store_breakdown[store_name]["qty"] += item.quantity
+
+    context = {
+        "order": order,
+        "ready_items": ready_items_qs,
+        "unassigned_ready_items": unassigned_ready_items,
+        "assigned_ready_items": assigned_ready_items,
+        "shipments": shipments,
+
+        "total_ready_qty": total_ready_qty,
+        "unassigned_qty": unassigned_qty,
+        "assigned_qty": assigned_qty,
+
+        "store_breakdown": store_breakdown,
+        "shipments_count": shipments.count(),
+    }
+    return render(request, "logistics/warehouse_order_detail.html", context)
+
+@login_required
+def order_items_preview(request, order_id):
+    """
+    JSON endpoint for shipment create page:
+    returns items that are shipped_to_warehouse=True and not assigned to a shipment yet.
+    """
+    order = get_object_or_404(Order, pk=order_id)
+
+    qs = (
+        OrderItem.objects
+        .filter(order=order, shipped_to_warehouse=True, current_shipment__isnull=True)
+        .select_related("product", "product__store")
+        .order_by("product__store__name", "product__name")
+    )
+
+    items = []
+    total_qty = 0
+
+    for it in qs:
+        store = getattr(it.product, "store", None)
+        store_name = store.name if store else "Unknown Store"
+
+        items.append({
+            "id": it.id,
+            "product_id": it.product_id,
+            "product_name": getattr(it.product, "name", "—"),
+            "store_name": store_name,
+            "quantity": it.quantity,
+            "price": str(getattr(it, "price", "")) if hasattr(it, "price") else None,
+        })
+        total_qty += (it.quantity or 0)
+
+    return JsonResponse({
+        "success": True,
+        "order_id": order.id,
+        "items_count": qs.count(),
+        "total_qty": total_qty,
+        "items": items
+    })
+
 # ============================================================================
 # LOGISTIC OFFICE VIEWS
 # ============================================================================

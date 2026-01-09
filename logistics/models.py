@@ -1142,7 +1142,7 @@ class WarehouseShipmentNotification(models.Model):
 
     def get_absolute_url(self):
         """Get URL to view this notification's order"""
-        return reverse('logistics:order_detail', kwargs={'order_id': self.order.id})
+        return reverse('logistics:warehouse_order_detail', kwargs={'order_id': self.order.id})
 
     def get_time_since(self):
         """Get human-readable time since creation"""

@@ -589,7 +589,11 @@
     <div class="d-flex align-items-center gap-3">
      <!-- Notifications Dropdown -->
 <div class="navbar-notifications position-relative">
-  <button class="btn btn-link text-secondary position-relative" id="notificationDropdownBtn" data-bs-toggle="dropdown" aria-expanded="false">
+  <button class="btn btn-link text-secondary position-relative" id="notificationDropdownBtn"
+          data-url="{% url 'logistics:notification_dropdown' %}"
+        data-mark-all-url="{% url 'logistics:notification_mark_all_as_read' %}"
+        data-mark-one-url-base="{% url 'logistics:notification_mark_as_read' 0 %}"
+          data-bs-toggle="dropdown" aria-expanded="false">
     <i class="fas fa-bell fs-5"></i>
     {% if notification_unread_count > 0 %}
     <span class="notification-badge">{{ notification_unread_count }}</span>
@@ -853,44 +857,94 @@
   });
 </script>
 <script>
-// Current filter
 let currentFilter = 'all';
+let refreshInterval = null;
 
-// Load notifications when dropdown opens
-document.getElementById('notificationDropdownBtn')?.addEventListener('show.bs.dropdown', function () {
+const dropdownBtn = document.getElementById('notificationDropdownBtn');
+
+function getUrls() {
+  if (!dropdownBtn) return {};
+
+  const dropdownUrl = dropdownBtn.dataset.url; // ✅ from Django url tag
+  const markAllUrl = dropdownBtn.dataset.markAllUrl;
+
+  // mark-one base: e.g. "/logistics/notifications/0/mark-read/"
+  const markOneBase = dropdownBtn.dataset.markOneUrlBase;
+
+  return { dropdownUrl, markAllUrl, markOneBase };
+}
+
+function buildMarkOneUrl(markOneBase, id) {
+  // Replace the trailing "/0/" part safely
+  return markOneBase.replace('/0/', `/${id}/`);
+}
+
+// Load notifications when dropdown opens (Bootstrap event)
+dropdownBtn?.addEventListener('show.bs.dropdown', function () {
   loadNotifications();
 });
 
-// Load notifications from API
 async function loadNotifications() {
   const list = document.getElementById('notificationsList');
+  const badge = document.querySelector('.notification-badge');
+
+  const { dropdownUrl } = getUrls();
+
+  if (!dropdownUrl) {
+    showError('Notification URL not configured.');
+    return;
+  }
 
   try {
-    const response = await fetch('/logistics/notifications/dropdown/');
+    const response = await fetch(dropdownUrl, {
+      headers: { 'Accept': 'application/json' }
+    });
+
+    // ✅ Prevent JSON.parse crash on 404/500 HTML responses
+    if (!response.ok) {
+      const text = await response.text();
+      console.error('Notifications HTTP error:', response.status, text.slice(0, 200));
+      showError(`Failed to load notifications (HTTP ${response.status})`);
+      return;
+    }
+
     const data = await response.json();
 
-    if (data.success) {
-      displayNotifications(data.notifications, data.unread_count);
+    if (data && data.success) {
+      displayNotifications(data.notifications || [], data.unread_count || 0);
+
+      // Update badge
+      if (data.unread_count > 0) {
+        if (badge) {
+          badge.textContent = data.unread_count;
+        } else {
+          // If you want auto-create badge, implement here
+        }
+      } else {
+        badge?.remove();
+      }
+
     } else {
       showError('Failed to load notifications');
     }
+
   } catch (error) {
     console.error('Error loading notifications:', error);
     showError('Error loading notifications');
   }
 }
 
-// Display notifications in list
 function displayNotifications(notifications, unreadCount) {
   const list = document.getElementById('notificationsList');
+  if (!list) return;
 
-  // Filter notifications based on current filter
+  // Filter
   let filtered = notifications;
   if (currentFilter === 'unread') {
     filtered = notifications.filter(n => !n.is_read);
   }
 
-  if (filtered.length === 0) {
+  if (!filtered.length) {
     list.innerHTML = `
       <div class="empty-notifications">
         <i class="fas fa-bell-slash"></i>
@@ -900,50 +954,56 @@ function displayNotifications(notifications, unreadCount) {
     return;
   }
 
-  list.innerHTML = filtered.map(notif => `
-    <div class="notification-item ${notif.is_read ? '' : 'unread'}"
-         onclick="handleNotificationClick(${notif.id}, '${notif.url}')">
-      <div class="d-flex gap-3">
-        <!-- Icon -->
-        <div class="notification-icon ${notif.type}">
-          ${getNotificationIcon(notif.type)}
-        </div>
+  list.innerHTML = filtered.map(notif => {
+    const url = notif.url || '#';
+    const storeName = notif.store_name || '—';
+    const itemsCount = Number(notif.items_count || 0);
+    const timeSince = notif.time_since || 'just now';
 
-        <!-- Content -->
-        <div class="flex-grow-1">
-          <!-- Title -->
-          <div class="fw-semibold text-dark mb-1" style="font-size: 0.875rem;">
-            ${notif.title}
+    // Avoid breaking onclick with quotes in URL
+    const safeUrl = encodeURIComponent(url);
+
+    return `
+      <div class="notification-item ${notif.is_read ? '' : 'unread'}"
+           onclick="handleNotificationClick(${notif.id}, decodeURIComponent('${safeUrl}'))">
+        <div class="d-flex gap-3">
+          <div class="notification-icon ${notif.type || ''}">
+            ${getNotificationIcon(notif.type)}
           </div>
 
-          <!-- Details -->
-          <div class="d-flex gap-2 mb-1 flex-wrap">
-            <span class="badge bg-light text-dark" style="font-size: 0.7rem;">
-              <i class="fas fa-shopping-cart me-1"></i>
-              Order #${notif.order_id}
-            </span>
-            <span class="badge bg-light text-dark" style="font-size: 0.7rem;">
-              <i class="fas fa-store me-1"></i>
-              ${notif.store_name}
-            </span>
-            <span class="badge bg-primary" style="font-size: 0.7rem;">
-              <i class="fas fa-box me-1"></i>
-              ${notif.items_count} item${notif.items_count > 1 ? 's' : ''}
-            </span>
-          </div>
+          <div class="flex-grow-1">
+            <div class="fw-semibold text-dark mb-1" style="font-size: 0.875rem;">
+              ${notif.title || 'Notification'}
+            </div>
 
-          <!-- Time -->
-          <div class="notification-time">
-            <i class="fas fa-clock me-1"></i>
-            ${notif.time_since} ago
+            <div class="d-flex gap-2 mb-1 flex-wrap">
+              <span class="badge bg-light text-dark" style="font-size: 0.7rem;">
+                <i class="fas fa-shopping-cart me-1"></i>
+                Order #${notif.order_id ?? '—'}
+              </span>
+
+              <span class="badge bg-light text-dark" style="font-size: 0.7rem;">
+                <i class="fas fa-store me-1"></i>
+                ${storeName}
+              </span>
+
+              <span class="badge bg-primary" style="font-size: 0.7rem;">
+                <i class="fas fa-box me-1"></i>
+                ${itemsCount} item${itemsCount > 1 ? 's' : ''}
+              </span>
+            </div>
+
+            <div class="notification-time">
+              <i class="fas fa-clock me-1"></i>
+              ${timeSince}${timeSince.includes('ago') ? '' : ' ago'}
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 }
 
-// Get icon based on notification type
 function getNotificationIcon(type) {
   const icons = {
     'item_shipped': '<i class="fas fa-box"></i>',
@@ -953,74 +1013,77 @@ function getNotificationIcon(type) {
   return icons[type] || '<i class="fas fa-bell"></i>';
 }
 
-// Handle notification click
 async function handleNotificationClick(notificationId, url) {
-  try {
-    // Mark as read
-    await fetch(`/logistics/notifications/${notificationId}/mark-read/`, {
-      method: 'POST',
-      headers: {
-        'X-CSRFToken': getCookie('csrftoken'),
-        'Content-Type': 'application/json'
-      }
-    });
+  const { markOneBase } = getUrls();
+  const markUrl = markOneBase ? buildMarkOneUrl(markOneBase, notificationId) : null;
 
-    // Navigate to URL
-    window.location.href = url;
+  try {
+    if (markUrl) {
+      await fetch(markUrl, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': getCookie('csrftoken'),
+          'Accept': 'application/json'
+        }
+      });
+    }
   } catch (error) {
     console.error('Error marking notification as read:', error);
-    // Still navigate even if marking fails
-    window.location.href = url;
+  } finally {
+    // Navigate anyway
+    if (url && url !== '#') {
+      window.location.href = url;
+    }
   }
 }
 
-// Mark all as read
 async function markAllAsRead() {
+  const { markAllUrl } = getUrls();
+
+  if (!markAllUrl) {
+    showError('Mark-all URL not configured.');
+    return;
+  }
+
   try {
-    const response = await fetch('/logistics/notifications/mark-all-read/', {
+    const response = await fetch(markAllUrl, {
       method: 'POST',
       headers: {
         'X-CSRFToken': getCookie('csrftoken'),
-        'Content-Type': 'application/json'
+        'Accept': 'application/json'
       }
     });
+
+    if (!response.ok) {
+      showError(`Failed to mark all as read (HTTP ${response.status})`);
+      return;
+    }
 
     const data = await response.json();
 
     if (data.success) {
-      // Reload notifications
       loadNotifications();
-
-      // Update badge
-      const badge = document.querySelector('.notification-badge');
-      if (badge) {
-        badge.remove();
-      }
-
-      // Show success message
+      document.querySelector('.notification-badge')?.remove();
       showSuccess('All notifications marked as read');
+    } else {
+      showError('Failed to mark notifications as read');
     }
+
   } catch (error) {
     console.error('Error marking all as read:', error);
     showError('Failed to mark notifications as read');
   }
 }
 
-// Filter notifications
 function filterNotifications(filter) {
   currentFilter = filter;
 
-  // Update active button
-  document.querySelectorAll('[data-filter]').forEach(btn => {
-    btn.classList.remove('active');
-  });
+  document.querySelectorAll('[data-filter]').forEach(btn => btn.classList.remove('active'));
   document.querySelector(`[data-filter="${filter}"]`)?.classList.add('active');
 
-  // Reload notifications
   loadNotifications();
 }
 
-// Helper: Get CSRF token
 function getCookie(name) {
   let cookieValue = null;
   if (document.cookie && document.cookie !== '') {
@@ -1036,16 +1099,14 @@ function getCookie(name) {
   return cookieValue;
 }
 
-// Helper: Show success message
 function showSuccess(message) {
-  // You can implement your own toast/alert system here
   console.log('Success:', message);
 }
 
-// Helper: Show error message
 function showError(message) {
   console.error('Error:', message);
   const list = document.getElementById('notificationsList');
+  if (!list) return;
   list.innerHTML = `
     <div class="empty-notifications text-danger">
       <i class="fas fa-exclamation-circle"></i>
@@ -1054,20 +1115,17 @@ function showError(message) {
   `;
 }
 
-// Auto-refresh notifications every 30 seconds (when dropdown is open)
-let refreshInterval;
-document.getElementById('notificationDropdownBtn')?.addEventListener('shown.bs.dropdown', function () {
-  refreshInterval = setInterval(() => {
-    loadNotifications();
-  }, 30000);
+// Auto-refresh only while dropdown is open
+dropdownBtn?.addEventListener('shown.bs.dropdown', function () {
+  refreshInterval = setInterval(loadNotifications, 30000);
 });
 
-document.getElementById('notificationDropdownBtn')?.addEventListener('hidden.bs.dropdown', function () {
-  if (refreshInterval) {
-    clearInterval(refreshInterval);
-  }
+dropdownBtn?.addEventListener('hidden.bs.dropdown', function () {
+  if (refreshInterval) clearInterval(refreshInterval);
+  refreshInterval = null;
 });
 </script>
+
 
 {% block extra_js %}{% endblock %}
 </body>

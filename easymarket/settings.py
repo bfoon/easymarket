@@ -77,7 +77,6 @@ INSTALLED_APPS = [
     "marketplace",
     "orders",
     "payments",
-    "logistics",
     "reviews",
     "stock",
     "chat",
@@ -86,7 +85,8 @@ INSTALLED_APPS = [
     "auction",
     "helpdesk",
     "analytics",
-    'supply_chain',
+    "supply_chain",
+    "logistics.apps.LogisticsConfig",
 ]
 
 SITE_ID = config("SITE_ID", default=1, cast=int)
