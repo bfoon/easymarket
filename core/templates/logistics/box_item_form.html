@@ -3,132 +3,191 @@
 {% block title %}{{ action }} Item - Box #{{ box.box_number }}{% endblock %}
 
 {% block content %}
-<div class="page-header d-flex justify-content-between align-items-center">
-    <div>
-        <h1 class="page-title">{{ action }} Item to Box #{{ box.box_number }}</h1>
-        <p class="page-subtitle">
-            Shipment #{{ shipment.id }} - {{ shipment.shipping_address.city }}, {{ shipment.shipping_address.state }}
-        </p>
+<div class="container-fluid">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'logistics:shipment_list' %}">Shipments</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'logistics:shipment_detail' shipment.pk %}">Shipment #{{ shipment.shipment_number|default:shipment.id }}</a></li>
+            <li class="breadcrumb-item">Box #{{ box.box_number }}</li>
+            <li class="breadcrumb-item active">{{ action }} Item</li>
+        </ol>
+    </nav>
+
+    <!-- Header -->
+    <div class="page-header d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="page-title mb-2">
+                <i class="fas fa-cube me-2 text-primary"></i>
+                {{ action }} Item to Box #{{ box.box_number }}
+            </h1>
+            <p class="page-subtitle text-muted mb-0">
+                <i class="fas fa-shipping-fast me-1"></i>
+                Shipment #{{ shipment.shipment_number|default:shipment.id }}
+                {% if shipment.shipping_address %}
+                    • <i class="fas fa-map-marker-alt me-1"></i>
+                    {% if shipment.shipping_address.city %}{{ shipment.shipping_address.city }}{% endif %}{% if shipment.shipping_address.state %}, {{ shipment.shipping_address.state }}{% endif %}
+                {% endif %}
+            </p>
+        </div>
+        <a href="{% url 'logistics:shipment_detail' shipment.pk %}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-2"></i>Back to Shipment
+        </a>
     </div>
-    <a href="{% url 'logistics:shipment_detail' shipment.pk %}" class="btn btn-outline-secondary">
-        <i class="fas fa-arrow-left me-1"></i>
-        Back to Shipment
-    </a>
-</div>
 
-<div class="row">
-    <div class="col-lg-8 mx-auto">
-        <div class="card">
-            <div class="card-header">
-                <h6 class="m-0 font-weight-bold text-primary">
-                    <i class="fas fa-cube me-2"></i>
-                    Item Information
-                </h6>
+    <div class="row">
+        <!-- Form -->
+        <div class="col-lg-8">
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-gradient-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-box-open me-2"></i>Item Details</h5>
+                </div>
+                <div class="card-body p-4">
+                    <form method="post" novalidate id="boxItemForm">
+                        {% csrf_token %}
+
+                        <div class="mb-4">
+                            <label for="{{ form.order_item.id_for_label }}" class="form-label fw-bold">
+                                <i class="fas fa-tag me-1 text-primary"></i>Product <span class="text-danger">*</span>
+                            </label>
+                            {{ form.order_item }}
+                            {% if form.order_item.errors %}
+                                <div class="invalid-feedback d-block">
+                                    <i class="fas fa-exclamation-circle me-1"></i>{{ form.order_item.errors.0 }}
+                                </div>
+                            {% endif %}
+                            <div class="form-text">
+                                <i class="fas fa-info-circle me-1"></i>Select the product from the shipment items
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="{{ form.quantity.id_for_label }}" class="form-label fw-bold">
+                                <i class="fas fa-sort-numeric-up me-1 text-primary"></i>Quantity <span class="text-danger">*</span>
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light"><i class="fas fa-cubes"></i></span>
+                                {{ form.quantity }}
+                                <span class="input-group-text bg-light">units</span>
+                            </div>
+                            {% if form.quantity.errors %}
+                                <div class="invalid-feedback d-block">
+                                    <i class="fas fa-exclamation-circle me-1"></i>{{ form.quantity.errors.0 }}
+                                </div>
+                            {% endif %}
+                            <div class="form-text">
+                                <i class="fas fa-info-circle me-1"></i>Number of units to add (must not exceed available quantity)
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-center mt-4 pt-3 border-top">
+                            <a href="{% url 'logistics:shipment_detail' shipment.pk %}" class="btn btn-outline-secondary btn-lg">
+                                <i class="fas fa-times me-2"></i>Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary btn-lg px-5" id="submitBtn">
+                                <i class="fas fa-save me-2"></i>{{ action }} Item
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
-            <div class="card-body">
-                <form method="post" novalidate>
-                    {% csrf_token %}
-                    
-                    <div class="mb-3">
-                        <label for="{{ form.order_item.id_for_label }}" class="form-label">
-                            Product <span class="text-danger">*</span>
-                        </label>
-                        {{ form.order_item }}
-                        {% if form.order_item.errors %}
-                            <div class="text-danger small">{{ form.order_item.errors.0 }}</div>
-                        {% endif %}
-                        <div class="form-text">
-                            Select the product from the related order
-                        </div>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="{{ form.quantity.id_for_label }}" class="form-label">
-                            Quantity <span class="text-danger">*</span>
-                        </label>
-                        {{ form.quantity }}
-                        {% if form.quantity.errors %}
-                            <div class="text-danger small">{{ form.quantity.errors.0 }}</div>
-                        {% endif %}
-                        <div class="form-text">
-                            Number of units to add to this box
-                        </div>
-                    </div>
+        </div>
 
-                    <!-- Show current box contents -->
-                    {% if box.items.exists %}
-                    <div class="alert alert-info">
-                        <h6 class="alert-heading">
-                            <i class="fas fa-info-circle me-1"></i>
-                            Current Box Contents
-                        </h6>
-                        <div class="table-responsive">
-                            <table class="table table-sm mb-0">
-                                <thead>
-                                    <tr>
-                                        <th>Product</th>
-                                        <th>Quantity</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for item in box.items.all %}
-                                    <tr>
-                                        <td>{{ item.order_item.product.name }}</td>
-                                        <td>{{ item.quantity }}</td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Current Box Contents -->
+            {% if box.items.exists %}
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-warning text-dark">
+                    <h6 class="mb-0"><i class="fas fa-box me-2"></i>Current Box Contents</h6>
+                </div>
+                <div class="card-body">
+                    <div class="list-group list-group-flush">
+                        {% for item in box.items.all %}
+                        <div class="list-group-item px-0">
+                            <h6 class="mb-1"><i class="fas fa-cube me-1 text-primary"></i>{{ item.order_item.product.name }}</h6>
+                            {% if item.order_item.product.sku %}
+                                <small class="text-muted d-block"><i class="fas fa-barcode me-1"></i>{{ item.order_item.product.sku }}</small>
+                            {% endif %}
+                            <div class="mt-2">
+                                <span class="badge bg-info"><i class="fas fa-cubes me-1"></i>{{ item.quantity }} units</span>
+                                <span class="badge bg-success ms-1"><i class="fas fa-dollar-sign me-1"></i>D{{ item.order_item.product.price }}</span>
+                            </div>
                         </div>
+                        {% endfor %}
                     </div>
-                    {% endif %}
+                    <div class="mt-3 p-3 bg-light rounded text-center">
+                        <div class="fw-bold text-primary fs-5">{{ box.items.count }}</div>
+                        <small class="text-muted">Item Types</small>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-body text-center py-5">
+                    <i class="fas fa-box-open fa-3x text-muted mb-3"></i>
+                    <p class="text-muted mb-0">This box is empty.<br>Add your first item!</p>
+                </div>
+            </div>
+            {% endif %}
 
-                    <!-- Show available order items if linked to an order -->
-                    {% if shipment.order %}
-                    <div class="alert alert-secondary">
-                        <h6 class="alert-heading">
-                            <i class="fas fa-shopping-cart me-1"></i>
-                            Available Order Items
-                        </h6>
-                        <div class="table-responsive">
-                            <table class="table table-sm mb-0">
-                                <thead>
-                                    <tr>
-                                        <th>Product</th>
-                                        <th>Order Quantity</th>
-                                        <th>Unit Price</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for order_item in shipment.order.items.all %}
-                                    <tr>
-                                        <td>
-                                            {{ order_item.product.name }}
-                                            {% if order_item.product.sku %}
-                                                <br><small class="text-muted">SKU: {{ order_item.product.sku }}</small>
-                                            {% endif %}
-                                        </td>
-                                        <td>{{ order_item.quantity }}</td>
-                                        <td>D{{ order_item.product.price }}</td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
+            <!-- Available Items -->
+            {% if shipment_items %}
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-info text-white">
+                    <h6 class="mb-0"><i class="fas fa-list me-2"></i>Available Shipment Items</h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th><i class="fas fa-tag me-1"></i>Product</th>
+                                    <th class="text-center"><i class="fas fa-cubes me-1"></i>Qty</th>
+                                    <th class="text-end"><i class="fas fa-dollar-sign me-1"></i>Price</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in shipment_items %}
+                                <tr>
+                                    <td>
+                                        <div class="fw-bold">{{ item.order_item.product.name }}</div>
+                                        {% if item.order_item.product.sku %}
+                                            <small class="text-muted">{{ item.order_item.product.sku }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center"><span class="badge bg-primary">{{ item.quantity }}</span></td>
+                                    <td class="text-end fw-bold">D{{ item.order_item.discounted_unit_price }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
                     </div>
-                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
 
-                    <div class="d-flex justify-content-end gap-2">
-                        <a href="{% url 'logistics:shipment_detail' shipment.pk %}" class="btn btn-outline-secondary">
-                            <i class="fas fa-times me-1"></i>
-                            Cancel
-                        </a>
-                        <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-save me-1"></i>
-                            {{ action }} Item
-                        </button>
-                    </div>
-                </form>
+            <!-- Tips -->
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-success text-white">
+                    <h6 class="mb-0"><i class="fas fa-lightbulb me-2"></i>Packing Tips</h6>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled mb-0">
+                        <li class="mb-3">
+                            <i class="fas fa-check-circle text-success me-2"></i><strong>Quantity Validation:</strong>
+                            <p class="mb-0 ms-4 small text-muted">Don't exceed available items</p>
+                        </li>
+                        <li class="mb-3">
+                            <i class="fas fa-check-circle text-success me-2"></i><strong>Similar Items:</strong>
+                            <p class="mb-0 ms-4 small text-muted">Group similar products together</p>
+                        </li>
+                        <li class="mb-0">
+                            <i class="fas fa-check-circle text-success me-2"></i><strong>Weight Distribution:</strong>
+                            <p class="mb-0 ms-4 small text-muted">Distribute weight evenly</p>
+                        </li>
+                    </ul>
+                </div>
             </div>
         </div>
     </div>
@@ -138,50 +197,64 @@
 
 {% block extra_css %}
 <style>
-    .form-control, .form-select {
-        border-radius: 8px;
-        border: 1px solid #d1d5db;
-        padding: 12px 16px;
+    .bg-gradient-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .form-control, .form-select, .input-group-text {
+        border-radius: 10px; border: 2px solid #e5e7eb; padding: 12px 16px;
+        transition: all 0.3s ease; font-size: 0.95rem;
     }
-    
     .form-control:focus, .form-select:focus {
-        border-color: var(--primary-color);
-        box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.15);
+        border-color: #667eea; box-shadow: 0 0 0 0.25rem rgba(102, 126, 234, 0.15);
+        transform: translateY(-1px);
     }
-    
-    .form-label {
-        font-weight: 600;
-        color: #374151;
-        margin-bottom: 8px;
-    }
-    
-    .text-danger {
-        font-size: 14px;
-        margin-top: 4px;
-    }
-    
-    .form-text {
-        font-size: 12px;
-        color: #6b7280;
-        margin-top: 4px;
-    }
+    .input-group-text { background: #f8fafc; color: #64748b; font-weight: 600; }
+    .input-group .form-control { border-left: none; border-right: none; }
+    .input-group .input-group-text:first-child { border-right: none; }
+    .input-group .input-group-text:last-child { border-left: none; }
+    .input-group:focus-within .input-group-text { border-color: #667eea; background: #eff6ff; color: #667eea; }
+    .input-group:focus-within .form-control { border-color: #667eea; }
+    .form-label { font-weight: 600; color: #1e293b; margin-bottom: 10px; font-size: 0.95rem; }
+    .form-text { font-size: 0.85rem; color: #64748b; margin-top: 8px; }
+    .card { border-radius: 16px; transition: all 0.3s ease; }
+    .card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12) !important; }
+    .card-header { border-bottom: none; padding: 1.25rem 1.5rem; font-weight: 600; }
+    .list-group-item { border: none; border-bottom: 1px solid #e5e7eb; padding: 1rem 0; }
+    .list-group-item:last-child { border-bottom: none; }
+    .btn { border-radius: 10px; padding: 10px 20px; font-weight: 600; transition: all 0.3s ease; }
+    .btn-lg { padding: 12px 30px; font-size: 1rem; }
+    .btn-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4); }
+    .breadcrumb { background: transparent; padding: 0; margin: 0; font-size: 0.9rem; }
+    .breadcrumb-item + .breadcrumb-item::before { content: "›"; font-size: 1.2rem; }
+    .breadcrumb-item a { color: #667eea; text-decoration: none; }
+    .breadcrumb-item a:hover { color: #764ba2; text-decoration: underline; }
+    .page-title { font-weight: 700; color: #1e293b; font-size: 2rem; }
+    @keyframes slideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    .card { animation: slideIn 0.4s ease-out; }
 </style>
 {% endblock %}
 
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Add Bootstrap classes to form fields
-    const selects = document.querySelectorAll('select');
-    const inputs = document.querySelectorAll('input');
-    
-    selects.forEach(select => {
-        select.classList.add('form-select');
-    });
-    
-    inputs.forEach(input => {
-        if (input.type === 'number' || input.type === 'text') {
-            input.classList.add('form-control');
+    document.querySelectorAll('select').forEach(s => s.classList.add('form-select'));
+    document.querySelectorAll('input[type="number"], input[type="text"]').forEach(i => i.classList.add('form-control'));
+
+    const form = document.getElementById('boxItemForm');
+    const submitBtn = document.getElementById('submitBtn');
+
+    if (form) {
+        form.addEventListener('submit', function() {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Adding...';
+        });
+    }
+
+    document.addEventListener('keydown', function(e) {
+        if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+            e.preventDefault(); form.submit();
+        }
+        if (e.key === 'Escape') {
+            window.location.href = "{% url 'logistics:shipment_detail' shipment.pk %}";
         }
     });
 });

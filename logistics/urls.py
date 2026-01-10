@@ -295,4 +295,61 @@ urlpatterns = [
 
     path('orders/<int:order_id>/items-preview/', views.order_items_preview, name='order_items_preview'),
 
+    # B2B Shipments
+    path("b2b/shipments/", views.b2b_shipment_list, name="b2b_shipment_list"),
+    path("b2b/shipments/<uuid:order_id>/", views.b2b_shipment_detail, name="b2b_shipment_detail"),
+
+    # Box Management
+    path("b2b/shipments/<uuid:order_id>/boxes/bulk-create/",
+         views.b2b_bulk_create_boxes,
+         name="b2b_bulk_create_boxes"),
+
+    # Label Generation (regular QR image labels)
+    path("b2b/box/<int:box_id>/label/",
+         views.b2b_generate_box_label,
+         name="b2b_generate_box_label"),
+
+    path("b2b/shipments/<uuid:order_id>/labels/all/",
+         views.b2b_generate_all_box_labels,
+         name="b2b_generate_all_box_labels"),
+
+    # Printable PDF Labels
+    path("b2b/box/<int:box_id>/print-label/",
+         views.b2b_print_box_label,
+         name="b2b_print_box_label"),
+
+    path("b2b/shipments/<uuid:order_id>/print-all-labels/",
+         views.b2b_print_all_labels,
+         name="b2b_print_all_labels"),
+
+    # Box Item Management
+    path("b2b/box/<int:box_id>/items/add/",
+         views.b2b_box_item_add,
+         name="b2b_box_item_add"),
+
+    path("b2b/box-item/<int:item_id>/delete/",
+         views.b2b_box_item_delete,
+         name="b2b_box_item_delete"),
+
+    # Shipment Lock/Unlock
+    path("b2b/shipments/<uuid:order_id>/unlock/",
+         views.b2b_unlock_shipment,
+         name="b2b_unlock_shipment"),
+
+    path("b2b/shipments/<uuid:order_id>/lock/",
+         views.b2b_lock_shipment,
+         name="b2b_lock_shipment"),
+
+    # NEW: Delivery Management
+    path("b2b/shipments/<uuid:order_id>/mark-in-transit/",
+         views.b2b_mark_in_transit,
+         name="b2b_mark_in_transit"),
+
+    path("b2b/shipments/<uuid:order_id>/mark-delivered/",
+         views.b2b_mark_delivered,
+         name="b2b_mark_delivered"),
+
+    path("b2b/shipments/<uuid:order_id>/revert-to-in-transit/",
+         views.b2b_revert_to_in_transit,
+         name="b2b_revert_to_in_transit"),
 ]

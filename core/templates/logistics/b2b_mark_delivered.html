@@ -1,0 +1,100 @@
+{% extends 'logistics/base.html' %}
+
+{% block content %}
+<div class="container py-4">
+
+  <div class="card shadow">
+    <div class="card-header bg-success text-white">
+      <h4 class="mb-0">
+        <i class="fas fa-check-circle"></i> Confirm Delivery
+      </h4>
+    </div>
+
+    <div class="card-body">
+      <div class="alert alert-info">
+        <i class="fas fa-info-circle me-2"></i>
+        You are about to mark this shipment as <strong>DELIVERED</strong>. This action confirms that the package has been successfully received by the customer.
+      </div>
+
+      <!-- Shipment Summary -->
+      <div class="row mb-4">
+        <div class="col-md-6">
+          <h6 class="text-muted mb-2">SHIPMENT DETAILS</h6>
+          <div class="mb-2">
+            <strong>Order ID:</strong> {{ order.id }}
+          </div>
+          <div class="mb-2">
+            <strong>Tracking:</strong> {{ shipment.tracking_number|default:"N/A" }}
+          </div>
+          <div class="mb-2">
+            <strong>Store:</strong> {{ order.store.name }}
+          </div>
+        </div>
+
+        <div class="col-md-6">
+          <h6 class="text-muted mb-2">DELIVERY ADDRESS</h6>
+          {% if shipment.shipping_address %}
+            <div>{{ shipment.shipping_address.full_name }}</div>
+            <div>{{ shipment.shipping_address.address_line }}</div>
+            <div>{{ shipment.shipping_address.city }}, {{ shipment.shipping_address.country }}</div>
+          {% else %}
+            <div class="text-muted">No address specified</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Delivery Form -->
+      <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        <div class="mb-3">
+          <label for="delivery_notes" class="form-label">
+            <i class="fas fa-sticky-note me-1"></i> Delivery Notes
+            <span class="text-muted">(Optional)</span>
+          </label>
+          <textarea
+            name="delivery_notes"
+            id="delivery_notes"
+            class="form-control"
+            rows="3"
+            placeholder="Example: Received by John Doe, signed at gate, package in good condition, etc."></textarea>
+          <div class="form-text">
+            Add any relevant notes about the delivery (who received it, condition, signature, etc.)
+          </div>
+        </div>
+
+        <div class="mb-4">
+          <label for="delivery_proof" class="form-label">
+            <i class="fas fa-camera me-1"></i> Proof of Delivery
+            <span class="text-muted">(Optional)</span>
+          </label>
+          <input
+            type="file"
+            name="delivery_proof"
+            id="delivery_proof"
+            class="form-control"
+            accept="image/*">
+          <div class="form-text">
+            Upload a photo showing proof of delivery (signature, delivered package, etc.)
+          </div>
+        </div>
+
+        <div class="alert alert-warning">
+          <i class="fas fa-exclamation-triangle me-2"></i>
+          <strong>Important:</strong> Once marked as delivered, the shipment status will be finalized. Only administrators can revert this action if needed.
+        </div>
+
+        <div class="d-flex gap-2 justify-content-end">
+          <a href="{% url 'logistics:b2b_shipment_detail' order.id %}" class="btn btn-outline-secondary">
+            <i class="fas fa-times me-1"></i> Cancel
+          </a>
+          <button type="submit" class="btn btn-success btn-lg">
+            <i class="fas fa-check-circle me-1"></i> Confirm Delivery
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

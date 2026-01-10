@@ -1,89 +1,243 @@
 {% extends 'logistics/base.html' %}
 
-{% block title %}{{ action }} Box - Shipment #{{ shipment.id }}{% endblock %}
+{% block title %}{{ action }} Box - Shipment #{{ shipment.shipment_number|default:shipment.id }}{% endblock %}
 
 {% block content %}
-<div class="page-header d-flex justify-content-between align-items-center">
-    <div>
-        <h1 class="page-title">{{ action }} Box</h1>
-        <p class="page-subtitle">Shipment #{{ shipment.id }} - {{ shipment.shipping_address.city }}, {{ shipment.shipping_address.state }}</p>
+<div class="container-fluid">
+    <!-- Breadcrumb Navigation -->
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'logistics:shipment_list' %}">Shipments</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'logistics:shipment_detail' shipment.pk %}">Shipment #{{ shipment.shipment_number|default:shipment.id }}</a></li>
+            <li class="breadcrumb-item active">{{ action }} Box</li>
+        </ol>
+    </nav>
+
+    <!-- Page Header -->
+    <div class="page-header d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="page-title mb-2">
+                <i class="fas fa-box-open me-2 text-primary"></i>
+                {{ action }} Box
+            </h1>
+            <p class="page-subtitle text-muted mb-0">
+                <i class="fas fa-shipping-fast me-1"></i>
+                Shipment #{{ shipment.shipment_number|default:shipment.id }}
+                {% if shipment.shipping_address %}
+                    •
+                    <i class="fas fa-map-marker-alt me-1"></i>
+                    {% if shipment.shipping_address.city %}{{ shipment.shipping_address.city }}{% endif %}{% if shipment.shipping_address.state %}, {{ shipment.shipping_address.state }}{% endif %}
+                {% endif %}
+            </p>
+        </div>
+        <a href="{% url 'logistics:shipment_detail' shipment.pk %}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-2"></i>
+            Back to Shipment
+        </a>
     </div>
-    <a href="{% url 'logistics:shipment_detail' shipment.pk %}" class="btn btn-outline-secondary">
-        <i class="fas fa-arrow-left me-1"></i>
-        Back to Shipment
-    </a>
-</div>
 
-<div class="row">
-    <div class="col-lg-6 mx-auto">
-        <div class="card">
-            <div class="card-header">
-                <h6 class="m-0 font-weight-bold text-primary">
-                    <i class="fas fa-box me-2"></i>
-                    Box Information
-                </h6>
-            </div>
-            <div class="card-body">
-                <form method="post" novalidate>
-                    {% csrf_token %}
-                    
-                    <div class="mb-3">
-                        <label for="{{ form.box_number.id_for_label }}" class="form-label">
-                            Box Number <span class="text-danger">*</span>
-                        </label>
-                        {{ form.box_number }}
-                        {% if form.box_number.errors %}
-                            <div class="text-danger small">{{ form.box_number.errors.0 }}</div>
-                        {% endif %}
-                        <div class="form-text">
-                            Unique identifier for this box within the shipment
-                        </div>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="{{ form.weight_kg.id_for_label }}" class="form-label">
-                            Weight (kg)
-                        </label>
-                        {{ form.weight_kg }}
-                        {% if form.weight_kg.errors %}
-                            <div class="text-danger small">{{ form.weight_kg.errors.0 }}</div>
-                        {% endif %}
-                        <div class="form-text">
-                            Weight of the box and its contents in kilograms
-                        </div>
-                    </div>
+    <div class="row">
+        <!-- Main Form Column -->
+        <div class="col-lg-7 mb-4">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-gradient-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-cube me-2"></i>
+                        Box Details
+                    </h5>
+                </div>
+                <div class="card-body p-4">
+                    <form method="post" novalidate id="boxForm">
+                        {% csrf_token %}
 
-                    <!-- Display existing boxes for reference -->
-                    {% if shipment.boxes.exists %}
-                    <div class="alert alert-info">
-                        <h6 class="alert-heading">
-                            <i class="fas fa-info-circle me-1"></i>
-                            Existing Boxes
-                        </h6>
-                        <div class="row">
-                            {% for box in shipment.boxes.all %}
-                                <div class="col-md-6 mb-1">
-                                    <small>
-                                        Box #{{ box.box_number }}
-                                        {% if box.weight_kg %} - {{ box.weight_kg }} kg{% endif %}
-                                    </small>
+                        <!-- Box Number Field -->
+                        <div class="mb-4">
+                            <label for="{{ form.box_number.id_for_label }}" class="form-label fw-bold">
+                                <i class="fas fa-hashtag me-1 text-primary"></i>
+                                Box Number
+                                <span class="text-danger">*</span>
+                            </label>
+                            {{ form.box_number }}
+                            {% if form.box_number.errors %}
+                                <div class="invalid-feedback d-block">
+                                    <i class="fas fa-exclamation-circle me-1"></i>
+                                    {{ form.box_number.errors.0 }}
                                 </div>
-                            {% endfor %}
+                            {% endif %}
+                            <div class="form-text">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Unique identifier for this box within the shipment (e.g., 1, 2, 3, or A, B, C)
+                            </div>
+                        </div>
+
+                        <!-- Weight Field -->
+                        <div class="mb-4">
+                            <label for="{{ form.weight_kg.id_for_label }}" class="form-label fw-bold">
+                                <i class="fas fa-weight me-1 text-primary"></i>
+                                Weight (kg)
+                            </label>
+                            <div class="input-group">
+                                {{ form.weight_kg }}
+                                <span class="input-group-text bg-light">
+                                    <i class="fas fa-balance-scale me-1"></i>
+                                    kg
+                                </span>
+                            </div>
+                            {% if form.weight_kg.errors %}
+                                <div class="invalid-feedback d-block">
+                                    <i class="fas fa-exclamation-circle me-1"></i>
+                                    {{ form.weight_kg.errors.0 }}
+                                </div>
+                            {% endif %}
+                            <div class="form-text">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Total weight of the box including all contents
+                            </div>
+                        </div>
+
+                        <!-- Form Actions -->
+                        <div class="d-flex justify-content-between align-items-center mt-4 pt-3 border-top">
+                            <a href="{% url 'logistics:shipment_detail' shipment.pk %}" class="btn btn-outline-secondary btn-lg">
+                                <i class="fas fa-times me-2"></i>
+                                Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary btn-lg px-5" id="submitBtn">
+                                <i class="fas fa-save me-2"></i>
+                                {{ action }} Box
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar Column -->
+        <div class="col-lg-5">
+            <!-- Existing Boxes Info -->
+            {% if shipment.boxes.exists %}
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-info text-white">
+                    <h6 class="mb-0">
+                        <i class="fas fa-boxes me-2"></i>
+                        Existing Boxes in This Shipment
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="list-group list-group-flush">
+                        {% for box in shipment.boxes.all %}
+                            <div class="list-group-item px-0 {% if box == object %}bg-light border-primary border-2{% endif %}">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h6 class="mb-1">
+                                            <i class="fas fa-box me-2 text-primary"></i>
+                                            Box #{{ box.box_number }}
+                                            {% if box == object %}
+                                                <span class="badge bg-primary ms-2">Editing</span>
+                                            {% endif %}
+                                        </h6>
+                                        <small class="text-muted">
+                                            {% if box.weight_kg %}
+                                                <i class="fas fa-weight me-1"></i>
+                                                {{ box.weight_kg }} kg
+                                            {% else %}
+                                                <i class="fas fa-question-circle me-1"></i>
+                                                Weight not set
+                                            {% endif %}
+                                            {% if box.items.count %}
+                                                •
+                                                <i class="fas fa-cube me-1"></i>
+                                                {{ box.items.count }} item{{ box.items.count|pluralize }}
+                                            {% endif %}
+                                        </small>
+                                    </div>
+                                    {% if box != object %}
+                                        <a href="{% url 'logistics:box_edit' box.pk %}" class="btn btn-sm btn-outline-primary">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="mt-3 p-3 bg-light rounded">
+                        <div class="row text-center">
+                            <div class="col-6">
+                                <div class="fw-bold text-primary fs-4">{{ shipment.boxes.count }}</div>
+                                <small class="text-muted">Total Boxes</small>
+                            </div>
+                            <div class="col-6">
+                                <div class="fw-bold text-success fs-4">
+                                    {{ total_weight|floatformat:1|default:"0" }}
+                                </div>
+                                <small class="text-muted">Total Weight (kg)</small>
+                            </div>
                         </div>
                     </div>
-                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
 
-                    <div class="d-flex justify-content-end gap-2">
-                        <a href="{% url 'logistics:shipment_detail' shipment.pk %}" class="btn btn-outline-secondary">
-                            <i class="fas fa-times me-1"></i>
-                            Cancel
+            <!-- Tips & Guidelines Card -->
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-success text-white">
+                    <h6 class="mb-0">
+                        <i class="fas fa-lightbulb me-2"></i>
+                        Tips & Guidelines
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled mb-0">
+                        <li class="mb-3">
+                            <i class="fas fa-check-circle text-success me-2"></i>
+                            <strong>Box Numbering:</strong>
+                            <p class="mb-0 ms-4 small text-muted">Use sequential numbers (1, 2, 3) or letters (A, B, C) for easy tracking</p>
+                        </li>
+                        <li class="mb-3">
+                            <i class="fas fa-check-circle text-success me-2"></i>
+                            <strong>Weight Accuracy:</strong>
+                            <p class="mb-0 ms-4 small text-muted">Include packaging materials in total weight for accurate shipping calculations</p>
+                        </li>
+                        <li class="mb-3">
+                            <i class="fas fa-check-circle text-success me-2"></i>
+                            <strong>Label Generation:</strong>
+                            <p class="mb-0 ms-4 small text-muted">After creating the box, you can generate a QR code label for tracking</p>
+                        </li>
+                        <li class="mb-0">
+                            <i class="fas fa-check-circle text-success me-2"></i>
+                            <strong>Item Assignment:</strong>
+                            <p class="mb-0 ms-4 small text-muted">Add items to the box after creation from the shipment detail page</p>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Quick Actions Card -->
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-secondary text-white">
+                    <h6 class="mb-0">
+                        <i class="fas fa-bolt me-2"></i>
+                        Quick Actions
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'logistics:shipment_detail' shipment.pk %}" class="btn btn-outline-primary">
+                            <i class="fas fa-eye me-2"></i>
+                            View Full Shipment
                         </a>
-                        <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-save me-1"></i>
-                            {{ action }} Box
-                        </button>
+                        {% if action == 'Edit' and object %}
+                        <a href="{% url 'logistics:box_item_create' object.pk %}" class="btn btn-outline-success">
+                            <i class="fas fa-plus me-2"></i>
+                            Add Items to This Box
+                        </a>
+                        {% endif %}
+                        <a href="{% url 'logistics:box_create' shipment.pk %}" class="btn btn-outline-info">
+                            <i class="fas fa-box me-2"></i>
+                            Create Another Box
+                        </a>
                     </div>
-                </form>
+                </div>
             </div>
         </div>
     </div>
@@ -93,32 +247,209 @@
 
 {% block extra_css %}
 <style>
-    .form-control {
-        border-radius: 8px;
-        border: 1px solid #d1d5db;
+    /* Custom Gradient */
+    .bg-gradient-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    /* Enhanced Form Controls */
+    .form-control, .input-group-text {
+        border-radius: 10px;
+        border: 2px solid #e5e7eb;
         padding: 12px 16px;
+        transition: all 0.3s ease;
+        font-size: 0.95rem;
     }
-    
+
     .form-control:focus {
-        border-color: var(--primary-color);
-        box-shadow: 0 0 0 0.2rem rgba(37, 99, 235, 0.15);
+        border-color: #667eea;
+        box-shadow: 0 0 0 0.25rem rgba(102, 126, 234, 0.15);
+        transform: translateY(-1px);
     }
-    
+
+    .form-control:hover:not(:focus) {
+        border-color: #cbd5e1;
+    }
+
+    .input-group-text {
+        background: #f8fafc;
+        border-left: none;
+        color: #64748b;
+        font-weight: 600;
+    }
+
+    .input-group .form-control {
+        border-right: none;
+    }
+
+    .input-group:focus-within .input-group-text {
+        border-color: #667eea;
+        background: #eff6ff;
+        color: #667eea;
+    }
+
+    /* Form Labels */
     .form-label {
         font-weight: 600;
-        color: #374151;
-        margin-bottom: 8px;
+        color: #1e293b;
+        margin-bottom: 10px;
+        font-size: 0.95rem;
+        letter-spacing: 0.3px;
     }
-    
-    .text-danger {
-        font-size: 14px;
-        margin-top: 4px;
-    }
-    
+
+    /* Form Text */
     .form-text {
-        font-size: 12px;
-        color: #6b7280;
-        margin-top: 4px;
+        font-size: 0.85rem;
+        color: #64748b;
+        margin-top: 8px;
+        line-height: 1.5;
+    }
+
+    /* Invalid Feedback */
+    .invalid-feedback {
+        font-size: 0.875rem;
+        margin-top: 6px;
+        font-weight: 500;
+    }
+
+    /* Cards */
+    .card {
+        border-radius: 16px;
+        overflow: hidden;
+        transition: all 0.3s ease;
+    }
+
+    .card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12) !important;
+    }
+
+    .card-header {
+        border-bottom: none;
+        padding: 1.25rem 1.5rem;
+        font-weight: 600;
+    }
+
+    /* List Group */
+    .list-group-item {
+        border: none;
+        border-bottom: 1px solid #e5e7eb;
+        padding: 1rem 0;
+        transition: all 0.2s ease;
+    }
+
+    .list-group-item:last-child {
+        border-bottom: none;
+    }
+
+    .list-group-item:hover {
+        background-color: #f8fafc;
+        padding-left: 0.5rem;
+    }
+
+    /* Buttons */
+    .btn {
+        border-radius: 10px;
+        padding: 10px 20px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        border: 2px solid transparent;
+    }
+
+    .btn-lg {
+        padding: 12px 30px;
+        font-size: 1rem;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+    }
+
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-outline-primary:hover {
+        background: #667eea;
+        border-color: #667eea;
+        color: white;
+        transform: translateY(-2px);
+    }
+
+    .btn-outline-secondary:hover {
+        transform: translateY(-2px);
+    }
+
+    /* Breadcrumb */
+    .breadcrumb {
+        background: transparent;
+        padding: 0;
+        margin: 0;
+        font-size: 0.9rem;
+    }
+
+    .breadcrumb-item + .breadcrumb-item::before {
+        content: "›";
+        font-size: 1.2rem;
+    }
+
+    .breadcrumb-item a {
+        color: #667eea;
+        text-decoration: none;
+        transition: all 0.2s;
+    }
+
+    .breadcrumb-item a:hover {
+        color: #764ba2;
+        text-decoration: underline;
+    }
+
+    /* Page Header */
+    .page-title {
+        font-weight: 700;
+        color: #1e293b;
+        font-size: 2rem;
+        letter-spacing: -0.5px;
+    }
+
+    .page-subtitle {
+        font-size: 1rem;
+        line-height: 1.6;
+    }
+
+    /* Animations */
+    @keyframes slideIn {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .card {
+        animation: slideIn 0.4s ease-out;
+    }
+
+    /* Responsive */
+    @media (max-width: 991px) {
+        .page-title {
+            font-size: 1.5rem;
+        }
+
+        .page-header {
+            flex-direction: column;
+            align-items: flex-start !important;
+            gap: 1rem;
+        }
+
+        .page-header > a {
+            width: 100%;
+        }
     }
 </style>
 {% endblock %}
@@ -127,10 +458,56 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Add Bootstrap classes to form fields
-    const inputs = document.querySelectorAll('input');
+    const inputs = document.querySelectorAll('input[type="number"], input[type="text"]');
     inputs.forEach(input => {
-        if (input.type === 'number' || input.type === 'text') {
-            input.classList.add('form-control');
+        input.classList.add('form-control');
+    });
+
+    // Form validation
+    const form = document.getElementById('boxForm');
+    const submitBtn = document.getElementById('submitBtn');
+
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processing...';
+        });
+
+        // Real-time validation
+        inputs.forEach(input => {
+            input.addEventListener('blur', function() {
+                if (this.value.trim() === '' && this.required) {
+                    this.classList.add('is-invalid');
+                } else {
+                    this.classList.remove('is-invalid');
+                    this.classList.add('is-valid');
+                }
+            });
+
+            input.addEventListener('input', function() {
+                if (this.classList.contains('is-invalid') && this.value.trim() !== '') {
+                    this.classList.remove('is-invalid');
+                    this.classList.add('is-valid');
+                }
+            });
+        });
+    }
+
+    // Auto-focus first input
+    const firstInput = document.querySelector('#{{ form.box_number.id_for_label }}');
+    if (firstInput) {
+        firstInput.focus();
+    }
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+        if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+            e.preventDefault();
+            form.submit();
+        }
+
+        if (e.key === 'Escape') {
+            window.location.href = "{% url 'logistics:shipment_detail' shipment.pk %}";
         }
     });
 });

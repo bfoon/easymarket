@@ -1,4 +1,5 @@
 from .models import Shipment, WarehouseShipmentNotification
+from stores.b2b.models import B2BOrder
 
 def logistics_nav_counts(request):
     """
@@ -11,8 +12,11 @@ def logistics_nav_counts(request):
         status__in=['pending', 'in_transit']
     ).count()
 
+    nav_b2b_shipments_count = B2BOrder.objects.filter(status__iexact="shipped").count()
+
     return {
         'nav_active_shipments_count': active_shipments_count,
+        'nav_b2b_shipments_count': nav_b2b_shipments_count,
     }
 
 

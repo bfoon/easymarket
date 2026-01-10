@@ -1,0 +1,718 @@
+{% extends 'logistics/base.html' %}
+{% load static %}
+
+{% block extra_css %}
+<style>
+  .route-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 8px;
+    font-weight: 500;
+    font-size: 0.9rem;
+  }
+
+  .route-badge i {
+    font-size: 1.1rem;
+  }
+
+  .location-info {
+    background: #f8f9fa;
+    border-left: 4px solid #667eea;
+    padding: 12px 16px;
+    border-radius: 4px;
+    margin-bottom: 16px;
+  }
+
+  .location-info .from-location {
+    color: #28a745;
+    font-weight: 600;
+  }
+
+  .location-info .to-location {
+    color: #007bff;
+    font-weight: 600;
+  }
+
+  .shipment-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 24px;
+    border-radius: 8px;
+    margin-bottom: 24px;
+  }
+
+  .tracking-badge {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    backdrop-filter: blur(10px);
+  }
+
+  .stat-card {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+
+  .stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  }
+
+  .stat-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #333;
+    margin: 8px 0;
+  }
+
+  .stat-label {
+    font-size: 0.75rem;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .material-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  .material-fragile { background: #fff3cd; color: #856404; border: 1px solid #ffc107; }
+  .material-flammable { background: #f8d7da; color: #721c24; border: 1px solid #dc3545; }
+  .material-chemical { background: #d1ecf1; color: #0c5460; border: 1px solid #17a2b8; }
+  .material-perishable { background: #d4edda; color: #155724; border: 1px solid #28a745; }
+  .material-standard { background: #e7e7e7; color: #383d41; border: 1px solid #6c757d; }
+
+  .box-card {
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+    background: white;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+
+  .box-card:hover {
+    border-color: #667eea;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.15);
+  }
+
+  .box-number {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 1rem;
+  }
+
+  .action-btn-group {
+    display: flex;
+    gap: 6px;
+  }
+
+  .print-btn {
+    background: #28a745;
+    color: white;
+    border: none;
+    transition: background 0.2s;
+  }
+
+  .print-btn:hover {
+    background: #218838;
+    color: white;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+  <!-- Professional Header with Route Information -->
+  <div class="shipment-header">
+    <div class="d-flex justify-content-between align-items-start">
+      <div>
+        <h3 class="mb-2">
+          <i class="fas fa-shipping-fast"></i> B2B International Shipment
+        </h3>
+        <div class="d-flex align-items-center gap-3 flex-wrap mb-2">
+          <span class="tracking-badge">
+            Order ID: <strong>{{ order.id }}</strong>
+          </span>
+          {% if shipment.tracking_number %}
+          <span class="tracking-badge">
+            <i class="fas fa-barcode"></i> {{ shipment.tracking_number }}
+          </span>
+          {% endif %}
+          <span class="tracking-badge">
+            Store: {{ order.store.name }}
+          </span>
+
+          <!-- Lock Status Badge -->
+          {% if shipment.is_delivered %}
+          <span class="tracking-badge" style="background: rgba(40, 167, 69, 0.3);">
+            <i class="fas fa-check-circle"></i> DELIVERED
+          </span>
+          {% elif shipment.is_in_transit %}
+          <span class="tracking-badge" style="background: rgba(23, 162, 184, 0.3);">
+            <i class="fas fa-truck"></i> IN TRANSIT
+          </span>
+          {% elif shipment.is_locked %}
+          <span class="tracking-badge" style="background: rgba(220, 53, 69, 0.3);">
+            <i class="fas fa-lock"></i> LOCKED - Read Only
+          </span>
+          {% else %}
+          <span class="tracking-badge" style="background: rgba(40, 167, 69, 0.3);">
+            <i class="fas fa-unlock"></i> DRAFT - Editable
+          </span>
+          {% endif %}
+        </div>
+
+        <!-- Route Information -->
+        <div class="mt-3">
+          <div class="route-badge">
+            <div class="d-flex align-items-center gap-2">
+              <div class="text-end">
+                <i class="fas fa-map-marker-alt"></i>
+                <strong>{{ order.store.country|default:"Origin" }}</strong>
+              </div>
+              <i class="fas fa-arrow-right"></i>
+              <div>
+                <i class="fas fa-flag-checkered"></i>
+                <strong>{% if shipping_address %}{{ shipping_address.country }}{% else %}Destination{% endif %}</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="text-end">
+        <!-- Delivery Status Actions -->
+        {% if not shipment.is_delivered %}
+          {% if shipment.status == "locked" %}
+            <form method="post" action="{% url 'logistics:b2b_mark_in_transit' order.id %}" class="d-inline">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-info btn-sm me-2">
+                <i class="fas fa-truck"></i> Mark In Transit
+              </button>
+            </form>
+          {% endif %}
+
+          {% if shipment.status in "locked,in_transit" %}
+            <a href="{% url 'logistics:b2b_mark_delivered' order.id %}" class="btn btn-success btn-sm me-2">
+              <i class="fas fa-check-circle"></i> Mark Delivered
+            </a>
+          {% endif %}
+        {% else %}
+          {% if user.is_superuser %}
+            <form method="post" action="{% url 'logistics:b2b_revert_to_in_transit' order.id %}" class="d-inline">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-warning btn-sm me-2" onclick="return confirm('Are you sure you want to revert this shipment to in transit?')">
+                <i class="fas fa-undo"></i> Revert Delivery
+              </button>
+            </form>
+          {% endif %}
+        {% endif %}
+
+        <!-- Lock/Unlock Buttons -->
+        {% if user.is_superuser and not shipment.is_delivered %}
+          {% if shipment.status in "locked,in_transit" %}
+            <form method="post" action="{% url 'logistics:b2b_unlock_shipment' order.id %}" class="d-inline">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-warning btn-sm me-2" onclick="return confirm('Are you sure you want to unlock this shipment? This will allow editing of logistics details.')">
+                <i class="fas fa-unlock"></i> Unlock
+              </button>
+            </form>
+          {% elif shipment.is_draft %}
+            <form method="post" action="{% url 'logistics:b2b_lock_shipment' order.id %}" class="d-inline">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-danger btn-sm me-2" onclick="return confirm('Are you sure you want to lock this shipment? This will make logistics details read-only.')">
+                <i class="fas fa-lock"></i> Lock
+              </button>
+            </form>
+          {% endif %}
+        {% endif %}
+
+        <a href="{% url 'logistics:b2b_shipment_list' %}" class="btn btn-light btn-sm">
+          <i class="fas fa-arrow-left"></i> Back to List
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Shipment Statistics -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-3">
+      <div class="stat-card">
+        <i class="fas fa-boxes text-primary" style="font-size: 2rem;"></i>
+        <div class="stat-value">{{ boxes|length }}</div>
+        <div class="stat-label">Total Boxes</div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="stat-card">
+        <i class="fas fa-box-open text-success" style="font-size: 2rem;"></i>
+        <div class="stat-value">{{ total_qty }}</div>
+        <div class="stat-label">Total Items</div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="stat-card">
+        <i class="fas fa-weight text-warning" style="font-size: 2rem;"></i>
+        <div class="stat-value">{{ shipment.weight_kg|default:"--" }}</div>
+        <div class="stat-label">Weight (kg)</div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="stat-card">
+        <i class="fas fa-dollar-sign text-info" style="font-size: 2rem;"></i>
+        <div class="stat-value">{{ total_value }}</div>
+        <div class="stat-label">Total Value (GMD)</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4">
+    <!-- LEFT COLUMN: Shipping & Items Info -->
+    <div class="col-lg-7">
+
+      <!-- Origin & Destination Information -->
+      <div class="card mb-3 shadow-sm">
+        <div class="card-header bg-white border-bottom">
+          <h5 class="mb-0"><i class="fas fa-route text-primary"></i> Route Information</h5>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-6">
+              <div class="location-info">
+                <div class="d-flex align-items-center mb-2">
+                  <i class="fas fa-warehouse text-success me-2"></i>
+                  <strong>ORIGIN</strong>
+                </div>
+                <div class="from-location">
+                  <i class="fas fa-map-marker-alt me-1"></i>
+                  {{ order.store.name }}
+                </div>
+                <div class="text-muted small mt-1">
+                  {% if order.store.city %}{{ order.store.city }}, {% endif %}
+                  <strong>{{ order.store.country|default:"Not specified" }}</strong>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="location-info">
+                <div class="d-flex align-items-center mb-2">
+                  <i class="fas fa-shipping-fast text-primary me-2"></i>
+                  <strong>DESTINATION</strong>
+                </div>
+                {% if shipping_address %}
+                <div class="to-location">
+                  <i class="fas fa-map-marker-alt me-1"></i>
+                  {{ shipping_address.city }}{% if shipping_address.region %}, {{ shipping_address.region }}{% endif %}
+                </div>
+                <div class="text-muted small mt-1">
+                  <strong>{{ shipping_address.country }}</strong>
+                </div>
+                {% else %}
+                <div class="text-muted">Not specified</div>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+
+          {% if shipment.eta_text %}
+          <div class="alert alert-info mb-0 mt-3">
+            <i class="fas fa-clock me-2"></i>
+            <strong>Estimated Delivery:</strong> {{ shipment.eta_text }}
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Delivery Status Card (if delivered) -->
+      {% if shipment.is_delivered %}
+      <div class="card mb-3 shadow-sm border-success">
+        <div class="card-header bg-success text-white">
+          <h5 class="mb-0">
+            <i class="fas fa-check-circle"></i> Delivery Confirmed
+          </h5>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-6">
+              <div class="mb-2">
+                <strong><i class="fas fa-calendar-check text-success me-1"></i> Delivered On:</strong>
+                <div class="text-muted">{{ shipment.delivered_at|date:"F d, Y \a\t h:i A" }}</div>
+              </div>
+              {% if shipment.delivered_by %}
+              <div class="mb-2">
+                <strong><i class="fas fa-user text-primary me-1"></i> Confirmed By:</strong>
+                <div class="text-muted">{{ shipment.delivered_by.get_full_name|default:shipment.delivered_by.username }}</div>
+              </div>
+              {% endif %}
+            </div>
+            <div class="col-md-6">
+              {% if shipment.delivery_notes %}
+              <div class="mb-2">
+                <strong><i class="fas fa-sticky-note text-warning me-1"></i> Delivery Notes:</strong>
+                <div class="text-muted">{{ shipment.delivery_notes }}</div>
+              </div>
+              {% endif %}
+              {% if shipment.delivery_proof %}
+              <div class="mb-2">
+                <strong><i class="fas fa-image text-info me-1"></i> Proof of Delivery:</strong>
+                <div class="mt-1">
+                  <a href="{{ shipment.delivery_proof.url }}" target="_blank">
+                    <img src="{{ shipment.delivery_proof.url }}" class="img-thumbnail" style="max-width: 200px;">
+                  </a>
+                </div>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Customer / Delivery Info -->
+      <div class="card mb-3 shadow-sm">
+        <div class="card-header bg-white border-bottom">
+          <h5 class="mb-0"><i class="fas fa-user-tie text-primary"></i> Customer & Delivery Details</h5>
+        </div>
+        <div class="card-body">
+          {% if shipping_address %}
+            <div class="mb-2">
+              <strong class="text-primary">{{ shipping_address.full_name }}</strong>
+              {% if shipping_address.company_name %}
+                <span class="badge bg-secondary ms-2">{{ shipping_address.company_name }}</span>
+              {% endif %}
+            </div>
+
+            <div class="mb-3">
+              <i class="fas fa-phone text-success me-2"></i>{{ shipping_address.phone }}
+              <i class="fas fa-envelope text-info ms-3 me-2"></i>{{ shipping_address.email }}
+            </div>
+
+            <hr/>
+
+            <div class="mb-1">
+              <i class="fas fa-map-marked-alt text-danger me-2"></i>
+              <strong>Delivery Address:</strong>
+            </div>
+            <div class="ps-4">
+              <div>{{ shipping_address.address_line }}</div>
+              <div>{{ shipping_address.city }}, {{ shipping_address.region }}</div>
+              <div><strong>{{ shipping_address.country }}</strong></div>
+            </div>
+
+            {% if shipping_address.delivery_instructions %}
+              <div class="alert alert-warning mt-3 mb-0">
+                <i class="fas fa-sticky-note me-2"></i>
+                <strong>Special Instructions:</strong><br/>
+                {{ shipping_address.delivery_instructions }}
+              </div>
+            {% endif %}
+          {% else %}
+            <div class="alert alert-warning mb-0">
+              <i class="fas fa-exclamation-triangle me-2"></i>
+              No B2B shipping address found for this order.
+            </div>
+          {% endif %}
+
+          <hr/>
+
+          <div class="small text-muted">
+            <strong>Buyer:</strong> {{ order.buyer.get_full_name|default:order.buyer.username }}
+          </div>
+        </div>
+      </div>
+
+      <!-- Items Being Shipped -->
+      <div class="card shadow-sm">
+        <div class="card-header bg-white border-bottom">
+          <h5 class="mb-0"><i class="fas fa-box-open text-primary"></i> Shipment Items</h5>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Product</th>
+                  <th class="text-center" width="100">Qty</th>
+                  <th class="text-end" width="150">Line Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for it in shipment_items %}
+                  <tr>
+                    <td>
+                      <div class="fw-bold">{{ it.order_item.product_name|default:it.order_item.product.name }}</div>
+                      <div class="small text-muted">Item ID: {{ it.order_item.id }}</div>
+                    </td>
+                    <td class="text-center">
+                      <span class="badge bg-primary">{{ it.quantity }}</span>
+                    </td>
+                    <td class="text-end fw-bold">{{ it.get_total_price }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+              <tfoot class="table-light">
+                <tr class="fw-bold">
+                  <th>TOTAL (GMD)</th>
+                  <th class="text-center"><span class="badge bg-success">{{ total_qty }}</span></th>
+                  <th class="text-end text-primary">{{ total_value }}</th>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT COLUMN: Logistics & Boxes -->
+    <div class="col-lg-5">
+
+      <!-- Logistics Details Form -->
+      <div class="card mb-3 shadow-sm">
+        <div class="card-header bg-white border-bottom">
+          <h5 class="mb-0"><i class="fas fa-clipboard-list text-primary"></i> Logistics Information</h5>
+        </div>
+        <div class="card-body">
+          {% if shipment.is_locked %}
+          <div class="alert alert-warning">
+            <i class="fas fa-lock me-2"></i>
+            <strong>Shipment Locked:</strong> Logistics details are read-only. Labels have been generated.
+            {% if user.is_superuser %}
+            Click "Unlock Shipment" above if you need to make corrections.
+            {% else %}
+            Contact an administrator to unlock if corrections are needed.
+            {% endif %}
+          </div>
+          {% endif %}
+
+          <form method="post">
+            {% csrf_token %}
+
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label fw-bold">
+                  <i class="fas fa-weight-hanging text-warning"></i> Weight (kg)
+                </label>
+                <input name="weight_kg" class="form-control" value="{{ shipment.weight_kg|default:'' }}" placeholder="e.g. 12.5" {% if shipment.is_locked %}readonly{% endif %}>
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-bold">
+                  <i class="fas fa-cube text-info"></i> Volume (m³)
+                </label>
+                <input name="cubic_m" class="form-control" value="{{ shipment.cubic_m|default:'' }}" placeholder="e.g. 0.250" {% if shipment.is_locked %}readonly{% endif %}>
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-bold">
+                  <i class="fas fa-box text-primary"></i> Material Type
+                </label>
+                <select name="material_type" class="form-select" {% if shipment.is_locked %}disabled{% endif %}>
+                  <option value="standard" {% if shipment.material_type == "standard" %}selected{% endif %}>Standard</option>
+                  <option value="fragile" {% if shipment.material_type == "fragile" %}selected{% endif %}>⚠️ Fragile</option>
+                  <option value="flammable" {% if shipment.material_type == "flammable" %}selected{% endif %}>🔥 Flammable</option>
+                  <option value="chemical" {% if shipment.material_type == "chemical" %}selected{% endif %}>☠️ Dangerous Chemical</option>
+                  <option value="perishable" {% if shipment.material_type == "perishable" %}selected{% endif %}>❄️ Perishable</option>
+                </select>
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-bold">
+                  <i class="fas fa-plane text-success"></i> Shipment Mode
+                </label>
+                <select name="shipment_mode" class="form-select" {% if shipment.is_locked %}disabled{% endif %}>
+                  <option value="easy_move" {% if shipment.shipment_mode == "easy_move" %}selected{% endif %}>🚚 Easy Move (Normal)</option>
+                  <option value="cargo" {% if shipment.shipment_mode == "cargo" %}selected{% endif %}>📦 Cargo</option>
+                  <option value="air_freight" {% if shipment.shipment_mode == "air_freight" %}selected{% endif %}>✈️ Air Freight</option>
+                </select>
+              </div>
+
+              <div class="col-12">
+                <label class="form-label fw-bold">
+                  <i class="fas fa-tag text-secondary"></i> Material Class <span class="text-muted">(optional)</span>
+                </label>
+                <input name="material_class" class="form-control" value="{{ shipment.material_class|default:'' }}" placeholder="e.g. Class 3 Flammable Liquids" {% if shipment.is_locked %}readonly{% endif %}>
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-bold">
+                  <i class="fas fa-dollar-sign text-success"></i> Shipping Cost (GMD)
+                </label>
+                <input name="shipping_cost" class="form-control" value="{{ shipment.shipping_cost|default:'0.00' }}" {% if shipment.is_locked %}readonly{% endif %}>
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label fw-bold">
+                  <i class="fas fa-clock text-info"></i> Estimated Time
+                </label>
+                <input name="eta_text" class="form-control" value="{{ shipment.eta_text|default:'' }}" placeholder="e.g. 3-5 days" {% if shipment.is_locked %}readonly{% endif %}>
+              </div>
+            </div>
+
+            <div class="d-grid mt-4">
+              <button class="btn btn-primary btn-lg" {% if shipment.is_locked %}disabled{% endif %}>
+                <i class="fas fa-save"></i>
+                {% if shipment.is_locked %}
+                  Locked - Cannot Edit
+                {% else %}
+                  Save & {% if shipment.tracking_number %}Update{% else %}Generate Tracking{% endif %}
+                {% endif %}
+              </button>
+            </div>
+
+            {% if shipment.material_type and shipment.material_type != 'standard' %}
+            <div class="mt-3 text-center">
+              <span class="material-badge material-{{ shipment.material_type }}">
+                {{ shipment.get_material_type_display|default:shipment.material_type }}
+              </span>
+            </div>
+            {% endif %}
+          </form>
+        </div>
+      </div>
+
+      <!-- Boxes Management -->
+      <div class="card shadow-sm">
+        <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center">
+          <h5 class="mb-0">
+            <i class="fas fa-boxes text-primary"></i> Boxes
+            <span class="badge bg-primary">{{ boxes|length }}</span>
+          </h5>
+          <div class="d-flex gap-2 align-items-center">
+            <form method="post" action="{% url 'logistics:b2b_bulk_create_boxes' order.id %}" class="d-flex gap-2">
+              {% csrf_token %}
+              <input name="num_boxes" class="form-control form-control-sm" style="width:70px" value="1" min="1" max="50">
+              <button class="btn btn-sm btn-outline-primary" title="Add Boxes">
+                <i class="fas fa-plus"></i> Add
+              </button>
+            </form>
+
+            <a href="{% url 'logistics:b2b_generate_all_box_labels' order.id %}"
+               class="btn btn-sm btn-outline-success"
+               title="Generate QR Labels">
+              <i class="fas fa-qrcode"></i>
+            </a>
+
+            <a href="{% url 'logistics:b2b_print_all_labels' order.id %}"
+               target="_blank"
+               class="btn btn-sm btn-success print-btn"
+               title="Print All Labels">
+              <i class="fas fa-print"></i> Print All
+            </a>
+          </div>
+        </div>
+
+        <div class="card-body">
+          {% if boxes %}
+            {% for b in boxes %}
+              <div class="box-card">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                  <div class="box-number">
+                    <i class="fas fa-box"></i> BOX #{{ b.box_number }}
+                  </div>
+                  <div class="action-btn-group">
+                    <a class="btn btn-sm btn-outline-secondary"
+                       href="{% url 'logistics:b2b_generate_box_label' b.id %}"
+                       title="Generate QR Label">
+                      <i class="fas fa-qrcode"></i>
+                    </a>
+                    <a class="btn btn-sm btn-success print-btn"
+                       href="{% url 'logistics:b2b_print_box_label' b.id %}"
+                       target="_blank"
+                       title="Print Label">
+                      <i class="fas fa-print"></i>
+                    </a>
+                  </div>
+                </div>
+
+                {% if b.label %}
+                  <div class="text-center mb-3">
+                    <img src="{{ b.label.url }}" style="max-width:180px" class="img-thumbnail"/>
+                  </div>
+                {% endif %}
+
+                <!-- Pack Items Form -->
+                <form method="post" action="{% url 'logistics:b2b_box_item_add' b.id %}">
+                  {% csrf_token %}
+                  <div class="row g-2 mb-2">
+                    <div class="col-7">
+                      <select name="order_item_id" class="form-select form-select-sm">
+                        {% for it in shipment_items %}
+                          <option value="{{ it.order_item.id }}">
+                            {{ it.order_item.product_name|default:it.order_item.product.name|truncatechars:30 }} (max {{ it.quantity }})
+                          </option>
+                        {% endfor %}
+                      </select>
+                    </div>
+                    <div class="col-3">
+                      <input name="quantity" class="form-control form-control-sm" value="1" min="1">
+                    </div>
+                    <div class="col-2 d-grid">
+                      <button class="btn btn-sm btn-primary" title="Pack Item">
+                        <i class="fas fa-plus"></i>
+                      </button>
+                    </div>
+                  </div>
+                </form>
+
+                <!-- Packed Items List -->
+                {% if b.items.all %}
+                  <div class="border-top pt-2">
+                    <div class="small fw-bold text-muted mb-2">
+                      <i class="fas fa-list"></i> Packed Items:
+                    </div>
+                    {% for bi in b.items.all %}
+                      <div class="d-flex justify-content-between align-items-center py-1 border-bottom">
+                        <div class="small">
+                          <i class="fas fa-box-open text-primary me-1"></i>
+                          {{ bi.order_item.product_name|default:bi.order_item.product.name|truncatechars:35 }}
+                          <span class="badge bg-secondary">× {{ bi.quantity }}</span>
+                        </div>
+                        <form method="post" action="{% url 'logistics:b2b_box_item_delete' bi.id %}" class="d-inline">
+                          {% csrf_token %}
+                          <button class="btn btn-sm btn-outline-danger" title="Remove Item">
+                            <i class="fas fa-trash-alt"></i>
+                          </button>
+                        </form>
+                      </div>
+                    {% endfor %}
+                  </div>
+                {% else %}
+                  <div class="alert alert-light small mb-0">
+                    <i class="fas fa-info-circle me-1"></i> No items packed yet
+                  </div>
+                {% endif %}
+              </div>
+            {% endfor %}
+          {% else %}
+            <div class="alert alert-info mb-0">
+              <i class="fas fa-info-circle me-2"></i>
+              No boxes created yet. Use the "Add" button above to create boxes.
+            </div>
+          {% endif %}
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+{% endblock %}

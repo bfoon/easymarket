@@ -25,6 +25,7 @@ from django.core.files.base import ContentFile
 from django.urls import reverse
 
 from orders.models import Order, ShippingAddress, OrderItem
+from stores.b2b.models import B2BOrder, B2BOrderItem, B2BShippingAddress
 
 User = get_user_model()
 
@@ -1222,3 +1223,378 @@ class WarehouseShipmentNotification(models.Model):
             read_at=timezone.now()
         )
 
+
+class B2BShipment(models.Model):
+    """
+    Logistics shipment record for a B2B order.
+    Created/managed by logistics team after seller marks order as shipped.
+
+    LOCK BEHAVIOR:
+    - Shipment starts unlocked (editable)
+    - When "Generate All Labels" is clicked, status becomes 'locked'
+    - Locked shipments are READ-ONLY (logistics details cannot be changed)
+    - Can be manually unlocked by logistics admins if needed
+    """
+
+    STATUS_CHOICES = [
+        ("draft", "Draft - Editable"),
+        ("locked", "Locked - Labels Generated"),
+        ("in_transit", "In Transit"),
+        ("delivered", "Delivered"),
+    ]
+
+    SHIPMENT_MODE_CHOICES = [
+        ("easy_move", "Easy Move (Normal)"),
+        ("cargo", "Cargo"),
+        ("air_freight", "Air Freight"),
+    ]
+
+    MATERIAL_TYPE_CHOICES = [
+        ("standard", "Standard"),
+        ("fragile", "Fragile"),
+        ("flammable", "Flammable"),
+        ("chemical", "Dangerous Chemical"),
+        ("perishable", "Perishable"),
+    ]
+
+    order = models.OneToOneField(
+        B2BOrder,  # Use string reference
+        on_delete=models.CASCADE,
+        related_name="logistics_shipment",
+    )
+
+    # duplicate link (convenience) - B2B has its own shipping model
+    shipping_address = models.OneToOneField(
+        B2BShippingAddress,  # Use string reference
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="logistics_shipment",
+    )
+
+    tracking_number = models.CharField(max_length=80, blank=True, null=True, unique=True)
+
+    # NEW: Lock status
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default="draft",
+        help_text="Draft = editable, Locked = read-only after labels generated, In Transit = shipped, Delivered = completed"
+    )
+    locked_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp when shipment was locked"
+    )
+    locked_by = models.ForeignKey(
+        User,  # Use string reference
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="locked_shipments",
+        help_text="User who locked the shipment"
+    )
+
+    # NEW: Delivery tracking
+    delivered_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp when shipment was marked as delivered"
+    )
+    delivered_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="delivered_shipments",
+        help_text="User who marked shipment as delivered"
+    )
+    delivery_notes = models.TextField(
+        blank=True,
+        help_text="Notes about the delivery (signature, condition, etc.)"
+    )
+    delivery_proof = models.ImageField(
+        upload_to='shipment_delivery_proofs/',
+        null=True,
+        blank=True,
+        help_text="Photo proof of delivery (optional)"
+    )
+
+    # Logistics details
+    weight_kg = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(Decimal("0.01"))]
+    )
+    cubic_m = models.DecimalField(
+        max_digits=10, decimal_places=3, null=True, blank=True,
+        validators=[MinValueValidator(Decimal("0.001"))],
+        help_text="Cubic meters (m³)"
+    )
+    total_boxes = models.PositiveIntegerField(default=0)
+
+    material_type = models.CharField(max_length=20, choices=MATERIAL_TYPE_CHOICES, default="standard")
+    material_class = models.CharField(
+        max_length=80, blank=True,
+        help_text="Optional material class (e.g. Class 3 Flammable Liquids)"
+    )
+
+    shipment_mode = models.CharField(max_length=20, choices=SHIPMENT_MODE_CHOICES, default="easy_move")
+
+    shipping_cost = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
+    eta_text = models.CharField(max_length=120, blank=True, help_text="Estimated delivery time, e.g. 3-5 days")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['status', 'created_at']),
+            models.Index(fields=['tracking_number']),
+        ]
+
+    def __str__(self):
+        status_emoji = "🔒" if self.is_locked() else "📝"
+        return f"{status_emoji} B2BShipment {self.tracking_number or self.order_id}"
+
+    def is_locked(self):
+        """Check if shipment is locked (read-only)"""
+        return self.status in ["locked", "in_transit", "delivered"]
+
+    def is_draft(self):
+        """Check if shipment is still editable"""
+        return self.status == "draft"
+
+    def is_delivered(self):
+        """Check if shipment has been delivered"""
+        return self.status == "delivered"
+
+    def is_in_transit(self):
+        """Check if shipment is currently in transit"""
+        return self.status == "in_transit"
+
+    def lock(self, user=None):
+        """
+        Lock the shipment (make it read-only).
+        Called automatically when QR labels are generated.
+        """
+        if self.status == "draft":
+            self.status = "locked"
+            self.locked_at = timezone.now()
+            if user:
+                self.locked_by = user
+            self.save(update_fields=['status', 'locked_at', 'locked_by', 'updated_at'])
+            return True
+        return False
+
+    def unlock(self, user=None):
+        """
+        Unlock the shipment (allow editing again).
+        Should only be done by logistics admins when corrections are needed.
+        """
+        if self.status in ["locked", "in_transit"]:
+            self.status = "draft"
+            self.locked_at = None
+            self.locked_by = None
+            self.save(update_fields=['status', 'locked_at', 'locked_by', 'updated_at'])
+            return True
+        return False
+
+    def mark_in_transit(self, user=None):
+        """
+        Mark shipment as in transit (shipped out).
+        """
+        if self.status == "locked":
+            self.status = "in_transit"
+            self.save(update_fields=['status', 'updated_at'])
+            return True
+        return False
+
+    def mark_delivered(self, user=None, notes="", proof=None):
+        """
+        Mark shipment as delivered.
+        """
+        if self.status in ["locked", "in_transit"]:
+            self.status = "delivered"
+            self.delivered_at = timezone.now()
+            if user:
+                self.delivered_by = user
+            if notes:
+                self.delivery_notes = notes
+            if proof:
+                self.delivery_proof = proof
+            self.save(update_fields=['status', 'delivered_at', 'delivered_by', 'delivery_notes', 'delivery_proof',
+                                     'updated_at'])
+            return True
+        return False
+
+    def can_edit(self):
+        """Check if logistics details can be edited"""
+        return self.is_draft()
+
+    def get_status_display_with_icon(self):
+        """Get status with icon for display"""
+        icons = {
+            'draft': '📝 Draft - Editable',
+            'locked': '🔒 Locked - Read Only',
+            'in_transit': '🚚 In Transit',
+            'delivered': '✅ Delivered',
+        }
+        return icons.get(self.status, self.status)
+
+    def ensure_shipping_address(self):
+        if not self.shipping_address and hasattr(self.order, "shipping_address"):
+            self.shipping_address = self.order.shipping_address
+        if not self.shipping_address:
+            from .models import B2BShippingAddress  # Adjust import
+            addr = B2BShippingAddress.objects.filter(order=self.order).first()
+            if addr:
+                self.shipping_address = addr
+
+    def clean(self):
+        super().clean()
+        # Prevent editing locked shipments
+        if self.pk and self.is_locked():
+            # Allow certain fields to be updated even when locked
+            allowed_updates = ['updated_at', 'total_boxes']
+
+            # Get the original instance from database
+            try:
+                original = B2BShipment.objects.get(pk=self.pk)
+
+                # Check if any protected fields were changed
+                protected_fields = [
+                    'weight_kg', 'cubic_m', 'material_type', 'material_class',
+                    'shipment_mode', 'shipping_cost', 'eta_text'
+                ]
+
+                for field in protected_fields:
+                    if getattr(self, field) != getattr(original, field):
+                        from django.core.exceptions import ValidationError
+                        raise ValidationError(
+                            f"Cannot modify {field} - shipment is locked. "
+                            "Please unlock the shipment first if corrections are needed."
+                        )
+            except B2BShipment.DoesNotExist:
+                pass
+
+        # Keep total_boxes consistent
+        actual_boxes = self.boxes.count() if self.pk else 0
+        if self.total_boxes and actual_boxes and self.total_boxes != actual_boxes:
+            pass  # Allow mismatch, but you can enforce if needed
+
+class B2BShipmentItem(models.Model):
+    """
+    What is being shipped (B2B order items with quantity).
+    """
+    shipment = models.ForeignKey(B2BShipment, on_delete=models.CASCADE, related_name="shipment_items")
+    order_item = models.ForeignKey(B2BOrderItem, on_delete=models.CASCADE, related_name="b2b_shipment_items")
+    quantity = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        unique_together = ("shipment", "order_item")
+
+    def __str__(self):
+        return f"{self.order_item_id} x{self.quantity}"
+
+    def get_total_price(self):
+        # prefer seller_unit_price if it exists, else requested_unit_price, else 0
+        unit = getattr(self.order_item, "seller_unit_price", None) or getattr(self.order_item, "requested_unit_price", None) or Decimal("0.00")
+        return (unit or Decimal("0.00")) * Decimal(int(self.quantity or 0))
+
+
+class B2BShipmentBox(models.Model):
+    """
+    Box inside a B2BShipment (label + QR).
+    """
+    shipment = models.ForeignKey(B2BShipment, on_delete=models.CASCADE, related_name="boxes")
+    box_number = models.PositiveIntegerField()
+    weight_kg = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        validators=[MinValueValidator(Decimal("0.01"))]
+    )
+    dimensions = models.CharField(max_length=50, blank=True, help_text="LxWxH in cm (optional)")
+
+    label = models.ImageField(upload_to="b2b_shipments/box_labels/%Y/%m/%d/", null=True, blank=True)
+    qr_data = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("shipment", "box_number")
+        ordering = ["shipment", "box_number"]
+
+    def __str__(self):
+        return f"B2B Box #{self.box_number} ({self.shipment.tracking_number})"
+
+    def generate_qr_label(self):
+        """
+        QR includes tracking + customer info.
+        Mirrors your existing ShipmentBox.generate_qr_label pattern :contentReference[oaicite:3]{index=3}
+        """
+        sh = self.shipment
+        sh.ensure_shipping_address()
+        addr = sh.shipping_address
+
+        buyer = sh.order.buyer
+        buyer_name = buyer.get_full_name() or buyer.username
+
+        # Build readable customer block
+        customer_block = ""
+        if addr:
+            customer_block = (
+                f"Customer: {addr.full_name or buyer_name}\n"
+                f"Phone: {addr.phone or ''}\n"
+                f"Company: {addr.company_name or ''}\n"
+                f"Address: {addr.address_line or ''}\n"
+                f"City/Region: {addr.city or ''} {addr.region or ''}\n"
+                f"Country: {addr.country or ''}\n"
+            ).strip()
+
+        total_boxes = sh.boxes.count() or (sh.total_boxes or 0)
+
+        self.qr_data = (
+            f"TRACKING: {sh.tracking_number}\n"
+            f"BOX: {self.box_number}/{total_boxes}\n"
+            f"MODE: {sh.shipment_mode}\n"
+            f"{customer_block}"
+        ).strip()
+
+        qr = qrcode.QRCode(
+            version=2,
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=8,
+            border=3,
+        )
+        qr.add_data(self.qr_data)
+        qr.make(fit=True)
+
+        img = qr.make_image(fill_color="black", back_color="white")
+
+        buf = BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+
+        filename = f"b2b_box_{sh.tracking_number}_#{self.box_number}.png"
+        self.label.save(filename, ContentFile(buf.getvalue()), save=False)
+        buf.close()
+
+        self.save(update_fields=["label", "qr_data", "updated_at"])
+
+
+class B2BBoxItem(models.Model):
+    """
+    B2B order items packed in a B2BShipmentBox.
+    """
+    box = models.ForeignKey(B2BShipmentBox, on_delete=models.CASCADE, related_name="items")
+    order_item = models.ForeignKey(B2BOrderItem, on_delete=models.CASCADE, related_name="b2b_box_items")
+    quantity = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        unique_together = ("box", "order_item")
+
+    def clean(self):
+        super().clean()
+        if self.quantity and self.quantity < 1:
+            raise ValidationError({"quantity": "Quantity must be at least 1."})
