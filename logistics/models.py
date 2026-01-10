@@ -793,6 +793,8 @@ class Shipment(TimeStampedModel):
         verbose_name=_("Shipping Cost")
     )
 
+    created_by = models.DateTimeField(auto_now_add=True)
+
     def save(self, *args, **kwargs):
         """Generate tracking number if not provided."""
         if not self.tracking_number:

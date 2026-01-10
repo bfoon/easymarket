@@ -1,705 +1,650 @@
 {% extends 'logistics/base.html' %}
 {% load static %}
+{% load humanize %}
 
-{% block title %}Warehouse Item #{{ item.id }} - {{ order.id }}{% endblock %}
+{% block title %}{{ warehouse.name }} - Warehouse Details{% endblock %}
 
 {% block extra_css %}
 <style>
-    :root {
-        --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        --success-gradient: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-        --warning-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-        --info-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-    }
+  :root{
+    --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --success-gradient: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    --warning-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    --info-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
 
-    /* Page Header */
-    .detail-header {
-        background: white;
-        border-radius: 20px;
-        padding: 2rem;
-        margin-bottom: 2rem;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-        position: relative;
-        overflow: hidden;
-    }
+    --ink: #1f2937;
+    --muted: #6b7280;
+    --border: #eef2f7;
+    --bg-soft: #f8fafc;
+  }
 
-    .detail-header::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 5px;
-        background: var(--primary-gradient);
-    }
+  /* Header */
+  .warehouse-header{
+    background:#fff;
+    border-radius: 20px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 4px 20px rgba(0,0,0,.08);
+    position: relative;
+    overflow: hidden;
+  }
+  .warehouse-header::before{
+    content:'';
+    position:absolute;
+    inset:0 0 auto 0;
+    height:5px;
+    background: var(--primary-gradient);
+  }
+  .warehouse-header h1{
+    color: var(--ink);
+    letter-spacing: -0.02em;
+  }
 
-    /* Breadcrumb */
-    .breadcrumb {
-        background: transparent;
-        padding: 0;
-        margin: 0;
-    }
+  /* Stats Cards */
+  .stat-card{
+    background:#fff;
+    border-radius:16px;
+    padding:1.5rem;
+    box-shadow:0 4px 15px rgba(0,0,0,.05);
+    transition:transform .25s ease, box-shadow .25s ease;
+    border-left:4px solid;
+    position:relative;
+    overflow:hidden;
+    height:100%;
+  }
+  .stat-card::before{
+    content:'';
+    position:absolute;
+    top:.5rem;
+    right:.75rem;
+    width:96px;
+    height:96px;
+    opacity:.06;
+    font-size:3.5rem;
+    font-family:"Font Awesome 5 Free";
+    font-weight:900;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .stat-card:hover{
+    transform: translateY(-4px);
+    box-shadow:0 10px 30px rgba(0,0,0,.10);
+  }
+  .stat-card.primary{ border-left-color:#667eea; }
+  .stat-card.primary::before{ content:'\f466'; color:#667eea; }
 
-    .breadcrumb-item + .breadcrumb-item::before {
-        content: '›';
-        color: #a0aec0;
-    }
+  .stat-card.success{ border-left-color:#11998e; }
+  .stat-card.success::before{ content:'\f058'; color:#11998e; }
 
-    .breadcrumb-item a {
-        color: #667eea;
-        text-decoration: none;
-    }
+  .stat-card.warning{ border-left-color:#f093fb; }
+  .stat-card.warning::before{ content:'\f017'; color:#f093fb; }
 
-    .breadcrumb-item a:hover {
-        text-decoration: underline;
-    }
+  .stat-card.info{ border-left-color:#4facfe; }
+  .stat-card.info::before{ content:'\f0d1'; color:#4facfe; }
 
-    .breadcrumb-item.active {
-        color: #718096;
-    }
+  .stat-value{
+    font-size:2rem;
+    font-weight:800;
+    color: var(--ink);
+    margin:.35rem 0 .15rem 0;
+  }
+  .stat-label{
+    color: var(--muted);
+    font-size:.80rem;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    font-weight:700;
+  }
+  .stat-icon{
+    width:52px;
+    height:52px;
+    border-radius:14px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:1.35rem;
+    margin-bottom:.75rem;
+  }
+  .stat-icon.primary{ background: rgba(102,126,234,.10); color:#667eea; }
+  .stat-icon.success{ background: rgba(17,153,142,.10); color:#11998e; }
+  .stat-icon.warning{ background: rgba(240,147,251,.10); color:#f093fb; }
+  .stat-icon.info{ background: rgba(79,172,254,.10); color:#4facfe; }
 
-    /* Cards */
-    .detail-card {
-        background: white;
-        border-radius: 20px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-        overflow: hidden;
-        margin-bottom: 1.5rem;
-    }
+  /* Detail Cards */
+  .detail-card{
+    background:#fff;
+    border-radius:20px;
+    box-shadow: 0 4px 20px rgba(0,0,0,.08);
+    overflow:hidden;
+    margin-bottom:1.5rem;
+    border:1px solid var(--border);
+  }
+  .detail-card-header{
+    background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+    padding: 1.1rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:1rem;
+    flex-wrap:wrap;
+  }
+  .detail-card-header h5, .detail-card-header h6{
+    margin:0;
+    font-weight:800;
+    display:flex;
+    align-items:center;
+    gap:.55rem;
+    color: var(--ink);
+  }
 
-    .detail-card-header {
-        background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
-        padding: 1.25rem 1.5rem;
-        border-bottom: 2px solid #f1f3f5;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
+  /* Info Grid */
+  .info-grid{
+    display:grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap:1rem;
+  }
+  .info-item{
+    background: var(--bg-soft);
+    padding:1rem;
+    border-radius:14px;
+    border:1px solid var(--border);
+    border-left:4px solid #667eea;
+  }
+  .info-label{
+    color: var(--muted);
+    font-size:.78rem;
+    font-weight:800;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    margin-bottom:.25rem;
+  }
+  .info-value{
+    color: var(--ink);
+    font-weight:700;
+    font-size:1rem;
+  }
 
-    .detail-card-header h5, .detail-card-header h6 {
-        margin: 0;
-        font-weight: 700;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-    }
+  /* Table */
+  .inventory-table{
+    margin:0;
+  }
+  .inventory-table thead th{
+    background: #f8f9fa;
+    color: var(--ink);
+    font-weight:800;
+    font-size:.78rem;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    padding: 1rem;
+    border:none;
+    white-space:nowrap;
+  }
+  .inventory-table tbody tr{
+    transition: background .15s ease;
+    border-bottom:1px solid var(--border);
+  }
+  .inventory-table tbody tr:hover{
+    background: rgba(102,126,234,.05);
+  }
+  .inventory-table tbody td{
+    padding: 1rem;
+    vertical-align: middle;
+    border:none;
+  }
 
-    /* Product Display */
-    .product-image {
-        width: 120px;
-        height: 120px;
-        border-radius: 16px;
-        object-fit: cover;
-        border: 2px solid #e2e8f0;
-    }
+  /* Badges */
+  .badge-custom{
+    padding:.35rem .75rem;
+    border-radius:999px;
+    font-weight:800;
+    font-size:.74rem;
+    display:inline-flex;
+    align-items:center;
+    gap:.4rem;
+    border: 1px solid transparent;
+  }
+  .badge-soft-success{
+    background: rgba(17,153,142,.12);
+    color:#0f766e;
+    border-color: rgba(17,153,142,.18);
+  }
+  .badge-soft-info{
+    background: rgba(79,172,254,.12);
+    color:#2563eb;
+    border-color: rgba(79,172,254,.18);
+  }
+  .badge-soft-warning{
+    background: rgba(245,158,11,.14);
+    color:#b45309;
+    border-color: rgba(245,158,11,.22);
+  }
+  .badge-soft-danger{
+    background: rgba(239,68,68,.12);
+    color:#b91c1c;
+    border-color: rgba(239,68,68,.22);
+  }
+  .badge-soft-neutral{
+    background: rgba(148,163,184,.18);
+    color:#334155;
+    border-color: rgba(148,163,184,.28);
+  }
 
-    .product-placeholder {
-        width: 120px;
-        height: 120px;
-        border-radius: 16px;
-        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: #a0aec0;
-        font-size: 2rem;
-        border: 2px solid #e2e8f0;
-    }
+  /* Utilization */
+  .utilization-bar{
+    height: 18px;
+    background:#e2e8f0;
+    border-radius:999px;
+    overflow:hidden;
+    position:relative;
+  }
+  .utilization-fill{
+    height:100%;
+    background: var(--success-gradient);
+    transition: width .6s ease;
+    position:relative;
+  }
+  .utilization-fill.warning{ background: var(--warning-gradient); }
+  .utilization-fill.danger{ background: linear-gradient(135deg, #f5576c 0%, #c92a2a 100%); }
+  .utilization-text{
+    position:absolute;
+    top:50%;
+    left:50%;
+    transform: translate(-50%,-50%);
+    font-weight:900;
+    font-size:.72rem;
+    color:#fff;
+    text-shadow: 0 1px 2px rgba(0,0,0,.35);
+    white-space:nowrap;
+  }
 
-    /* Badges */
-    .badge-modern {
-        padding: 0.4rem 0.75rem;
-        border-radius: 12px;
-        font-weight: 600;
-        font-size: 0.75rem;
-    }
+  /* Filters */
+  .filter-bar{
+    background: var(--bg-soft);
+    padding: 1rem;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    margin-bottom: 1.5rem;
+  }
 
-    .badge-success-modern {
-        background: rgba(17, 153, 142, 0.15);
-        color: #11998e;
-    }
+  /* Empty */
+  .empty-state{
+    text-align:center;
+    padding: 3rem 2rem;
+    color:#94a3b8;
+  }
+  .empty-state i{ font-size:3rem; margin-bottom:1rem; }
 
-    .badge-danger-modern {
-        background: rgba(239, 68, 68, 0.15);
-        color: #ef4444;
-    }
-
-    .badge-info-modern {
-        background: rgba(79, 172, 254, 0.15);
-        color: #4facfe;
-    }
-
-    .badge-secondary-modern {
-        background: rgba(100, 116, 139, 0.15);
-        color: #64748b;
-    }
-
-    /* Tables */
-    .modern-table {
-        margin: 0;
-    }
-
-    .modern-table thead th {
-        background: #f8f9fa;
-        color: #2d3748;
-        font-weight: 700;
-        font-size: 0.85rem;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        padding: 1rem 1.5rem;
-        border: none;
-    }
-
-    .modern-table tbody tr {
-        transition: all 0.2s ease;
-        border-bottom: 1px solid #f1f3f5;
-    }
-
-    .modern-table tbody tr:hover {
-        background: rgba(102, 126, 234, 0.05);
-    }
-
-    .modern-table tbody td {
-        padding: 1rem 1.5rem;
-        vertical-align: middle;
-        border: none;
-    }
-
-    /* Info Section */
-    .info-section {
-        background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
-        border-radius: 12px;
-        padding: 1.25rem;
-        border: 2px solid #f1f3f5;
-    }
-
-    .info-section h6 {
-        font-weight: 700;
-        margin-bottom: 0.75rem;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-    }
-
-    /* Empty State */
-    .empty-state {
-        text-align: center;
-        padding: 3rem 2rem;
-        color: #a0aec0;
-    }
-
-    .empty-state i {
-        font-size: 3rem;
-        margin-bottom: 1rem;
-    }
-
-    /* Alert */
-    .alert-modern {
-        border-radius: 12px;
-        border: 2px solid;
-        padding: 1rem 1.25rem;
-        display: flex;
-        align-items: start;
-        gap: 0.75rem;
-    }
-
-    .alert-info-modern {
-        background: rgba(79, 172, 254, 0.1);
-        border-color: rgba(79, 172, 254, 0.3);
-        color: #0369a1;
-    }
-
-    .alert-warning-modern {
-        background: rgba(245, 87, 108, 0.1);
-        border-color: rgba(245, 87, 108, 0.3);
-        color: #b91c1c;
-    }
-
-    /* Status Badges */
-    .status-pending {
-        background: rgba(245, 158, 11, 0.15);
-        color: #d97706;
-    }
-
-    .status-shipped {
-        background: rgba(14, 165, 233, 0.15);
-        color: #0284c7;
-    }
-
-    .status-in_transit {
-        background: rgba(79, 172, 254, 0.15);
-        color: #0369a1;
-    }
-
-    .status-delivered {
-        background: rgba(17, 153, 142, 0.15);
-        color: #047857;
-    }
-
-    /* Buttons */
-    .btn-modern {
-        border-radius: 10px;
-        padding: 0.5rem 1rem;
-        font-weight: 600;
-        transition: all 0.3s ease;
-    }
-
-    .btn-outline-modern {
-        border: 2px solid #e2e8f0;
-        color: #64748b;
-    }
-
-    .btn-outline-modern:hover {
-        background: #f8f9fa;
-        border-color: #cbd5e0;
-    }
-
-    .btn-primary-modern {
-        background: var(--primary-gradient);
-        color: white;
-        border: none;
-    }
-
-    .btn-primary-modern:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-        color: white;
-    }
-
-    /* Product Details */
-    .product-details {
-        display: flex;
-        gap: 1.5rem;
-    }
-
-    .product-meta {
-        flex: 1;
-    }
-
-    .product-meta h6 {
-        font-weight: 700;
-        margin-bottom: 0.5rem;
-    }
-
-    .product-meta .sku {
-        color: #718096;
-        font-size: 0.85rem;
-        margin-bottom: 0.75rem;
-    }
-
-    .product-pricing {
-        display: flex;
-        gap: 1.5rem;
-        flex-wrap: wrap;
-    }
-
-    .price-item {
-        display: flex;
-        flex-direction: column;
-    }
-
-    .price-label {
-        font-weight: 600;
-        color: #718096;
-        font-size: 0.85rem;
-    }
-
-    .price-value {
-        font-weight: 700;
-        color: #2d3748;
-        font-size: 1.1rem;
-    }
-
-    /* Animation */
-    @keyframes fadeInUp {
-        from {
-            opacity: 0;
-            transform: translateY(20px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-
-    .animate-in {
-        animation: fadeInUp 0.6s ease-out;
-    }
-
-    /* Responsive */
-    @media (max-width: 768px) {
-        .product-details {
-            flex-direction: column;
-        }
-
-        .product-pricing {
-            flex-direction: column;
-            gap: 0.5rem;
-        }
-    }
+  /* Animations */
+  @keyframes fadeInUp{
+    from{ opacity:0; transform: translateY(18px); }
+    to{ opacity:1; transform: translateY(0); }
+  }
+  .animate-in{ animation: fadeInUp .55s ease-out both; }
 </style>
 {% endblock %}
 
 {% block content %}
-<!-- Page Header -->
-<div class="detail-header animate-in">
-    <h1 class="h2 mb-2">
-        <i class="fas fa-warehouse me-2"></i>
-        Warehouse Item Detail
-    </h1>
-    <p class="text-muted mb-3">
-        Order item flagged as <strong class="text-success">Shipped to Warehouse</strong>
-    </p>
 
-    <!-- Breadcrumb -->
-    <nav aria-label="breadcrumb">
-        <ol class="breadcrumb">
-            <li class="breadcrumb-item"><a href="{% url 'logistics:dashboard' %}">Dashboard</a></li>
-            <li class="breadcrumb-item"><a href="{% url 'logistics:dashboard' %}#warehouse-queue">Warehouse Queue</a></li>
-            <li class="breadcrumb-item active" aria-current="page">Item #{{ item.id }}</li>
-        </ol>
-    </nav>
-</div>
-
-<div class="row">
-    <!-- Left Column: Item & Product Details -->
-    <div class="col-lg-7">
-        <!-- Order Item Card -->
-        <div class="detail-card animate-in" style="animation-delay: 0.1s">
-            <div class="detail-card-header">
-                <h5>
-                    <i class="fas fa-box"></i>
-                    Order Item #{{ item.id }}
-                </h5>
-                <div class="d-flex gap-2">
-                    <span class="badge-modern badge-success-modern">
-                        <i class="fas fa-warehouse me-1"></i>Shipped to Warehouse
-                    </span>
-                    {% if order.status == 'cancelled' %}
-                        <span class="badge-modern badge-danger-modern">
-                            <i class="fas fa-times-circle me-1"></i>Order Cancelled
-                        </span>
-                    {% elif order.status == 'shipped' %}
-                        <span class="badge-modern badge-info-modern">
-                            <i class="fas fa-shipping-fast me-1"></i>Order Shipped
-                        </span>
-                    {% endif %}
-                </div>
-            </div>
-            <div class="card-body p-4">
-                <div class="product-details">
-                    <!-- Product Image -->
-                    <div>
-                        {% if item.product and item.product.image %}
-                            <img src="{{ item.product.image.url }}" alt="{{ item.product.name }}" class="product-image">
-                        {% else %}
-                            <div class="product-placeholder">
-                                <i class="fas fa-image"></i>
-                            </div>
-                        {% endif %}
-                    </div>
-
-                    <!-- Product Meta -->
-                    <div class="product-meta">
-                        {% if item.product %}
-                            <h6>{{ item.product.name }}</h6>
-                            {% if item.product.sku %}
-                                <div class="sku">SKU: {{ item.product.sku }}</div>
-                            {% endif %}
-
-                            <div class="product-pricing mt-3">
-                                <div class="price-item">
-                                    <span class="price-label">Quantity</span>
-                                    <span class="price-value">{{ item.quantity }}</span>
-                                </div>
-                                <div class="price-item">
-                                    <span class="price-label">Unit Price</span>
-                                    <span class="price-value">D{{ item.product.price|floatformat:2 }}</span>
-                                </div>
-                                <div class="price-item">
-                                    <span class="price-label">Total</span>
-                                    <span class="price-value">D{{ item.get_total_price|floatformat:2 }}</span>
-                                </div>
-                            </div>
-                        {% else %}
-                            <h6 class="text-muted">Product unavailable</h6>
-                            <div class="product-pricing mt-3">
-                                <div class="price-item">
-                                    <span class="price-label">Quantity</span>
-                                    <span class="price-value">{{ item.quantity }}</span>
-                                </div>
-                                <div class="price-item">
-                                    <span class="price-label">Total</span>
-                                    <span class="price-value">D{{ item.get_total_price|floatformat:2 }}</span>
-                                </div>
-                            </div>
-                        {% endif %}
-
-                        {% if item.shipped_to_warehouse_at %}
-                            <div class="text-muted small mt-3">
-                                <i class="fas fa-clock me-1"></i>
-                                Marked for warehouse: {{ item.shipped_to_warehouse_at|date:"M d, Y H:i" }}
-                            </div>
-                        {% endif %}
-                    </div>
-                </div>
-
-                <hr class="my-4">
-
-                <!-- Shop & Buyer Info -->
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <div class="info-section">
-                            <h6>
-                                <i class="fas fa-store"></i>
-                                Shop Information
-                            </h6>
-                            {% if store %}
-                                <div class="fw-semibold mb-1">{{ store.name }}</div>
-                                {% if store.city %}
-                                    <div class="text-muted small">
-                                        <i class="fas fa-map-marker-alt me-1"></i>{{ store.city }}
-                                    </div>
-                                {% endif %}
-                                {% if store.phone %}
-                                    <div class="text-muted small">
-                                        <i class="fas fa-phone me-1"></i>{{ store.phone }}
-                                    </div>
-                                {% endif %}
-                            {% else %}
-                                <div class="text-muted small">No store information available</div>
-                            {% endif %}
-                        </div>
-                    </div>
-
-                    <div class="col-md-6 mb-3">
-                        <div class="info-section">
-                            <h6>
-                                <i class="fas fa-user"></i>
-                                Buyer Information
-                            </h6>
-                            {% if buyer %}
-                                <div class="fw-semibold mb-1">{{ buyer.get_full_name|default:buyer.username }}</div>
-                                <div class="text-muted small">
-                                    <i class="fas fa-envelope me-1"></i>{{ buyer.email }}
-                                </div>
-                                {% if buyer.telephone %}
-                                    <div class="text-muted small">
-                                        <i class="fas fa-phone me-1"></i>{{ buyer.telephone }}
-                                    </div>
-                                {% endif %}
-                            {% else %}
-                                <div class="text-muted small">No buyer information available</div>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Box Placements Card -->
-        <div class="detail-card animate-in" style="animation-delay: 0.2s">
-            <div class="detail-card-header">
-                <h6>
-                    <i class="fas fa-boxes"></i>
-                    Box Placements
-                </h6>
-            </div>
-            <div class="card-body p-0">
-                {% if boxed_in %}
-                    <div class="table-responsive">
-                        <table class="modern-table table mb-0">
-                            <thead>
-                                <tr>
-                                    <th>Shipment</th>
-                                    <th>Box #</th>
-                                    <th>Quantity</th>
-                                    <th>Placed</th>
-                                    <th class="text-end">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for bi in boxed_in %}
-                                <tr>
-                                    <td>
-                                        {% if bi.box and bi.box.shipment %}
-                                            <a href="{% url 'logistics:shipment_detail' bi.box.shipment.pk %}" class="fw-semibold text-decoration-none">
-                                                #{{ bi.box.shipment.id }}
-                                            </a>
-                                            <br>
-                                            <span class="badge-modern status-{{ bi.box.shipment.status }}">
-                                                {{ bi.box.shipment.get_status_display }}
-                                            </span>
-                                        {% else %}
-                                            <span class="text-muted">—</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <span class="badge-modern badge-secondary-modern">
-                                            Box {{ bi.box.box_number }}
-                                        </span>
-                                    </td>
-                                    <td>{{ bi.quantity }}</td>
-                                    <td>{{ bi.created_at|date:"M d, Y H:i" }}</td>
-                                    <td class="text-end">
-                                        {% if bi.box and bi.box.shipment %}
-                                            <a class="btn btn-sm btn-modern btn-outline-modern"
-                                               href="{% url 'logistics:shipment_detail' bi.box.shipment.pk %}">
-                                               <i class="fas fa-eye me-1"></i>View
-                                            </a>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                {% else %}
-                    <div class="empty-state">
-                        <i class="fas fa-box-open"></i>
-                        <h6>No Box Placements</h6>
-                        <p class="text-muted mb-0">This item hasn't been placed into a box yet.</p>
-                    </div>
-                {% endif %}
-            </div>
-        </div>
+<!-- Warehouse Header -->
+<div class="warehouse-header animate-in">
+  <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
+    <div>
+      <h1 class="h2 mb-2">
+        <i class="fas fa-warehouse me-2 text-primary"></i>
+        {{ warehouse.name }}
+      </h1>
+      <p class="text-muted mb-0">
+        <i class="fas fa-map-marker-alt me-2"></i>
+        {{ warehouse.address|default:"No address specified" }}
+      </p>
     </div>
 
-    <!-- Right Column: Order & Shipments -->
-    <div class="col-lg-5">
-        <!-- Order Card -->
-        <div class="detail-card animate-in" style="animation-delay: 0.3s">
-            <div class="detail-card-header">
-                <h6>
-                    <i class="fas fa-receipt"></i>
-                    Order Details
-                </h6>
-            </div>
-            <div class="card-body p-4">
-                <div class="d-flex justify-content-between align-items-start mb-3">
-                    <div>
-                        <h5 class="fw-bold mb-1">#{{ order.id }}</h5>
-                        <div class="text-muted small">
-                            <i class="fas fa-calendar me-1"></i>
-                            Created: {{ order.created_at|date:"M d, Y H:i" }}
-                        </div>
-                    </div>
-                    <span class="badge-modern badge-secondary-modern">
-                        {{ order.get_status_display }}
-                    </span>
-                </div>
+    <div class="d-flex gap-2">
+      <a href="{% url 'logistics:warehouse_list' %}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left me-1"></i> Back
+      </a>
+      {% if perms.logistics.change_warehouse %}
+      <a href="{% url 'logistics:warehouse_edit' warehouse.pk %}" class="btn btn-primary">
+        <i class="fas fa-edit me-1"></i> Edit
+      </a>
+      {% endif %}
+    </div>
+  </div>
 
-                {% if order.shipping_address %}
-                <hr>
-                <div>
-                    <h6 class="mb-2">
-                        <i class="fas fa-map-marker-alt me-2"></i>
-                        Shipping Address
-                    </h6>
-                    <div class="text-muted small">
-                        {{ order.shipping_address.full_name }}<br>
-                        {{ order.shipping_address.street }}<br>
-                        {{ order.shipping_address.city }}, {{ order.shipping_address.region }} {{ order.shipping_address.geo_code }}
-                    </div>
-                </div>
-                {% endif %}
-            </div>
+  <!-- Info Grid -->
+  <div class="info-grid mt-4">
+    {% if warehouse.manager %}
+    <div class="info-item">
+      <div class="info-label"><i class="fas fa-user-tie me-1"></i> Manager</div>
+      <div class="info-value">{{ warehouse.manager.get_full_name|default:warehouse.manager.username }}</div>
+    </div>
+    {% endif %}
+
+    {% if warehouse.logistic_office %}
+    <div class="info-item">
+      <div class="info-label"><i class="fas fa-building me-1"></i> Logistics Office</div>
+      <div class="info-value">{{ warehouse.logistic_office.name }}</div>
+    </div>
+    {% endif %}
+
+    <div class="info-item">
+      <div class="info-label"><i class="fas fa-cube me-1"></i> Capacity</div>
+      <div class="info-value">{{ warehouse.capacity_cubic_meters|default:0|floatformat:2 }} m³</div>
+    </div>
+
+    <div class="info-item">
+      <div class="info-label"><i class="fas fa-toggle-on me-1"></i> Status</div>
+      <div class="info-value">
+        {% if warehouse.is_active %}
+          <span class="badge-custom badge-soft-success"><i class="fas fa-check-circle"></i> Active</span>
+        {% else %}
+          <span class="badge-custom badge-soft-neutral"><i class="fas fa-ban"></i> Inactive</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Stats -->
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="stat-card primary animate-in" style="animation-delay:.05s">
+      <div class="stat-icon primary"><i class="fas fa-boxes"></i></div>
+      <div class="stat-value">{{ total_packages }}</div>
+      <div class="stat-label">Total Packages</div>
+    </div>
+  </div>
+
+  <div class="col-md-3">
+    <div class="stat-card success animate-in" style="animation-delay:.10s">
+      <div class="stat-icon success"><i class="fas fa-check-circle"></i></div>
+      <div class="stat-value">{{ active_packages }}</div>
+      <div class="stat-label">Active</div>
+    </div>
+  </div>
+
+  <div class="col-md-3">
+    <div class="stat-card warning animate-in" style="animation-delay:.15s">
+      <div class="stat-icon warning"><i class="fas fa-clock"></i></div>
+      <div class="stat-value">{{ pending_packages }}</div>
+      <div class="stat-label">Pending Pickup</div>
+    </div>
+  </div>
+
+  <div class="col-md-3">
+    <div class="stat-card info animate-in" style="animation-delay:.20s">
+      <div class="stat-icon info"><i class="fas fa-truck"></i></div>
+      <div class="stat-value">{{ shipped_today }}</div>
+      <div class="stat-label">Shipped Today</div>
+    </div>
+  </div>
+</div>
+
+<!-- Utilization -->
+<div class="detail-card animate-in" style="animation-delay:.25s">
+  <div class="detail-card-header">
+    <h6><i class="fas fa-chart-pie"></i> Warehouse Utilization</h6>
+  </div>
+
+  <div class="card-body p-4">
+    <div class="row align-items-center g-3">
+      <div class="col-md-8">
+        <div class="utilization-bar">
+          <div class="utilization-fill {% if utilization_percent > 90 %}danger{% elif utilization_percent > 75 %}warning{% endif %}"
+               style="width: {{ utilization_percent }}%">
+            <span class="utilization-text">{{ utilization_percent|floatformat:1 }}%</span>
+          </div>
         </div>
 
-        <!-- Shipments Card -->
-        <div class="detail-card animate-in" style="animation-delay: 0.4s">
-            <div class="detail-card-header">
-                <h6>
+        <div class="d-flex justify-content-between mt-2 text-muted small flex-wrap gap-2">
+          <span>Used: {{ current_utilization|default:0|floatformat:2 }} m³</span>
+          <span>Available: {{ available_space|default:0|floatformat:2 }} m³</span>
+          <span>Total: {{ warehouse.capacity_cubic_meters|default:0|floatformat:2 }} m³</span>
+        </div>
+      </div>
+
+      <div class="col-md-4 text-center">
+        <div class="stat-value" style="font-size:3rem; line-height:1;">
+          {{ utilization_percent|floatformat:0 }}%
+        </div>
+        <div class="text-muted">Utilized</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="filter-bar animate-in" style="animation-delay:.30s">
+  <form method="get" class="row g-3 align-items-end">
+    <div class="col-md-3">
+      <label class="form-label small fw-bold">Search</label>
+      <input type="text" name="search" class="form-control" placeholder="Order ID, tracking number..."
+             value="{{ request.GET.search }}">
+    </div>
+
+    <div class="col-md-2">
+      <label class="form-label small fw-bold">Status</label>
+      <select name="status" class="form-select">
+        <option value="">All Status</option>
+        <option value="pending" {% if request.GET.status == "pending" %}selected{% endif %}>Pending</option>
+        <option value="shipped" {% if request.GET.status == "shipped" %}selected{% endif %}>Shipped</option>
+        <option value="in_transit" {% if request.GET.status == "in_transit" %}selected{% endif %}>In Transit</option>
+        <option value="delivered" {% if request.GET.status == "delivered" %}selected{% endif %}>Delivered</option>
+      </select>
+    </div>
+
+    <div class="col-md-2">
+      <label class="form-label small fw-bold">Date Range</label>
+      <select name="date_range" class="form-select">
+        <option value="">All Time</option>
+        <option value="today" {% if request.GET.date_range == "today" %}selected{% endif %}>Today</option>
+        <option value="week" {% if request.GET.date_range == "week" %}selected{% endif %}>This Week</option>
+        <option value="month" {% if request.GET.date_range == "month" %}selected{% endif %}>This Month</option>
+      </select>
+    </div>
+
+    <div class="col-md-2">
+      <label class="form-label small fw-bold">Sort By</label>
+      <select name="sort" class="form-select">
+        <option value="-created_at" {% if request.GET.sort == "-created_at" %}selected{% endif %}>Newest First</option>
+        <option value="created_at" {% if request.GET.sort == "created_at" %}selected{% endif %}>Oldest First</option>
+        <option value="tracking_number" {% if request.GET.sort == "tracking_number" %}selected{% endif %}>Tracking A–Z</option>
+      </select>
+    </div>
+
+    <div class="col-md-3 d-flex gap-2">
+      <button type="submit" class="btn btn-primary flex-fill">
+        <i class="fas fa-filter me-1"></i> Filter
+      </button>
+      <a href="{% url 'logistics:warehouse_detail' warehouse.pk %}" class="btn btn-outline-secondary" title="Reset">
+        <i class="fas fa-redo"></i>
+      </a>
+    </div>
+  </form>
+</div>
+
+<!-- Inventory -->
+<div class="detail-card animate-in" style="animation-delay:.35s">
+  <div class="detail-card-header">
+    <h6>
+      <i class="fas fa-clipboard-list"></i>
+      Warehouse Inventory
+      <span class="badge bg-primary ms-2">{{ inventory_items|length }}</span>
+    </h6>
+
+    <div class="d-flex gap-2">
+      <button class="btn btn-sm btn-outline-primary" onclick="window.print()">
+        <i class="fas fa-print me-1"></i> Print
+      </button>
+
+      {# Keep current filters when exporting #}
+      <a class="btn btn-sm btn-outline-success"
+         href="?{% if request.GET.search %}search={{ request.GET.search|urlencode }}&{% endif %}
+                 {% if request.GET.status %}status={{ request.GET.status|urlencode }}&{% endif %}
+                 {% if request.GET.date_range %}date_range={{ request.GET.date_range|urlencode }}&{% endif %}
+                 {% if request.GET.sort %}sort={{ request.GET.sort|urlencode }}&{% endif %}
+                 export=csv">
+        <i class="fas fa-download me-1"></i> Export CSV
+      </a>
+    </div>
+  </div>
+
+  <div class="card-body p-0">
+    {% if inventory_items %}
+    <div class="table-responsive">
+      <table class="inventory-table table mb-0">
+        <thead>
+          <tr>
+            <th>Package</th>
+            <th>Order</th>
+            <th>Owner</th>
+            <th>Contact</th>
+            <th>Boxes</th>
+            <th>Weight</th>
+            <th>Date In</th>
+            <th>Days</th>
+            <th>Entered By</th>
+            <th>Status</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+
+        <tbody>
+        {% for item in inventory_items %}
+          <tr>
+            <td>
+              <a href="{% url 'logistics:shipment_detail' item.pk %}" class="fw-bold text-decoration-none">
+                #{{ item.id }}
+              </a>
+              {% if item.tracking_number %}
+                <div class="small text-muted">{{ item.tracking_number }}</div>
+              {% endif %}
+            </td>
+
+            <td>
+              {% if item.order %}
+                <a href="{% url 'logistics:warehouse_order_detail' item.order.pk %}" class="text-decoration-none">
+                  Order #{{ item.order.id }}
+                </a>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+
+            <td>
+              {% if item.order and item.order.buyer %}
+                <div class="fw-semibold">
+                  {{ item.order.buyer.get_full_name|default:item.order.buyer.username }}
+                </div>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+
+            <td>
+              {% if item.order and item.order.buyer %}
+                {% if item.order.buyer.telephone %}
+                  <div class="small"><i class="fas fa-phone me-1"></i>{{ item.order.buyer.telephone }}</div>
+                {% endif %}
+                <div class="small text-muted">
+                  <i class="fas fa-envelope me-1"></i>{{ item.order.buyer.email|truncatechars:22 }}
+                </div>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+
+            <td>
+              <span class="badge-custom badge-soft-info">
+                <i class="fas fa-boxes"></i> {{ item.boxes.count }}
+              </span>
+            </td>
+
+            <td>
+              {% if item.total_weight %}
+                {{ item.total_weight|floatformat:2 }} kg
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+
+            <td>
+              {% if item.created_at %}
+                <div class="small">{{ item.created_at|date:"M d, Y" }}</div>
+                <div class="text-muted small">{{ item.created_at|time:"H:i" }}</div>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+
+            <td>
+              {% if item.days_in_warehouse is not None %}
+                {# ✅ fixed logic: danger first, then warning #}
+                <span class="fw-bold {% if item.days_in_warehouse > 14 %}text-danger{% elif item.days_in_warehouse > 7 %}text-warning{% endif %}">
+                  {{ item.days_in_warehouse }} day{{ item.days_in_warehouse|pluralize }}
+                </span>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+
+            <td>
+              {# created_by is a DateTimeField in your model right now. Show System to avoid crashes. #}
+              <span class="text-muted">System</span>
+            </td>
+
+            <td>
+              {% if item.status == "pending" %}
+                <span class="badge-custom badge-soft-warning"><i class="fas fa-clock"></i> Pending</span>
+              {% elif item.status == "shipped" %}
+                <span class="badge-custom badge-soft-info"><i class="fas fa-truck"></i> Shipped</span>
+              {% elif item.status == "in_transit" %}
+                <span class="badge-custom badge-soft-info"><i class="fas fa-route"></i> In Transit</span>
+              {% elif item.status == "delivered" %}
+                <span class="badge-custom badge-soft-success"><i class="fas fa-check"></i> Delivered</span>
+              {% else %}
+                <span class="badge-custom badge-soft-neutral">{{ item.get_status_display }}</span>
+              {% endif %}
+            </td>
+
+            <td class="text-end">
+              <div class="btn-group btn-group-sm">
+                <a href="{% url 'logistics:shipment_detail' item.pk %}" class="btn btn-outline-primary" title="View">
+                  <i class="fas fa-eye"></i>
+                </a>
+                {% if item.status != "delivered" %}
+                  <button type="button" class="btn btn-outline-success"
+                          title="Mark as Shipped" onclick="markAsShipped({{ item.pk }})">
                     <i class="fas fa-truck"></i>
-                    Shipments for this Order
-                </h6>
-                {% if can_create_shipment %}
-                    <a href="{% url 'logistics:shipment_create' %}?order={{ order.id }}"
-                       class="btn btn-sm btn-modern btn-primary-modern">
-                        <i class="fas fa-plus me-1"></i>Create Shipment
-                    </a>
+                  </button>
                 {% endif %}
-            </div>
-            <div class="card-body p-0">
-                {% if shipments %}
-                    <div class="table-responsive">
-                        <table class="modern-table table mb-0">
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>Status</th>
-                                    <th>Driver</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for s in shipments %}
-                                <tr>
-                                    <td>
-                                        <a href="{% url 'logistics:shipment_detail' s.pk %}" class="fw-semibold text-decoration-none">
-                                            #{{ s.id }}
-                                        </a>
-                                    </td>
-                                    <td>
-                                        <span class="badge-modern status-{{ s.status }}">
-                                            {{ s.get_status_display }}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        {% if s.driver and s.driver.user %}
-                                            {{ s.driver.user.get_full_name|default:s.driver.user.username|truncatewords:2 }}
-                                        {% else %}
-                                            <span class="text-muted">—</span>
-                                        {% endif %}
-                                    </td>
-                                    <td class="text-end">
-                                        <a href="{% url 'logistics:shipment_detail' s.pk %}" class="btn btn-sm btn-modern btn-outline-modern">
-                                            <i class="fas fa-eye"></i>
-                                        </a>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-
-                    {% if can_add_to_shipment %}
-                    <div class="p-3">
-                        <div class="alert-modern alert-info-modern">
-                            <i class="fas fa-info-circle fs-5"></i>
-                            <div>
-                                <strong>Shipment Exists</strong><br>
-                                <small>A shipment already exists for this order. Place the item into a box on the shipment detail page.</small>
-                            </div>
-                        </div>
-                    </div>
-                    {% endif %}
-                {% else %}
-                    <div class="empty-state">
-                        <i class="fas fa-truck"></i>
-                        <h6>No Shipments Yet</h6>
-                        <p class="text-muted mb-3">No shipments have been created for this order.</p>
-                        {% if can_create_shipment %}
-                            <a href="{% url 'logistics:shipment_create' %}?order={{ order.id }}" class="btn btn-modern btn-primary-modern">
-                                <i class="fas fa-plus me-1"></i>Create First Shipment
-                            </a>
-                        {% endif %}
-                    </div>
-
-                    {% if not can_create_shipment %}
-                    <div class="p-3">
-                        <div class="alert-modern alert-warning-modern">
-                            <i class="fas fa-exclamation-triangle fs-5"></i>
-                            <div>
-                                <strong>Cannot Create Shipment</strong><br>
-                                <small>Shipment creation is disabled because the order status is <strong>{{ order.get_status_display }}</strong>.</small>
-                            </div>
-                        </div>
-                    </div>
-                    {% endif %}
-                {% endif %}
-            </div>
-        </div>
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
     </div>
+    {% else %}
+      <div class="empty-state">
+        <i class="fas fa-box-open"></i>
+        <h5 class="mb-1">No Inventory Items</h5>
+        <p class="text-muted mb-0">There are currently no packages in this warehouse.</p>
+      </div>
+    {% endif %}
+  </div>
 </div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  function markAsShipped(shipmentId){
+    if(!confirm("Mark this package as shipped?")) return;
+    // TODO: Add your AJAX call / HTMX call here
+    console.log("Marking shipment " + shipmentId + " as shipped");
+  }
+</script>
 {% endblock %}

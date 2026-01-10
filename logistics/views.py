@@ -2645,9 +2645,226 @@ class WarehouseListView(LoginRequiredMixin, ListView):
 
 
 class WarehouseDetailView(LoginRequiredMixin, DetailView):
-    """View warehouse details"""
+    """
+    Enhanced warehouse detail view with complete inventory tracking.
+    Shows all packages, owner info, contact details, and audit trail.
+    """
     model = Warehouse
-    template_name = 'logistics/warehouse_detail.html'
+    template_name = "logistics/warehouse_detail.html"
+    context_object_name = "warehouse"
+
+    # ✅ allow only safe fields to sort by (prevents broken queries / injection)
+    ALLOWED_SORTS = {
+        "created_at": "created_at",
+        "-created_at": "-created_at",
+        "id": "id",
+        "-id": "-id",
+        "status": "status",
+        "-status": "-status",
+        "tracking_number": "tracking_number",
+        "-tracking_number": "-tracking_number",
+        "collect_time": "collect_time",
+        "-collect_time": "-collect_time",
+    }
+
+    def get(self, request, *args, **kwargs):
+        """
+        ✅ Do CSV export here (not inside get_context_data),
+        because get_context_data must return a dict, not a response.
+        """
+        self.object = self.get_object()
+        context = self.get_context_data(object=self.object)
+
+        if request.GET.get("export") == "csv":
+            return self._export_csv(self.object, context.get("inventory_items", []))
+
+        return self.render_to_response(context)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        warehouse = self.object
+
+        # Get all shipments in this warehouse
+        shipments_qs = (
+            Shipment.objects.filter(warehouse=warehouse)
+            .select_related(
+                "order",
+                "order__buyer",
+                "driver",
+                "vehicle",
+                # ❌ removed 'created_by' because it's not a relation
+            )
+            .prefetch_related("boxes")
+        )
+
+        # Apply filters
+        shipments_qs = self._apply_filters(shipments_qs)
+
+        # Calculate statistics
+        context.update(self._get_statistics(warehouse, shipments_qs))
+
+        # Calculate utilization
+        context.update(self._calculate_utilization(warehouse))
+
+        # Enhance shipments with additional data
+        inventory_items = self._enhance_inventory_items(shipments_qs)
+        context["inventory_items"] = inventory_items
+
+        return context
+
+    def _apply_filters(self, queryset):
+        """Apply search and filter parameters."""
+        # Search
+        search = self.request.GET.get("search", "").strip()
+        if search:
+            queryset = queryset.filter(
+                Q(id__icontains=search)
+                | Q(tracking_number__icontains=search)
+                | Q(order__id__icontains=search)
+                | Q(order__buyer__username__icontains=search)
+                | Q(order__buyer__email__icontains=search)
+            )
+
+        # Status filter
+        status = self.request.GET.get("status", "").strip()
+        if status:
+            queryset = queryset.filter(status=status)
+
+        # Date range filter
+        date_range = self.request.GET.get("date_range", "").strip()
+        if date_range == "today":
+            today = timezone.now().date()
+            queryset = queryset.filter(created_at__date=today)
+        elif date_range == "week":
+            week_ago = timezone.now() - timedelta(days=7)
+            queryset = queryset.filter(created_at__gte=week_ago)
+        elif date_range == "month":
+            month_ago = timezone.now() - timedelta(days=30)
+            queryset = queryset.filter(created_at__gte=month_ago)
+
+        # ✅ Safe sorting
+        sort = self.request.GET.get("sort", "-created_at").strip()
+        sort = self.ALLOWED_SORTS.get(sort, "-created_at")
+        queryset = queryset.order_by(sort)
+
+        return queryset
+
+    def _get_statistics(self, warehouse, shipments_qs):
+        """Calculate warehouse statistics."""
+        today = timezone.now().date()
+
+        stats = {
+            "total_packages": shipments_qs.count(),
+            "active_packages": shipments_qs.filter(
+                status__in=["pending", "shipped", "in_transit"]
+            ).count(),
+            "pending_packages": shipments_qs.filter(status="pending").count(),
+            "shipped_today": shipments_qs.filter(
+                status="in_transit",
+                collect_time__date=today
+            ).count(),
+        }
+        return stats
+
+    def _calculate_utilization(self, warehouse):
+        """Calculate warehouse space utilization."""
+        capacity = warehouse.capacity_cubic_meters or 0
+        current_util = warehouse.current_utilization or 0
+
+        utilization_percent = 0
+        available_space = capacity
+
+        if capacity > 0:
+            utilization_percent = (current_util / capacity) * 100
+            available_space = capacity - current_util
+
+        return {
+            "current_utilization": current_util,
+            "utilization_percent": min(utilization_percent, 100),
+            "available_space": max(available_space, 0),
+        }
+
+    def _enhance_inventory_items(self, shipments_qs):
+        """Add calculated fields to inventory items."""
+        now = timezone.now()
+        enhanced_items = []
+
+        for shipment in shipments_qs:
+            # Calculate days in warehouse
+            days_in_wh = (now - shipment.created_at).days if shipment.created_at else None
+
+            # total_weight (keep as-is; just avoid overwriting model property incorrectly)
+            total_weight = getattr(shipment, "total_weight", None)
+
+            shipment.days_in_warehouse = days_in_wh
+            shipment._computed_total_weight = total_weight  # ✅ avoid clobbering properties
+
+            enhanced_items.append(shipment)
+
+        return enhanced_items
+
+    def _export_csv(self, warehouse, inventory_items):
+        """Export inventory to CSV."""
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = (
+            f'attachment; filename="warehouse_{warehouse.id}_inventory_'
+            f'{timezone.now().strftime("%Y%m%d")}.csv"'
+        )
+
+        writer = csv.writer(response)
+
+        # Header
+        writer.writerow(
+            [
+                "Package ID",
+                "Tracking Number",
+                "Order ID",
+                "Owner Name",
+                "Owner Email",
+                "Owner Phone",
+                "Boxes",
+                "Weight (kg)",
+                "Date In",
+                "Days in Warehouse",
+                "Entered By",
+                "Status",
+            ]
+        )
+
+        # Data rows
+        for item in inventory_items:
+            owner_name = ""
+            owner_email = ""
+            owner_phone = ""
+
+            if item.order and item.order.buyer:
+                buyer = item.order.buyer
+                owner_name = buyer.get_full_name() or buyer.username
+                owner_email = buyer.email
+                # buyer.telephone might not exist
+                owner_phone = getattr(buyer, "telephone", "") or getattr(buyer, "phone", "") or ""
+
+            # ✅ since created_by is datetime in your model, don't treat it as a User
+            entered_by = ""  # leave empty unless you change model to FK(User)
+
+            writer.writerow(
+                [
+                    item.id,
+                    item.tracking_number or "",
+                    item.order.id if item.order else "",
+                    owner_name,
+                    owner_email,
+                    owner_phone,
+                    item.boxes.count(),
+                    getattr(item, "_computed_total_weight", "") or "",
+                    item.created_at.strftime("%Y-%m-%d %H:%M") if item.created_at else "",
+                    getattr(item, "days_in_warehouse", "") or "",
+                    entered_by,
+                    item.get_status_display(),
+                ]
+            )
+
+        return response
 
 
 class WarehouseCreateView(LoginRequiredMixin, CreateView):
