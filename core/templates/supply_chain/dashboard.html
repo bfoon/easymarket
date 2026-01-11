@@ -1,0 +1,715 @@
+{% extends 'logistics/base.html' %}
+{% load static %}
+
+{% block title %}Supply Chain Dashboard{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --primary-color: #2563eb;
+        --secondary-color: #0ea5e9;
+        --success-color: #10b981;
+        --warning-color: #f59e0b;
+        --danger-color: #ef4444;
+        --dark-bg: #1e293b;
+        --card-bg: #ffffff;
+        --border-color: #e2e8f0;
+    }
+
+    body {
+        background: #f8fafc;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    .dashboard-header {
+        background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: 1rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 10px 30px rgba(37, 99, 235, 0.2);
+    }
+
+    .dashboard-header h1 {
+        font-size: 2rem;
+        font-weight: 700;
+        margin: 0 0 0.5rem 0;
+    }
+
+    .dashboard-header p {
+        opacity: 0.9;
+        margin: 0;
+    }
+
+    .metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .metric-card {
+        background: var(--card-bg);
+        border-radius: 1rem;
+        padding: 1.5rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        border: 1px solid var(--border-color);
+        transition: all 0.3s ease;
+    }
+
+    .metric-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+    }
+
+    .metric-card .metric-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+        margin-bottom: 1rem;
+    }
+
+    .metric-card .metric-value {
+        font-size: 2rem;
+        font-weight: 700;
+        margin: 0.5rem 0;
+    }
+
+    .metric-card .metric-label {
+        color: #64748b;
+        font-size: 0.875rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .metric-card .metric-change {
+        font-size: 0.875rem;
+        margin-top: 0.5rem;
+    }
+
+    .metric-card.primary .metric-icon {
+        background: #dbeafe;
+        color: var(--primary-color);
+    }
+
+    .metric-card.success .metric-icon {
+        background: #d1fae5;
+        color: var(--success-color);
+    }
+
+    .metric-card.warning .metric-icon {
+        background: #fef3c7;
+        color: var(--warning-color);
+    }
+
+    .metric-card.info .metric-icon {
+        background: #e0f2fe;
+        color: var(--secondary-color);
+    }
+
+    .section-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+        gap: 2rem;
+        margin-bottom: 2rem;
+    }
+
+    .section-card {
+        background: var(--card-bg);
+        border-radius: 1rem;
+        padding: 1.5rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        border: 1px solid var(--border-color);
+    }
+
+    .section-card h2 {
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin: 0 0 1rem 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .section-card h2 .badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.75rem;
+        border-radius: 1rem;
+        font-weight: 600;
+    }
+
+    .transfer-item, .order-item {
+        padding: 1rem;
+        border-left: 4px solid var(--border-color);
+        margin-bottom: 1rem;
+        background: #f8fafc;
+        border-radius: 0.5rem;
+        transition: all 0.2s ease;
+    }
+
+    .transfer-item:hover, .order-item:hover {
+        border-left-color: var(--primary-color);
+        background: #f1f5f9;
+    }
+
+    .transfer-item.pending {
+        border-left-color: var(--warning-color);
+    }
+
+    .transfer-item.in-transit {
+        border-left-color: var(--secondary-color);
+    }
+
+    .order-item.urgent {
+        border-left-color: var(--danger-color);
+    }
+
+    .order-item.high {
+        border-left-color: var(--warning-color);
+    }
+
+    .item-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+
+    .item-title {
+        font-weight: 600;
+        font-size: 0.95rem;
+    }
+
+    .status-badge {
+        padding: 0.25rem 0.75rem;
+        border-radius: 1rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .status-pending {
+        background: #fef3c7;
+        color: #92400e;
+    }
+
+    .status-picked-up {
+        background: #dbeafe;
+        color: #1e40af;
+    }
+
+    .status-urgent {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    .status-high {
+        background: #fed7aa;
+        color: #9a3412;
+    }
+
+    .status-normal {
+        background: #e0e7ff;
+        color: #3730a3;
+    }
+
+    .item-details {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 0.5rem;
+        font-size: 0.875rem;
+        color: #64748b;
+    }
+
+    .detail-item {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    .warehouse-stats {
+        display: grid;
+        gap: 1rem;
+    }
+
+    .warehouse-stat {
+        padding: 1rem;
+        background: #f8fafc;
+        border-radius: 0.5rem;
+        border: 1px solid var(--border-color);
+    }
+
+    .warehouse-name {
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+    }
+
+    .capacity-bar {
+        height: 8px;
+        background: #e2e8f0;
+        border-radius: 4px;
+        overflow: hidden;
+        margin: 0.5rem 0;
+    }
+
+    .capacity-fill {
+        height: 100%;
+        background: linear-gradient(90deg, var(--success-color), var(--primary-color));
+        transition: width 0.3s ease;
+    }
+
+    .capacity-fill.warning {
+        background: linear-gradient(90deg, var(--warning-color), #f97316);
+    }
+
+    .capacity-fill.danger {
+        background: linear-gradient(90deg, var(--danger-color), #dc2626);
+    }
+
+    .bottleneck-alert {
+        padding: 1rem;
+        border-radius: 0.5rem;
+        margin-bottom: 0.75rem;
+        display: flex;
+        align-items: start;
+        gap: 0.75rem;
+    }
+
+    .bottleneck-alert.high {
+        background: #fee2e2;
+        border: 1px solid #fecaca;
+    }
+
+    .bottleneck-alert.medium {
+        background: #fef3c7;
+        border: 1px solid #fde68a;
+    }
+
+    .bottleneck-icon {
+        font-size: 1.5rem;
+    }
+
+    .btn {
+        padding: 0.5rem 1rem;
+        border-radius: 0.5rem;
+        font-weight: 500;
+        text-decoration: none;
+        display: inline-block;
+        transition: all 0.2s ease;
+        border: none;
+        cursor: pointer;
+    }
+
+    .btn-primary {
+        background: var(--primary-color);
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: #1d4ed8;
+        transform: translateY(-1px);
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 3rem 1rem;
+        color: #94a3b8;
+    }
+
+    .empty-state svg {
+        width: 64px;
+        height: 64px;
+        margin-bottom: 1rem;
+        opacity: 0.5;
+    }
+
+    @media (max-width: 768px) {
+        .section-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .metrics-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+    <!-- Header -->
+    <div class="dashboard-header">
+        <h1>🚚 Supply Chain Control Center</h1>
+        <p>Real-time operations monitoring and management</p>
+        {% if user_warehouse %}
+        <p style="margin-top: 0.5rem; opacity: 0.8;">
+            📍 Warehouse: <strong>{{ user_warehouse.name }}</strong>
+        </p>
+        {% endif %}
+    </div>
+
+    <!-- Key Metrics -->
+    <div class="metrics-grid">
+        <div class="metric-card warning">
+            <div class="metric-icon">⏳</div>
+            <div class="metric-label">Pending Transfers</div>
+            <div class="metric-value">{{ pending_count }}</div>
+            <div class="metric-change">
+                <a href="{% url 'supply_chain:transfer_list' %}?status=PENDING" style="color: inherit; text-decoration: none;">
+                    View all →
+                </a>
+            </div>
+        </div>
+
+        <div class="metric-card info">
+            <div class="metric-icon">🚛</div>
+            <div class="metric-label">In Transit</div>
+            <div class="metric-value">{{ in_transit_count }}</div>
+            <div class="metric-change">
+                <a href="{% url 'supply_chain:transfer_list' %}?status=PICKED_UP" style="color: inherit; text-decoration: none;">
+                    Track shipments →
+                </a>
+            </div>
+        </div>
+
+        <div class="metric-card primary">
+            <div class="metric-icon">📦</div>
+            <div class="metric-label">Orders in Queue</div>
+            <div class="metric-value">{{ fulfillment_by_status.QUEUED|default:0 }}</div>
+            <div class="metric-change">
+                <a href="{% url 'supply_chain:fulfillment_queue' %}" style="color: inherit; text-decoration: none;">
+                    Manage queue →
+                </a>
+            </div>
+        </div>
+
+        <div class="metric-card success">
+            <div class="metric-icon">✅</div>
+            <div class="metric-label">Ready to Ship</div>
+            <div class="metric-value">{{ fulfillment_by_status.READY|default:0 }}</div>
+            <div class="metric-change">
+                <a href="{% url 'supply_chain:fulfillment_queue' %}?status=READY" style="color: inherit; text-decoration: none;">
+                    Process →
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Performance Metrics -->
+    <div class="metrics-grid">
+        <div class="metric-card">
+            <div class="metric-label">Avg Transfer Time</div>
+            <div class="metric-value">{{ avg_transfer_time }} min</div>
+            <div class="metric-change text-success">
+                ✓ {{ transfers_completed_count }} completed this week
+            </div>
+        </div>
+
+        <div class="metric-card">
+            <div class="metric-label">Avg Fulfillment Time</div>
+            <div class="metric-value">{{ avg_fulfillment_time }} min</div>
+            <div class="metric-change text-success">
+                ✓ {{ orders_fulfilled_count }} orders shipped this week
+            </div>
+        </div>
+
+        <div class="metric-card">
+            <div class="metric-label">Active Picking</div>
+            <div class="metric-value">{{ fulfillment_by_status.PICKING|default:0 }}</div>
+        </div>
+
+        <div class="metric-card">
+            <div class="metric-label">Active Packing</div>
+            <div class="metric-value">{{ fulfillment_by_status.PACKING|default:0 }}</div>
+        </div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="section-grid">
+        <!-- Pending Transfers -->
+        <div class="section-card">
+            <h2>
+                Pending Transfers
+                <span class="badge bg-warning">{{ pending_count }}</span>
+            </h2>
+            
+            {% if pending_transfers %}
+                {% for transfer in pending_transfers %}
+                <div class="transfer-item pending">
+                    <div class="item-header">
+                        <div class="item-title">
+                            📋 {{ transfer.transfer_number }}
+                        </div>
+                        <span class="status-badge status-pending">Pending</span>
+                    </div>
+                    <div class="item-details">
+                        <div class="detail-item">
+                            🏪 {{ transfer.store_warehouse.code }}
+                        </div>
+                        <div class="detail-item">
+                            → 📍 {{ transfer.logistics_warehouse.name }}
+                        </div>
+                        <div class="detail-item">
+                            🕐 {{ transfer.requested_at|timesince }} ago
+                        </div>
+                        <div class="detail-item">
+                            📦 {{ transfer.items.count }} items
+                        </div>
+                    </div>
+                    <div style="margin-top: 0.75rem;">
+                        <a href="{% url 'supply_chain:transfer_detail' transfer.id %}" class="btn btn-primary btn-sm">
+                            View Details
+                        </a>
+                    </div>
+                </div>
+                {% endfor %}
+                
+                {% if pending_count > 10 %}
+                <div style="text-align: center; margin-top: 1rem;">
+                    <a href="{% url 'supply_chain:transfer_list' %}?status=PENDING" class="btn btn-primary">
+                        View All {{ pending_count }} Transfers
+                    </a>
+                </div>
+                {% endif %}
+            {% else %}
+                <div class="empty-state">
+                    <div>✅</div>
+                    <p>No pending transfers</p>
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- In Transit -->
+        <div class="section-card">
+            <h2>
+                In Transit
+                <span class="badge bg-info">{{ in_transit_count }}</span>
+            </h2>
+            
+            {% if in_transit_transfers %}
+                {% for transfer in in_transit_transfers %}
+                <div class="transfer-item in-transit">
+                    <div class="item-header">
+                        <div class="item-title">
+                            🚛 {{ transfer.transfer_number }}
+                        </div>
+                        <span class="status-badge status-picked-up">In Transit</span>
+                    </div>
+                    <div class="item-details">
+                        <div class="detail-item">
+                            🏪 {{ transfer.store_warehouse.code }}
+                        </div>
+                        <div class="detail-item">
+                            → 📍 {{ transfer.logistics_warehouse.name }}
+                        </div>
+                        {% if transfer.driver %}
+                        <div class="detail-item">
+                            👤 {{ transfer.driver.name }}
+                        </div>
+                        {% endif %}
+                        {% if transfer.vehicle %}
+                        <div class="detail-item">
+                            🚗 {{ transfer.vehicle.license_plate }}
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div style="margin-top: 0.75rem;">
+                        <a href="{% url 'supply_chain:transfer_detail' transfer.id %}" class="btn btn-primary btn-sm">
+                            Track
+                        </a>
+                    </div>
+                </div>
+                {% endfor %}
+                
+                {% if in_transit_count > 10 %}
+                <div style="text-align: center; margin-top: 1rem;">
+                    <a href="{% url 'supply_chain:transfer_list' %}?status=PICKED_UP" class="btn btn-primary">
+                        View All {{ in_transit_count }} Transfers
+                    </a>
+                </div>
+                {% endif %}
+            {% else %}
+                <div class="empty-state">
+                    <div>✅</div>
+                    <p>No transfers in transit</p>
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- Urgent Orders -->
+        <div class="section-card">
+            <h2>
+                🔥 Urgent Orders
+                <span class="badge bg-danger">{{ urgent_orders.count }}</span>
+            </h2>
+            
+            {% if urgent_orders %}
+                {% for queue in urgent_orders %}
+                <div class="order-item {{ queue.priority|lower }}">
+                    <div class="item-header">
+                        <div class="item-title">
+                            Order #{{ queue.order.id|slice:":8" }}
+                        </div>
+                        <span class="status-badge status-{{ queue.priority|lower }}">
+                            {{ queue.get_priority_display }}
+                        </span>
+                    </div>
+                    <div class="item-details">
+                        <div class="detail-item">
+                            📊 {{ queue.get_status_display }}
+                        </div>
+                        <div class="detail-item">
+                            🕐 {{ queue.queued_at|timesince }} in queue
+                        </div>
+                        <div class="detail-item">
+                            📦 {{ queue.order.items.count }} items
+                        </div>
+                    </div>
+                    <div style="margin-top: 0.75rem;">
+                        <a href="{% url 'supply_chain:fulfillment_queue' %}" class="btn btn-primary btn-sm">
+                            Process
+                        </a>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="empty-state">
+                    <div>✅</div>
+                    <p>No urgent orders</p>
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- Active Shipments -->
+        <div class="section-card">
+            <h2>
+                🌍 Active B2B Shipments
+                <span class="badge bg-primary">{{ active_shipments.count }}</span>
+            </h2>
+            
+            {% if active_shipments %}
+                {% for shipment in active_shipments %}
+                <div class="order-item">
+                    <div class="item-header">
+                        <div class="item-title">
+                            {{ shipment.shipment_number }}
+                        </div>
+                        <span class="status-badge status-normal">
+                            {{ shipment.get_status_display }}
+                        </span>
+                    </div>
+                    <div class="item-details">
+                        <div class="detail-item">
+                            🌍 {{ shipment.country.country_name }}
+                        </div>
+                        <div class="detail-item">
+                            🚚 {{ shipment.shipping_company.name }}
+                        </div>
+                        <div class="detail-item">
+                            💰 ${{ shipment.total_cost }}
+                        </div>
+                        {% if shipment.tracking_number %}
+                        <div class="detail-item">
+                            📍 {{ shipment.tracking_number }}
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div style="margin-top: 0.75rem;">
+                        <a href="{% url 'supply_chain:shipment_detail' shipment.id %}" class="btn btn-primary btn-sm">
+                            Track Shipment
+                        </a>
+                    </div>
+                </div>
+                {% endfor %}
+                
+                <div style="text-align: center; margin-top: 1rem;">
+                    <a href="{% url 'supply_chain:b2b_shipments' %}" class="btn btn-primary">
+                        View All Shipments
+                    </a>
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    <div>📦</div>
+                    <p>No active shipments</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Warehouse Capacity & Bottlenecks -->
+    <div class="section-grid">
+        <!-- Warehouse Capacity -->
+        <div class="section-card">
+            <h2>Warehouse Capacity</h2>
+            <div class="warehouse-stats">
+                {% for stat in warehouse_stats %}
+                <div class="warehouse-stat">
+                    <div class="warehouse-name">{{ stat.warehouse.name }}</div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.875rem; color: #64748b;">
+                        <span>{{ stat.active_orders }} active orders</span>
+                        <span>{{ stat.capacity_used|floatformat:0 }}% capacity</span>
+                    </div>
+                    <div class="capacity-bar">
+                        <div class="capacity-fill {% if stat.capacity_used > 80 %}danger{% elif stat.capacity_used > 60 %}warning{% endif %}" 
+                             style="width: {{ stat.capacity_used }}%"></div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Bottlenecks -->
+        <div class="section-card">
+            <h2>System Alerts</h2>
+            {% if bottlenecks %}
+                {% for bottleneck in bottlenecks %}
+                <div class="bottleneck-alert {{ bottleneck.severity|lower }}">
+                    <div class="bottleneck-icon">
+                        {% if bottleneck.severity == 'HIGH' %}⚠️{% else %}⚡{% endif %}
+                    </div>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; margin-bottom: 0.25rem;">
+                            {{ bottleneck.type }}
+                        </div>
+                        <div style="font-size: 0.875rem;">
+                            {{ bottleneck.count }} items require attention
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="empty-state">
+                    <div>✅</div>
+                    <p>All systems running smoothly</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="section-card">
+        <h2>Quick Actions</h2>
+        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+            <a href="{% url 'supply_chain:transfer_list' %}" class="btn btn-primary">
+                📦 View All Transfers
+            </a>
+            <a href="{% url 'supply_chain:fulfillment_queue' %}" class="btn btn-primary">
+                🎯 Fulfillment Queue
+            </a>
+            <a href="{% url 'supply_chain:b2b_shipments' %}" class="btn btn-primary">
+                🌍 B2B Shipments
+            </a>
+            <a href="{% url 'supply_chain:warehouse_linkages' %}" class="btn btn-primary">
+                🔗 Warehouse Links
+            </a>
+            <a href="{% url 'supply_chain:analytics' %}" class="btn btn-primary">
+                📊 Analytics
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

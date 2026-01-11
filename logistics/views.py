@@ -67,6 +67,7 @@ from .models import (
     Warehouse, LogisticOffice, DriverLocation, WarehouseShipmentNotification,
     B2BShipment, B2BShipmentItem, B2BShipmentBox, B2BBoxItem
 )
+
 from stores.b2b.models import B2BOrder, B2BOrderItem, B2BShippingAddress
 from .forms import (
     ShipmentForm, ShipmentBoxForm, BoxItemForm,
@@ -89,6 +90,7 @@ from .services import (
 from orders.models import Order, OrderItem, ShippingAddress, OrderStatusHistory
 from stock.models import Warehouse as StockWarehouse
 from marketplace.notifications import send_whatsapp, send_email
+from supply_chain.models import FulfillmentQueue
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -4102,6 +4104,21 @@ def b2b_shipment_detail(request, order_id):
                 order.tracking_number = shipment.tracking_number
                 order.save(update_fields=["tracking_number", "updated_at"])
 
+        # ✅ Save selected shipping company config
+        company_config_id = request.POST.get("company_config_id",
+                                                     "").strip()  # must match <select name="company_config_id">
+        from supply_chain.models import ShippingCompanyCountry  # import here to avoid circular imports
+
+        if company_config_id:
+            config = get_object_or_404(
+                ShippingCompanyCountry.objects.select_related("shipping_company", "country"),
+                id=company_config_id,
+                is_active=True
+            )
+            shipment.set_company_config(config)
+        else:
+            shipment.set_company_config(None)
+
         shipment.save()
 
         messages.success(request, f"✅ B2B Shipment saved. Tracking: {shipment.tracking_number}")
@@ -4217,12 +4234,22 @@ def b2b_unlock_shipment(request, order_id):
 
     return redirect("logistics:b2b_shipment_detail", order_id=order.id)
 
+def _is_locked_by_status(shipment) -> bool:
+    """
+    Single source of truth for lock state in Logistics:
+    Your template logic uses shipment.status heavily.
+    Treat 'locked' and anything beyond as locked/read-only.
+    """
+    return str(getattr(shipment, "status", "")).lower() in {"locked", "in_transit", "delivered"}
+
 
 @login_required
 @transaction.atomic
 def b2b_lock_shipment(request, order_id):
     """
-    Manually lock a shipment (normally done automatically when generating all labels).
+    Locks Logistics B2B shipment AND pushes it to Supply Chain by:
+    1) Creating/Linking StoreToLogisticsTransfer
+    2) Creating/Linking FulfillmentQueue (so fulfiller sees it)
     """
     if not _is_logistics_user(request.user):
         return HttpResponseForbidden("Logistics only")
@@ -4233,14 +4260,119 @@ def b2b_lock_shipment(request, order_id):
     order = get_object_or_404(B2BOrder, id=order_id)
     shipment = get_object_or_404(B2BShipment, order=order)
 
-    if shipment.lock(user=request.user):
-        messages.success(
-            request,
-            f"🔒 Shipment locked. Logistics details are now read-only."
-        )
-    else:
+    # ✅ If already locked by status, stop early
+    if _is_locked_by_status(shipment):
         messages.info(request, "Shipment is already locked.")
+        return redirect("logistics:b2b_shipment_detail", order_id=order.id)
 
+    # --------------------------------------------------
+    # 1) Attempt your model's lock() method (if present)
+    # --------------------------------------------------
+    lock_method = getattr(shipment, "lock", None)
+    if callable(lock_method):
+        try:
+            lock_method(user=request.user)
+        except TypeError:
+            # in case your lock() signature is lock() without kwargs
+            lock_method()
+
+        shipment.refresh_from_db()
+
+    # --------------------------------------------------
+    # 2) Fallback: force lock if still not locked
+    # --------------------------------------------------
+    if not _is_locked_by_status(shipment):
+        shipment.status = "locked"
+
+        # Optional fields if your model has them
+        if hasattr(shipment, "locked_at") and getattr(shipment, "locked_at") is None:
+            shipment.locked_at = timezone.now()
+        if hasattr(shipment, "locked_by") and getattr(shipment, "locked_by_id", None) is None:
+            shipment.locked_by = request.user
+
+        # Save only existing fields
+        update_fields = ["status"]
+        if hasattr(shipment, "locked_at"):
+            update_fields.append("locked_at")
+        if hasattr(shipment, "locked_by"):
+            update_fields.append("locked_by")
+
+        shipment.save(update_fields=update_fields)
+        shipment.refresh_from_db()
+
+    # If still not locked, something is wrong
+    if not _is_locked_by_status(shipment):
+        messages.error(request, "Could not lock shipment. Please check shipment model lock logic.")
+        return redirect("logistics:b2b_shipment_detail", order_id=order.id)
+
+    # --------------------------------------------------
+    # Push to Supply Chain
+    # --------------------------------------------------
+    from supply_chain.models import StoreToLogisticsTransfer, FulfillmentQueue, WarehouseLinkage
+
+    # Determine warehouses (adjust these lines if your logistics shipment stores them differently)
+    store_warehouse = (
+        getattr(shipment, "store_warehouse", None)
+        or getattr(order, "store_warehouse", None)
+        or getattr(getattr(order, "store", None), "warehouse", None)
+    )
+    logistics_warehouse = (
+        getattr(shipment, "logistics_warehouse", None)
+        or (WarehouseLinkage.get_optimal_logistics_warehouse(store_warehouse) if store_warehouse else None)
+    )
+
+    if not store_warehouse or not logistics_warehouse:
+        messages.error(
+            request,
+            "Shipment locked, but cannot push to Supply Chain: missing store/logistics warehouse."
+        )
+        return redirect("logistics:b2b_shipment_detail", order_id=order.id)
+
+    transfer, _ = StoreToLogisticsTransfer.objects.get_or_create(
+        order=order,
+        defaults={
+            "store_warehouse": store_warehouse,
+            "logistics_warehouse": logistics_warehouse,
+            "requested_by": request.user,
+            "status": "PENDING",
+            "notes": f"Auto-created from Logistics lock by {request.user}",
+        }
+    )
+
+    # Keep warehouses consistent if transfer already existed
+    changed = False
+    if transfer.store_warehouse_id != store_warehouse.id:
+        transfer.store_warehouse = store_warehouse
+        changed = True
+    if transfer.logistics_warehouse_id != logistics_warehouse.id:
+        transfer.logistics_warehouse = logistics_warehouse
+        changed = True
+    if changed:
+        transfer.save(update_fields=["store_warehouse", "logistics_warehouse"])
+
+    fq, _ = FulfillmentQueue.objects.get_or_create(
+        order=order,
+        defaults={
+            "logistics_warehouse": logistics_warehouse,
+            "transfer": transfer,
+            "status": "QUEUED",
+            "priority": "NORMAL",
+            "notes": "Auto-queued from Logistics lock",
+        }
+    )
+
+    # Ensure transfer is attached
+    fq_changed = False
+    if fq.transfer_id is None:
+        fq.transfer = transfer
+        fq_changed = True
+    if fq.logistics_warehouse_id != logistics_warehouse.id:
+        fq.logistics_warehouse = logistics_warehouse
+        fq_changed = True
+    if fq_changed:
+        fq.save(update_fields=["transfer", "logistics_warehouse"])
+
+    messages.success(request, "🔒 Shipment locked and pushed to Supply Chain fulfillment queue.")
     return redirect("logistics:b2b_shipment_detail", order_id=order.id)
 
 
@@ -4806,7 +4938,15 @@ def b2b_print_all_labels(request, order_id):
 def b2b_mark_in_transit(request, order_id):
     """
     Mark a shipment as in transit (shipped out).
-    Only available for locked shipments.
+
+    Requirements:
+    - Shipment must be locked
+    - Fulfillment must be in READY status
+
+    Actions:
+    - Updates shipment status to IN_TRANSIT
+    - Automatically marks fulfillment as SHIPPED
+    - Records who shipped it and when
     """
     if not _is_logistics_user(request.user):
         return HttpResponseForbidden("Logistics only")
@@ -4817,6 +4957,7 @@ def b2b_mark_in_transit(request, order_id):
     order = get_object_or_404(B2BOrder, id=order_id)
     shipment = get_object_or_404(B2BShipment, order=order)
 
+    # ✅ CHECK 1: Shipment must be locked
     if shipment.status != "locked":
         messages.error(
             request,
@@ -4824,19 +4965,52 @@ def b2b_mark_in_transit(request, order_id):
         )
         return redirect("logistics:b2b_shipment_detail", order_id=order.id)
 
-    if shipment.mark_in_transit(user=request.user):
-        # Send in-transit notification
-        NotificationManager.run_in_background(
-            'notify_b2b_shipment_in_transit',
-            shipment,
-            request.user
+    # ✅ CHECK 2: Fulfillment must be in READY status
+    try:
+        fulfillment = FulfillmentQueue.objects.get(b2b_order=order)
+
+        if fulfillment.status != 'READY':
+            messages.error(
+                request,
+                f"❌ Cannot mark as in transit. Fulfillment must be READY first. "
+                f"Current status: {fulfillment.get_status_display()}"
+            )
+            return redirect("logistics:b2b_shipment_detail", order_id=order.id)
+
+    except FulfillmentQueue.DoesNotExist:
+        messages.error(
+            request,
+            "❌ Cannot mark as in transit. No fulfillment queue found for this order."
         )
+        return redirect("logistics:b2b_shipment_detail", order_id=order.id)
+
+    # ✅ UPDATE SHIPMENT STATUS
+    if shipment.mark_in_transit(user=request.user):
+        # ✅ AUTOMATICALLY UPDATE FULFILLMENT TO SHIPPED
+        fulfillment.status = 'SHIPPED'
+        fulfillment.shipped_at = timezone.now()
+        fulfillment.shipped_by = request.user
+        fulfillment.save(update_fields=['status', 'shipped_at', 'shipped_by'])
+
+        # Send in-transit notification
+        try:
+            from helpdesk.notifications import NotificationManager
+            NotificationManager.run_in_background(
+                'notify_b2b_shipment_in_transit',
+                shipment,
+                request.user
+            )
+        except ImportError:
+            pass  # Notifications not available
+
         messages.success(
             request,
-            "🚚 Shipment marked as IN TRANSIT. Package is on its way!"
+            "🚚 Shipment marked as IN TRANSIT. Fulfillment marked as SHIPPED. Package is on its way!"
         )
     else:
         messages.error(request, "Failed to update shipment status.")
+
+    return redirect("logistics:b2b_shipment_detail", order_id=order.id)
 
     return redirect("logistics:b2b_shipment_detail", order_id=order.id)
 
@@ -4864,10 +5038,10 @@ def b2b_mark_delivered(request, order_id):
             return redirect("logistics:b2b_shipment_detail", order_id=order.id)
 
         # Get delivery notes and proof
-        notes = request.POST.get("delivery_notes", "").strip()
+        notes = (request.POST.get("delivery_notes") or "").strip()
         proof = request.FILES.get("delivery_proof")
 
-        if shipment.mark_delivered(user=request.user, notes=notes, proof=proof):
+        if shipment.mark_delivered(user=request.user, delivery_notes=notes, delivery_proof=proof):
             # Send delivered notification
             NotificationManager.run_in_background(
                 'notify_b2b_shipment_delivered',

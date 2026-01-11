@@ -1,0 +1,958 @@
+{% extends 'logistics/base.html' %}
+{% load static %}
+
+{% block title %}Transfer {{ transfer.transfer_number }} - Supply Chain{% endblock %}
+
+{% block extra_css %}
+<style>
+    .detail-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: 1rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 10px 30px rgba(102, 126, 234, 0.2);
+    }
+
+    .detail-header h1 {
+        font-size: 1.75rem;
+        font-weight: 700;
+        margin: 0 0 0.5rem 0;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .detail-header .status-badge {
+        padding: 0.5rem 1rem;
+        border-radius: 1rem;
+        font-size: 0.875rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .status-pending {
+        background: rgba(254, 243, 199, 0.3);
+        border: 2px solid #fef3c7;
+        color: #fef3c7;
+    }
+
+    .status-picked_up {
+        background: rgba(219, 234, 254, 0.3);
+        border: 2px solid #dbeafe;
+        color: #dbeafe;
+    }
+
+    .status-received {
+        background: rgba(209, 250, 229, 0.3);
+        border: 2px solid #d1fae5;
+        color: #d1fae5;
+    }
+
+    .status-cancelled {
+        background: rgba(254, 226, 226, 0.3);
+        border: 2px solid #fee2e2;
+        color: #fee2e2;
+    }
+
+    .content-grid {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        gap: 2rem;
+        margin-bottom: 2rem;
+    }
+
+    .card {
+        background: white;
+        border-radius: 1rem;
+        padding: 2rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        border: 1px solid #e2e8f0;
+    }
+
+    .card-title {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #1f2937;
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding-bottom: 1rem;
+        border-bottom: 2px solid #f3f4f6;
+    }
+
+    .card-title i {
+        color: #667eea;
+    }
+
+    .route-visualization {
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+        padding: 1.5rem;
+        background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+        border-radius: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .route-point {
+        flex: 1;
+        text-align: center;
+    }
+
+    .route-point-icon {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        background: white;
+        border: 3px solid #667eea;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2rem;
+        color: #667eea;
+        margin: 0 auto 1rem;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+    }
+
+    .route-point-label {
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 0.5rem;
+    }
+
+    .route-point-name {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #1f2937;
+        margin-bottom: 0.25rem;
+    }
+
+    .route-point-detail {
+        font-size: 0.875rem;
+        color: #6b7280;
+    }
+
+    .route-arrow {
+        font-size: 2rem;
+        color: #667eea;
+        animation: slide 2s ease-in-out infinite;
+    }
+
+    @keyframes slide {
+        0%, 100% { transform: translateX(0); }
+        50% { transform: translateX(10px); }
+    }
+
+    .timeline {
+        position: relative;
+        padding-left: 2rem;
+    }
+
+    .timeline::before {
+        content: '';
+        position: absolute;
+        left: 0.625rem;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: linear-gradient(to bottom, #667eea, #e2e8f0);
+    }
+
+    .timeline-item {
+        position: relative;
+        padding-bottom: 2rem;
+    }
+
+    .timeline-item:last-child {
+        padding-bottom: 0;
+    }
+
+    .timeline-marker {
+        position: absolute;
+        left: -1.375rem;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: white;
+        border: 3px solid #667eea;
+        z-index: 1;
+    }
+
+    .timeline-marker.completed {
+        background: #10b981;
+        border-color: #10b981;
+    }
+
+    .timeline-marker.current {
+        background: #667eea;
+        border-color: #667eea;
+        box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.2);
+        animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+        0%, 100% { box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.2); }
+        50% { box-shadow: 0 0 0 8px rgba(102, 126, 234, 0.1); }
+    }
+
+    .timeline-content {
+        padding-left: 1.5rem;
+    }
+
+    .timeline-title {
+        font-weight: 600;
+        color: #1f2937;
+        margin-bottom: 0.25rem;
+    }
+
+    .timeline-time {
+        font-size: 0.875rem;
+        color: #6b7280;
+        margin-bottom: 0.5rem;
+    }
+
+    .timeline-user {
+        font-size: 0.875rem;
+        color: #667eea;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .info-item {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .info-label {
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #9ca3af;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .info-value {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #1f2937;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .info-value i {
+        color: #667eea;
+        font-size: 0.875rem;
+    }
+
+    .items-table {
+        width: 100%;
+        margin-top: 1rem;
+    }
+
+    .items-table thead {
+        background: #f9fafb;
+        border-radius: 0.5rem;
+    }
+
+    .items-table th {
+        padding: 0.75rem 1rem;
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        text-align: left;
+    }
+
+    .items-table td {
+        padding: 1rem;
+        border-bottom: 1px solid #f3f4f6;
+    }
+
+    .items-table tr:last-child td {
+        border-bottom: none;
+    }
+
+    .product-name {
+        font-weight: 600;
+        color: #1f2937;
+    }
+
+    .product-sku {
+        font-size: 0.875rem;
+        color: #6b7280;
+    }
+
+    .quantity-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.375rem 0.75rem;
+        background: #f3f4f6;
+        border-radius: 0.5rem;
+        font-weight: 600;
+        color: #1f2937;
+    }
+
+    .metric-card {
+        background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+        padding: 1.5rem;
+        border-radius: 0.75rem;
+        border: 1px solid #e2e8f0;
+        margin-bottom: 1rem;
+    }
+
+    .metric-label {
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 0.5rem;
+    }
+
+    .metric-value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #1f2937;
+        margin-bottom: 0.25rem;
+    }
+
+    .metric-subtext {
+        font-size: 0.875rem;
+        color: #6b7280;
+    }
+
+    .performance-badge {
+        padding: 0.5rem 1rem;
+        border-radius: 0.5rem;
+        font-weight: 600;
+        font-size: 0.875rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .performance-excellent {
+        background: #d1fae5;
+        color: #065f46;
+    }
+
+    .performance-good {
+        background: #dbeafe;
+        color: #1e40af;
+    }
+
+    .performance-warning {
+        background: #fef3c7;
+        color: #92400e;
+    }
+
+    .performance-poor {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    .action-buttons {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+        margin-top: 2rem;
+    }
+
+    .btn {
+        padding: 0.75rem 1.5rem;
+        border-radius: 0.75rem;
+        font-size: 0.9375rem;
+        font-weight: 600;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.75rem;
+        transition: all 0.2s ease;
+        border: none;
+        cursor: pointer;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+    }
+
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-success {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        color: white;
+    }
+
+    .btn-success:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(16, 185, 129, 0.4);
+    }
+
+    .btn-outline {
+        border: 2px solid #e2e8f0;
+        color: #374151;
+        background: white;
+    }
+
+    .btn-outline:hover {
+        border-color: #667eea;
+        color: #667eea;
+        background: #f9fafb;
+    }
+
+    .notes-box {
+        background: #fffbeb;
+        border: 1px solid #fcd34d;
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        margin-top: 1.5rem;
+    }
+
+    .notes-box h6 {
+        font-weight: 700;
+        color: #92400e;
+        margin-bottom: 0.75rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .notes-box p {
+        color: #78350f;
+        margin: 0;
+        line-height: 1.6;
+    }
+
+    .alert-info {
+        background: #dbeafe;
+        border: 1px solid #93c5fd;
+        border-radius: 0.75rem;
+        padding: 1rem 1.5rem;
+        display: flex;
+        align-items: start;
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+
+    .alert-info i {
+        color: #1e40af;
+        font-size: 1.25rem;
+        margin-top: 0.25rem;
+    }
+
+    .alert-info-content {
+        flex: 1;
+    }
+
+    .alert-info-title {
+        font-weight: 600;
+        color: #1e3a8a;
+        margin-bottom: 0.25rem;
+    }
+
+    .alert-info-text {
+        font-size: 0.875rem;
+        color: #1e40af;
+        margin: 0;
+    }
+
+    @media (max-width: 992px) {
+        .content-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .info-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .route-visualization {
+            flex-direction: column;
+        }
+
+        .route-arrow {
+            transform: rotate(90deg);
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+    <!-- Header -->
+    <div class="detail-header">
+        <div class="d-flex justify-content-between align-items-start mb-3">
+            <div>
+                <h1>
+                    <i class="fas fa-barcode"></i>
+                    {{ transfer.transfer_number }}
+                </h1>
+                <p style="margin: 0; opacity: 0.9;">
+                    Requested {{ transfer.requested_at|date:"F d, Y \a\t H:i" }}
+                    {% if transfer.requested_by %}
+                    by {{ transfer.requested_by.get_full_name|default:transfer.requested_by.username }}
+                    {% endif %}
+                </p>
+            </div>
+            <span class="status-badge status-{{ transfer.status|lower }}">
+                {{ transfer.get_status_display }}
+            </span>
+        </div>
+
+        <div class="action-buttons" style="margin-top: 1.5rem;">
+            <a href="{% url 'supply_chain:transfer_list' %}" class="btn btn-outline" style="color: white; border-color: rgba(255,255,255,0.3);">
+                <i class="fas fa-arrow-left"></i>
+                Back to List
+            </a>
+
+            {% if transfer.status == 'PENDING' %}
+            <button type="button" class="btn btn-success" onclick="showPickupModal()">
+                <i class="fas fa-truck-loading"></i>
+                Mark as Picked Up
+            </button>
+            {% endif %}
+
+            {% if transfer.status == 'PICKED_UP' %}
+            <button type="button" class="btn btn-success" onclick="showReceiveModal()">
+                <i class="fas fa-check-circle"></i>
+                Mark as Received
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Route Visualization -->
+    <div class="card">
+        <div class="route-visualization">
+            <div class="route-point">
+                <div class="route-point-icon">
+                    <i class="fas fa-store"></i>
+                </div>
+                <div class="route-point-label">Origin</div>
+                <div class="route-point-name">{{ transfer.store_warehouse.code }}</div>
+                <div class="route-point-detail">{{ transfer.store_warehouse.name }}</div>
+            </div>
+
+            <div class="route-arrow">
+                <i class="fas fa-arrow-right"></i>
+            </div>
+
+            <div class="route-point">
+                <div class="route-point-icon">
+                    <i class="fas fa-warehouse"></i>
+                </div>
+                <div class="route-point-label">Destination</div>
+                <div class="route-point-name">{{ transfer.logistics_warehouse.name }}</div>
+                <div class="route-point-detail">Logistics Center</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Content Grid -->
+    <div class="content-grid">
+        <!-- Left Column -->
+        <div>
+            <!-- Transfer Information -->
+            <div class="card">
+                <h2 class="card-title">
+                    <i class="fas fa-info-circle"></i>
+                    Transfer Information
+                </h2>
+
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="info-label">Transfer ID</span>
+                        <span class="info-value">
+                            <i class="fas fa-fingerprint"></i>
+                            {{ transfer.id }}
+                        </span>
+                    </div>
+
+                    <div class="info-item">
+                        <span class="info-label">Status</span>
+                        <span class="info-value">
+                            <i class="fas fa-flag"></i>
+                            {{ transfer.get_status_display }}
+                        </span>
+                    </div>
+
+                    {% if transfer.order %}
+                    <div class="info-item">
+                        <span class="info-label">Related Order</span>
+                        <span class="info-value">
+                            <i class="fas fa-shopping-cart"></i>
+                            <a href="#" style="color: #667eea; text-decoration: none;">
+                                #{{ transfer.order.id|slice:":8" }}
+                            </a>
+                        </span>
+                    </div>
+                    {% endif %}
+
+                    <div class="info-item">
+                        <span class="info-label">Total Items</span>
+                        <span class="info-value">
+                            <i class="fas fa-box"></i>
+                            {{ transfer.items.count }} item{% if transfer.items.count != 1 %}s{% endif %}
+                        </span>
+                    </div>
+
+                    {% if transfer.vehicle %}
+                    <div class="info-item">
+                        <span class="info-label">Vehicle</span>
+                        <span class="info-value">
+                            <i class="fas fa-truck"></i>
+                            {{ transfer.vehicle.license_plate }}
+                        </span>
+                    </div>
+                    {% endif %}
+
+                    {% if transfer.driver %}
+                    <div class="info-item">
+                        <span class="info-label">Driver</span>
+                        <span class="info-value">
+                            <i class="fas fa-user"></i>
+                            {{ transfer.driver.name }}
+                        </span>
+                    </div>
+                    {% endif %}
+
+                    {% if transfer.actual_duration_minutes %}
+                    <div class="info-item">
+                        <span class="info-label">Actual Duration</span>
+                        <span class="info-value">
+                            <i class="fas fa-clock"></i>
+                            {{ transfer.actual_duration_minutes }} minutes
+                        </span>
+                    </div>
+                    {% endif %}
+                </div>
+
+                {% if transfer.notes %}
+                <div class="notes-box">
+                    <h6>
+                        <i class="fas fa-sticky-note"></i>
+                        Notes
+                    </h6>
+                    <p>{{ transfer.notes }}</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Items List -->
+            <div class="card" style="margin-top: 2rem;">
+                <h2 class="card-title">
+                    <i class="fas fa-boxes"></i>
+                    Transfer Items
+                </h2>
+
+                <table class="items-table">
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th>Quantity</th>
+                            <th>Order Item</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in transfer.items.all %}
+                        <tr>
+                            <td>
+                                <div class="product-name">{{ item.product.name }}</div>
+                                <div class="product-sku">SKU: {{ item.product.sku|default:"N/A" }}</div>
+                            </td>
+                            <td>
+                                <span class="quantity-badge">
+                                    <i class="fas fa-box"></i>
+                                    {{ item.quantity }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if item.order_item %}
+                                <i class="fas fa-check-circle" style="color: #10b981;"></i>
+                                Linked
+                                {% else %}
+                                <span style="color: #6b7280;">—</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="3" style="text-align: center; color: #6b7280; padding: 2rem;">
+                                No items in this transfer
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Right Column -->
+        <div>
+            <!-- Timeline -->
+            <div class="card">
+                <h2 class="card-title">
+                    <i class="fas fa-history"></i>
+                    Timeline
+                </h2>
+
+                <div class="timeline">
+                    <!-- Requested -->
+                    <div class="timeline-item">
+                        <div class="timeline-marker completed"></div>
+                        <div class="timeline-content">
+                            <div class="timeline-title">Transfer Requested</div>
+                            <div class="timeline-time">
+                                <i class="far fa-calendar"></i>
+                                {{ transfer.requested_at|date:"F d, Y \a\t H:i" }}
+                            </div>
+                            {% if transfer.requested_by %}
+                            <div class="timeline-user">
+                                <i class="fas fa-user"></i>
+                                {{ transfer.requested_by.get_full_name|default:transfer.requested_by.username }}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Picked Up -->
+                    <div class="timeline-item">
+                        <div class="timeline-marker {% if transfer.picked_up_at %}completed{% elif transfer.status == 'PENDING' %}current{% endif %}"></div>
+                        <div class="timeline-content">
+                            <div class="timeline-title">Picked Up from Warehouse</div>
+                            {% if transfer.picked_up_at %}
+                            <div class="timeline-time">
+                                <i class="far fa-calendar"></i>
+                                {{ transfer.picked_up_at|date:"F d, Y \a\t H:i" }}
+                            </div>
+                            {% if transfer.picked_up_by %}
+                            <div class="timeline-user">
+                                <i class="fas fa-user"></i>
+                                {{ transfer.picked_up_by.get_full_name|default:transfer.picked_up_by.username }}
+                            </div>
+                            {% endif %}
+                            {% else %}
+                            <div class="timeline-time" style="color: #9ca3af;">
+                                <i class="far fa-clock"></i>
+                                Pending pickup
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Received -->
+                    <div class="timeline-item">
+                        <div class="timeline-marker {% if transfer.received_at %}completed{% elif transfer.status == 'PICKED_UP' %}current{% endif %}"></div>
+                        <div class="timeline-content">
+                            <div class="timeline-title">Received at Logistics Center</div>
+                            {% if transfer.received_at %}
+                            <div class="timeline-time">
+                                <i class="far fa-calendar"></i>
+                                {{ transfer.received_at|date:"F d, Y \a\t H:i" }}
+                            </div>
+                            {% if transfer.received_by %}
+                            <div class="timeline-user">
+                                <i class="fas fa-user"></i>
+                                {{ transfer.received_by.get_full_name|default:transfer.received_by.username }}
+                            </div>
+                            {% endif %}
+                            {% else %}
+                            <div class="timeline-time" style="color: #9ca3af;">
+                                <i class="far fa-clock"></i>
+                                {% if transfer.status == 'PICKED_UP' %}
+                                In transit
+                                {% else %}
+                                Awaiting receipt
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Performance Metrics -->
+            {% if transfer.actual_duration_minutes %}
+            <div class="card" style="margin-top: 2rem;">
+                <h2 class="card-title">
+                    <i class="fas fa-chart-line"></i>
+                    Performance
+                </h2>
+
+                <div class="metric-card">
+                    <div class="metric-label">Transfer Duration</div>
+                    <div class="metric-value">{{ transfer.actual_duration_minutes }}</div>
+                    <div class="metric-subtext">minutes</div>
+                </div>
+
+                {% if transfer.actual_duration_minutes <= 60 %}
+                <div class="performance-badge performance-excellent">
+                    <i class="fas fa-star"></i>
+                    Excellent Performance
+                </div>
+                {% elif transfer.actual_duration_minutes <= 90 %}
+                <div class="performance-badge performance-good">
+                    <i class="fas fa-thumbs-up"></i>
+                    Good Performance
+                </div>
+                {% elif transfer.actual_duration_minutes <= 120 %}
+                <div class="performance-badge performance-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Below Expected
+                </div>
+                {% else %}
+                <div class="performance-badge performance-poor">
+                    <i class="fas fa-exclamation-circle"></i>
+                    Needs Attention
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <!-- Quick Info -->
+            <div class="card" style="margin-top: 2rem;">
+                <h2 class="card-title">
+                    <i class="fas fa-lightbulb"></i>
+                    Quick Info
+                </h2>
+
+                <div class="alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    <div class="alert-info-content">
+                        <div class="alert-info-title">Transfer Status</div>
+                        <p class="alert-info-text">
+                            {% if transfer.status == 'PENDING' %}
+                            This transfer is awaiting pickup from the store warehouse.
+                            {% elif transfer.status == 'PICKED_UP' %}
+                            This transfer is currently in transit to the logistics center.
+                            {% elif transfer.status == 'RECEIVED' %}
+                            This transfer has been completed and items are now at the logistics center.
+                            {% elif transfer.status == 'CANCELLED' %}
+                            This transfer has been cancelled.
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Pickup Modal -->
+<div class="modal fade" id="pickupModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-truck-loading me-2"></i>
+                    Mark Transfer as Picked Up
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{% url 'supply_chain:mark_picked_up' transfer.id %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Vehicle (Optional)</label>
+                        <select name="vehicle" class="form-select">
+                            <option value="">Select Vehicle</option>
+                            <!-- Populate from context -->
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Driver (Optional)</label>
+                        <select name="driver" class="form-select">
+                            <option value="">Select Driver</option>
+                            <!-- Populate from context -->
+                        </select>
+                    </div>
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        This will mark the transfer as picked up and change status to "In Transit".
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-check"></i>
+                        Confirm Pickup
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Receive Modal -->
+<div class="modal fade" id="receiveModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-check-circle me-2"></i>
+                    Mark Transfer as Received
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{% url 'supply_chain:mark_received' transfer.id %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <div>
+                            <strong>Important:</strong> This will update stock levels at the logistics warehouse.
+                            <ul style="margin-top: 0.5rem; margin-bottom: 0;">
+                                <li>Stock will be decreased at <strong>{{ transfer.store_warehouse.code }}</strong></li>
+                                <li>Stock will be increased at <strong>{{ transfer.logistics_warehouse.name }}</strong></li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Condition Notes (Optional)</label>
+                        <textarea name="condition_notes" class="form-control" rows="3"
+                                  placeholder="Any issues or notes about the condition of received items..."></textarea>
+                        <small class="text-muted">These notes will be appended to the transfer notes.</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-check"></i>
+                        Confirm Receipt
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function showPickupModal() {
+    new bootstrap.Modal(document.getElementById('pickupModal')).show();
+}
+
+function showReceiveModal() {
+    new bootstrap.Modal(document.getElementById('receiveModal')).show();
+}
+</script>
+{% endblock %}

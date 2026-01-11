@@ -1,0 +1,1060 @@
+{% extends 'logistics/base.html' %}
+{% load static %}
+
+{% block title %}Shipment {{ shipment.shipment_number }} - Supply Chain{% endblock %}
+
+{% block extra_css %}
+<style>
+    .shipment-header {
+        background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%);
+        color: white;
+        padding: 2.5rem;
+        border-radius: 1rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 10px 30px rgba(14, 165, 233, 0.3);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .shipment-header::before {
+        content: '✈️';
+        position: absolute;
+        top: -20px;
+        right: -20px;
+        font-size: 15rem;
+        opacity: 0.1;
+        transform: rotate(-15deg);
+    }
+
+    .shipment-header-content {
+        position: relative;
+        z-index: 1;
+    }
+
+    .shipment-number {
+        font-size: 2rem;
+        font-weight: 800;
+        margin: 0 0 0.5rem 0;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .tracking-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        background: rgba(255, 255, 255, 0.2);
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-radius: 2rem;
+        font-size: 0.875rem;
+        font-weight: 600;
+    }
+
+    .status-badge-large {
+        padding: 0.75rem 1.5rem;
+        border-radius: 1rem;
+        font-size: 1rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .status-pending { background: rgba(254, 243, 199, 0.3); border: 2px solid #fef3c7; color: #fef3c7; }
+    .status-processing { background: rgba(219, 234, 254, 0.3); border: 2px solid #dbeafe; color: #dbeafe; }
+    .status-shipped { background: rgba(224, 231, 255, 0.3); border: 2px solid #e0e7ff; color: #e0e7ff; }
+    .status-in_transit { background: rgba(221, 214, 254, 0.3); border: 2px solid #ddd6fe; color: #ddd6fe; }
+    .status-customs { background: rgba(254, 215, 170, 0.3); border: 2px solid #fed7aa; color: #fed7aa; }
+    .status-out_for_delivery { background: rgba(167, 243, 208, 0.3); border: 2px solid #a7f3d0; color: #a7f3d0; }
+    .status-delivered { background: rgba(209, 250, 229, 0.3); border: 2px solid #d1fae5; color: #d1fae5; }
+    .status-failed { background: rgba(254, 226, 226, 0.3); border: 2px solid #fee2e2; color: #fee2e2; }
+    .status-returned { background: rgba(254, 226, 226, 0.3); border: 2px solid #fee2e2; color: #fee2e2; }
+
+    .content-grid {
+        display: grid;
+        grid-template-columns: 1.5fr 1fr;
+        gap: 2rem;
+        margin-bottom: 2rem;
+    }
+
+    .card {
+        background: white;
+        border-radius: 1rem;
+        padding: 2rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        border: 1px solid #e2e8f0;
+    }
+
+    .card-title {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #1f2937;
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding-bottom: 1rem;
+        border-bottom: 2px solid #f3f4f6;
+    }
+
+    .card-title i {
+        color: #0ea5e9;
+    }
+
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .info-item {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .info-label {
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #9ca3af;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .info-value {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #1f2937;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .info-value i {
+        color: #0ea5e9;
+        font-size: 0.875rem;
+    }
+
+    .route-display {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 1.5rem;
+        background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+        border-radius: 1rem;
+        margin-bottom: 1.5rem;
+        border: 2px solid #bae6fd;
+    }
+
+    .route-point {
+        flex: 1;
+        text-align: center;
+    }
+
+    .route-flag {
+        font-size: 3rem;
+        margin-bottom: 0.5rem;
+        filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+    }
+
+    .route-label {
+        font-size: 0.75rem;
+        color: #0c4a6e;
+        font-weight: 700;
+        text-transform: uppercase;
+        margin-bottom: 0.25rem;
+    }
+
+    .route-name {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #075985;
+    }
+
+    .route-arrow {
+        font-size: 2rem;
+        color: #0ea5e9;
+        animation: fly 3s ease-in-out infinite;
+    }
+
+    @keyframes fly {
+        0%, 100% { transform: translateX(0); }
+        50% { transform: translateX(10px); }
+    }
+
+    .tracking-timeline {
+        position: relative;
+        padding-left: 2rem;
+    }
+
+    .tracking-timeline::before {
+        content: '';
+        position: absolute;
+        left: 0.625rem;
+        top: 0;
+        bottom: 0;
+        width: 3px;
+        background: linear-gradient(to bottom, #0ea5e9, #e2e8f0);
+    }
+
+    .timeline-item {
+        position: relative;
+        padding-bottom: 2.5rem;
+    }
+
+    .timeline-item:last-child {
+        padding-bottom: 0;
+    }
+
+    .timeline-marker {
+        position: absolute;
+        left: -1.5rem;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: white;
+        border: 4px solid #0ea5e9;
+        z-index: 1;
+        box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.1);
+    }
+
+    .timeline-marker.completed {
+        background: #10b981;
+        border-color: #10b981;
+    }
+
+    .timeline-marker.current {
+        background: #0ea5e9;
+        border-color: #0ea5e9;
+        animation: pulse-blue 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-blue {
+        0%, 100% { box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.2); }
+        50% { box-shadow: 0 0 0 8px rgba(14, 165, 233, 0.1); }
+    }
+
+    .timeline-content {
+        padding-left: 1.5rem;
+    }
+
+    .timeline-status {
+        font-weight: 700;
+        color: #1f2937;
+        font-size: 1.05rem;
+        margin-bottom: 0.25rem;
+    }
+
+    .timeline-location {
+        color: #0ea5e9;
+        font-size: 0.875rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .timeline-description {
+        color: #6b7280;
+        font-size: 0.875rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .timeline-time {
+        font-size: 0.8125rem;
+        color: #9ca3af;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .package-card {
+        background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+        padding: 1.5rem;
+        border-radius: 1rem;
+        border: 1px solid #e5e7eb;
+        margin-bottom: 1rem;
+    }
+
+    .package-icon {
+        width: 60px;
+        height: 60px;
+        background: white;
+        border-radius: 1rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.75rem;
+        color: #0ea5e9;
+        margin-bottom: 1rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .cost-breakdown {
+        background: #fffbeb;
+        border: 2px solid #fcd34d;
+        border-radius: 1rem;
+        padding: 1.5rem;
+    }
+
+    .cost-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid #fde68a;
+    }
+
+    .cost-row:last-child {
+        border-bottom: none;
+        margin-top: 0.5rem;
+        padding-top: 1rem;
+        border-top: 2px solid #fbbf24;
+    }
+
+    .cost-label {
+        font-weight: 600;
+        color: #78350f;
+    }
+
+    .cost-value {
+        font-weight: 700;
+        color: #92400e;
+        font-size: 1.1rem;
+    }
+
+    .cost-row:last-child .cost-value {
+        font-size: 1.5rem;
+        color: #78350f;
+    }
+
+    .documents-grid {
+        display: grid;
+        gap: 1rem;
+    }
+
+    .document-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 1rem;
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 0.75rem;
+        transition: all 0.2s ease;
+    }
+
+    .document-item:hover {
+        background: #f3f4f6;
+        border-color: #0ea5e9;
+    }
+
+    .document-info {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .document-icon {
+        width: 48px;
+        height: 48px;
+        background: white;
+        border: 2px solid #e5e7eb;
+        border-radius: 0.75rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+        color: #0ea5e9;
+    }
+
+    .document-name {
+        font-weight: 600;
+        color: #1f2937;
+    }
+
+    .document-status {
+        font-size: 0.75rem;
+        color: #6b7280;
+    }
+
+    .btn {
+        padding: 0.75rem 1.5rem;
+        border-radius: 0.75rem;
+        font-size: 0.9375rem;
+        font-weight: 600;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.75rem;
+        transition: all 0.2s ease;
+        border: none;
+        cursor: pointer;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%);
+        color: white;
+    }
+
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(14, 165, 233, 0.4);
+    }
+
+    .btn-success {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        color: white;
+    }
+
+    .btn-success:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(16, 185, 129, 0.4);
+    }
+
+    .btn-outline {
+        border: 2px solid #e5e7eb;
+        color: #374151;
+        background: white;
+    }
+
+    .btn-outline:hover {
+        border-color: #0ea5e9;
+        color: #0ea5e9;
+        background: #f9fafb;
+    }
+
+    .btn-sm {
+        padding: 0.5rem 1rem;
+        font-size: 0.8125rem;
+    }
+
+    .alert-info {
+        background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+        border: 2px solid #7dd3fc;
+        border-radius: 1rem;
+        padding: 1.5rem;
+        display: flex;
+        align-items: start;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .alert-info i {
+        color: #0369a1;
+        font-size: 1.5rem;
+        margin-top: 0.25rem;
+    }
+
+    .alert-info-content {
+        flex: 1;
+    }
+
+    .alert-info-title {
+        font-weight: 700;
+        color: #075985;
+        margin-bottom: 0.5rem;
+        font-size: 1.05rem;
+    }
+
+    .alert-info-text {
+        color: #0c4a6e;
+        margin: 0;
+        line-height: 1.6;
+    }
+
+    .notes-box {
+        background: #f0f9ff;
+        border: 1px solid #bae6fd;
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        margin-top: 1rem;
+    }
+
+    .notes-box h6 {
+        font-weight: 700;
+        color: #075985;
+        margin-bottom: 0.75rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .notes-box p {
+        color: #0c4a6e;
+        margin: 0;
+        line-height: 1.6;
+    }
+
+    .action-buttons {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+        margin-top: 1.5rem;
+    }
+
+    @media (max-width: 992px) {
+        .content-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .info-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .route-display {
+            flex-direction: column;
+        }
+
+        .route-arrow {
+            transform: rotate(90deg);
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+    <!-- Header -->
+    <div class="shipment-header">
+        <div class="shipment-header-content">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <div>
+                    <div class="shipment-number">
+                        <i class="fas fa-plane"></i>
+                        {{ shipment.shipment_number }}
+                    </div>
+                    {% if shipment.tracking_number %}
+                    <div class="tracking-badge">
+                        <i class="fas fa-barcode"></i>
+                        Tracking: {{ shipment.tracking_number }}
+                    </div>
+                    {% endif %}
+                    <div style="margin-top: 0.75rem; font-size: 0.95rem; opacity: 0.9;">
+                        Created {{ shipment.created_at|date:"F d, Y \a\t H:i" }}
+                    </div>
+                </div>
+                <span class="status-badge-large status-{{ shipment.status|lower }}">
+                    {% if shipment.status == 'PENDING' %}
+                    <i class="fas fa-clock"></i>
+                    {% elif shipment.status == 'PROCESSING' %}
+                    <i class="fas fa-cog fa-spin"></i>
+                    {% elif shipment.status == 'SHIPPED' %}
+                    <i class="fas fa-plane-departure"></i>
+                    {% elif shipment.status == 'IN_TRANSIT' %}
+                    <i class="fas fa-shipping-fast"></i>
+                    {% elif shipment.status == 'CUSTOMS' %}
+                    <i class="fas fa-file-invoice"></i>
+                    {% elif shipment.status == 'OUT_FOR_DELIVERY' %}
+                    <i class="fas fa-truck"></i>
+                    {% elif shipment.status == 'DELIVERED' %}
+                    <i class="fas fa-check-circle"></i>
+                    {% else %}
+                    <i class="fas fa-exclamation-circle"></i>
+                    {% endif %}
+                    {{ shipment.get_status_display }}
+                </span>
+            </div>
+
+            <div class="action-buttons">
+                <a href="{% url 'supply_chain:b2b_shipments' %}" class="btn btn-outline" style="color: white; border-color: rgba(255,255,255,0.3);">
+                    <i class="fas fa-arrow-left"></i>
+                    Back to Shipments
+                </a>
+
+                {% if shipment.carrier_tracking_url %}
+                <a href="{{ shipment.carrier_tracking_url }}" target="_blank" class="btn btn-success">
+                    <i class="fas fa-external-link-alt"></i>
+                    Carrier Tracking
+                </a>
+                {% endif %}
+
+                {% if shipment.status == 'PENDING' or shipment.status == 'PROCESSING' %}
+                <button class="btn btn-success" onclick="showShipModal()">
+                    <i class="fas fa-shipping-fast"></i>
+                    Mark as Shipped
+                </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Route Display -->
+    <div class="card">
+        <div class="route-display">
+            <div class="route-point">
+                <div class="route-flag">🏭</div>
+                <div class="route-label">Origin</div>
+                <div class="route-name">Warehouse</div>
+            </div>
+
+            <div class="route-arrow">
+                <i class="fas fa-plane"></i>
+            </div>
+
+            <div class="route-point">
+                <div class="route-flag">{{ shipment.country.country_code|default:"🌍" }}</div>
+                <div class="route-label">Destination</div>
+                <div class="route-name">{{ shipment.country.country_name }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Content Grid -->
+    <div class="content-grid">
+        <!-- Left Column -->
+        <div>
+            <!-- Shipment Information -->
+            <div class="card">
+                <h2 class="card-title">
+                    <i class="fas fa-info-circle"></i>
+                    Shipment Information
+                </h2>
+
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="info-label">Shipment ID</span>
+                        <span class="info-value">
+                            <i class="fas fa-fingerprint"></i>
+                            {{ shipment.id }}
+                        </span>
+                    </div>
+
+                    <div class="info-item">
+                        <span class="info-label">B2B Order</span>
+                        <span class="info-value">
+                            <i class="fas fa-shopping-cart"></i>
+                            <a href="#" style="color: #0ea5e9; text-decoration: none;">
+                                #{{ shipment.b2b_order.id|slice:":8" }}
+                            </a>
+                        </span>
+                    </div>
+
+                    <div class="info-item">
+                        <span class="info-label">Shipping Company</span>
+                        <span class="info-value">
+                            <i class="fas fa-shipping-fast"></i>
+                            {{ shipment.shipping_company.name }}
+                        </span>
+                    </div>
+
+                    <div class="info-item">
+                        <span class="info-label">Service Level</span>
+                        <span class="info-value">
+                            <i class="fas fa-bolt"></i>
+                            {{ shipment.company_config.get_service_level_display }}
+                        </span>
+                    </div>
+
+                    <div class="info-item">
+                        <span class="info-label">Destination Country</span>
+                        <span class="info-value">
+                            <i class="fas fa-globe"></i>
+                            {{ shipment.country.country_name }}
+                        </span>
+                    </div>
+
+                    <div class="info-item">
+                        <span class="info-label">Created Date</span>
+                        <span class="info-value">
+                            <i class="far fa-calendar"></i>
+                            {{ shipment.created_at|date:"M d, Y" }}
+                        </span>
+                    </div>
+
+                    {% if shipment.shipped_at %}
+                    <div class="info-item">
+                        <span class="info-label">Shipped Date</span>
+                        <span class="info-value">
+                            <i class="fas fa-plane-departure"></i>
+                            {{ shipment.shipped_at|date:"M d, Y H:i" }}
+                        </span>
+                    </div>
+                    {% endif %}
+
+                    {% if shipment.estimated_delivery %}
+                    <div class="info-item">
+                        <span class="info-label">Est. Delivery</span>
+                        <span class="info-value">
+                            <i class="far fa-calendar-check"></i>
+                            {{ shipment.estimated_delivery|date:"M d, Y" }}
+                        </span>
+                    </div>
+                    {% endif %}
+
+                    {% if shipment.delivered_at %}
+                    <div class="info-item">
+                        <span class="info-label">Delivered Date</span>
+                        <span class="info-value">
+                            <i class="fas fa-check-circle"></i>
+                            {{ shipment.delivered_at|date:"M d, Y H:i" }}
+                        </span>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Package Details -->
+                <div class="package-card">
+                    <div class="package-icon">
+                        <i class="fas fa-box"></i>
+                    </div>
+                    <div class="info-grid" style="margin-bottom: 0;">
+                        <div class="info-item">
+                            <span class="info-label">Total Weight</span>
+                            <span class="info-value">
+                                <i class="fas fa-weight"></i>
+                                {{ shipment.total_weight_kg }} kg
+                            </span>
+                        </div>
+
+                        <div class="info-item">
+                            <span class="info-label">Package Count</span>
+                            <span class="info-value">
+                                <i class="fas fa-boxes"></i>
+                                {{ shipment.package_count }} package{% if shipment.package_count != 1 %}s{% endif %}
+                            </span>
+                        </div>
+
+                        {% if shipment.dimensions_cm %}
+                        <div class="info-item">
+                            <span class="info-label">Dimensions</span>
+                            <span class="info-value">
+                                <i class="fas fa-ruler-combined"></i>
+                                {{ shipment.dimensions_cm }} cm
+                            </span>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Cost Breakdown -->
+                <div class="cost-breakdown">
+                    <h3 style="font-size: 1.1rem; font-weight: 700; color: #92400e; margin-bottom: 1rem;">
+                        <i class="fas fa-dollar-sign me-2"></i>
+                        Cost Breakdown
+                    </h3>
+
+                    <div class="cost-row">
+                        <span class="cost-label">Shipping Cost</span>
+                        <span class="cost-value">${{ shipment.shipping_cost }}</span>
+                    </div>
+
+                    {% if shipment.insurance_cost > 0 %}
+                    <div class="cost-row">
+                        <span class="cost-label">Insurance</span>
+                        <span class="cost-value">${{ shipment.insurance_cost }}</span>
+                    </div>
+                    {% endif %}
+
+                    {% if shipment.customs_fee > 0 %}
+                    <div class="cost-row">
+                        <span class="cost-label">Customs Fee</span>
+                        <span class="cost-value">${{ shipment.customs_fee }}</span>
+                    </div>
+                    {% endif %}
+
+                    <div class="cost-row">
+                        <span class="cost-label">Total Cost</span>
+                        <span class="cost-value">${{ shipment.total_cost }}</span>
+                    </div>
+                </div>
+
+                <!-- Notes -->
+                {% if shipment.notes or shipment.customs_notes %}
+                <div class="mt-4">
+                    {% if shipment.notes %}
+                    <div class="notes-box">
+                        <h6>
+                            <i class="fas fa-sticky-note"></i>
+                            Shipment Notes
+                        </h6>
+                        <p>{{ shipment.notes }}</p>
+                    </div>
+                    {% endif %}
+
+                    {% if shipment.customs_notes %}
+                    <div class="notes-box" style="margin-top: 1rem;">
+                        <h6>
+                            <i class="fas fa-file-invoice"></i>
+                            Customs Notes
+                        </h6>
+                        <p>{{ shipment.customs_notes }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Documents -->
+            <div class="card" style="margin-top: 2rem;">
+                <h2 class="card-title">
+                    <i class="fas fa-file-alt"></i>
+                    Shipping Documents
+                </h2>
+
+                <div class="documents-grid">
+                    <div class="document-item">
+                        <div class="document-info">
+                            <div class="document-icon">
+                                <i class="fas fa-file-invoice"></i>
+                            </div>
+                            <div>
+                                <div class="document-name">Commercial Invoice</div>
+                                <div class="document-status">
+                                    {% if shipment.commercial_invoice %}
+                                    <i class="fas fa-check-circle" style="color: #10b981;"></i>
+                                    Available
+                                    {% else %}
+                                    <i class="fas fa-times-circle" style="color: #ef4444;"></i>
+                                    Not uploaded
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% if shipment.commercial_invoice %}
+                        <a href="{{ shipment.commercial_invoice.url }}" target="_blank" class="btn btn-outline btn-sm">
+                            <i class="fas fa-download"></i>
+                            Download
+                        </a>
+                        {% endif %}
+                    </div>
+
+                    <div class="document-item">
+                        <div class="document-info">
+                            <div class="document-icon">
+                                <i class="fas fa-list-alt"></i>
+                            </div>
+                            <div>
+                                <div class="document-name">Packing List</div>
+                                <div class="document-status">
+                                    {% if shipment.packing_list %}
+                                    <i class="fas fa-check-circle" style="color: #10b981;"></i>
+                                    Available
+                                    {% else %}
+                                    <i class="fas fa-times-circle" style="color: #ef4444;"></i>
+                                    Not uploaded
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% if shipment.packing_list %}
+                        <a href="{{ shipment.packing_list.url }}" target="_blank" class="btn btn-outline btn-sm">
+                            <i class="fas fa-download"></i>
+                            Download
+                        </a>
+                        {% endif %}
+                    </div>
+
+                    <div class="document-item">
+                        <div class="document-info">
+                            <div class="document-icon">
+                                <i class="fas fa-file-contract"></i>
+                            </div>
+                            <div>
+                                <div class="document-name">Customs Declaration</div>
+                                <div class="document-status">
+                                    {% if shipment.customs_declaration %}
+                                    <i class="fas fa-check-circle" style="color: #10b981;"></i>
+                                    Available
+                                    {% else %}
+                                    <i class="fas fa-times-circle" style="color: #ef4444;"></i>
+                                    Not uploaded
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% if shipment.customs_declaration %}
+                        <a href="{{ shipment.customs_declaration.url }}" target="_blank" class="btn btn-outline btn-sm">
+                            <i class="fas fa-download"></i>
+                            Download
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column -->
+        <div>
+            <!-- Tracking Timeline -->
+            <div class="card">
+                <h2 class="card-title">
+                    <i class="fas fa-route"></i>
+                    Tracking Timeline
+                </h2>
+
+                {% if tracking_history %}
+                <div class="tracking-timeline">
+                    {% for tracking in tracking_history %}
+                    <div class="timeline-item">
+                        <div class="timeline-marker {% if forloop.first %}current{% elif not forloop.last %}completed{% endif %}"></div>
+                        <div class="timeline-content">
+                            <div class="timeline-status">{{ tracking.status }}</div>
+                            {% if tracking.location %}
+                            <div class="timeline-location">
+                                <i class="fas fa-map-marker-alt"></i>
+                                {{ tracking.location }}
+                            </div>
+                            {% endif %}
+                            <div class="timeline-description">{{ tracking.description }}</div>
+                            <div class="timeline-time">
+                                <i class="far fa-clock"></i>
+                                {{ tracking.timestamp|date:"M d, Y H:i" }}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    <div class="alert-info-content">
+                        <div class="alert-info-title">No Tracking Updates Yet</div>
+                        <p class="alert-info-text">
+                            Tracking information will appear here once the shipment is in transit.
+                            {% if not shipment.tracking_number %}
+                            A tracking number needs to be assigned first.
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Delivery Info -->
+            <div class="card" style="margin-top: 2rem;">
+                <h2 class="card-title">
+                    <i class="fas fa-map-marked-alt"></i>
+                    Delivery Information
+                </h2>
+
+                {% if shipment.b2b_order.shipping %}
+                <div class="info-grid" style="margin-bottom: 0;">
+                    <div class="info-item" style="grid-column: 1 / -1;">
+                        <span class="info-label">Recipient</span>
+                        <span class="info-value">
+                            <i class="fas fa-user"></i>
+                            {{ shipment.b2b_order.shipping.full_name }}
+                        </span>
+                    </div>
+
+                    {% if shipment.b2b_order.shipping.company_name %}
+                    <div class="info-item" style="grid-column: 1 / -1;">
+                        <span class="info-label">Company</span>
+                        <span class="info-value">
+                            <i class="fas fa-building"></i>
+                            {{ shipment.b2b_order.shipping.company_name }}
+                        </span>
+                    </div>
+                    {% endif %}
+
+                    <div class="info-item" style="grid-column: 1 / -1;">
+                        <span class="info-label">Address</span>
+                        <span class="info-value" style="display: block;">
+                            <i class="fas fa-map-marker-alt"></i>
+                            {{ shipment.b2b_order.shipping.address_line }}<br>
+                            {{ shipment.b2b_order.shipping.city }}{% if shipment.b2b_order.shipping.region %}, {{ shipment.b2b_order.shipping.region }}{% endif %}<br>
+                            {{ shipment.b2b_order.shipping.country }}
+                        </span>
+                    </div>
+
+                    {% if shipment.b2b_order.shipping.phone %}
+                    <div class="info-item">
+                        <span class="info-label">Phone</span>
+                        <span class="info-value">
+                            <i class="fas fa-phone"></i>
+                            {{ shipment.b2b_order.shipping.phone }}
+                        </span>
+                    </div>
+                    {% endif %}
+
+                    {% if shipment.b2b_order.shipping.email %}
+                    <div class="info-item">
+                        <span class="info-label">Email</span>
+                        <span class="info-value">
+                            <i class="fas fa-envelope"></i>
+                            {{ shipment.b2b_order.shipping.email }}
+                        </span>
+                    </div>
+                    {% endif %}
+                </div>
+
+                {% if shipment.b2b_order.shipping.delivery_instructions %}
+                <div class="notes-box" style="margin-top: 1rem;">
+                    <h6>
+                        <i class="fas fa-clipboard-list"></i>
+                        Delivery Instructions
+                    </h6>
+                    <p>{{ shipment.b2b_order.shipping.delivery_instructions }}</p>
+                </div>
+                {% endif %}
+                {% else %}
+                <p style="color: #6b7280;">No delivery address available</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Mark as Shipped Modal -->
+<div class="modal fade" id="shipModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-shipping-fast me-2"></i>
+                    Mark Shipment as Shipped
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{% url 'supply_chain:mark_shipment_shipped' shipment.id %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Tracking Number *</label>
+                        <input type="text" name="tracking_number" class="form-control" required
+                               placeholder="Enter carrier tracking number">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Carrier Tracking URL</label>
+                        <input type="url" name="tracking_url" class="form-control"
+                               placeholder="https://track.carrier.com/...">
+                        <small class="text-muted">Optional: Direct link to carrier's tracking page</small>
+                    </div>
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <div>
+                            <strong>This will:</strong>
+                            <ul style="margin-top: 0.5rem; margin-bottom: 0;">
+                                <li>Update shipment status to "Shipped"</li>
+                                <li>Set estimated delivery date</li>
+                                <li>Update B2B order status to "Processing"</li>
+                                <li>Notify the customer</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-check"></i>
+                        Confirm Shipment
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function showShipModal() {
+    new bootstrap.Modal(document.getElementById('shipModal')).show();
+}
+</script>
+{% endblock %}

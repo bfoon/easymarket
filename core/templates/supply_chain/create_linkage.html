@@ -1,0 +1,704 @@
+{% extends 'logistics/base.html' %}
+{% load static %}
+
+{% block title %}Create Warehouse Linkage - Supply Chain{% endblock %}
+
+{% block extra_css %}
+<style>
+    .page-header {
+        background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+        color: white;
+        padding: 2.5rem;
+        border-radius: 1rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 10px 30px rgba(139, 92, 246, 0.3);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .page-header::before {
+        content: '🔗';
+        position: absolute;
+        top: -20px;
+        right: -20px;
+        font-size: 12rem;
+        opacity: 0.1;
+    }
+
+    .page-header h1 {
+        font-size: 2rem;
+        font-weight: 700;
+        margin: 0 0 0.5rem 0;
+        position: relative;
+        z-index: 1;
+    }
+
+    .form-card {
+        background: white;
+        border-radius: 1rem;
+        padding: 2.5rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        border: 1px solid #e2e8f0;
+    }
+
+    .form-section {
+        margin-bottom: 2.5rem;
+    }
+
+    .section-title {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #1f2937;
+        margin-bottom: 1.5rem;
+        padding-bottom: 0.75rem;
+        border-bottom: 2px solid #f3f4f6;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .section-title i {
+        color: #8b5cf6;
+        font-size: 1.5rem;
+    }
+
+    .form-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .form-label {
+        font-weight: 600;
+        color: #374151;
+        font-size: 0.875rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .form-label .required {
+        color: #ef4444;
+    }
+
+    .form-control, .form-select {
+        border: 2px solid #e5e7eb;
+        border-radius: 0.75rem;
+        padding: 0.75rem 1rem;
+        font-size: 0.9375rem;
+        transition: all 0.2s ease;
+        background: white;
+    }
+
+    .form-control:focus, .form-select:focus {
+        border-color: #8b5cf6;
+        box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+        outline: none;
+    }
+
+    .form-control:disabled, .form-select:disabled {
+        background: #f9fafb;
+        color: #9ca3af;
+        cursor: not-allowed;
+    }
+
+    .form-help {
+        font-size: 0.8125rem;
+        color: #6b7280;
+        margin-top: 0.25rem;
+    }
+
+    .warehouse-preview {
+        background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+        border: 2px solid #bae6fd;
+        border-radius: 1rem;
+        padding: 1.5rem;
+        margin-top: 1.5rem;
+    }
+
+    .preview-title {
+        font-weight: 700;
+        color: #0c4a6e;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .route-preview {
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+        justify-content: center;
+    }
+
+    .warehouse-box {
+        flex: 1;
+        background: white;
+        border: 2px solid #0ea5e9;
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        text-align: center;
+    }
+
+    .warehouse-icon {
+        font-size: 2.5rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .warehouse-type {
+        font-size: 0.75rem;
+        color: #0369a1;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-weight: 600;
+        margin-bottom: 0.25rem;
+    }
+
+    .warehouse-name {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #0c4a6e;
+    }
+
+    .warehouse-detail {
+        font-size: 0.875rem;
+        color: #475569;
+        margin-top: 0.5rem;
+    }
+
+    .route-arrow {
+        font-size: 2.5rem;
+        color: #8b5cf6;
+        animation: bounce-horizontal 2s ease-in-out infinite;
+    }
+
+    @keyframes bounce-horizontal {
+        0%, 100% { transform: translateX(0); }
+        50% { transform: translateX(10px); }
+    }
+
+    .checkbox-group {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 1rem;
+        background: #f9fafb;
+        border: 2px solid #e5e7eb;
+        border-radius: 0.75rem;
+        transition: all 0.2s ease;
+        cursor: pointer;
+    }
+
+    .checkbox-group:hover {
+        background: #f3f4f6;
+        border-color: #8b5cf6;
+    }
+
+    .checkbox-group input[type="checkbox"] {
+        width: 20px;
+        height: 20px;
+        cursor: pointer;
+        accent-color: #8b5cf6;
+    }
+
+    .checkbox-label {
+        font-weight: 600;
+        color: #374151;
+        cursor: pointer;
+        flex: 1;
+    }
+
+    .priority-selector {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+    }
+
+    .priority-option {
+        position: relative;
+    }
+
+    .priority-option input[type="radio"] {
+        position: absolute;
+        opacity: 0;
+    }
+
+    .priority-label {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 1rem;
+        border: 2px solid #e5e7eb;
+        border-radius: 0.75rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        background: white;
+    }
+
+    .priority-option input[type="radio"]:checked + .priority-label {
+        border-color: #8b5cf6;
+        background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+    }
+
+    .priority-icon {
+        font-size: 2rem;
+    }
+
+    .priority-name {
+        font-weight: 700;
+        color: #1f2937;
+        font-size: 0.875rem;
+    }
+
+    .transfer-type-selector {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+    }
+
+    .transfer-type-option {
+        position: relative;
+    }
+
+    .transfer-type-option input[type="radio"] {
+        position: absolute;
+        opacity: 0;
+    }
+
+    .transfer-type-label {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        padding: 1.25rem;
+        border: 2px solid #e5e7eb;
+        border-radius: 0.75rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        background: white;
+        height: 100%;
+    }
+
+    .transfer-type-option input[type="radio"]:checked + .transfer-type-label {
+        border-color: #8b5cf6;
+        background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+    }
+
+    .transfer-type-icon {
+        font-size: 2rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .transfer-type-name {
+        font-weight: 700;
+        color: #1f2937;
+        font-size: 1rem;
+        margin-bottom: 0.25rem;
+    }
+
+    .transfer-type-desc {
+        font-size: 0.8125rem;
+        color: #6b7280;
+        line-height: 1.5;
+    }
+
+    .action-buttons {
+        display: flex;
+        gap: 1rem;
+        justify-content: flex-end;
+        margin-top: 2rem;
+        padding-top: 2rem;
+        border-top: 2px solid #f3f4f6;
+    }
+
+    .btn {
+        padding: 0.875rem 2rem;
+        border-radius: 0.75rem;
+        font-size: 0.9375rem;
+        font-weight: 600;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.75rem;
+        transition: all 0.2s ease;
+        border: none;
+        cursor: pointer;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+        color: white;
+    }
+
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(139, 92, 246, 0.4);
+    }
+
+    .btn-outline {
+        border: 2px solid #e5e7eb;
+        color: #374151;
+        background: white;
+    }
+
+    .btn-outline:hover {
+        border-color: #8b5cf6;
+        color: #8b5cf6;
+        background: #f9fafb;
+    }
+
+    .alert {
+        padding: 1rem 1.25rem;
+        border-radius: 0.75rem;
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: start;
+        gap: 1rem;
+    }
+
+    .alert-info {
+        background: #dbeafe;
+        border: 2px solid #60a5fa;
+        color: #1e40af;
+    }
+
+    .alert-warning {
+        background: #fef3c7;
+        border: 2px solid #fbbf24;
+        color: #92400e;
+    }
+
+    .alert i {
+        font-size: 1.25rem;
+        margin-top: 0.125rem;
+    }
+
+    @media (max-width: 768px) {
+        .form-row {
+            grid-template-columns: 1fr;
+        }
+
+        .priority-selector {
+            grid-template-columns: 1fr;
+        }
+
+        .transfer-type-selector {
+            grid-template-columns: 1fr;
+        }
+
+        .route-preview {
+            flex-direction: column;
+        }
+
+        .route-arrow {
+            transform: rotate(90deg);
+        }
+
+        .action-buttons {
+            flex-direction: column-reverse;
+        }
+
+        .btn {
+            width: 100%;
+            justify-content: center;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+    <!-- Page Header -->
+    <div class="page-header">
+        <div style="position: relative; z-index: 1;">
+            <h1>🔗 Create Warehouse Linkage</h1>
+            <p style="margin: 0; opacity: 0.9;">Link a store warehouse to a logistics center for inventory transfers</p>
+        </div>
+    </div>
+
+    <!-- Alert Messages -->
+    {% if messages %}
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }}">
+            <i class="fas fa-info-circle"></i>
+            <div>{{ message }}</div>
+        </div>
+        {% endfor %}
+    {% endif %}
+
+    <!-- Form Card -->
+    <div class="form-card">
+        <form method="post" action="{% url 'supply_chain:add_linkage' %}" id="linkageForm">
+            {% csrf_token %}
+
+            <!-- Warehouse Selection -->
+            <div class="form-section">
+                <h2 class="section-title">
+                    <i class="fas fa-warehouse"></i>
+                    Warehouse Selection
+                </h2>
+
+                <div class="alert alert-info">
+                    <i class="fas fa-lightbulb"></i>
+                    <div>
+                        <strong>Tip:</strong> Select the source warehouse (store) and destination warehouse (logistics center).
+                        This linkage will enable inventory transfers between these locations.
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">
+                            Store Warehouse <span class="required">*</span>
+                        </label>
+                        <select name="store_warehouse" class="form-select" required id="storeWarehouse">
+                            <option value="">Select Store Warehouse</option>
+                            {% for warehouse in store_warehouses %}
+                            <option value="{{ warehouse.id }}" 
+                                    data-name="{{ warehouse.name }}" 
+                                    data-location="{{ warehouse.location|default:'N/A' }}">
+                                {{ warehouse.name }}{% if warehouse.code %} ({{ warehouse.code }}){% endif %}
+                                {% if warehouse.location %} - {{ warehouse.location }}{% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <span class="form-help">Source warehouse where inventory originates</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">
+                            Logistics Warehouse <span class="required">*</span>
+                        </label>
+                        <select name="logistics_warehouse" class="form-select" required id="logisticsWarehouse">
+                            <option value="">Select Logistics Warehouse</option>
+                            {% for warehouse in logistics_warehouses %}
+                            <option value="{{ warehouse.id }}" 
+                                    data-name="{{ warehouse.name }}" 
+                                    data-location="{{ warehouse.location|default:'N/A' }}">
+                                {{ warehouse.name }}
+                                {% if warehouse.location %} - {{ warehouse.location }}{% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <span class="form-help">Destination logistics center</span>
+                    </div>
+                </div>
+
+                <!-- Route Preview -->
+                <div class="warehouse-preview" id="routePreview" style="display: none;">
+                    <div class="preview-title">
+                        <i class="fas fa-route"></i>
+                        Route Preview
+                    </div>
+                    <div class="route-preview">
+                        <div class="warehouse-box">
+                            <div class="warehouse-icon">🏪</div>
+                            <div class="warehouse-type">Store Warehouse</div>
+                            <div class="warehouse-name" id="previewStoreName">-</div>
+                            <div class="warehouse-detail" id="previewStoreLocation">-</div>
+                        </div>
+
+                        <div class="route-arrow">
+                            <i class="fas fa-arrow-right"></i>
+                        </div>
+
+                        <div class="warehouse-box">
+                            <div class="warehouse-icon">🏭</div>
+                            <div class="warehouse-type">Logistics Warehouse</div>
+                            <div class="warehouse-name" id="previewLogisticsName">-</div>
+                            <div class="warehouse-detail" id="previewLogisticsLocation">-</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Transfer Configuration -->
+            <div class="form-section">
+                <h2 class="section-title">
+                    <i class="fas fa-cog"></i>
+                    Transfer Configuration
+                </h2>
+
+                <div class="form-group">
+                    <label class="form-label">Transfer Type <span class="required">*</span></label>
+                    <div class="transfer-type-selector">
+                        <div class="transfer-type-option">
+                            <input type="radio" name="transfer_type" value="AUTOMATIC" id="typeAutomatic">
+                            <label for="typeAutomatic" class="transfer-type-label">
+                                <div class="transfer-type-icon">🪄</div>
+                                <div class="transfer-type-name">Automatic</div>
+                                <div class="transfer-type-desc">Transfers occur automatically based on inventory thresholds</div>
+                            </label>
+                        </div>
+
+                        <div class="transfer-type-option">
+                            <input type="radio" name="transfer_type" value="MANUAL" id="typeManual" checked>
+                            <label for="typeManual" class="transfer-type-label">
+                                <div class="transfer-type-icon">✋</div>
+                                <div class="transfer-type-name">Manual Approval</div>
+                                <div class="transfer-type-desc">All transfers require manual approval before processing</div>
+                            </label>
+                        </div>
+
+                        <div class="transfer-type-option">
+                            <input type="radio" name="transfer_type" value="SCHEDULED" id="typeScheduled">
+                            <label for="typeScheduled" class="transfer-type-label">
+                                <div class="transfer-type-icon">🕐</div>
+                                <div class="transfer-type-name">Scheduled</div>
+                                <div class="transfer-type-desc">Transfers run on a scheduled basis (daily, weekly, etc.)</div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-top: 1.5rem;">
+                    <label class="form-label">Priority Level <span class="required">*</span></label>
+                    <div class="priority-selector">
+                        <div class="priority-option">
+                            <input type="radio" name="priority" value="HIGH" id="priorityHigh">
+                            <label for="priorityHigh" class="priority-label">
+                                <div class="priority-icon">🔴</div>
+                                <div class="priority-name">High Priority</div>
+                            </label>
+                        </div>
+
+                        <div class="priority-option">
+                            <input type="radio" name="priority" value="MEDIUM" id="priorityMedium" checked>
+                            <label for="priorityMedium" class="priority-label">
+                                <div class="priority-icon">🟡</div>
+                                <div class="priority-name">Medium Priority</div>
+                            </label>
+                        </div>
+
+                        <div class="priority-option">
+                            <input type="radio" name="priority" value="LOW" id="priorityLow">
+                            <label for="priorityLow" class="priority-label">
+                                <div class="priority-icon">🟢</div>
+                                <div class="priority-name">Low Priority</div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Logistics Details -->
+            <div class="form-section">
+                <h2 class="section-title">
+                    <i class="fas fa-truck"></i>
+                    Logistics Details
+                </h2>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Lead Time (hours)</label>
+                        <input type="number" name="lead_time_hours" class="form-control" 
+                               step="0.5" min="0" placeholder="e.g., 24">
+                        <span class="form-help">Expected time for transfer completion</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Cost per Transfer (USD)</label>
+                        <input type="number" name="cost_per_transfer" class="form-control" 
+                               step="0.01" min="0" placeholder="e.g., 50.00">
+                        <span class="form-help">Average cost per transfer operation</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Additional Information -->
+            <div class="form-section">
+                <h2 class="section-title">
+                    <i class="fas fa-sticky-note"></i>
+                    Additional Information
+                </h2>
+
+                <div class="form-group">
+                    <label class="form-label">Notes</label>
+                    <textarea name="notes" class="form-control" rows="4" 
+                              placeholder="Enter any additional information about this linkage..."></textarea>
+                    <span class="form-help">Special instructions, constraints, or other relevant details</span>
+                </div>
+
+                <div class="checkbox-group">
+                    <input type="checkbox" name="is_active" id="isActive" checked>
+                    <label for="isActive" class="checkbox-label">
+                        <strong>Active</strong> - Enable this linkage immediately for transfers
+                    </label>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="action-buttons">
+                <a href="{% url 'supply_chain:warehouse_linkages' %}" class="btn btn-outline">
+                    <i class="fas fa-times"></i>
+                    Cancel
+                </a>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-check"></i>
+                    Create Linkage
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// Route Preview Functionality
+const storeSelect = document.getElementById('storeWarehouse');
+const logisticsSelect = document.getElementById('logisticsWarehouse');
+const routePreview = document.getElementById('routePreview');
+
+function updatePreview() {
+    const storeOption = storeSelect.options[storeSelect.selectedIndex];
+    const logisticsOption = logisticsSelect.options[logisticsSelect.selectedIndex];
+    
+    if (storeSelect.value && logisticsSelect.value) {
+        // Show preview
+        routePreview.style.display = 'block';
+        
+        // Update store info
+        document.getElementById('previewStoreName').textContent = 
+            storeOption.dataset.name || storeOption.text;
+        document.getElementById('previewStoreLocation').textContent = 
+            storeOption.dataset.location || '-';
+        
+        // Update logistics info
+        document.getElementById('previewLogisticsName').textContent = 
+            logisticsOption.dataset.name || logisticsOption.text;
+        document.getElementById('previewLogisticsLocation').textContent = 
+            logisticsOption.dataset.location || '-';
+    } else {
+        routePreview.style.display = 'none';
+    }
+}
+
+storeSelect.addEventListener('change', updatePreview);
+logisticsSelect.addEventListener('change', updatePreview);
+
+// Form Validation
+document.getElementById('linkageForm').addEventListener('submit', function(e) {
+    const storeWarehouse = document.getElementById('storeWarehouse').value;
+    const logisticsWarehouse = document.getElementById('logisticsWarehouse').value;
+    
+    if (!storeWarehouse || !logisticsWarehouse) {
+        e.preventDefault();
+        alert('Please select both store warehouse and logistics warehouse.');
+        return false;
+    }
+    
+    if (storeWarehouse === logisticsWarehouse) {
+        e.preventDefault();
+        alert('Store warehouse and logistics warehouse cannot be the same.');
+        return false;
+    }
+});
+</script>
+{% endblock %}

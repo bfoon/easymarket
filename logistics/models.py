@@ -1341,6 +1341,17 @@ class B2BShipment(models.Model):
     )
 
     shipment_mode = models.CharField(max_length=20, choices=SHIPMENT_MODE_CHOICES, default="easy_move")
+    company_config = models.ForeignKey(
+        "supply_chain.ShippingCompanyCountry",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="logistics_shipments",
+        help_text="Selected shipping company configuration based on origin + mode"
+    )
+
+    # Optional: cache company name (nice for display even if config changes later)
+    shipping_company_name = models.CharField(max_length=200, blank=True)
 
     shipping_cost = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
     eta_text = models.CharField(max_length=120, blank=True, help_text="Estimated delivery time, e.g. 3-5 days")
@@ -1402,33 +1413,135 @@ class B2BShipment(models.Model):
             return True
         return False
 
+    def set_company_config(self, config):
+        """Helper to keep fields consistent."""
+        self.company_config = config
+        self.shipping_company_name = config.shipping_company.name if config else ""
+
     def mark_in_transit(self, user=None):
         """
-        Mark shipment as in transit (shipped out).
-        """
-        if self.status == "locked":
-            self.status = "in_transit"
-            self.save(update_fields=['status', 'updated_at'])
-            return True
-        return False
+        Mark shipment as in transit.
 
-    def mark_delivered(self, user=None, notes="", proof=None):
+        Requirements:
+        - Shipment must be locked
+        - Fulfillment must be READY
         """
-        Mark shipment as delivered.
-        """
-        if self.status in ["locked", "in_transit"]:
-            self.status = "delivered"
-            self.delivered_at = timezone.now()
+        from django.core.exceptions import ValidationError
+        from supply_chain.models import FulfillmentQueue
+
+        # Validate shipment status
+        if self.status != "locked":
+            raise ValidationError("Shipment must be locked before marking as in transit")
+
+        # Check fulfillment status
+        try:
+            fulfillment = FulfillmentQueue.objects.get(b2b_order=self.order)
+
+            if fulfillment.status != "READY":
+                raise ValidationError(
+                    f"Fulfillment must be READY. Current status: {fulfillment.get_status_display()}"
+                )
+
+            # Update fulfillment to SHIPPED (keep this as your fulfillment system expects)
+            fulfillment.status = "SHIPPED"
+            fulfillment.shipped_at = timezone.now()
             if user:
-                self.delivered_by = user
-            if notes:
-                self.delivery_notes = notes
-            if proof:
-                self.delivery_proof = proof
-            self.save(update_fields=['status', 'delivered_at', 'delivered_by', 'delivery_notes', 'delivery_proof',
-                                     'updated_at'])
-            return True
-        return False
+                fulfillment.shipped_by = user
+            fulfillment.save(update_fields=["status", "shipped_at", "shipped_by"])
+
+        except FulfillmentQueue.DoesNotExist:
+            raise ValidationError("No fulfillment queue found for this order")
+
+        # Update shipment (✅ use lowercase choice)
+        self.status = "in_transit"
+
+        # If you don't have shipped_at on this model, REMOVE these two lines.
+        if hasattr(self, "shipped_at"):
+            self.shipped_at = timezone.now()
+
+        # If you don't have estimated_delivery on this model, REMOVE these lines.
+        if hasattr(self, "estimated_delivery") and not self.estimated_delivery and self.company_config:
+            self.estimated_delivery = timezone.now() + timezone.timedelta(
+                days=int(getattr(self.company_config, "estimated_days", 0) or 0)
+            )
+
+        self.save()
+        return True
+
+    def can_mark_in_transit(self):
+        """
+        Returns: (can_mark: bool, reason: str)
+        """
+        from supply_chain.models import FulfillmentQueue
+
+        if self.status != "locked":
+            return (False, "Shipment must be locked first")
+
+        try:
+            fulfillment = FulfillmentQueue.objects.get(b2b_order=self.order)
+
+            if fulfillment.status != "READY":
+                return (False, f"Fulfillment must be READY. Current: {fulfillment.get_status_display()}")
+
+            return (True, "Ready to mark as in transit")
+
+        except FulfillmentQueue.DoesNotExist:
+            return (False, "No fulfillment queue found")
+
+    def mark_shipped(self, tracking_number, user=None):
+        """Mark shipment as shipped (alternative to mark_in_transit)"""
+        self.status = 'SHIPPED'
+        self.tracking_number = tracking_number
+        self.shipped_at = timezone.now()
+
+        # Set estimated delivery
+        if self.company_config and not self.estimated_delivery:
+            self.estimated_delivery = timezone.now() + timezone.timedelta(
+                days=self.company_config.estimated_days
+            )
+
+        self.save()
+
+        # Note: This doesn't update fulfillment - use mark_in_transit for that
+        return True
+
+    def mark_delivered(self, user=None, delivery_notes=None, delivery_proof=None):
+        """
+        Mark shipment as delivered and store optional delivery notes/proof.
+        """
+        # ✅ use lowercase choice value
+        self.status = "DELIVERED"
+        self.delivered_at = timezone.now()
+
+        if user:
+            self.delivered_by = user
+
+        if delivery_notes is not None:
+            self.delivery_notes = (delivery_notes or "").strip()
+
+        if delivery_proof is not None:
+            self.delivery_proof = delivery_proof
+
+        self.save(update_fields=[
+            "status", "delivered_at", "delivered_by",
+            "delivery_notes", "delivery_proof", "updated_at"
+        ])
+        return True
+
+    @property
+    def fulfillment_status(self):
+        from supply_chain.models import FulfillmentQueue
+        try:
+            fulfillment = FulfillmentQueue.objects.get(b2b_order=self.order)
+            return fulfillment.status
+        except FulfillmentQueue.DoesNotExist:
+            return None
+
+    @property
+    def is_ready_to_ship(self):
+        """Check if order is ready to be marked as in transit"""
+        can_mark, _ = self.can_mark_in_transit()
+        return can_mark
 
     def can_edit(self):
         """Check if logistics details can be edited"""

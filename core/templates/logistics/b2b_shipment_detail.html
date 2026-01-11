@@ -544,6 +544,19 @@
                   <option value="air_freight" {% if shipment.shipment_mode == "air_freight" %}selected{% endif %}>✈️ Air Freight</option>
                 </select>
               </div>
+                <div class="col-md-12">
+  <label class="form-label fw-bold">
+    <i class="fas fa-building text-primary"></i> Shipping Company (Origin Based)
+  </label>
+
+  <select name="company_config_id" id="companyConfigSelect" class="form-select" {% if shipment.is_locked %}disabled{% endif %}>
+    <option value="">-- Select Shipping Company --</option>
+  </select>
+
+  <div class="small text-muted mt-1" id="companyHint">
+    Choose shipment mode first to load companies for the origin country.
+  </div>
+</div>
 
               <div class="col-12">
                 <label class="form-label fw-bold">
@@ -715,4 +728,58 @@
   </div>
 
 </div>
+<script>
+(function(){
+  const modeSelect = document.querySelector('select[name="shipment_mode"]');
+  const companySelect = document.getElementById('companyConfigSelect');
+  const hint = document.getElementById('companyHint');
+
+  const originCountry = "{{ order.store.country|default:'' }}";
+  const currentCompanyConfigId = "{{ shipment.company_config_id|default:'' }}";  // ✅ restore selection
+
+  async function loadCompanies(){
+    const mode = modeSelect ? modeSelect.value : "";
+
+    if(!originCountry){
+      hint.textContent = "Origin country missing on store profile.";
+      companySelect.innerHTML = `<option value="">-- No origin country --</option>`;
+      return;
+    }
+
+    hint.textContent = "Loading shipping companies...";
+
+    const url = `{% url 'supply_chain:api_origin_shipping_companies' %}?origin=${encodeURIComponent(originCountry)}&mode=${encodeURIComponent(mode)}`;
+    const res = await fetch(url, {headers: {"X-Requested-With": "XMLHttpRequest"}});
+    const data = await res.json();
+
+    if(!data.success){
+      hint.textContent = data.error || "Failed to load companies.";
+      companySelect.innerHTML = `<option value="">-- None found --</option>`;
+      return;
+    }
+
+    companySelect.innerHTML =
+      `<option value="">-- Select Shipping Company --</option>` +
+      data.results.map(r => {
+        const label = `${r.company_name} • ${r.service_level} • ${r.estimated_days} days`;
+        return `<option value="${r.id}">${label}</option>`;
+      }).join("");
+
+    // ✅ set selected after options are built
+    if (currentCompanyConfigId) {
+      companySelect.value = currentCompanyConfigId;
+    }
+
+    hint.textContent = data.results.length
+      ? `Found ${data.results.length} companies for ${originCountry} (${mode}).`
+      : `No companies registered for this origin + mode.`;
+  }
+
+  if(modeSelect){
+    modeSelect.addEventListener("change", loadCompanies);
+    loadCompanies();
+  }
+})();
+</script>
+
 {% endblock %}
