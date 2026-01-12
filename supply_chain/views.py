@@ -16,12 +16,11 @@ from django.views.decorators.http import require_GET
 from .models import (
     WarehouseLinkage, StoreToLogisticsTransfer, TransferItem,
     FulfillmentQueue, CountryShippingConfig, ShippingCompany,
-    ShippingCompanyCountry, B2BShipment, ShipmentTracking
+    ShippingCompanyCountry, ShipmentTracking
 )
-from .models import B2BShipment as IntlB2BShipment
 from stores.models import B2BOrder, B2BOrderItem, Store
 from stock.models import Warehouse, Stock
-from logistics.models import Warehouse as LogisticsWarehouse, Vehicle, Driver
+from logistics.models import Warehouse as LogisticsWarehouse, Vehicle, Driver, B2BShipment
 
 
 # ==================== PERMISSION CHECKS ====================
@@ -105,8 +104,14 @@ def supply_chain_dashboard(request):
 
     active_shipments = (
         B2BShipment.objects
-        .select_related("country", "shipping_company")
-        .filter(status__in=["PENDING", "PROCESSING", "SHIPPED", "IN_TRANSIT", "CUSTOMS", "OUT_FOR_DELIVERY"])
+        .select_related(
+            "order",
+            "shipping_address",
+            "company_config",
+            "company_config__shipping_company",
+            "company_config__country",
+        )
+        .filter(status__in=["locked", "in_transit"])  # use your logistics statuses
         .order_by("-created_at")[:10]
     )
 

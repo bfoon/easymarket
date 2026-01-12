@@ -75,6 +75,7 @@ class B2BCartItem(models.Model):
 class B2BOrder(models.Model):
     STATUS_CHOICES = (
         ("submitted", "Submitted"),
+        ("shipped", "Shipped to Buyer"),
         ("priced", "Priced by seller"),
         ("accepted", "Accepted by buyer"),
         ("rejected", "Rejected by buyer"),

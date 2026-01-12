@@ -289,6 +289,13 @@ class FulfillmentQueue(models.Model):
     packed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='packed_orders'
     )
+    shipped_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="fulfillment_shipped_by",
+    )
 
     estimated_pick_time_minutes = models.IntegerField(default=30)
     actual_pick_time_minutes = models.IntegerField(null=True, blank=True)

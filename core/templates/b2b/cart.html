@@ -1,326 +1,1104 @@
 {% extends "base.html" %}
 {% load humanize %}
 {% load static %}
-{% block title %}B2B Cart · EasyMarket{% endblock %}
 
+{% block title %}B2B Wholesale Cart · EasyMarket{% endblock %}
 {% block content %}
 <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+
 <style>
-  :root{
-    --b2b-primary:#1a5f9e;
-    --b2b-secondary:#2d8ccc;
-    --b2b-accent:#ff6b35;
-    --b2b-success:#2ed573;
-    --neutral-dark:#2c2c54;
-    --neutral-light:#f8f9fa;
-  }
+    /* ========== B2B CART SCOPED STYLES ========== */
+    :root {
+        --b2b-cart-primary: #1e40af;
+        --b2b-cart-secondary: #3b82f6;
+        --b2b-cart-accent: #f59e0b;
+        --b2b-cart-success: #10b981;
+        --b2b-cart-danger: #ef4444;
+        --b2b-cart-purple: #8b5cf6;
+        --b2b-cart-text-primary: #111827;
+        --b2b-cart-text-secondary: #6b7280;
+        --b2b-cart-text-muted: #9ca3af;
+        --b2b-cart-border: #e5e7eb;
+        --b2b-cart-background: #f9fafb;
+        --b2b-cart-card: #ffffff;
+    }
 
-  .b2b-cart-hero{
-    background: linear-gradient(135deg,var(--b2b-primary),var(--b2b-secondary));
-    color:#fff;
-    border-radius: 14px;
-    padding: 1.6rem;
-    position: relative;
-    overflow:hidden;
-    margin: 1.25rem 0 1rem;
-    border: 1px solid rgba(255,255,255,.18);
-  }
-  .b2b-cart-hero::after{
-    content:"";
-    position:absolute;
-    width:420px;height:420px;
-    right:-140px;top:-160px;
-    background: rgba(255,255,255,.08);
-    border-radius: 50%;
-  }
-  .b2b-cart-hero h1{font-weight:900; letter-spacing:-.4px; margin:0;}
-  .b2b-cart-hero p{margin:.35rem 0 0; opacity:.95}
+    /* ========== LAYOUT ========== */
+    .b2b-cart-container {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 2rem 1.5rem;
+    }
 
-  .b2b-cart-wrap{
-    background:#fff;
-    border:1px solid #e9ecef;
-    border-radius: 14px;
-    overflow:hidden;
-    box-shadow: 0 10px 28px rgba(0,0,0,.06);
-  }
+    /* ========== HERO HEADER ========== */
+    .b2b-cart-hero {
+        background: linear-gradient(135deg, #1e40af 0%, #3b82f6 50%, #60a5fa 100%);
+        border-radius: 1.5rem;
+        padding: 2.5rem 2rem;
+        margin-bottom: 2rem;
+        position: relative;
+        overflow: hidden;
+        color: white;
+        box-shadow: 0 20px 50px rgba(30, 64, 175, 0.2);
+    }
 
-  .b2b-cart-topbar{
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    gap: 12px;
-    padding: 1rem 1.25rem;
-    background: #fbfcfe;
-    border-bottom: 1px solid #e9ecef;
-    flex-wrap: wrap;
-  }
+    .b2b-cart-hero::before {
+        content: '🛒';
+        position: absolute;
+        top: -20px;
+        right: 40px;
+        font-size: 12rem;
+        opacity: 0.08;
+    }
 
-  .b2b-cart-badge{
-    display:inline-flex;
-    align-items:center;
-    gap: .5rem;
-    padding: .45rem .8rem;
-    border-radius: 999px;
-    background: rgba(26,95,158,.10);
-    color: var(--b2b-primary);
-    font-weight: 800;
-    font-size: .85rem;
-  }
-  .b2b-cart-badge i{color: var(--b2b-accent);}
+    .b2b-cart-hero::after {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -20%;
+        width: 600px;
+        height: 600px;
+        background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
+        border-radius: 50%;
+    }
 
-  .b2b-cart-table{
-    width: 100%;
-    margin:0;
-  }
-  .b2b-cart-table th{
-    font-size: .82rem;
-    text-transform: uppercase;
-    letter-spacing: .6px;
-    color:#6c757d;
-    padding: .9rem 1.25rem;
-    border-bottom: 1px solid #eef1f4;
-    background: #fff;
-  }
-  .b2b-cart-table td{
-    padding: 1rem 1.25rem;
-    border-bottom: 1px solid #f1f3f5;
-    vertical-align: middle;
-  }
+    .b2b-cart-hero-content {
+        position: relative;
+        z-index: 1;
+    }
 
-  .b2b-item-title{
-    font-weight: 800;
-    color: var(--neutral-dark);
-    margin:0;
-    line-height: 1.15;
-  }
-  .b2b-item-meta{
-    color:#6c757d;
-    font-size: .85rem;
-    margin-top: .35rem;
-  }
+    .b2b-cart-hero-header {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 0.75rem;
+    }
 
-  .b2b-price{
-    font-weight: 900;
-    color: var(--b2b-primary);
-  }
+    .b2b-cart-hero-title {
+        font-size: 2.25rem;
+        font-weight: 800;
+        margin: 0;
+        letter-spacing: -0.02em;
+    }
 
-  .b2b-qty-pill{
-    display:inline-flex;
-    align-items:center;
-    gap:.5rem;
-    padding:.4rem .7rem;
-    border-radius: 999px;
-    background: var(--neutral-light);
-    border: 1px solid #e9ecef;
-    font-weight: 800;
-  }
+    .b2b-cart-badge {
+        background: rgba(255, 255, 255, 0.2);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        padding: 0.5rem 1rem;
+        border-radius: 0.75rem;
+        font-size: 0.875rem;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
 
-  .b2b-cart-footer{
-    padding: 1rem 1.25rem;
-    display:flex;
-    justify-content: space-between;
-    align-items:center;
-    gap: 12px;
-    flex-wrap: wrap;
-    background: #fff;
-  }
+    .b2b-cart-hero-subtitle {
+        font-size: 1.0625rem;
+        opacity: 0.95;
+        margin: 0;
+        font-weight: 400;
+        line-height: 1.6;
+    }
 
-  .b2b-subtotal{
-    font-size: 1.1rem;
-    font-weight: 900;
-    color: var(--neutral-dark);
-  }
-  .b2b-subtotal strong{color: var(--b2b-primary);}
+    /* ========== CART WRAPPER ========== */
+    .b2b-cart-wrapper {
+        background: white;
+        border: 2px solid var(--b2b-cart-border);
+        border-radius: 1.5rem;
+        overflow: hidden;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.06);
+    }
 
-  .b2b-note{
-    width: 100%;
-    border-radius: 12px;
-    border: 1px solid #e9ecef;
-    padding: .85rem 1rem;
-    outline: none;
-  }
+    /* ========== CART TOOLBAR ========== */
+    .b2b-cart-toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1.25rem 1.75rem;
+        background: var(--b2b-cart-background);
+        border-bottom: 2px solid var(--b2b-cart-border);
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
 
-  .b2b-btn{
-    border:none;
-    border-radius: 10px;
-    padding: .85rem 1.1rem;
-    font-weight: 900;
-    cursor:pointer;
-    transition: transform .15s ease, box-shadow .15s ease;
-  }
-  .b2b-btn-primary{
-    background: var(--b2b-primary);
-    color:#fff;
-    box-shadow: 0 10px 22px rgba(26,95,158,.22);
-  }
-  .b2b-btn-primary:hover{ transform: translateY(-1px); }
-  .b2b-btn-secondary{
-    background: #f8f9fa;
-    border: 1px solid #e9ecef;
-    color: var(--neutral-dark);
-  }
+    .b2b-cart-count {
+        font-size: 0.9375rem;
+        color: var(--b2b-cart-text-secondary);
+        font-weight: 600;
+    }
 
-  .b2b-empty{
-    padding: 2.5rem 1.25rem;
-    text-align:center;
-  }
-  .b2b-empty i{font-size: 2.3rem; color:#c7ced6;}
-  .b2b-empty h3{margin: .8rem 0 .3rem; font-weight:900; color: var(--neutral-dark);}
-  .b2b-empty p{color:#6c757d; margin:0 0 1.2rem;}
+    .b2b-cart-count strong {
+        color: var(--b2b-cart-primary);
+        font-size: 1.125rem;
+    }
 
+    .b2b-cart-btn {
+        padding: 0.625rem 1.25rem;
+        border-radius: 0.75rem;
+        font-weight: 600;
+        font-size: 0.9375rem;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        transition: all 0.2s ease;
+        border: none;
+        cursor: pointer;
+    }
+
+    .b2b-cart-btn-outline {
+        background: white;
+        color: var(--b2b-cart-text-secondary);
+        border: 2px solid var(--b2b-cart-border);
+    }
+
+    .b2b-cart-btn-outline:hover {
+        border-color: var(--b2b-cart-primary);
+        color: var(--b2b-cart-primary);
+        background: #eff6ff;
+    }
+
+    .b2b-cart-btn-primary {
+        background: var(--b2b-cart-primary);
+        color: white;
+        box-shadow: 0 4px 12px rgba(30, 64, 175, 0.3);
+    }
+
+    .b2b-cart-btn-primary:hover {
+        background: #1e3a8a;
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(30, 64, 175, 0.4);
+    }
+
+    .b2b-cart-btn-success {
+        background: var(--b2b-cart-success);
+        color: white;
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    }
+
+    .b2b-cart-btn-success:hover {
+        background: #059669;
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(16, 185, 129, 0.4);
+    }
+
+    /* ========== CART TABLE ========== */
+    .b2b-cart-table {
+        width: 100%;
+    }
+
+    .b2b-cart-table thead {
+        background: white;
+        border-bottom: 2px solid var(--b2b-cart-border);
+    }
+
+    .b2b-cart-table th {
+        padding: 1rem 1.75rem;
+        text-align: left;
+        font-size: 0.8125rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--b2b-cart-text-secondary);
+    }
+
+    .b2b-cart-table td {
+        padding: 1.5rem 1.75rem;
+        border-bottom: 1px solid var(--b2b-cart-border);
+        vertical-align: middle;
+    }
+
+    .b2b-cart-table tbody tr {
+        transition: background 0.2s ease;
+    }
+
+    .b2b-cart-table tbody tr:hover {
+        background: #fafbfc;
+    }
+
+    /* ========== PRODUCT INFO ========== */
+    .b2b-cart-product-info {
+        display: flex;
+        align-items: center;
+        gap: 1.25rem;
+    }
+
+    .b2b-cart-product-image-wrapper {
+        width: 64px;
+        height: 64px;
+        flex-shrink: 0;
+        position: relative;
+        border-radius: 0.75rem;
+        overflow: hidden;
+        background: linear-gradient(135deg, #eff6ff 0%, #f5f3ff 100%);
+        border: 2px solid var(--b2b-cart-border);
+        transition: all 0.2s ease;
+    }
+
+    .b2b-cart-product-image-wrapper:hover {
+        border-color: var(--b2b-cart-primary);
+        transform: scale(1.02);
+    }
+
+    .b2b-cart-product-image {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+    .b2b-cart-product-placeholder {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #3b82f6;
+        font-size: 1.5rem;
+    }
+
+    .b2b-cart-product-details {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .b2b-cart-product-name {
+        font-size: 1.0625rem;
+        font-weight: 700;
+        color: var(--b2b-cart-text-primary);
+        margin: 0 0 0.5rem 0;
+        line-height: 1.3;
+    }
+
+    .b2b-cart-product-meta {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+        font-size: 0.875rem;
+        color: var(--b2b-cart-text-secondary);
+    }
+
+    .b2b-cart-meta-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+    }
+
+    .b2b-cart-store-badge {
+        background: #eff6ff;
+        color: var(--b2b-cart-primary);
+        padding: 0.25rem 0.75rem;
+        border-radius: 0.5rem;
+        font-weight: 600;
+    }
+
+    /* ========== QUANTITY CONTROLS ========== */
+    .b2b-cart-qty-control {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: var(--b2b-cart-background);
+        border: 2px solid var(--b2b-cart-border);
+        border-radius: 0.75rem;
+        padding: 0.25rem;
+    }
+
+    .b2b-cart-qty-btn {
+        width: 36px;
+        height: 36px;
+        background: white;
+        border: 1px solid var(--b2b-cart-border);
+        border-radius: 0.5rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        color: var(--b2b-cart-text-secondary);
+        font-weight: 700;
+        font-size: 1.125rem;
+    }
+
+    .b2b-cart-qty-btn:hover:not(:disabled) {
+        background: var(--b2b-cart-primary);
+        color: white;
+        border-color: var(--b2b-cart-primary);
+        transform: scale(1.05);
+    }
+
+    .b2b-cart-qty-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+
+    .b2b-cart-qty-input {
+        width: 70px;
+        text-align: center;
+        border: none;
+        background: transparent;
+        font-weight: 700;
+        font-size: 1.0625rem;
+        color: var(--b2b-cart-text-primary);
+        padding: 0.5rem 0.25rem;
+    }
+
+    .b2b-cart-qty-input:focus {
+        outline: none;
+    }
+
+    .b2b-cart-qty-label {
+        font-size: 0.75rem;
+        color: var(--b2b-cart-text-muted);
+        margin-top: 0.375rem;
+        text-align: center;
+        font-weight: 600;
+    }
+
+    /* ========== PRICE SECTION ========== */
+    .b2b-cart-price-section {
+        text-align: right;
+    }
+
+    .b2b-cart-requested-price {
+        background: #fef3c7;
+        color: #92400e;
+        padding: 0.5rem 1rem;
+        border-radius: 0.75rem;
+        display: inline-block;
+        margin-bottom: 0.5rem;
+    }
+
+    .b2b-cart-price-value {
+        font-size: 1.375rem;
+        font-weight: 800;
+        color: var(--b2b-cart-primary);
+        line-height: 1;
+    }
+
+    .b2b-cart-price-label {
+        font-size: 0.75rem;
+        color: var(--b2b-cart-text-muted);
+        margin-top: 0.25rem;
+        font-weight: 600;
+    }
+
+    .b2b-cart-no-price {
+        color: var(--b2b-cart-text-muted);
+        font-style: italic;
+    }
+
+    .b2b-cart-price-note {
+        font-size: 0.8125rem;
+        color: var(--b2b-cart-text-secondary);
+        margin-top: 0.25rem;
+    }
+
+    /* ========== ACTIONS COLUMN ========== */
+    .b2b-cart-item-actions {
+        text-align: center;
+    }
+
+    .b2b-cart-remove-btn {
+        width: 40px;
+        height: 40px;
+        background: var(--b2b-cart-background);
+        border: 2px solid var(--b2b-cart-border);
+        border-radius: 0.75rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        color: var(--b2b-cart-text-muted);
+    }
+
+    .b2b-cart-remove-btn:hover {
+        background: var(--b2b-cart-danger);
+        color: white;
+        border-color: var(--b2b-cart-danger);
+        transform: scale(1.1);
+    }
+
+    /* ========== NOTES SECTION ========== */
+    .b2b-cart-notes-section {
+        padding: 2rem 1.75rem;
+        background: var(--b2b-cart-background);
+        border-top: 2px solid var(--b2b-cart-border);
+    }
+
+    .b2b-cart-notes-label {
+        font-size: 0.875rem;
+        font-weight: 700;
+        color: var(--b2b-cart-text-primary);
+        margin-bottom: 0.75rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .b2b-cart-notes-textarea {
+        width: 100%;
+        padding: 1rem 1.25rem;
+        border: 2px solid var(--b2b-cart-border);
+        border-radius: 0.75rem;
+        font-size: 0.9375rem;
+        font-family: inherit;
+        resize: vertical;
+        transition: all 0.2s ease;
+    }
+
+    .b2b-cart-notes-textarea:focus {
+        outline: none;
+        border-color: var(--b2b-cart-primary);
+        box-shadow: 0 0 0 3px #eff6ff;
+    }
+
+    .b2b-cart-notes-hint {
+        font-size: 0.8125rem;
+        color: var(--b2b-cart-text-secondary);
+        margin-top: 0.5rem;
+    }
+
+    /* ========== SUMMARY SECTION ========== */
+    .b2b-cart-summary {
+        padding: 2rem 1.75rem;
+        background: white;
+        border-top: 2px solid var(--b2b-cart-border);
+    }
+
+    .b2b-cart-summary-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+
+    .b2b-cart-summary-label {
+        font-size: 0.9375rem;
+        color: var(--b2b-cart-text-secondary);
+        font-weight: 600;
+    }
+
+    .b2b-cart-summary-value {
+        font-size: 1.0625rem;
+        font-weight: 700;
+        color: var(--b2b-cart-text-primary);
+    }
+
+    .b2b-cart-summary-total {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-top: 1.5rem;
+        margin-top: 1.5rem;
+        border-top: 2px solid var(--b2b-cart-border);
+    }
+
+    .b2b-cart-total-label {
+        font-size: 1.125rem;
+        font-weight: 700;
+        color: var(--b2b-cart-text-primary);
+    }
+
+    .b2b-cart-total-value {
+        font-size: 2rem;
+        font-weight: 800;
+        color: var(--b2b-cart-primary);
+    }
+
+    .b2b-cart-summary-note {
+        font-size: 0.8125rem;
+        color: var(--b2b-cart-text-secondary);
+        margin-top: 0.5rem;
+        padding: 0.75rem 1rem;
+        background: #fef3c7;
+        border-radius: 0.5rem;
+        display: flex;
+        align-items: start;
+        gap: 0.5rem;
+    }
+
+    .b2b-cart-summary-actions {
+        display: flex;
+        gap: 1rem;
+        margin-top: 1.5rem;
+        flex-wrap: wrap;
+    }
+
+    .b2b-cart-summary-actions .b2b-cart-btn {
+        flex: 1;
+        justify-content: center;
+        min-width: 200px;
+    }
+
+    /* ========== EMPTY STATE ========== */
+    .b2b-cart-empty {
+        padding: 4rem 2rem;
+        text-align: center;
+    }
+
+    .b2b-cart-empty-icon {
+        width: 140px;
+        height: 140px;
+        background: linear-gradient(135deg, #eff6ff 0%, #f5f3ff 100%);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 5rem;
+        margin: 0 auto 2rem;
+    }
+
+    .b2b-cart-empty-title {
+        font-size: 1.75rem;
+        font-weight: 800;
+        color: var(--b2b-cart-text-primary);
+        margin-bottom: 0.75rem;
+    }
+
+    .b2b-cart-empty-text {
+        font-size: 1.0625rem;
+        color: var(--b2b-cart-text-secondary);
+        margin-bottom: 2rem;
+        max-width: 500px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    /* ========== LOADING STATE ========== */
+    .b2b-cart-loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s ease;
+    }
+
+    .b2b-cart-loading-overlay.active {
+        opacity: 1;
+        pointer-events: all;
+    }
+
+    .b2b-cart-loading-spinner {
+        width: 60px;
+        height: 60px;
+        border: 4px solid rgba(255, 255, 255, 0.3);
+        border-top-color: white;
+        border-radius: 50%;
+        animation: b2b-cart-spin 0.8s linear infinite;
+    }
+
+    @keyframes b2b-cart-spin {
+        to { transform: rotate(360deg); }
+    }
+
+    /* ========== RESPONSIVE ========== */
+    @media (max-width: 1024px) {
+        .b2b-cart-table th:nth-child(4),
+        .b2b-cart-table td:nth-child(4) {
+            display: none;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .b2b-cart-container {
+            padding: 1rem;
+        }
+
+        .b2b-cart-hero {
+            padding: 1.75rem 1.25rem;
+        }
+
+        .b2b-cart-hero-title {
+            font-size: 1.75rem;
+        }
+
+        .b2b-cart-table {
+            display: block;
+            overflow-x: auto;
+        }
+
+        .b2b-cart-toolbar {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .b2b-cart-summary-actions {
+            flex-direction: column;
+        }
+
+        .b2b-cart-summary-actions .b2b-cart-btn {
+            width: 100%;
+        }
+
+        .b2b-cart-product-info {
+            flex-direction: column;
+            align-items: start;
+        }
+    }
 </style>
 
-<div class="container" style="max-width: 1100px;">
-  <div class="b2b-cart-hero">
-    <div class="d-flex align-items-center gap-2">
-      <i class="fas fa-shopping-basket fa-lg" style="color: var(--b2b-accent);"></i>
-      <h1 class="mb-0">B2B Cart</h1>
-      <span class="b2b-cart-badge ms-2"><i class="fas fa-building"></i> B2B</span>
-    </div>
-    <p>Review your wholesale basket. When you place order, suppliers will receive it for pricing/confirmation.</p>
-  </div>
-
-  <div class="b2b-cart-wrap">
-    <div class="b2b-cart-topbar">
-      <div class="text-muted small fw-semibold">
-        Items: <span class="fw-bold text-dark">{{ items|length }}</span>
-      </div>
-      <a href="{% url 'stores:b2b_marketplace' %}" class="btn btn-sm btn-outline-secondary">
-        <i class="fas fa-arrow-left me-1"></i>Continue Shopping
-      </a>
+<div class="b2b-cart-container">
+    <!-- Hero Header -->
+    <div class="b2b-cart-hero">
+        <div class="b2b-cart-hero-content">
+            <div class="b2b-cart-hero-header">
+                <h1 class="b2b-cart-hero-title">B2B Wholesale Cart</h1>
+                <span class="b2b-cart-badge">
+                    <i class="fas fa-building"></i>
+                    Business
+                </span>
+            </div>
+            <p class="b2b-cart-hero-subtitle">
+                Review your wholesale order. Submit to suppliers for pricing and confirmation.
+            </p>
+        </div>
     </div>
 
-    {% if items %}
-      <div class="table-responsive">
-        <table class="b2b-cart-table">
-          <thead>
-            <tr>
-              <th>Item</th>
-              <th style="width:160px;">Qty</th>
-              <th style="width:220px;">Requested Price</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for it in items %}
-              <tr>
-                <td>
-                  <div class="b2b-item-title">{{ it.product_name|default:it.product.name }}</div>
-                  <div class="b2b-item-meta">
-                    <i class="fas fa-store me-1"></i>
-                    {{ it.store.name|default:it.product.store.name }}
-                    {% if it.variant %}
-                      · <span class="text-muted">Variant:</span> {{ it.variant }}
-                    {% endif %}
-                  </div>
-                </td>
-                <td>
-                  <span class="b2b-qty-pill">
-                    <i class="fas fa-box"></i> {{ it.quantity }}
-                  </span>
-                </td>
-                <td>
-                  {% if it.requested_unit_price %}
-                    <span class="b2b-price">D{{ it.requested_unit_price|floatformat:2 }}</span>
-                    <div class="text-muted small">Buyer request</div>
-                  {% else %}
-                    <span class="text-muted">—</span>
-                    <div class="text-muted small">Default pricing will apply if seller doesn't set price.</div>
-                  {% endif %}
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-
-      <div class="p-3 p-md-4 border-top" style="background:#fbfcfe;">
-        <label class="small fw-bold mb-2">Buyer note (optional)</label>
-        <textarea id="b2bBuyerNote" class="b2b-note" rows="3"
-          placeholder="Example: We need delivery weekly. Please share your best unit price for 500+ units and lead time."></textarea>
-      </div>
-
-      <div class="b2b-cart-footer">
-        <div class="b2b-subtotal">
-          Estimated subtotal: <strong>D{{ subtotal|floatformat:2 }}</strong>
-          <div class="text-muted small">Final prices can be adjusted by suppliers.</div>
+    <!-- Cart Content -->
+    <div class="b2b-cart-wrapper">
+        <!-- Toolbar -->
+        <div class="b2b-cart-toolbar">
+            <div class="b2b-cart-count">
+                Items in cart: <strong>{{ items|length }}</strong>
+            </div>
+            <a href="{% url 'stores:b2b_marketplace' %}" class="b2b-cart-btn b2b-cart-btn-outline">
+                <i class="fas fa-arrow-left"></i>
+                Continue Shopping
+            </a>
         </div>
 
-        <div class="d-flex gap-2">
-          <button class="b2b-btn b2b-btn-secondary" type="button" onclick="window.location.href='{% url 'stores:b2b_marketplace' %}'">
-            <i class="fas fa-store me-1"></i>Back
-          </button>
+        {% if items %}
+        <!-- Cart Table -->
+        <div style="overflow-x: auto;">
+            <table class="b2b-cart-table">
+                <thead>
+                    <tr>
+                        <th style="width: 45%;">Product</th>
+                        <th style="width: 20%;">Quantity</th>
+                        <th style="width: 20%;">Price</th>
+                        <th style="width: 10%;">Subtotal</th>
+                        <th style="width: 5%;"></th>
+                    </tr>
+                </thead>
+                <tbody id="b2bCartItems">
+                    {% for item in items %}
+                    <tr data-item-id="{{ item.id }}">
+                        <!-- Product Info -->
+                        <td>
+                            <div class="b2b-cart-product-info">
+                                <!-- Product Image -->
+                                <div class="b2b-cart-product-image-wrapper">
+                                    {% if item.product.display_image_url %}
+                                        <img src="{{ item.product.display_image_url }}"
+                                             class="b2b-cart-product-image"
+                                             alt="{{ item.product_name|default:item.product.name }}"
+                                             loading="lazy"
+                                             onerror="this.style.display='none'; this.parentElement.innerHTML='<div class=\'b2b-cart-product-placeholder\'><i class=\'fas fa-box\'></i></div>';">
+                                    {% else %}
+                                        <div class="b2b-cart-product-placeholder">
+                                            <i class="fas fa-box"></i>
+                                        </div>
+                                    {% endif %}
+                                </div>
 
-          <button class="b2b-btn b2b-btn-primary" type="button" id="b2bPlaceOrderBtn">
-            <i class="fas fa-check-circle me-1"></i>Place B2B Order
-          </button>
+                                <div class="b2b-cart-product-details">
+                                    <h3 class="b2b-cart-product-name">
+                                        {{ item.product_name|default:item.product.name }}
+                                    </h3>
+                                    <div class="b2b-cart-product-meta">
+                                        <span class="b2b-cart-meta-item">
+                                            <i class="fas fa-store"></i>
+                                            <span class="b2b-cart-store-badge">
+                                                {{ item.store.name|default:item.product.store.name }}
+                                            </span>
+                                        </span>
+                                        {% if item.variant %}
+                                        <span class="b2b-cart-meta-item">
+                                            <i class="fas fa-tag"></i>
+                                            {{ item.variant }}
+                                        </span>
+                                        {% endif %}
+                                        {% if item.product.sku %}
+                                        <span class="b2b-cart-meta-item">
+                                            <i class="fas fa-barcode"></i>
+                                            SKU: {{ item.product.sku }}
+                                        </span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+
+                        <!-- Quantity Controls -->
+                        <td>
+                            <div class="b2b-cart-qty-control">
+                                <button class="b2b-cart-qty-btn" onclick="updateQuantity('{{ item.id }}', -1)">
+                                    <i class="fas fa-minus"></i>
+                                </button>
+                                <input type="number"
+                                       class="b2b-cart-qty-input"
+                                       id="qty-{{ item.id }}"
+                                       value="{{ item.quantity }}"
+                                       min="1"
+                                       max="9999"
+                                       onchange="setQuantity('{{ item.id }}', this.value)"
+                                       data-price="{{ item.requested_unit_price|default:0 }}">
+                                <button class="b2b-cart-qty-btn" onclick="updateQuantity('{{ item.id }}', 1)">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                            </div>
+                            <div class="b2b-cart-qty-label">Units</div>
+                        </td>
+
+                        <!-- Price -->
+                        <td>
+                            <div class="b2b-cart-price-section">
+                                {% if item.requested_unit_price %}
+                                <div class="b2b-cart-requested-price">
+                                    <i class="fas fa-hand-holding-dollar"></i>
+                                    Requested
+                                </div>
+                                <div class="b2b-cart-price-value">D{{ item.requested_unit_price|floatformat:2 }}</div>
+                                <div class="b2b-cart-price-label">per unit</div>
+                                {% else %}
+                                <div class="b2b-cart-no-price">—</div>
+                                <div class="b2b-cart-price-note">Default pricing applies</div>
+                                {% endif %}
+                            </div>
+                        </td>
+
+                        <!-- Subtotal -->
+                        <td>
+                            <div class="b2b-cart-price-section">
+                                {% if item.requested_unit_price %}
+                                <div class="b2b-cart-price-value" id="subtotal-{{ item.id }}">
+                                    D<span class="subtotal-amount" data-price="{{ item.requested_unit_price }}" data-qty="{{ item.quantity }}">{{ item.requested_unit_price|floatformat:2 }}</span>
+                                </div>
+                                <div class="b2b-cart-price-label">estimated</div>
+                                <script>
+                                    (function() {
+                                        const price = parseFloat('{{ item.requested_unit_price }}');
+                                        const qty = parseInt('{{ item.quantity }}');
+                                        const subtotal = (price * qty).toFixed(2);
+                                        const elem = document.querySelector('#subtotal-{{ item.id }} .subtotal-amount');
+                                        if (elem) elem.textContent = subtotal;
+                                    })();
+                                </script>
+                                {% else %}
+                                <div class="b2b-cart-no-price">TBD</div>
+                                {% endif %}
+                            </div>
+                        </td>
+
+                        <!-- Remove -->
+                        <td>
+                            <div class="b2b-cart-item-actions">
+                                <button class="b2b-cart-remove-btn" onclick="removeItem('{{ item.id }}')" title="Remove item">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
-      </div>
 
-    {% else %}
-      <div class="b2b-empty">
-        <i class="fas fa-basket-shopping"></i>
-        <h3>Your B2B basket is empty</h3>
-        <p>Add products from the B2B marketplace to begin.</p>
-        <a href="{% url 'stores:b2b_marketplace' %}" class="btn" style="background: var(--b2b-primary); color:#fff; font-weight:900; border-radius:10px; padding:.85rem 1.1rem;">
-          <i class="fas fa-cubes me-1"></i>Browse B2B Products
-        </a>
-      </div>
-    {% endif %}
-  </div>
+        <!-- Notes Section -->
+        <div class="b2b-cart-notes-section">
+            <label class="b2b-cart-notes-label">
+                <i class="fas fa-comment-dots"></i>
+                Order Notes (Optional)
+            </label>
+            <textarea id="buyerNote"
+                      class="b2b-cart-notes-textarea"
+                      rows="4"
+                      placeholder="Example: We need weekly delivery. Please provide your best bulk pricing for 500+ units and estimated lead time."></textarea>
+            <div class="b2b-cart-notes-hint">
+                💡 <strong>Tip:</strong> Include delivery preferences, bulk discounts needed, or any special requirements
+            </div>
+        </div>
+
+        <!-- Summary Section -->
+        <div class="b2b-cart-summary">
+            <div class="b2b-cart-summary-row">
+                <span class="b2b-cart-summary-label">Total Items</span>
+                <span class="b2b-cart-summary-value" id="totalItems">{{ items|length }}</span>
+            </div>
+
+            <div class="b2b-cart-summary-row">
+                <span class="b2b-cart-summary-label">Total Units</span>
+                <span class="b2b-cart-summary-value" id="totalUnits">{{ total_units|default:0 }}</span>
+            </div>
+
+            <div class="b2b-cart-summary-total">
+                <span class="b2b-cart-total-label">Estimated Subtotal</span>
+                <span class="b2b-cart-total-value" id="grandTotal">D{{ subtotal|floatformat:2 }}</span>
+            </div>
+
+            <div class="b2b-cart-summary-note">
+                <i class="fas fa-info-circle" style="margin-top: 2px;"></i>
+                <span>
+                    <strong>Note:</strong> Final prices may be adjusted by suppliers.
+                    Shipping costs will be calculated and added separately.
+                </span>
+            </div>
+
+            <div class="b2b-cart-summary-actions">
+                <a href="{% url 'stores:b2b_marketplace' %}" class="b2b-cart-btn b2b-cart-btn-outline">
+                    <i class="fas fa-store"></i>
+                    Add More Items
+                </a>
+                <button class="b2b-cart-btn b2b-cart-btn-success" id="placeOrderBtn" onclick="placeOrder()">
+                    <i class="fas fa-paper-plane"></i>
+                    Submit Order to Suppliers
+                </button>
+            </div>
+        </div>
+
+        {% else %}
+        <!-- Empty Cart -->
+        <div class="b2b-cart-empty">
+            <div class="b2b-cart-empty-icon">
+                🛒
+            </div>
+            <h2 class="b2b-cart-empty-title">Your wholesale cart is empty</h2>
+            <p class="b2b-cart-empty-text">
+                Browse our B2B marketplace to find quality products at wholesale prices.
+                Add items to your cart to get started.
+            </p>
+            <a href="{% url 'stores:b2b_marketplace' %}" class="b2b-cart-btn b2b-cart-btn-primary" style="font-size: 1.0625rem; padding: 1rem 2rem;">
+                <i class="fas fa-cubes"></i>
+                Browse B2B Products
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Loading Overlay -->
+<div class="b2b-cart-loading-overlay" id="loadingOverlay">
+    <div class="b2b-cart-loading-spinner"></div>
 </div>
 
 <script>
-(function(){
-  const btn = document.getElementById('b2bPlaceOrderBtn');
-  if(!btn) return;
-
-  function getCookie(name) {
+// ==================== UTILITY FUNCTIONS ====================
+function getCookie(name) {
     let cookieValue = null;
-    if (document.cookie && document.cookie !== "") {
-      const cookies = document.cookie.split(";");
-      for (let i = 0; i < cookies.length; i++) {
-        const cookie = cookies[i].trim();
-        if (cookie.substring(0, name.length + 1) === (name + "=")) {
-          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-          break;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
         }
-      }
     }
     return cookieValue;
-  }
+}
 
-  btn.addEventListener('click', function(){
-    const note = (document.getElementById('b2bBuyerNote')?.value || '').trim();
+function showLoading() {
+    document.getElementById('loadingOverlay').classList.add('active');
+}
+
+function hideLoading() {
+    document.getElementById('loadingOverlay').classList.remove('active');
+}
+
+function showNotification(message, type = 'success') {
+    if (type === 'error') {
+        alert('Error: ' + message);
+    }
+}
+
+// ==================== QUANTITY MANAGEMENT ====================
+function updateQuantity(itemId, change) {
+    const input = document.getElementById(`qty-${itemId}`);
+    const currentQty = parseInt(input.value) || 1;
+    const newQty = Math.max(1, currentQty + change);
+
+    setQuantity(itemId, newQty);
+}
+
+function setQuantity(itemId, quantity) {
+    quantity = Math.max(1, Math.min(9999, parseInt(quantity) || 1));
+
+    const input = document.getElementById(`qty-${itemId}`);
+    input.value = quantity;
+
+    // Update subtotal locally first
+    const price = parseFloat(input.dataset.price || 0);
+    if (price > 0) {
+        const subtotalElem = document.querySelector(`#subtotal-${itemId} .subtotal-amount`);
+        if (subtotalElem) {
+            subtotalElem.textContent = (price * quantity).toFixed(2);
+        }
+    }
+
+    // Update quantity on server
+    updateCartItemQuantity(itemId, quantity);
+}
+
+function updateCartItemQuantity(itemId, quantity) {
+    showLoading();
+
+    const formData = new FormData();
+    formData.append('item_id', itemId);
+    formData.append('quantity', quantity);
+
+    fetch("{% url 'stores_b2b:update_quantity' %}", {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            updateCartTotals(data.cart_total, data.total_units);
+        } else {
+            showNotification(data.error || 'Failed to update quantity', 'error');
+            window.location.reload();
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showNotification('Failed to update quantity', 'error');
+    })
+    .finally(() => {
+        hideLoading();
+    });
+}
+
+function updateCartTotals(total, units) {
+    const totalElement = document.getElementById('grandTotal');
+    const unitsElement = document.getElementById('totalUnits');
+
+    if (totalElement && total !== undefined) {
+        totalElement.textContent = `D${parseFloat(total).toFixed(2)}`;
+    }
+
+    if (unitsElement && units !== undefined) {
+        unitsElement.textContent = units;
+    }
+}
+
+// ==================== REMOVE ITEM ====================
+function removeItem(itemId) {
+    if (!confirm('Remove this item from your cart?')) {
+        return;
+    }
+
+    showLoading();
+
+    const formData = new FormData();
+    formData.append('item_id', itemId);
+
+    fetch("{% url 'stores_b2b:remove_item' %}", {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const row = document.querySelector(`tr[data-item-id="${itemId}"]`);
+            if (row) {
+                row.remove();
+            }
+
+            updateCartTotals(data.cart_total, data.total_units);
+
+            const itemCount = document.getElementById('totalItems');
+            if (itemCount) {
+                itemCount.textContent = data.items_count;
+            }
+
+            if (data.items_count === 0) {
+                window.location.reload();
+            }
+        } else {
+            showNotification(data.error || 'Failed to remove item', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showNotification('Failed to remove item', 'error');
+    })
+    .finally(() => {
+        hideLoading();
+    });
+}
+
+// ==================== PLACE ORDER ====================
+function placeOrder() {
+    const buyerNote = document.getElementById('buyerNote').value.trim();
+    const btn = document.getElementById('placeOrderBtn');
+
+    if (!btn) return;
+
     btn.disabled = true;
-    const old = btn.innerHTML;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Placing...';
+    const originalHtml = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting Order...';
 
-    const fd = new FormData();
-    fd.append('buyer_note', note);
+    const formData = new FormData();
+    formData.append('buyer_note', buyerNote);
 
     fetch("{% url 'stores_b2b:place_order' %}", {
-      method: "POST",
-      headers: { "X-CSRFToken": getCookie("csrftoken") },
-      body: fd
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: formData
     })
-    .then(r => r.json())
+    .then(response => response.json())
     .then(data => {
-      if(!data || !data.success){
-        throw new Error(data?.error || "Could not place order.");
-      }
-      // reset local badge count (if you used localStorage)
-      try { localStorage.setItem('b2b_cart_count', '0'); } catch(e){}
-      btn.innerHTML = '<i class="fas fa-check me-1"></i>Order Sent';
-      setTimeout(()=> window.location.href = "{% url 'stores:b2b_marketplace' %}", 700);
-    })
-    .catch(err => {
-      console.error(err);
-      btn.disabled = false;
-      btn.innerHTML = old;
-      alert(err.message || "Something went wrong.");
-    });
-  });
-})();
-</script>
+        if (data.success) {
+            try {
+                localStorage.setItem('b2b_cart_count', '0');
+            } catch (e) {}
 
+            btn.innerHTML = '<i class="fas fa-check-circle"></i> Order Submitted!';
+
+            setTimeout(() => {
+                window.location.href = "{% url 'stores_b2b:my_personal_orders' %}";
+            }, 1000);
+        } else {
+            throw new Error(data.error || 'Failed to place order');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+        showNotification(error.message || 'Failed to place order', 'error');
+    });
+}
+
+// ==================== KEYBOARD SHORTCUTS ====================
+document.addEventListener('keydown', function(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        const placeBtn = document.getElementById('placeOrderBtn');
+        if (placeBtn && !placeBtn.disabled) {
+            placeOrder();
+        }
+    }
+});
+</script>
 {% endblock %}

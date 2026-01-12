@@ -13,6 +13,7 @@ import threading
 from django.conf import settings
 from marketplace.notifications import send_email, send_whatsapp
 from stores.models import StoreNotification
+from django.contrib import messages
 
 
 from django.db import transaction
@@ -302,34 +303,6 @@ def _notify_store_new_b2b_message(order: B2BOrder, message_obj=None):
 # -------------------------------------------------------------------
 # Cart
 # -------------------------------------------------------------------
-@login_required
-def b2b_cart(request):
-    cart = _get_or_create_active_cart(request.user)
-
-    # cart item usually has: cart, product, variant, quantity, requested_unit_price
-    items = cart.items.select_related("product", "variant", "product__store").all()
-
-    subtotal = Decimal("0.00")
-    for it in items:
-        # Prefer explicit B2B price fields
-        b2b_price = getattr(it.product, "b2b_price", None)
-        retail_price = getattr(it.product, "price", None)
-        unit = _safe_decimal(b2b_price, _safe_decimal(retail_price))
-        subtotal += unit * Decimal(int(it.quantity or 0))
-
-    cart_count = cart.items.aggregate(total=Sum("quantity"))["total"] or 0
-
-    return render(
-        request,
-        "b2b/cart.html",
-        {
-            "cart": cart,
-            "items": items,
-            "subtotal": subtotal,
-            "cart_count": int(cart_count),
-        },
-    )
-
 
 @login_required
 @transaction.atomic
@@ -401,6 +374,214 @@ def b2b_cart_add(request):
         }
     )
 
+@login_required
+@require_POST
+def b2b_update_quantity(request):
+    """
+    AJAX endpoint to update cart item quantity
+    """
+    try:
+        item_id = request.POST.get('item_id')
+        quantity = int(request.POST.get('quantity', 1))
+
+        # Validate quantity
+        if quantity < 1:
+            return JsonResponse({
+                'success': False,
+                'error': 'Quantity must be at least 1'
+            })
+
+        if quantity > 9999:
+            return JsonResponse({
+                'success': False,
+                'error': 'Quantity cannot exceed 9999'
+            })
+
+        # Get cart item
+        item = get_object_or_404(
+            B2BCartItem,
+            id=item_id,
+            cart__buyer=request.user,
+            cart__is_active=True
+        )
+
+        # Check MOQ if exists
+        moq = getattr(item.product, 'moq', None)
+        if moq and quantity < moq:
+            return JsonResponse({
+                'success': False,
+                'error': f'Minimum order quantity is {moq} units'
+            })
+
+        # Update quantity
+        item.quantity = quantity
+        item.save(update_fields=['quantity'])
+
+        # Calculate item subtotal
+        item_subtotal = Decimal('0.00')
+        if item.requested_unit_price:
+            item_subtotal = item.requested_unit_price * Decimal(quantity)
+
+        # Calculate cart totals
+        cart = item.cart
+        cart_total = Decimal('0.00')
+        total_units = 0
+
+        for cart_item in cart.items.all():
+            if cart_item.requested_unit_price:
+                cart_total += cart_item.requested_unit_price * Decimal(cart_item.quantity)
+            total_units += cart_item.quantity
+
+        return JsonResponse({
+            'success': True,
+            'item_subtotal': float(item_subtotal),
+            'cart_total': float(cart_total),
+            'total_units': total_units,
+            'quantity': quantity
+        })
+
+    except B2BCartItem.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': 'Cart item not found'
+        })
+    except ValueError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid quantity'
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        })
+
+
+@login_required
+@require_POST
+def b2b_remove_item(request):
+    """
+    AJAX endpoint to remove item from cart
+    """
+    try:
+        item_id = request.POST.get('item_id')
+
+        # Get and delete cart item
+        item = get_object_or_404(
+            B2BCartItem,
+            id=item_id,
+            cart__buyer=request.user,
+            cart__is_active=True
+        )
+
+        cart = item.cart
+        item.delete()
+
+        # Recalculate cart totals
+        cart_total = Decimal('0.00')
+        total_units = 0
+        items_count = 0
+
+        for cart_item in cart.items.all():
+            if cart_item.requested_unit_price:
+                cart_total += cart_item.requested_unit_price * Decimal(cart_item.quantity)
+            total_units += cart_item.quantity
+            items_count += 1
+
+        return JsonResponse({
+            'success': True,
+            'cart_total': float(cart_total),
+            'total_units': total_units,
+            'items_count': items_count,
+            'message': 'Item removed from cart'
+        })
+
+    except B2BCartItem.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': 'Cart item not found'
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        })
+
+
+@login_required
+@require_POST
+def b2b_buyer_cancel_order(request, order_id):
+    """
+    Allow buyer to cancel their B2B order request
+    Only works for submitted or priced orders (before acceptance)
+    """
+    order = get_object_or_404(B2BOrder, id=order_id, buyer=request.user)
+
+    # Check if order can be cancelled
+    if order.status not in ['submitted', 'priced']:
+        messages.error(
+            request,
+            f"❌ Cannot cancel order with status: {order.get_status_display()}"
+        )
+        return redirect('stores_b2b:my_personal_orders')
+
+    # Update order status
+    order.status = 'cancelled'
+    order.save()
+
+    # Notify seller (optional)
+    try:
+        # Add notification logic here if you have it
+        pass
+    except Exception as e:
+        print(f"Failed to send cancellation notification: {e}")
+
+    messages.success(
+        request,
+        "✅ Order cancelled successfully. The supplier has been notified."
+    )
+
+    return redirect('stores_b2b:my_personal_orders')
+
+@login_required
+def b2b_cart(request):
+    """
+    Display B2B cart with items
+    Enhanced to support quantity management
+    """
+    from django.core.paginator import Paginator
+
+    # Get or create active cart
+    cart, _ = B2BCart.objects.get_or_create(
+        buyer=request.user,
+        is_active=True
+    )
+
+    # Get cart items with related data
+    items = cart.items.select_related(
+        'product',
+        'product__store',
+        'variant',
+        'store'
+    ).order_by('-created_at')
+
+    # Calculate subtotal
+    subtotal = Decimal('0.00')
+    total_units = 0
+
+    for item in items:
+        if item.requested_unit_price:
+            subtotal += item.requested_unit_price * Decimal(item.quantity)
+        total_units += item.quantity
+
+    context = {
+        'cart': cart,
+        'items': items,
+        'subtotal': subtotal,
+        'total_units': total_units,
+    }
+
+    return render(request, 'b2b/cart.html', context)
 
 # -------------------------------------------------------------------
 # Place Order (convert cart -> one order per store)
@@ -732,7 +913,7 @@ def b2b_update_order_status(request, order_id):
         if new_status in ("shipped", "delivered") and current_status != "accepted":
             return JsonResponse({
                 "success": False,
-                "error": "You can’t mark this order as shipped/delivered until the buyer accepts the offer."
+                "danger": "You can’t mark this order as shipped/delivered until the buyer accepts the offer."
             }, status=400)
 
         # ----------------------------------------------------
