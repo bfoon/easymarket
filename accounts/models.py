@@ -4,6 +4,8 @@ from django.utils import timezone
 from django.conf import settings
 from django.utils.timezone import now, timedelta
 from django.core.exceptions import ValidationError
+from decimal import Decimal
+
 
 class User(AbstractUser):
     verify_doc = models.FileField(upload_to='company/', blank=True, null=True)
@@ -15,6 +17,16 @@ class User(AbstractUser):
     is_finance = models.BooleanField(default=False)
     is_driver = models.BooleanField(default=False)
     is_verified = models.BooleanField(default=False)
+
+    # Currency preference
+    preferred_currency = models.ForeignKey(
+        'Currency',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='users_preferring',
+        help_text="User's preferred currency for pricing"
+    )
 
     class Meta:
         swappable = 'AUTH_USER_MODEL'
@@ -40,9 +52,166 @@ class User(AbstractUser):
         return self.username or (self.phone or "")
 
 
+class Country(models.Model):
+    """
+    Comprehensive country list with currency support
+    """
+    name = models.CharField(max_length=200, unique=True)
+    code = models.CharField(max_length=3, unique=True, help_text="ISO 3166-1 alpha-2 code (e.g., GM, CN, US)")
+    code3 = models.CharField(max_length=3, blank=True, help_text="ISO 3166-1 alpha-3 code (e.g., GMB, CHN, USA)")
+    numeric_code = models.CharField(max_length=3, blank=True, help_text="ISO 3166-1 numeric code")
+    phone_code = models.CharField(max_length=10, blank=True, help_text="International dialing code (e.g., +220)")
+    currency = models.ForeignKey('Currency', on_delete=models.SET_NULL, null=True, blank=True, related_name='countries')
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name_plural = "Countries"
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
+class Currency(models.Model):
+    """
+    Currency model with real-time exchange rate support
+    """
+    code = models.CharField(max_length=3, unique=True, help_text="ISO 4217 currency code (e.g., GMD, USD, EUR, CNY)")
+    name = models.CharField(max_length=100)
+    symbol = models.CharField(max_length=10, help_text="Currency symbol (e.g., D, $, €, ¥)")
+    decimal_places = models.PositiveSmallIntegerField(default=2, help_text="Number of decimal places")
+    is_base_currency = models.BooleanField(
+        default=False,
+        help_text="Set one currency as base for exchange rates (typically USD or your main currency)"
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name_plural = "Currencies"
+        ordering = ['code']
+
+    def __str__(self):
+        return f"{self.code} - {self.name}"
+
+    def save(self, *args, **kwargs):
+        # Ensure only one base currency
+        if self.is_base_currency:
+            Currency.objects.filter(is_base_currency=True).exclude(pk=self.pk).update(is_base_currency=False)
+        super().save(*args, **kwargs)
+
+    def format_amount(self, amount):
+        """Format amount with currency symbol"""
+        formatted = f"{amount:.{self.decimal_places}f}"
+        return f"{self.symbol}{formatted}"
+
+    def get_exchange_rate_to(self, target_currency):
+        """
+        Get the exchange rate from this currency to target currency
+        Returns the rate or None if not available
+        """
+        if self.code == target_currency.code:
+            return Decimal('1.0')
+
+        # Try to get direct rate
+        rate = CurrencyExchangeRate.objects.filter(
+            from_currency=self,
+            to_currency=target_currency
+        ).order_by('-updated_at').first()
+
+        if rate and rate.is_valid():
+            return rate.rate
+
+        # Try inverse rate
+        inverse_rate = CurrencyExchangeRate.objects.filter(
+            from_currency=target_currency,
+            to_currency=self
+        ).order_by('-updated_at').first()
+
+        if inverse_rate and inverse_rate.is_valid():
+            return Decimal('1.0') / inverse_rate.rate
+
+        return None
+
+    def convert_to(self, amount, target_currency):
+        """
+        Convert an amount from this currency to target currency
+        Returns tuple: (converted_amount, exchange_rate, success)
+        """
+        if self.code == target_currency.code:
+            return (amount, Decimal('1.0'), True)
+
+        rate = self.get_exchange_rate_to(target_currency)
+
+        if rate:
+            converted = Decimal(str(amount)) * rate
+            return (converted, rate, True)
+
+        return (None, None, False)
+
+
+class CurrencyExchangeRate(models.Model):
+    """
+    Store exchange rates between currencies
+    Rates should be updated regularly from external API
+    """
+    from_currency = models.ForeignKey(Currency, on_delete=models.CASCADE, related_name='rates_from')
+    to_currency = models.ForeignKey(Currency, on_delete=models.CASCADE, related_name='rates_to')
+    rate = models.DecimalField(
+        max_digits=20,
+        decimal_places=8,
+        help_text="Exchange rate: 1 from_currency = rate × to_currency"
+    )
+    source = models.CharField(
+        max_length=50,
+        default='manual',
+        help_text="Source of the rate (e.g., 'exchangerate-api', 'manual', 'fixer.io')"
+    )
+    valid_from = models.DateTimeField(default=timezone.now)
+    valid_until = models.DateTimeField(null=True, blank=True, help_text="Rate expiry (if applicable)")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Currency Exchange Rate"
+        verbose_name_plural = "Currency Exchange Rates"
+        ordering = ['-updated_at']
+        unique_together = ['from_currency', 'to_currency']
+        indexes = [
+            models.Index(fields=['from_currency', 'to_currency']),
+            models.Index(fields=['-updated_at']),
+        ]
+
+    def __str__(self):
+        return f"1 {self.from_currency.code} = {self.rate} {self.to_currency.code}"
+
+    def is_valid(self):
+        """Check if the rate is still valid"""
+        if self.valid_until:
+            return timezone.now() <= self.valid_until
+        return True
+
+    def clean(self):
+        if self.from_currency == self.to_currency:
+            raise ValidationError("Cannot create exchange rate for the same currency")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+
 class Address(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    country = models.CharField(max_length=200, blank=True, null=True)
+    country = models.ForeignKey(
+        Country,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        help_text="Select country from the list"
+    )
+    # Keep the old country field for backwards compatibility during migration
+    country_name = models.CharField(max_length=200, blank=True, null=True, help_text="Deprecated: Use country field")
     address1 = models.TextField(blank=True, null=True)
     address2 = models.TextField(blank=True, null=True)
 
@@ -50,7 +219,11 @@ class Address(models.Model):
     geo_code = models.CharField(max_length=100, blank=True, null=True)
 
     def full_address(self):
-        parts = [self.address1, self.address2, self.country]
+        parts = [self.address1, self.address2]
+        if self.country:
+            parts.append(self.country.name)
+        elif self.country_name:
+            parts.append(self.country_name)
         return ', '.join(filter(None, parts))
 
     def __str__(self):
@@ -116,6 +289,7 @@ class AdminLog(models.Model):
         }
         return status_map.get(self.action_type, 'info')
 
+
 class Device(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="devices")
     device_id = models.CharField(max_length=128, db_index=True)  # fingerprint hash
@@ -132,6 +306,7 @@ class Device(models.Model):
 
     def __str__(self):
         return f"{self.user} - {self.browser} on {self.os} ({'trusted' if self.is_trusted else 'untrusted'})"
+
 
 class OneTimeCode(models.Model):
     PURPOSE_LOGIN = "login"

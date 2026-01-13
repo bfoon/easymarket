@@ -3,6 +3,7 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.db import transaction
 import re
+from .models import Currency
 
 User = get_user_model()
 
@@ -84,4 +85,23 @@ class ProfileUpdateForm(forms.ModelForm):
             "first_name": forms.TextInput(attrs={"class": "form-control", "placeholder": "First name"}),
             "last_name": forms.TextInput(attrs={"class": "form-control", "placeholder": "Last name"}),
             "telephone": forms.TextInput(attrs={"class": "form-control", "placeholder": "Phone"}),
+        }
+
+
+class ProfileUpdateForm(forms.ModelForm):
+    preferred_currency = forms.ModelChoiceField(
+        queryset=Currency.objects.filter(is_active=True),
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+
+    class Meta:
+        model = User
+        fields = ['first_name', 'last_name', 'email', 'telephone',
+                  'profile_pic', 'preferred_currency']
+        widgets = {
+            'first_name': forms.TextInput(attrs={'class': 'form-control'}),
+            'last_name': forms.TextInput(attrs={'class': 'form-control'}),
+            'email': forms.EmailInput(attrs={'class': 'form-control'}),
+            'telephone': forms.TextInput(attrs={'class': 'form-control'}),
         }

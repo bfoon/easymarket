@@ -164,6 +164,7 @@ TEMPLATES = [
                 "analytics.context_processors.store_analytics_kpis",
                 "logistics.context_processors.logistics_nav_counts",
                 "logistics.context_processors.notification_context",
+                "accounts.context_processors.currency_context",
             ],
         },
     },
@@ -243,6 +244,7 @@ TWILIO_WHATSAPP_NUMBER = config("TWILIO_WHATSAPP_NUMBER", default="")
 # -----------------------------------------------------------------------------
 LOGISTICS_EMAIL = config("LOGISTICS_EMAIL", default="")
 LOGISTICS_PHONE = config("LOGISTICS_PHONE", default="")
+DEFAULT_CURRENCY = 'GMD'  # or 'USD', 'EUR', etc.
 
 # -----------------------------------------------------------------------------
 # Rate limiting (notifications)

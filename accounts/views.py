@@ -28,7 +28,7 @@ from marketplace.utils import migrate_session_cart_to_user
 from orders.models import Order
 
 from .forms import ProfileUpdateForm
-from .models import Address, AdminLog, Device, OneTimeCode
+from .models import Address, AdminLog, Device, OneTimeCode, Currency, Country
 from .utils import device_fingerprint, parse_ua, send_otp_email, send_otp_whatsapp
 
 logger = logging.getLogger(__name__)
@@ -561,3 +561,230 @@ def delete_address(request, address_id):
     address.delete()
     messages.success(request, "Address removed successfully.")
     return redirect("accounts:user_profile")
+
+
+@login_required
+@require_POST
+@csrf_protect
+def set_currency_preference(request):
+    """
+    Quick currency switcher from header or profile
+    """
+    currency_code = request.POST.get('currency_code', '').strip()
+    redirect_to = request.POST.get('redirect_to', request.META.get('HTTP_REFERER', '/'))
+
+    if currency_code:
+        try:
+            currency = Currency.objects.get(code=currency_code, is_active=True)
+            request.user.preferred_currency = currency
+            request.user.save(update_fields=['preferred_currency'])
+
+            messages.success(
+                request,
+                f'Currency updated to {currency.name} ({currency.symbol})'
+            )
+        except Currency.DoesNotExist:
+            messages.error(request, 'Invalid currency selected')
+
+    return redirect(redirect_to)
+
+
+@login_required
+@require_POST
+@csrf_protect
+def set_country_preference(request):
+    """
+    Set user's country preference (updates their primary address)
+    """
+    country_id = request.POST.get('country_id')
+    redirect_to = request.POST.get('redirect_to', request.META.get('HTTP_REFERER', '/'))
+
+    if country_id:
+        try:
+            country = Country.objects.get(id=country_id, is_active=True)
+
+            # Update or create primary address
+            address, created = Address.objects.get_or_create(
+                user=request.user,
+                defaults={'country': country}
+            )
+
+            if not created:
+                address.country = country
+                address.save(update_fields=['country'])
+
+            # Optionally set currency to country's default currency
+            if country.currency:
+                request.user.preferred_currency = country.currency
+                request.user.save(update_fields=['preferred_currency'])
+
+            messages.success(
+                request,
+                f'Location updated to {country.name}'
+            )
+        except Country.DoesNotExist:
+            messages.error(request, 'Invalid country selected')
+
+    return redirect(redirect_to)
+
+
+@login_required
+@require_POST
+@csrf_protect
+def update_preferences(request):
+    """
+    Update both currency and country preferences from profile page
+    """
+    currency_id = request.POST.get('preferred_currency')
+    country_id = request.POST.get('country')
+
+    updated = False
+
+    # Update currency preference
+    if currency_id:
+        try:
+            currency = Currency.objects.get(id=currency_id, is_active=True)
+            request.user.preferred_currency = currency
+            request.user.save(update_fields=['preferred_currency'])
+            updated = True
+        except Currency.DoesNotExist:
+            messages.error(request, 'Invalid currency selected')
+
+    # Update country (primary address)
+    if country_id:
+        try:
+            country = Country.objects.get(id=country_id, is_active=True)
+
+            # Get or create the user's first address
+            address = request.user.address_set.first()
+            if address:
+                address.country = country
+                address.save(update_fields=['country'])
+            else:
+                Address.objects.create(user=request.user, country=country)
+
+            updated = True
+        except Country.DoesNotExist:
+            messages.error(request, 'Invalid country selected')
+
+    if updated:
+        messages.success(request, 'Preferences updated successfully')
+
+    return redirect('accounts:user_profile')
+
+
+@login_required
+@csrf_protect
+def quick_currency_switch(request):
+    """
+    Quick currency switch from profile sidebar
+    """
+    if request.method == 'POST':
+        return set_currency_preference(request)
+    return redirect('accounts:user_profile')
+
+
+# UPDATE THE EXISTING user_profile VIEW TO INCLUDE CURRENCIES AND COUNTRIES
+
+@login_required
+def user_profile(request):
+    """
+    Enhanced user profile view with currency and country support
+    """
+    user = request.user
+    addresses = Address.objects.filter(user=user).select_related('country')
+
+    # Get all active currencies and countries
+    currencies = Currency.objects.filter(is_active=True).order_by('code')
+    countries = Country.objects.filter(is_active=True).select_related('currency').order_by('name')
+
+    # Orders (paginated)
+    from orders.models import Order
+    from django.core.paginator import Paginator
+
+    order_list = Order.objects.filter(buyer=user).order_by("-created_at")
+    paginator = Paginator(order_list, 5)
+    page_number = request.GET.get("page")
+    orders = paginator.get_page(page_number)
+
+    if request.method == "POST":
+        if "update_profile" in request.POST:
+            from .forms import ProfileUpdateForm
+            from django.contrib.auth.forms import PasswordChangeForm
+
+            profile_form = ProfileUpdateForm(request.POST, request.FILES, instance=user)
+            password_form = PasswordChangeForm(user)
+
+            if profile_form.is_valid():
+                profile_form.save()
+                messages.success(request, "Profile updated successfully.")
+                return redirect("accounts:user_profile")
+
+        elif "change_password" in request.POST:
+            from .forms import ProfileUpdateForm
+            from django.contrib.auth.forms import PasswordChangeForm
+            from django.contrib.auth import update_session_auth_hash
+
+            profile_form = ProfileUpdateForm(instance=user)
+            password_form = PasswordChangeForm(user, request.POST)
+
+            if password_form.is_valid():
+                updated_user = password_form.save()
+                update_session_auth_hash(request, updated_user)
+                messages.success(request, "Password changed successfully.")
+                return redirect("accounts:user_profile")
+        else:
+            from django.http import HttpResponseBadRequest
+            return HttpResponseBadRequest("Invalid form submission.")
+    else:
+        from .forms import ProfileUpdateForm
+        from django.contrib.auth.forms import PasswordChangeForm
+
+        profile_form = ProfileUpdateForm(instance=user)
+        password_form = PasswordChangeForm(user)
+
+    return render(
+        request,
+        "accounts/user_profile.html",
+        {
+            "user": user,
+            "addresses": addresses,
+            "profile_form": profile_form,
+            "orders": orders,
+            "password_form": password_form,
+            "currencies": currencies,  # NEW
+            "countries": countries,  # NEW
+        },
+    )
+
+
+# UPDATE THE edit_address_modal VIEW TO SUPPORT COUNTRY SELECTION
+
+@login_required
+@require_POST
+@csrf_protect
+def edit_address_modal(request):
+    """
+    Handles modal form submission for addresses with country support
+    """
+    address, _ = Address.objects.get_or_create(user=request.user)
+
+    address.address1 = request.POST.get("address1", "").strip()
+    address.address2 = request.POST.get("address2", "").strip()
+    address.geo_code = request.POST.get("geo_code", "").strip()
+
+    # Handle country selection
+    country_id = request.POST.get("country")
+    if country_id:
+        try:
+            country = Country.objects.get(id=country_id)
+            address.country = country
+            # Keep country_name for backward compatibility
+            address.country_name = country.name
+        except Country.DoesNotExist:
+            pass
+
+    address.save()
+    messages.success(request, "Address saved successfully.")
+
+    return redirect(request.META.get("HTTP_REFERER") or "marketplace:product_list")

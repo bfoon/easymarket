@@ -8,7 +8,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet" />
 </head>
 <body>
-
+{% load currency_tags %}
 <nav class="easymarket-navbar navbar navbar-expand-lg navbar-light bg-white shadow-sm sticky-top">
     <div class="container">
       <div class="d-flex flex-column align-items-start">
@@ -328,6 +328,148 @@
                 {% endif %}
             </ul>
 
+            <li class="nav-item dropdown easymarket-currency-dropdown">
+    <a class="easymarket-nav-link nav-link easymarket-dropdown-toggle"
+       href="#"
+       id="currencyDropdown"
+       role="button"
+       data-bs-toggle="dropdown"
+       aria-expanded="false">
+        {% if request.user.is_authenticated and request.user.preferred_currency %}
+            <i class="fas fa-globe me-1"></i>
+            <span class="fw-bold">{{ request.user.preferred_currency.symbol }}</span>
+            <span class="d-none d-md-inline ms-1">{{ request.user.preferred_currency.code }}</span>
+        {% else %}
+            <i class="fas fa-globe me-1"></i>
+            <span class="fw-bold">D</span>
+            <span class="d-none d-md-inline ms-1">GMD</span>
+        {% endif %}
+    </a>
+
+    <div class="dropdown-menu easymarket-dropdown-menu easymarket-currency-menu shadow-lg"
+         aria-labelledby="currencyDropdown">
+        <div class="px-3 py-2 border-bottom">
+            <h6 class="mb-1 fw-bold">
+                <i class="fas fa-coins text-warning me-2"></i>Select Currency
+            </h6>
+            <small class="text-muted">Prices will be displayed in your preferred currency</small>
+        </div>
+
+        <!-- Popular Currencies -->
+        <div class="px-3 py-2">
+            <small class="text-muted text-uppercase fw-bold">Popular</small>
+        </div>
+
+        <form method="post" action="{% url 'accounts:set_currency_preference' %}" id="headerCurrencyForm">
+            {% csrf_token %}
+            <input type="hidden" name="currency_code" id="headerCurrencyCode">
+            <input type="hidden" name="redirect_to" value="{{ request.path }}">
+        </form>
+
+        {% for curr_code in "GMD,USD,EUR,GBP,CNY,NGN"|split:"," %}
+            <a href="#"
+               class="easymarket-dropdown-item currency-option {% if request.user.preferred_currency.code == curr_code or not request.user.preferred_currency and curr_code == 'GMD' %}active{% endif %}"
+               data-currency="{{ curr_code }}"
+               onclick="selectCurrency('{{ curr_code }}'); return false;">
+                <div class="d-flex align-items-center justify-content-between">
+                    <div>
+                        <span class="currency-symbol me-2">{{ curr_code|currency_symbol }}</span>
+                        <span class="fw-semibold">{{ curr_code }}</span>
+                    </div>
+                    {% if request.user.preferred_currency.code == curr_code %}
+                        <i class="fas fa-check text-success"></i>
+                    {% endif %}
+                </div>
+                <small class="text-muted d-block ms-4">
+                    {% if curr_code == "GMD" %}Gambian Dalasi
+                    {% elif curr_code == "USD" %}US Dollar
+                    {% elif curr_code == "EUR" %}Euro
+                    {% elif curr_code == "GBP" %}British Pound
+                    {% elif curr_code == "CNY" %}Chinese Yuan
+                    {% elif curr_code == "NGN" %}Nigerian Naira
+                    {% endif %}
+                </small>
+            </a>
+        {% endfor %}
+
+        <div class="dropdown-divider"></div>
+
+        <!-- All Currencies Link -->
+        <a href="{% url 'accounts:user_profile' %}#preferences" class="easymarket-dropdown-item">
+            <i class="fas fa-cog me-2 text-primary"></i>
+            <span>More Currencies & Settings</span>
+        </a>
+
+        <!-- Exchange Rate Info -->
+        <div class="px-3 py-2 bg-light border-top mt-2">
+            <small class="text-muted d-flex align-items-center">
+                <i class="fas fa-info-circle me-2"></i>
+                Exchange rates updated daily
+            </small>
+        </div>
+    </div>
+</li>
+
+<!-- Location/Country Selector (Optional - can be combined with currency or separate) -->
+<li class="nav-item dropdown easymarket-location-dropdown d-none d-lg-block">
+    <a class="easymarket-nav-link nav-link"
+       href="#"
+       id="locationDropdown"
+       role="button"
+       data-bs-toggle="dropdown"
+       aria-expanded="false">
+        <i class="fas fa-map-marker-alt me-1"></i>
+        <span class="d-none d-xl-inline">
+            {% if request.user.is_authenticated and request.user.address_set.first.country %}
+                {{ request.user.address_set.first.country.code }}
+            {% else %}
+                GM
+            {% endif %}
+        </span>
+    </a>
+
+    <div class="dropdown-menu easymarket-dropdown-menu shadow-lg" aria-labelledby="locationDropdown">
+        <div class="px-3 py-2 border-bottom">
+            <h6 class="mb-1 fw-bold">
+                <i class="fas fa-flag text-danger me-2"></i>Your Location
+            </h6>
+            <small class="text-muted">Select your country for better shipping options</small>
+        </div>
+
+        <div class="location-search px-3 py-2">
+            <input type="text"
+                   class="form-control form-control-sm"
+                   id="countrySearch"
+                   placeholder="Search countries...">
+        </div>
+
+        <div class="country-list" style="max-height: 300px; overflow-y: auto;">
+            {% for country in countries|slice:":10" %}
+                <a href="#"
+                   class="easymarket-dropdown-item country-option"
+                   data-country-id="{{ country.id }}"
+                   data-country-name="{{ country.name }}"
+                   onclick="selectCountry({{ country.id }}); return false;">
+                    <div class="d-flex align-items-center">
+                        <span class="me-2">{{ country.code }}</span>
+                        <span>{{ country.name }}</span>
+                    </div>
+                    <small class="text-muted d-block ms-4">
+                        <i class="fas fa-coins me-1"></i>{{ country.currency.code }}
+                    </small>
+                </a>
+            {% endfor %}
+        </div>
+
+        <div class="dropdown-divider"></div>
+
+        <a href="{% url 'accounts:user_profile' %}#address" class="easymarket-dropdown-item">
+            <i class="fas fa-cog me-2 text-primary"></i>
+            <span>Manage Addresses</span>
+        </a>
+    </div>
+</li>
+
             <!-- User Profile Section -->
             {% if user.is_authenticated %}
             <div class="easymarket-profile-dropdown dropdown me-3 easymarket-hide-on-portrait">
@@ -646,6 +788,76 @@
   box-shadow: 0 1px 3px rgba(0,0,0,.35);
 }
 
+/* Currency Dropdown Styles */
+.easymarket-currency-menu {
+    min-width: 320px;
+    max-width: 350px;
+    border-radius: 12px;
+    border: none;
+    padding: 0;
+}
+
+.easymarket-currency-menu .currency-option {
+    padding: 0.75rem 1rem;
+    transition: all 0.2s ease;
+    border-left: 3px solid transparent;
+}
+
+.easymarket-currency-menu .currency-option:hover {
+    background-color: #f8f9fa;
+    border-left-color: #0d6efd;
+}
+
+.easymarket-currency-menu .currency-option.active {
+    background-color: #e7f3ff;
+    border-left-color: #0d6efd;
+}
+
+.easymarket-currency-menu .currency-symbol {
+    display: inline-block;
+    width: 24px;
+    font-weight: bold;
+    font-size: 1.1em;
+}
+
+/* Location Dropdown Styles */
+.easymarket-location-dropdown .country-option {
+    padding: 0.75rem 1rem;
+    transition: all 0.2s ease;
+}
+
+.easymarket-location-dropdown .country-option:hover {
+    background-color: #f8f9fa;
+}
+
+.location-search input {
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+}
+
+.location-search input:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 991.98px) {
+    .easymarket-currency-menu {
+        min-width: 280px;
+    }
+
+    .easymarket-location-dropdown {
+        display: none !important;
+    }
+}
+
+/* Animation */
+.easymarket-currency-menu,
+.easymarket-location-dropdown .dropdown-menu {
+    animation: slideIn 0.3s ease;
+}
+
+
 /* Desktop: full width mega menu */
 @media (min-width: 992px) {
   .easymarket-navbar .easymarket-categories-dropdown {
@@ -671,6 +883,16 @@
   }
 }
 
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
 
 /* ==================================================
    EASYMARKET NAVBAR - SCOPED CSS STYLES
@@ -1461,6 +1683,69 @@ document.addEventListener('DOMContentLoaded', function() {
             };
         }
     })();
+});
+</script>
+<script>
+// Currency selection function
+function selectCurrency(currencyCode) {
+    document.getElementById('headerCurrencyCode').value = currencyCode;
+    document.getElementById('headerCurrencyForm').submit();
+}
+
+// Country selection function
+function selectCountry(countryId) {
+    // Create form dynamically
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '{% url "accounts:set_country_preference" %}';
+
+    // Add CSRF token
+    const csrfInput = document.createElement('input');
+    csrfInput.type = 'hidden';
+    csrfInput.name = 'csrfmiddlewaretoken';
+    csrfInput.value = '{{ csrf_token }}';
+    form.appendChild(csrfInput);
+
+    // Add country ID
+    const countryInput = document.createElement('input');
+    countryInput.type = 'hidden';
+    countryInput.name = 'country_id';
+    countryInput.value = countryId;
+    form.appendChild(countryInput);
+
+    // Add redirect path
+    const redirectInput = document.createElement('input');
+    redirectInput.type = 'hidden';
+    redirectInput.name = 'redirect_to';
+    redirectInput.value = window.location.pathname;
+    form.appendChild(redirectInput);
+
+    document.body.appendChild(form);
+    form.submit();
+}
+
+// Country search functionality
+document.getElementById('countrySearch')?.addEventListener('input', function() {
+    const searchTerm = this.value.toLowerCase();
+    const countryOptions = document.querySelectorAll('.country-option');
+
+    countryOptions.forEach(option => {
+        const countryName = option.dataset.countryName.toLowerCase();
+        if (countryName.includes(searchTerm)) {
+            option.style.display = 'block';
+        } else {
+            option.style.display = 'none';
+        }
+    });
+});
+
+// Prevent dropdown from closing when clicking inside
+document.querySelectorAll('.easymarket-currency-menu, .easymarket-location-dropdown .dropdown-menu').forEach(menu => {
+    menu.addEventListener('click', function(e) {
+        if (e.target.tagName !== 'A') {
+            e.stopPropagation();
+        }
+    });
 });
 </script>
 

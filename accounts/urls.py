@@ -49,4 +49,10 @@ urlpatterns = [
         name="password_reset_complete",
     ),
 
+    # Currency and Country Preferences (NEW)
+    path('set-currency/', views.set_currency_preference, name='set_currency_preference'),
+    path('set-country/', views.set_country_preference, name='set_country_preference'),
+    path('update-preferences/', views.update_preferences, name='update_preferences'),
+    path('quick-currency-switch/', views.quick_currency_switch, name='quick_currency_switch'),
+
 ]

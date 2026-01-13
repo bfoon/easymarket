@@ -528,36 +528,43 @@
 
                 <!-- Pricing -->
                 <div class="row g-3">
-                  <div class="col-md-6">
-                    <div class="mb-3">
-                      <label for="{{ product_form.price.id_for_label }}" class="form-label fw-bold">
-                        Current Price (D) <span class="text-danger">*</span>
-                      </label>
-                      <div class="input-group">
-                        <span class="input-group-text">D</span>
-                        {{ product_form.price }}
-                      </div>
-                      <div id="{{ product_form.price.id_for_label }}-feedback" class="invalid-feedback">
-                        {% if product_form.price.errors %}{{ product_form.price.errors.0 }}{% endif %}
-                      </div>
-                    </div>
-                  </div>
+  <div class="col-md-6">
+    <div class="mb-3">
+      <label for="{{ product_form.price.id_for_label }}" class="form-label fw-bold">
+        Current Price ({{ request.user.preferred_currency.code|default:"GMD" }}) <span class="text-danger">*</span>
+      </label>
+      <div class="input-group">
+        <span class="input-group-text currency-symbol">{{ request.user.preferred_currency.symbol|default:"D" }}</span>
+        {{ product_form.price }}
+      </div>
+      <div id="{{ product_form.price.id_for_label }}-feedback" class="invalid-feedback">
+        {% if product_form.price.errors %}{{ product_form.price.errors.0 }}{% endif %}
+      </div>
+      <div class="form-text">
+        <small class="text-muted">
+          <i class="fas fa-info-circle me-1"></i>
+          Prices stored in GMD • Displayed in: {{ request.user.preferred_currency.code|default:"GMD" }}
+        </small>
+      </div>
+    </div>
+  </div>
 
-                  <div class="col-md-6">
-                    <div class="mb-3">
-                      <label for="{{ product_form.original_price.id_for_label }}" class="form-label fw-bold">Original Price (D)</label>
-                      <div class="input-group">
-                        <span class="input-group-text">D</span>
-                        {{ product_form.original_price }}
-                      </div>
-                      <div id="{{ product_form.original_price.id_for_label }}-feedback" class="invalid-feedback">
-                        {% if product_form.original_price.errors %}{{ product_form.original_price.errors.0 }}{% endif %}
-                      </div>
-                      <div class="form-text"><small id="discountInfo" class="em-muted"></small></div>
-                    </div>
-                  </div>
-                </div>
-
+  <div class="col-md-6">
+    <div class="mb-3">
+      <label for="{{ product_form.original_price.id_for_label }}" class="form-label fw-bold">
+        Original Price ({{ request.user.preferred_currency.code|default:"GMD" }})
+      </label>
+      <div class="input-group">
+        <span class="input-group-text currency-symbol">{{ request.user.preferred_currency.symbol|default:"D" }}</span>
+        {{ product_form.original_price }}
+      </div>
+      <div id="{{ product_form.original_price.id_for_label }}-feedback" class="invalid-feedback">
+        {% if product_form.original_price.errors %}{{ product_form.original_price.errors.0 }}{% endif %}
+      </div>
+      <div class="form-text"><small id="discountInfo" class="em-muted"></small></div>
+    </div>
+  </div>
+</div>
                 <!-- Active Promo Codes -->
                 {% if product.promo_codes.exists %}
                 <div class="mb-3">
@@ -1485,6 +1492,37 @@
     hiddenInput.name = 'image_variant_data';
     hiddenInput.value = JSON.stringify(imageVariantData);
     this.appendChild(hiddenInput);
+  });
+  // Enhanced Currency-Aware Discount Calculator
+  document.addEventListener('DOMContentLoaded', function() {
+    const priceInput = document.querySelector('[name="price"]');
+    const originalPriceInput = document.querySelector('[name="original_price"]');
+    const discountInfo = document.getElementById('discountInfo');
+
+    function updateDiscountInfo() {
+      const price = parseFloat(priceInput?.value) || 0;
+      const originalPrice = parseFloat(originalPriceInput?.value) || 0;
+
+      if (price && originalPrice && originalPrice > price) {
+        const discount = ((originalPrice - price) / originalPrice * 100).toFixed(2);
+        const currencySymbol = '{{ request.user.preferred_currency.symbol|default:"D" }}';
+        const savings = (originalPrice - price).toFixed(2);
+
+        discountInfo.innerHTML = `
+          <i class="fas fa-tag text-success me-1"></i>
+          <span class="text-success fw-bold">${discount}% OFF</span>
+          <span class="text-muted"> • Save ${currencySymbol}${savings}</span>
+        `;
+      } else {
+        discountInfo.innerHTML = '';
+      }
+    }
+
+    priceInput?.addEventListener('input', updateDiscountInfo);
+    originalPriceInput?.addEventListener('input', updateDiscountInfo);
+
+    // Run on page load
+    updateDiscountInfo();
   });
 </script>
 
