@@ -149,114 +149,125 @@
                 </div>
 
                 <!-- NEW: Preferences Tab -->
-                <div class="tab-pane fade" id="preferences" role="tabpanel">
-                  <div class="preferences-header mb-4">
-                    <h5 class="mb-2"><i class="fas fa-globe me-2 text-primary"></i>Regional Preferences</h5>
-                    <p class="text-muted mb-0">Customize your shopping experience by setting your preferred currency and location</p>
+          <div class="tab-pane fade" id="preferences" role="tabpanel">
+  <div class="preferences-header mb-4">
+    <h5 class="mb-2"><i class="fas fa-globe me-2 text-primary"></i>Regional Preferences</h5>
+    <p class="text-muted mb-0">Customize your shopping experience by setting your preferred currency and location</p>
+  </div>
+
+  <form method="post" action="{% url 'accounts:update_preferences' %}" class="enhanced-form">
+    {% csrf_token %}
+
+    <!-- Currency Preference Section -->
+    <div class="preference-section mb-4">
+      <div class="row align-items-start">
+        <div class="col-md-4">
+          <label class="form-label fw-semibold mb-md-0">
+            <i class="fas fa-coins text-warning me-2"></i>Preferred Currency
+          </label>
+          <small class="d-block text-muted">Prices will be displayed in this currency</small>
+        </div>
+        <div class="col-md-8">
+          <select name="preferred_currency" class="form-select form-select-lg" id="currencySelect">
+            <option value="">-- Select Currency --</option>
+            {% for currency in currencies %}
+              <option value="{{ currency.id }}"
+                      data-symbol="{{ currency.symbol }}"
+                      data-code="{{ currency.code }}"
+                      data-flag="{% if currency.code == 'GMD' %}🇬🇲{% elif currency.code == 'USD' %}🇺🇸{% elif currency.code == 'EUR' %}🇪🇺{% elif currency.code == 'GBP' %}🇬🇧{% elif currency.code == 'CNY' %}🇨🇳{% elif currency.code == 'JPY' %}🇯🇵{% elif currency.code == 'AUD' %}🇦🇺{% elif currency.code == 'CAD' %}🇨🇦{% elif currency.code == 'CHF' %}🇨🇭{% elif currency.code == 'INR' %}🇮🇳{% elif currency.code == 'NGN' %}🇳🇬{% elif currency.code == 'ZAR' %}🇿🇦{% elif currency.code == 'KES' %}🇰🇪{% elif currency.code == 'GHS' %}🇬🇭{% elif currency.code == 'XOF' %}🇸🇳{% elif currency.code == 'EGP' %}🇪🇬{% elif currency.code == 'MAD' %}🇲🇦{% elif currency.code == 'AED' %}🇦🇪{% elif currency.code == 'SAR' %}🇸🇦{% elif currency.code == 'BRL' %}🇧🇷{% elif currency.code == 'MXN' %}🇲🇽{% elif currency.code == 'RUB' %}🇷🇺{% elif currency.code == 'KRW' %}🇰🇷{% elif currency.code == 'SGD' %}🇸🇬{% elif currency.code == 'HKD' %}🇭🇰{% elif currency.code == 'NZD' %}🇳🇿{% elif currency.code == 'SEK' %}🇸🇪{% elif currency.code == 'NOK' %}🇳🇴{% elif currency.code == 'DKK' %}🇩🇰{% elif currency.code == 'PLN' %}🇵🇱{% else %}🌐{% endif %}"
+                      {% if user.preferred_currency.id == currency.id %}selected{% endif %}>
+                {% if currency.code == 'GMD' %}🇬🇲 {% elif currency.code == 'USD' %}🇺🇸 {% elif currency.code == 'EUR' %}🇪🇺 {% elif currency.code == 'GBP' %}🇬🇧 {% elif currency.code == 'CNY' %}🇨🇳 {% elif currency.code == 'JPY' %}🇯🇵 {% elif currency.code == 'AUD' %}🇦🇺 {% elif currency.code == 'CAD' %}🇨🇦 {% elif currency.code == 'CHF' %}🇨🇭 {% elif currency.code == 'INR' %}🇮🇳 {% elif currency.code == 'NGN' %}🇳🇬 {% elif currency.code == 'ZAR' %}🇿🇦 {% elif currency.code == 'KES' %}🇰🇪 {% elif currency.code == 'GHS' %}🇬🇭 {% elif currency.code == 'XOF' %}🇸🇳 {% elif currency.code == 'EGP' %}🇪🇬 {% elif currency.code == 'MAD' %}🇲🇦 {% elif currency.code == 'AED' %}🇦🇪 {% elif currency.code == 'SAR' %}🇸🇦 {% elif currency.code == 'BRL' %}🇧🇷 {% elif currency.code == 'MXN' %}🇲🇽 {% elif currency.code == 'RUB' %}🇷🇺 {% elif currency.code == 'KRW' %}🇰🇷 {% elif currency.code == 'SGD' %}🇸🇬 {% elif currency.code == 'HKD' %}🇭🇰 {% elif currency.code == 'NZD' %}🇳🇿 {% elif currency.code == 'SEK' %}🇸🇪 {% elif currency.code == 'NOK' %}🇳🇴 {% elif currency.code == 'DKK' %}🇩🇰 {% elif currency.code == 'PLN' %}🇵🇱 {% else %}🌐 {% endif %}{{ currency.symbol }} {{ currency.code }} - {{ currency.name }}
+              </option>
+            {% endfor %}
+          </select>
+
+          {% if user.preferred_currency %}
+          <div class="alert alert-info mt-3 mb-0">
+            <small>
+              <i class="fas fa-info-circle me-1"></i>
+              Current preference: <strong>{{ user.preferred_currency.name }} ({{ user.preferred_currency.symbol }})</strong>
+              <br>
+              {% if user.preferred_currency.code != "GMD" %}
+                {% get_exchange_rate "GMD" user.preferred_currency.code as sample_rate %}
+                {% if sample_rate %}
+                  Sample: 100 GMD ≈ {{ sample_rate|multiply:100|floatformat:2 }} {{ user.preferred_currency.code }}
+                {% endif %}
+              {% endif %}
+            </small>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <hr class="my-4">
+
+    <!-- Country Preference Section -->
+    <div class="preference-section mb-4">
+      <div class="row align-items-start">
+        <div class="col-md-4">
+          <label class="form-label fw-semibold mb-md-0">
+            <i class="fas fa-flag text-danger me-2"></i>Country/Region
+          </label>
+          <small class="d-block text-muted">Your primary location for shipping</small>
+        </div>
+        <div class="col-md-8">
+          <select name="country" class="form-select form-select-lg" id="countrySelect">
+            <option value="">-- Select Country --</option>
+            {% for country in countries %}
+              <option value="{{ country.id }}"
+                      data-code="{{ country.code }}"
+                      data-phone="{{ country.phone_code }}"
+                      data-currency="{{ country.currency.code }}"
+                      data-flag="{{ country.flag_emoji|default:'🌐' }}"
+                      {% if user.address_set.first.country.id == country.id %}selected{% endif %}>
+                {{ country.flag_emoji|default:'🌐' }} {{ country.name }} ({{ country.code }})
+              </option>
+            {% endfor %}
+          </select>
+
+          <div class="country-info mt-3" id="countryInfo" style="display: none;">
+            <div class="card bg-light border-0">
+              <div class="card-body p-3">
+                <div class="row g-3">
+                  <div class="col-12">
+                    <div class="d-flex align-items-center gap-2">
+                      <span class="country-flag-display fs-1" id="selectedCountryFlag">🌐</span>
+                      <div>
+                        <h6 class="mb-0" id="selectedCountryName">Country Name</h6>
+                        <small class="text-muted">Selected Country</small>
+                      </div>
+                    </div>
                   </div>
+                  <div class="col-6">
+                    <small class="text-muted d-block">Country Code</small>
+                    <strong id="selectedCountryCode">--</strong>
+                  </div>
+                  <div class="col-6">
+                    <small class="text-muted d-block">Phone Code</small>
+                    <strong id="selectedPhoneCode">--</strong>
+                  </div>
+                  <div class="col-12">
+                    <small class="text-muted d-block">Default Currency</small>
+                    <strong id="selectedCurrency">--</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
-                  <form method="post" action="{% url 'accounts:update_preferences' %}" class="enhanced-form">
-                    {% csrf_token %}
-
-                    <!-- Currency Preference -->
-                    <div class="preference-section mb-4">
-                      <div class="row align-items-center">
-                        <div class="col-md-4">
-                          <label class="form-label fw-semibold mb-md-0">
-                            <i class="fas fa-coins text-warning me-2"></i>Preferred Currency
-                          </label>
-                          <small class="d-block text-muted">Prices will be displayed in this currency</small>
-                        </div>
-                        <div class="col-md-8">
-                          <select name="preferred_currency" class="form-select form-select-lg" id="currencySelect">
-                            <option value="">-- Select Currency --</option>
-                            {% for currency in currencies %}
-                              <option value="{{ currency.id }}"
-                                      data-symbol="{{ currency.symbol }}"
-                                      data-code="{{ currency.code }}"
-                                      {% if user.preferred_currency.id == currency.id %}selected{% endif %}>
-                                {{ currency.symbol }} {{ currency.code }} - {{ currency.name }}
-                              </option>
-                            {% endfor %}
-                          </select>
-
-                          {% if user.preferred_currency %}
-                          <div class="alert alert-info mt-3 mb-0">
-                            <small>
-                              <i class="fas fa-info-circle me-1"></i>
-                              Current preference: <strong>{{ user.preferred_currency.name }} ({{ user.preferred_currency.symbol }})</strong>
-                              <br>
-                              {% if user.preferred_currency.code != "GMD" %}
-                                {% get_exchange_rate "GMD" user.preferred_currency.code as sample_rate %}
-                                {% if sample_rate %}
-                                  Sample: 100 GMD ≈ {{ sample_rate|multiply:100|floatformat:2 }} {{ user.preferred_currency.code }}
-                                {% endif %}
-                              {% endif %}
-                            </small>
-                          </div>
-                          {% endif %}
-                        </div>
-                      </div>
-                    </div>
-
-                    <hr class="my-4">
-
-                    <!-- Country Preference -->
-                    <div class="preference-section mb-4">
-                      <div class="row align-items-center">
-                        <div class="col-md-4">
-                          <label class="form-label fw-semibold mb-md-0">
-                            <i class="fas fa-flag text-danger me-2"></i>Country/Region
-                          </label>
-                          <small class="d-block text-muted">Your primary location for shipping</small>
-                        </div>
-                        <div class="col-md-8">
-                          <select name="country" class="form-select form-select-lg" id="countrySelect">
-                            <option value="">-- Select Country --</option>
-                            {% for country in countries %}
-                              <option value="{{ country.id }}"
-                                      data-code="{{ country.code }}"
-                                      data-phone="{{ country.phone_code }}"
-                                      data-currency="{{ country.currency.code }}"
-                                      {% if user.address_set.first.country.id == country.id %}selected{% endif %}>
-                                {{ country.name }} ({{ country.code }})
-                              </option>
-                            {% endfor %}
-                          </select>
-
-                          <div class="country-info mt-3" id="countryInfo" style="display: none;">
-                            <div class="card bg-light border-0">
-                              <div class="card-body p-3">
-                                <div class="row g-2">
-                                  <div class="col-6">
-                                    <small class="text-muted d-block">Country Code</small>
-                                    <strong id="selectedCountryCode">--</strong>
-                                  </div>
-                                  <div class="col-6">
-                                    <small class="text-muted d-block">Phone Code</small>
-                                    <strong id="selectedPhoneCode">--</strong>
-                                  </div>
-                                  <div class="col-12">
-                                    <small class="text-muted d-block">Default Currency</small>
-                                    <strong id="selectedCurrency">--</strong>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div class="mt-4 d-flex gap-2">
-                      <button type="submit" name="update_preferences" class="btn btn-primary px-4">
-                        <i class="fas fa-save me-2"></i>Save Preferences
-                      </button>
-                      <button type="button" class="btn btn-outline-secondary px-4" onclick="location.reload()">
-                        <i class="fas fa-undo me-2"></i>Cancel
-                      </button>
-                    </div>
-                  </form>
+    <div class="mt-4 d-flex gap-2">
+      <button type="submit" name="update_preferences" class="btn btn-primary px-4">
+        <i class="fas fa-save me-2"></i>Save Preferences
+      </button>
+      <button type="button" class="btn btn-outline-secondary px-4" onclick="location.reload()">
+        <i class="fas fa-undo me-2"></i>Cancel
+      </button>
+    </div>
+  </form>
 
                   <!-- Exchange Rate Info -->
                   <div class="mt-4 pt-4 border-top">
@@ -449,69 +460,189 @@
         <!-- Right Column - Quick Actions & Stats -->
         <div class="col-lg-4">
           <!-- Currency Quick Switch Card -->
-          <div class="card shadow-sm border-0 rounded-4 mb-4">
-            <div class="card-body p-4">
-              <h6 class="card-title mb-3">
-                <i class="fas fa-bolt text-warning me-2"></i>Quick Currency Switch
-              </h6>
-              <div class="btn-group-vertical w-100" role="group">
-                <form method="post" action="{% url 'accounts:quick_currency_switch' %}" id="quickCurrencyForm">
-                  {% csrf_token %}
-                  <input type="hidden" name="currency_code" id="quickCurrencyCode">
-                </form>
+          <div class="mt-5">
+    <h6 class="mb-3 fw-semibold">
+      <i class="fas fa-bolt text-warning me-2"></i>Quick Currency Switch
+    </h6>
+    <p class="text-muted small mb-3">Instantly switch to popular currencies</p>
 
-                <!-- GMD -->
-                <button type="button"
-                        class="btn btn-outline-primary text-start mb-2 quick-currency-btn {% if user.preferred_currency.code == 'GMD' %}active{% endif %}"
-                        data-currency="GMD"
-                        onclick="switchCurrency('GMD')">
-                  <i class="fas fa-coins me-2"></i>
-                  <span class="fw-bold">GMD</span>
-                  <small class="text-muted ms-2">D</small>
-                </button>
-
-                <!-- USD -->
-                <button type="button"
-                        class="btn btn-outline-primary text-start mb-2 quick-currency-btn {% if user.preferred_currency.code == 'USD' %}active{% endif %}"
-                        data-currency="USD"
-                        onclick="switchCurrency('USD')">
-                  <i class="fas fa-coins me-2"></i>
-                  <span class="fw-bold">USD</span>
-                  <small class="text-muted ms-2">$</small>
-                </button>
-
-                <!-- EUR -->
-                <button type="button"
-                        class="btn btn-outline-primary text-start mb-2 quick-currency-btn {% if user.preferred_currency.code == 'EUR' %}active{% endif %}"
-                        data-currency="EUR"
-                        onclick="switchCurrency('EUR')">
-                  <i class="fas fa-coins me-2"></i>
-                  <span class="fw-bold">EUR</span>
-                  <small class="text-muted ms-2">€</small>
-                </button>
-
-                <!-- GBP -->
-                <button type="button"
-                        class="btn btn-outline-primary text-start mb-2 quick-currency-btn {% if user.preferred_currency.code == 'GBP' %}active{% endif %}"
-                        data-currency="GBP"
-                        onclick="switchCurrency('GBP')">
-                  <i class="fas fa-coins me-2"></i>
-                  <span class="fw-bold">GBP</span>
-                  <small class="text-muted ms-2">£</small>
-                </button>
-
-                <!-- CNY -->
-                <button type="button"
-                        class="btn btn-outline-primary text-start mb-2 quick-currency-btn {% if user.preferred_currency.code == 'CNY' %}active{% endif %}"
-                        data-currency="CNY"
-                        onclick="switchCurrency('CNY')">
-                  <i class="fas fa-coins me-2"></i>
-                  <span class="fw-bold">CNY</span>
-                  <small class="text-muted ms-2">¥</small>
-                </button>
+    <div class="row g-2">
+      <!-- GMD -->
+      <div class="col-md-6">
+        <button type="button"
+                class="btn btn-outline-primary text-start w-100 quick-currency-btn {% if user.preferred_currency.code == 'GMD' %}active{% endif %}"
+                data-currency="GMD"
+                onclick="switchCurrency('GMD')">
+          <div class="d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center gap-2">
+              <span class="currency-flag-btn">🇬🇲</span>
+              <div>
+                <div class="fw-bold">GMD</div>
+                <small class="text-muted">Gambian Dalasi</small>
               </div>
             </div>
+            <span class="fw-bold">D</span>
           </div>
+        </button>
+      </div>
+
+      <!-- USD -->
+      <div class="col-md-6">
+        <button type="button"
+                class="btn btn-outline-primary text-start w-100 quick-currency-btn {% if user.preferred_currency.code == 'USD' %}active{% endif %}"
+                data-currency="USD"
+                onclick="switchCurrency('USD')">
+          <div class="d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center gap-2">
+              <span class="currency-flag-btn">🇺🇸</span>
+              <div>
+                <div class="fw-bold">USD</div>
+                <small class="text-muted">US Dollar</small>
+              </div>
+            </div>
+            <span class="fw-bold">$</span>
+          </div>
+        </button>
+      </div>
+
+      <!-- EUR -->
+      <div class="col-md-6">
+        <button type="button"
+                class="btn btn-outline-primary text-start w-100 quick-currency-btn {% if user.preferred_currency.code == 'EUR' %}active{% endif %}"
+                data-currency="EUR"
+                onclick="switchCurrency('EUR')">
+          <div class="d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center gap-2">
+              <span class="currency-flag-btn">🇪🇺</span>
+              <div>
+                <div class="fw-bold">EUR</div>
+                <small class="text-muted">Euro</small>
+              </div>
+            </div>
+            <span class="fw-bold">€</span>
+          </div>
+        </button>
+      </div>
+
+      <!-- GBP -->
+      <div class="col-md-6">
+        <button type="button"
+                class="btn btn-outline-primary text-start w-100 quick-currency-btn {% if user.preferred_currency.code == 'GBP' %}active{% endif %}"
+                data-currency="GBP"
+                onclick="switchCurrency('GBP')">
+          <div class="d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center gap-2">
+              <span class="currency-flag-btn">🇬🇧</span>
+              <div>
+                <div class="fw-bold">GBP</div>
+                <small class="text-muted">British Pound</small>
+              </div>
+            </div>
+            <span class="fw-bold">£</span>
+          </div>
+        </button>
+      </div>
+
+      <!-- CNY -->
+      <div class="col-md-6">
+        <button type="button"
+                class="btn btn-outline-primary text-start w-100 quick-currency-btn {% if user.preferred_currency.code == 'CNY' %}active{% endif %}"
+                data-currency="CNY"
+                onclick="switchCurrency('CNY')">
+          <div class="d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center gap-2">
+              <span class="currency-flag-btn">🇨🇳</span>
+              <div>
+                <div class="fw-bold">CNY</div>
+                <small class="text-muted">Chinese Yuan</small>
+              </div>
+            </div>
+            <span class="fw-bold">¥</span>
+          </div>
+        </button>
+      </div>
+
+      <!-- NGN -->
+      <div class="col-md-6">
+        <button type="button"
+                class="btn btn-outline-primary text-start w-100 quick-currency-btn {% if user.preferred_currency.code == 'NGN' %}active{% endif %}"
+                data-currency="NGN"
+                onclick="switchCurrency('NGN')">
+          <div class="d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center gap-2">
+              <span class="currency-flag-btn">🇳🇬</span>
+              <div>
+                <div class="fw-bold">NGN</div>
+                <small class="text-muted">Nigerian Naira</small>
+              </div>
+            </div>
+            <span class="fw-bold">₦</span>
+          </div>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Exchange Rate Preview -->
+  <div class="mt-4">
+    <h6 class="mb-3 fw-semibold">
+      <i class="fas fa-chart-line text-success me-2"></i>Live Exchange Rates
+    </h6>
+    <div class="row g-2">
+      <div class="col-md-3 col-6">
+        <div class="card border-0 bg-light">
+          <div class="card-body p-2 text-center">
+            <div class="mb-1">🇺🇸 USD</div>
+            <small class="text-muted">1 GMD =</small>
+            <div class="fw-bold">
+              {% get_exchange_rate "GMD" "USD" as usd_rate %}
+              {{ usd_rate|floatformat:4 }}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3 col-6">
+        <div class="card border-0 bg-light">
+          <div class="card-body p-2 text-center">
+            <div class="mb-1">🇪🇺 EUR</div>
+            <small class="text-muted">1 GMD =</small>
+            <div class="fw-bold">
+              {% get_exchange_rate "GMD" "EUR" as eur_rate %}
+              {{ eur_rate|floatformat:4 }}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3 col-6">
+        <div class="card border-0 bg-light">
+          <div class="card-body p-2 text-center">
+            <div class="mb-1">🇬🇧 GBP</div>
+            <small class="text-muted">1 GMD =</small>
+            <div class="fw-bold">
+              {% get_exchange_rate "GMD" "GBP" as gbp_rate %}
+              {{ gbp_rate|floatformat:4 }}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-3 col-6">
+        <div class="card border-0 bg-light">
+          <div class="card-body p-2 text-center">
+            <div class="mb-1">🇨🇳 CNY</div>
+            <small class="text-muted">1 GMD =</small>
+            <div class="fw-bold">
+              {% get_exchange_rate "GMD" "CNY" as cny_rate %}
+              {{ cny_rate|floatformat:4 }}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <small class="text-muted d-block mt-2">
+      <i class="fas fa-sync-alt me-1"></i>
+      Exchange rates are updated daily from multiple providers
+    </small>
+  </div>
 
           <!-- Orders Summary (from original template) -->
           <div class="card shadow-sm border-0 rounded-4">
@@ -929,6 +1060,68 @@
       font-size: 0.875rem;
     }
 
+    /* Currency flag in quick switcher buttons */
+.currency-flag-btn {
+  font-size: 1.5rem;
+  line-height: 1;
+  display: inline-block;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.1));
+}
+
+/* Country flag display in info card */
+.country-flag-display {
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+}
+
+/* Quick currency buttons */
+.quick-currency-btn {
+  padding: 0.75rem 1rem;
+  border: 2px solid #dee2e6;
+  transition: all 0.2s ease;
+}
+
+.quick-currency-btn:hover {
+  border-color: #0d6efd;
+  background-color: #f8f9fa;
+  transform: translateX(2px);
+}
+
+.quick-currency-btn.active {
+  background: linear-gradient(135deg, #e7f3ff 0%, #cfe7ff 100%);
+  border-color: #0d6efd;
+  border-width: 2px;
+  box-shadow: 0 2px 8px rgba(13, 110, 253, 0.2);
+}
+
+/* Fade in animation */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Select dropdown with flags */
+#currencySelect option,
+#countrySelect option {
+  padding: 8px;
+}
+
+/* Exchange rate cards */
+.card.border-0.bg-light {
+  transition: all 0.2s ease;
+}
+
+.card.border-0.bg-light:hover {
+  background-color: #e9ecef !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
     .address-grid {
       grid-template-columns: 1fr;
     }
@@ -958,6 +1151,70 @@
     animation-delay: 0.2s;
   }
 </style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const countrySelect = document.getElementById('countrySelect');
+  const countryInfo = document.getElementById('countryInfo');
+
+  if (countrySelect) {
+    // Show country info on change
+    countrySelect.addEventListener('change', function() {
+      const selectedOption = this.options[this.selectedIndex];
+
+      if (this.value) {
+        // Get data attributes
+        const flag = selectedOption.dataset.flag || '🌐';
+        const code = selectedOption.dataset.code || '--';
+        const phone = selectedOption.dataset.phone || '--';
+        const currency = selectedOption.dataset.currency || '--';
+        const name = selectedOption.text.split('(')[0].trim().replace(/^[🌐-🇿🇼]\s*/, '');
+
+        // Update display
+        document.getElementById('selectedCountryFlag').textContent = flag;
+        document.getElementById('selectedCountryName').textContent = name;
+        document.getElementById('selectedCountryCode').textContent = code;
+        document.getElementById('selectedPhoneCode').textContent = phone;
+        document.getElementById('selectedCurrency').textContent = currency;
+
+        // Show info card with animation
+        countryInfo.style.display = 'block';
+        countryInfo.style.animation = 'fadeInUp 0.3s ease';
+      } else {
+        countryInfo.style.display = 'none';
+      }
+    });
+
+    // Trigger change if already selected
+    if (countrySelect.value) {
+      countrySelect.dispatchEvent(new Event('change'));
+    }
+  }
+});
+
+// Quick currency switch function
+function switchCurrency(currencyCode) {
+  // Create and submit form
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = '{% url "accounts:quick_currency_switch" %}';
+
+  const csrfToken = document.createElement('input');
+  csrfToken.type = 'hidden';
+  csrfToken.name = 'csrfmiddlewaretoken';
+  csrfToken.value = '{{ csrf_token }}';
+  form.appendChild(csrfToken);
+
+  const currencyInput = document.createElement('input');
+  currencyInput.type = 'hidden';
+  currencyInput.name = 'currency_code';
+  currencyInput.value = currencyCode;
+  form.appendChild(currencyInput);
+
+  document.body.appendChild(form);
+  form.submit();
+}
+</script>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
