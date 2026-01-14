@@ -410,7 +410,6 @@
     </div>
 </li>
 
-<!-- Location/Country Selector (Optional - can be combined with currency or separate) -->
 <li class="nav-item dropdown easymarket-location-dropdown d-none d-lg-block">
     <a class="easymarket-nav-link nav-link"
        href="#"
@@ -418,7 +417,14 @@
        role="button"
        data-bs-toggle="dropdown"
        aria-expanded="false">
-        <i class="fas fa-map-marker-alt me-1"></i>
+        <!-- Show flag emoji in button -->
+        <span class="me-1">
+            {% if request.user.is_authenticated and request.user.address_set.first.country %}
+                {{ request.user.address_set.first.country.flag_emoji }}
+            {% else %}
+                🇬🇲
+            {% endif %}
+        </span>
         <span class="d-none d-xl-inline">
             {% if request.user.is_authenticated and request.user.address_set.first.country %}
                 {{ request.user.address_set.first.country.code }}
@@ -444,19 +450,25 @@
         </div>
 
         <div class="country-list" style="max-height: 300px; overflow-y: auto;">
-            {% for country in countries|slice:":10" %}
+            {% for country in countries|slice:":20" %}
                 <a href="#"
                    class="easymarket-dropdown-item country-option"
                    data-country-id="{{ country.id }}"
                    data-country-name="{{ country.name }}"
                    onclick="selectCountry({{ country.id }}); return false;">
-                    <div class="d-flex align-items-center">
-                        <span class="me-2">{{ country.code }}</span>
-                        <span>{{ country.name }}</span>
+                    <div class="d-flex align-items-center gap-2">
+                        <!-- FLAG EMOJI -->
+                        <span class="country-flag fs-4">{{ country.flag_emoji|default:"🌐" }}</span>
+                        <div class="flex-fill">
+                            <div class="fw-semibold">{{ country.name }}</div>
+                            <small class="text-muted d-flex align-items-center gap-1">
+                                <span>{{ country.code }}</span>
+                                <span>•</span>
+                                <i class="fas fa-coins"></i>
+                                <span>{{ country.currency.code }}</span>
+                            </small>
+                        </div>
                     </div>
-                    <small class="text-muted d-block ms-4">
-                        <i class="fas fa-coins me-1"></i>{{ country.currency.code }}
-                    </small>
                 </a>
             {% endfor %}
         </div>
@@ -863,6 +875,66 @@
   .easymarket-navbar .easymarket-categories-dropdown {
     position: static;
   }
+  /* Flag Emoji Styling */
+.currency-flag,
+.country-flag {
+    font-size: 1.5rem;
+    line-height: 1;
+    display: inline-block;
+}
+
+/* Currency dropdown item with flag */
+.easymarket-currency-menu .currency-option {
+    padding: 0.75rem 1rem;
+    transition: all 0.2s ease;
+    border-left: 3px solid transparent;
+}
+
+.easymarket-currency-menu .currency-option:hover {
+    background-color: #f8f9fa;
+    border-left-color: #0d6efd;
+    transform: translateX(2px);
+}
+
+.easymarket-currency-menu .currency-option.active {
+    background-color: #e7f3ff;
+    border-left-color: #0d6efd;
+}
+
+.easymarket-currency-menu .currency-option .currency-flag {
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.1));
+}
+
+/* Country dropdown item with flag */
+.country-option {
+    padding: 0.75rem 1rem;
+    transition: all 0.2s ease;
+    border-left: 3px solid transparent;
+}
+
+.country-option:hover {
+    background-color: #f8f9fa;
+    border-left-color: #10b981;
+    transform: translateX(2px);
+}
+
+.country-option .country-flag {
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.1));
+}
+
+/* Flag in navigation buttons */
+.easymarket-nav-link span.me-1 {
+    font-size: 1.25rem;
+    vertical-align: middle;
+}
+
+/* Mobile responsive flags */
+@media (max-width: 991.98px) {
+    .currency-flag,
+    .country-flag {
+        font-size: 1.25rem;
+    }
+}
 
   .easymarket-navbar .easymarket-categories-dropdown .dropdown-menu {
     margin-top: 0.4rem;

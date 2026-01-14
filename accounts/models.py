@@ -62,6 +62,7 @@ class Country(models.Model):
     numeric_code = models.CharField(max_length=3, blank=True, help_text="ISO 3166-1 numeric code")
     phone_code = models.CharField(max_length=10, blank=True, help_text="International dialing code (e.g., +220)")
     currency = models.ForeignKey('Currency', on_delete=models.SET_NULL, null=True, blank=True, related_name='countries')
+    flag_emoji = models.CharField(max_length=10, blank=True, help_text="Flag emoji for the country")
     is_active = models.BooleanField(default=True)
 
     class Meta:

@@ -318,7 +318,7 @@
         <div class="col-12 col-md-3">
           <div class="sod-stat">
             <div class="k">Subtotal</div>
-            <div class="v">D{{ order.subtotal|default:0|floatformat:2|intcomma }}</div>
+            <div class="v">{{ request.user.preferred_currency.symbol|default:"D" }}{{ order.subtotal|default:0|floatformat:2|intcomma }}</div>
             <div class="hint">Before shipping & discounts</div>
           </div>
         </div>
@@ -326,7 +326,7 @@
         <div class="col-12 col-md-3">
           <div class="sod-stat">
             <div class="k">Shipping</div>
-            <div class="v">D{{ order.shipping_cost|floatformat:2|intcomma }}</div>
+            <div class="v">{{ request.user.preferred_currency.symbol|default:"D" }}{{ order.shipping_cost|floatformat:2|intcomma }}</div>
             <div class="hint">{% if order.shipping_method %}{{ order.shipping_method }}{% else %}Not set{% endif %}</div>
           </div>
         </div>
@@ -335,7 +335,7 @@
           <div class="sod-stat">
             <div class="k">Grand Total</div>
             <div class="v">
-              D{{ grand_total|floatformat:2|intcomma }}
+              {{ request.user.preferred_currency.symbol|default:"D" }}{{ grand_total|floatformat:2|intcomma }}
             </div>
             <div class="hint">
               {% if order.is_b2b %}Final total depends on your pricing + shipping.{% else %}Automatically computed.{% endif %}
@@ -417,7 +417,7 @@
                                 {% if order.is_b2b and item.requested_unit_price %}
                                   <span class="ms-2 sod-chip">
                                     <i class="fas fa-handshake"></i>
-                                    Requested: D{{ item.requested_unit_price|floatformat:2|intcomma }}
+                                    Requested: {{ request.user.preferred_currency.symbol|default:"D" }}{{ item.requested_unit_price|floatformat:2|intcomma }}
                                   </span>
                                 {% endif %}
                               </div>
@@ -434,7 +434,7 @@
                         <td>
                           {% if order.is_b2b %}
                             {% if item.seller_unit_price %}
-                              <span class="fw-bold">D{{ item.seller_unit_price|floatformat:2|intcomma }}</span>
+                              <span class="fw-bold">{{ request.user.preferred_currency.symbol|default:"D" }}{{ item.seller_unit_price|floatformat:2|intcomma }}</span>
                               <div class="sod-mini text-muted">Seller price</div>
                             {% else %}
                               <span class="sod-chip pending"><i class="fas fa-exclamation-circle"></i>Not set</span>
@@ -442,13 +442,13 @@
                             {% endif %}
                           {% else %}
                             <span class="fw-bold">
-                              D{{ item.unit_price|default:item.product.price|floatformat:2|intcomma }}
+                              {{ item.unit_price|default:item.product.price|floatformat:2|intcomma }}
                             </span>
                           {% endif %}
                         </td>
 
                         <td class="fw-bold">
-                          D{% widthratio item.get_effective_unit_price 1 item.quantity as linetotal %}
+                          {{ request.user.preferred_currency.symbol|default:"D" }}{% widthratio item.get_effective_unit_price 1 item.quantity as linetotal %}
                           {{ linetotal|floatformat:2|intcomma }}
                         </td>
 
@@ -703,7 +703,7 @@
                         <td class="fw-bold">{{ item.quantity }}</td>
                        <td>
                           <div class="input-group">
-                            <span class="input-group-text">D</span>
+                            <span class="input-group-text">{{ request.user.preferred_currency.symbol|default:"D" }}</span>
                             <input
                               type="number"
                               step="0.01"
@@ -728,14 +728,14 @@
 
                           <div class="small text-muted mt-1">
                             {% if item.requested_unit_price %}
-                              Buyer requested: <strong>D{{ item.requested_unit_price|floatformat:2|intcomma }}</strong>
+                              Buyer requested: <strong>{{ request.user.preferred_currency.symbol|default:"D" }}{{ item.requested_unit_price|floatformat:2|intcomma }}</strong>
                             {% endif %}
                           </div>
                         </td>
 
                         <td class="small text-muted">
                           Default:
-                          D{% if item.product.b2b_price %}{{ item.product.b2b_price }} (B2B){% else %}{{ item.product.price }} (Retail){% endif %}
+                          {{ request.user.preferred_currency.symbol|default:"D" }}{% if item.product.b2b_price %}{{ item.product.b2b_price }} (B2B){% else %}{{ item.product.price }} (Retail){% endif %}
                         </td>
                       </tr>
                     {% endfor %}
@@ -1022,7 +1022,7 @@
           </div>
           <div class="modal-body">
             <form id="shippingCostForm">
-              <label class="form-label fw-bold">Shipping cost (D)</label>
+              <label class="form-label fw-bold">Shipping cost ({{ request.user.preferred_currency.symbol|default:"D" }})</label>
               <input type="number" min="0" step="0.01" class="form-control" name="shipping_cost" value="{{ order.shipping_cost|default:0 }}">
               <div class="form-text">This updates the order total immediately.</div>
               <div class="text-danger small mt-2 d-none" id="shipCostError"></div>
@@ -1090,7 +1090,7 @@
                     <tr>
                       <th>Item</th>
                       <th style="width:90px;">Qty</th>
-                      <th style="width:240px;">Unit Price (D)</th>
+                      <th style="width:240px;">Unit Price ({{ request.user.preferred_currency.symbol|default:"D" }})</th>
                       <th style="width:220px;">Reference</th>
                     </tr>
                   </thead>
@@ -1110,7 +1110,7 @@
 
                         <td>
                           <div class="input-group">
-                            <span class="input-group-text">D</span>
+                            <span class="input-group-text">{{ request.user.preferred_currency.symbol|default:"D" }}</span>
                             <input
                               type="number"
                               step="0.01"
@@ -1135,15 +1135,15 @@
 
                           <div class="small text-muted mt-1">
                             Effective now:
-                            <strong>D{{ item.get_effective_unit_price|floatformat:2|intcomma }}</strong>
+                            <strong>{{ request.user.preferred_currency.symbol|default:"D" }}{{ item.get_effective_unit_price|floatformat:2|intcomma }}</strong>
                           </div>
                         </td>
 
                         <td class="small text-muted">
                           {% if order.is_b2b %}
-                            B2B: D{{ item.product.b2b_price|default:item.product.price|floatformat:2|intcomma }}
+                            B2B: {{ request.user.preferred_currency.symbol|default:"D" }}{{ item.product.b2b_price|default:item.product.price|floatformat:2|intcomma }}
                           {% else %}
-                            Retail: D{{ item.product.price|floatformat:2|intcomma }}
+                            Retail: {{ request.user.preferred_currency.symbol|default:"D" }}{{ item.product.price|floatformat:2|intcomma }}
                           {% endif %}
                         </td>
                       </tr>
