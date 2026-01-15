@@ -4,7 +4,7 @@ from .models import (Product, Category, ProductImage, ProductView,
                      SearchHistory, PopularSearch, ProductFeature, ProductFeatureOption,
                      ProductVariant, SharedCart, Subscription, Career, CareerApplication,
                      PressRelease, InvestorDocument, InvestorEvent,
-                     SocialCart, CartMember, CartInvite, PaymentShare, Contribution)
+                     SocialCart, CartMember, CartInvite, PaymentShare, Contribution, Campaign, CampaignProduct, WheelSpin)
 from django.utils.html import format_html
 from django.urls import path
 from django.http import JsonResponse
@@ -12,7 +12,7 @@ from .utils import ColorUtils
 from django.http import HttpResponse
 from django.utils import timezone
 import csv
-
+from django.urls import reverse
 class CategoryAdmin(admin.ModelAdmin):
     list_display = ('name', 'parent',)
     list_filter = ('parent',)
@@ -228,3 +228,232 @@ class PaymentShareAdmin(admin.ModelAdmin):
 class ContributionAdmin(admin.ModelAdmin):
     list_display = ('social_cart','member','provider','amount','status','provider_ref','created_at')
     list_filter = ('provider','status')
+
+
+@admin.register(Campaign)
+class CampaignAdmin(admin.ModelAdmin):
+    list_display = [
+        'name', 'campaign_type', 'status_badge', 'start_date',
+        'end_date', 'total_views', 'total_spins', 'total_conversions',
+        'product_count', 'actions_column'
+    ]
+    list_filter = ['status', 'campaign_type', 'is_active', 'start_date', 'end_date']
+    search_fields = ['name', 'title', 'description', 'slug']  # REQUIRED for autocomplete
+    readonly_fields = [
+        'slug', 'total_views', 'total_spins', 'total_conversions',
+        'created_at', 'updated_at', 'created_by'
+    ]
+
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('name', 'slug', 'title', 'description', 'campaign_type')
+        }),
+        ('Schedule', {
+            'fields': ('start_date', 'end_date', 'status', 'is_active')
+        }),
+        ('Display Settings', {
+            'fields': ('banner_image', 'background_color', 'text_color')
+        }),
+        ('Wheel Configuration', {
+            'fields': ('enable_wheel', 'wheel_prizes', 'max_spins_per_user', 'require_login'),
+            'description': 'Configure the spinning wheel settings for this campaign.'
+        }),
+        ('Analytics', {
+            'fields': ('total_views', 'total_spins', 'total_conversions'),
+            'classes': ('collapse',)
+        }),
+        ('Meta', {
+            'fields': ('created_at', 'updated_at', 'created_by'),
+            'classes': ('collapse',)
+        })
+    )
+
+    def status_badge(self, obj):
+        colors = {
+            'draft': 'gray',
+            'scheduled': 'blue',
+            'active': 'green',
+            'ended': 'orange',
+            'cancelled': 'red'
+        }
+        color = colors.get(obj.status, 'gray')
+        return format_html(
+            '<span style="background: {}; color: white; padding: 4px 12px; '
+            'border-radius: 12px; font-size: 0.85rem; font-weight: 600;">{}</span>',
+            color, obj.get_status_display()
+        )
+
+    status_badge.short_description = 'Status'
+
+    def product_count(self, obj):
+        count = obj.campaign_products.count()
+        url = reverse('admin:marketplace_campaignproduct_changelist') + f'?campaign__id__exact={obj.id}'
+        return format_html('<a href="{}">{} products</a>', url, count)
+
+    product_count.short_description = 'Products'
+
+    def actions_column(self, obj):
+        if obj.is_running():
+            return format_html(
+                '<a class="button" href="{}">View Campaign</a>',
+                reverse('marketplace:campaign_detail', args=[obj.slug])
+            )
+        return '-'
+
+    actions_column.short_description = 'Actions'
+
+    def save_model(self, request, obj, form, change):
+        if not change:  # New object
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
+
+    class Media:
+        css = {
+            'all': ('admin/css/campaign_admin.css',)
+        }
+
+
+class CampaignProductInline(admin.TabularInline):
+    model = CampaignProduct
+    extra = 1
+    fields = ['product', 'discount_type', 'discount_value', 'position', 'is_featured', 'campaign_stock', 'stock_sold']
+    readonly_fields = ['stock_sold']
+    # Remove autocomplete_fields from inline to avoid errors
+    raw_id_fields = ['product']  # Use raw_id instead
+
+
+@admin.register(CampaignProduct)
+class CampaignProductAdmin(admin.ModelAdmin):
+    list_display = [
+        'product', 'campaign', 'discount_display', 'campaign_price_display',
+        'position', 'is_featured', 'stock_display', 'created_at'
+    ]
+    list_filter = ['campaign', 'discount_type', 'is_featured', 'created_at']
+    search_fields = ['product__name', 'campaign__name', 'campaign__title']  # REQUIRED for autocomplete
+    # Use raw_id_fields instead of autocomplete_fields to avoid the error
+    raw_id_fields = ['campaign', 'product']
+    readonly_fields = ['stock_sold', 'created_at']
+
+    fieldsets = (
+        ('Product & Campaign', {
+            'fields': ('campaign', 'product')
+        }),
+        ('Discount Configuration', {
+            'fields': ('discount_type', 'discount_value')
+        }),
+        ('Display Settings', {
+            'fields': ('position', 'is_featured')
+        }),
+        ('Stock Management', {
+            'fields': ('campaign_stock', 'stock_sold')
+        }),
+        ('Meta', {
+            'fields': ('created_at',),
+            'classes': ('collapse',)
+        })
+    )
+
+    def discount_display(self, obj):
+        if obj.discount_type == 'percentage':
+            return f'{obj.discount_value}%'
+        elif obj.discount_type == 'fixed':
+            return f'D{obj.discount_value}'
+        else:
+            return f'D{obj.discount_value} (Special)'
+
+    discount_display.short_description = 'Discount'
+
+    def campaign_price_display(self, obj):
+        price = obj.get_campaign_price()
+        original = obj.product.price
+        savings = original - price
+        return format_html(
+            '<strong>D{}</strong> <small>(was D{}, save D{})</small>',
+            price, original, savings
+        )
+
+    campaign_price_display.short_description = 'Campaign Price'
+
+    def stock_display(self, obj):
+        if obj.campaign_stock is None:
+            return format_html('<span style="color: green;">Unlimited</span>')
+
+        remaining = obj.remaining_stock()
+        if remaining == 0:
+            return format_html('<span style="color: red;">Sold Out ({}/{})</span>',
+                               obj.stock_sold, obj.campaign_stock)
+        elif remaining <= 5:
+            return format_html('<span style="color: orange;">Low Stock ({}/{})</span>',
+                               obj.stock_sold, obj.campaign_stock)
+        else:
+            return format_html('{}/{}', obj.stock_sold, obj.campaign_stock)
+
+    stock_display.short_description = 'Stock'
+
+
+@admin.register(WheelSpin)
+class WheelSpinAdmin(admin.ModelAdmin):
+    list_display = [
+        'user_display', 'campaign', 'prize_won', 'prize_type',
+        'prize_value', 'promo_code', 'is_redeemed', 'created_at'
+    ]
+    list_filter = ['campaign', 'prize_type', 'is_redeemed', 'created_at']
+    search_fields = ['user__email', 'user__username', 'session_key', 'prize_won', 'promo_code']  # Added search_fields
+    readonly_fields = [
+        'campaign', 'user', 'session_key', 'prize_won', 'prize_type',
+        'prize_value', 'promo_code', 'is_redeemed', 'redeemed_at',
+        'ip_address', 'user_agent', 'created_at'
+    ]
+
+    date_hierarchy = 'created_at'
+
+    fieldsets = (
+        ('Spin Information', {
+            'fields': ('campaign', 'user', 'session_key', 'created_at')
+        }),
+        ('Prize Details', {
+            'fields': ('prize_won', 'prize_type', 'prize_value', 'promo_code')
+        }),
+        ('Redemption', {
+            'fields': ('is_redeemed', 'redeemed_at')
+        }),
+        ('Technical', {
+            'fields': ('ip_address', 'user_agent'),
+            'classes': ('collapse',)
+        })
+    )
+
+    def user_display(self, obj):
+        if obj.user:
+            return obj.user.email
+        return f'Guest ({obj.session_key[:8]}...)'
+
+    user_display.short_description = 'User'
+
+    def has_add_permission(self, request):
+        # Prevent manual creation of spins
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        # Only allow viewing, not editing
+        return False
+
+
+# Optional: Custom admin actions for campaigns
+@admin.action(description='Activate selected campaigns')
+def activate_campaigns(modeladmin, request, queryset):
+    queryset.update(is_active=True)
+
+
+@admin.action(description='Deactivate selected campaigns')
+def deactivate_campaigns(modeladmin, request, queryset):
+    queryset.update(is_active=False)
+
+
+@admin.action(description='Cancel selected campaigns')
+def cancel_campaigns(modeladmin, request, queryset):
+    queryset.update(status=Campaign.Status.CANCELLED, is_active=False)
+
+
+# Add these actions to CampaignAdmin
+CampaignAdmin.actions = [activate_campaigns, deactivate_campaigns, cancel_campaigns]

@@ -73,5 +73,9 @@ urlpatterns = [
     path('cart/member/remove/<int:member_id>/', social_cart.remove_member, name='remove_member'),  # owner-only
     path("cart/split/set/", social_cart.set_split_mode, name="set_split_mode"),
 
+    # Campaign URLs
+    path('campaigns/<slug:slug>/', views.campaign_detail, name='campaign_detail'),
+    path('campaigns/<slug:slug>/spin/', views.spin_wheel, name='spin_wheel')
+
 
 ]

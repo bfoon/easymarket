@@ -2,7 +2,7 @@ from django.db import models
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.urls import reverse
-from django.db.models import Avg
+from django.db.models import Avg, F
 from decimal import Decimal
 from django.utils import timezone
 import os, uuid, secrets, string
@@ -329,6 +329,19 @@ class Product(models.Model):
         help_text="Auto-generated SKU in format: EM-XXXXXXXX"
     )
 
+    active_campaign = models.ForeignKey(
+        'Campaign',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='products',
+        help_text='Current active campaign for this product'
+    )
+    show_in_trending = models.BooleanField(
+        default=False,
+        help_text='Show in trending section (requires active trending campaign)'
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -566,6 +579,29 @@ class Product(models.Model):
         else:
             # Fallback to random if no ID yet
             return self.generate_sku()
+
+    # ---------- Campaign function----------
+
+    def get_campaign_info(self):
+        '''Get active campaign information for this product'''
+        if self.active_campaign and self.active_campaign.is_running():
+            try:
+                campaign_product = self.campaign_products.get(campaign=self.active_campaign)
+                return {
+                    'campaign': self.active_campaign,
+                    'campaign_price': campaign_product.get_campaign_price(),
+                    'discount_percentage': campaign_product.get_discount_percentage(),
+                    'discount_amount': campaign_product.get_discount_amount(),
+                    'time_remaining': self.active_campaign.time_remaining(),
+                }
+            except CampaignProduct.DoesNotExist:
+                pass
+        return None
+
+    def has_active_campaign(self):
+        '''Check if product has an active campaign'''
+        return self.active_campaign and self.active_campaign.is_running()
+
 
     # ---------- SAVE OVERRIDE (NOTIFICATIONS, PRICE HISTORY, WISHLIST) ----------
 
@@ -1552,3 +1588,286 @@ class InvestorEvent(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class Campaign(models.Model):
+    """
+    Marketing campaign model for flash promotions and special offers
+    """
+
+    class CampaignType(models.TextChoices):
+        FLASH_SALE = "flash_sale", "Flash Sale"
+        TRENDING = "trending", "Trending Promotion"
+        SEASONAL = "seasonal", "Seasonal Offer"
+        BUNDLE = "bundle", "Bundle Deal"
+        CLEARANCE = "clearance", "Clearance Sale"
+        NEW_ARRIVAL = "new_arrival", "New Arrival"
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        SCHEDULED = "scheduled", "Scheduled"
+        ACTIVE = "active", "Active"
+        ENDED = "ended", "Ended"
+        CANCELLED = "cancelled", "Cancelled"
+
+    name = models.CharField(max_length=200, help_text="Campaign name (internal)")
+    slug = models.SlugField(max_length=220, unique=True, blank=True)
+
+    # Campaign Details
+    title = models.CharField(max_length=200, help_text="Public-facing campaign title")
+    description = models.TextField(help_text="Campaign description for customers")
+    campaign_type = models.CharField(max_length=20, choices=CampaignType.choices, default=CampaignType.FLASH_SALE)
+
+    # Timing
+    start_date = models.DateTimeField()
+    end_date = models.DateTimeField()
+
+    # Status
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    is_active = models.BooleanField(default=True)
+
+    # Display Settings
+    banner_image = models.ImageField(upload_to='campaigns/banners/', blank=True, null=True)
+    background_color = models.CharField(max_length=7, default="#FF6B35", help_text="Hex color code")
+    text_color = models.CharField(max_length=7, default="#FFFFFF", help_text="Hex color code")
+
+    # Wheel Settings (for flash promotions)
+    enable_wheel = models.BooleanField(default=True, help_text="Show spinning wheel for this campaign")
+    wheel_prizes = models.JSONField(
+        default=list,
+        blank=True,
+        help_text='List of prizes like [{"label": "10% OFF", "probability": 0.3}, ...]'
+    )
+
+    # Engagement Limits
+    max_spins_per_user = models.IntegerField(default=1, help_text="Maximum spins per user")
+    require_login = models.BooleanField(default=False, help_text="Require login to participate")
+
+    # Analytics
+    total_views = models.IntegerField(default=0)
+    total_spins = models.IntegerField(default=0)
+    total_conversions = models.IntegerField(default=0)
+
+    # Meta
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='campaigns_created'
+    )
+
+    class Meta:
+        ordering = ['-start_date']
+        indexes = [
+            models.Index(fields=['status', 'start_date']),
+            models.Index(fields=['slug']),
+            models.Index(fields=['is_active']),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.get_status_display()})"
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            base = slugify(self.name)[:200]
+            candidate = base
+            i = 2
+            while Campaign.objects.filter(slug=candidate).exclude(pk=self.pk).exists():
+                candidate = f"{base}-{i}"
+                i += 1
+            self.slug = candidate
+
+        # Auto-update status based on dates
+        now = timezone.now()
+        if self.status != self.Status.CANCELLED:
+            if now < self.start_date:
+                self.status = self.Status.SCHEDULED
+            elif self.start_date <= now <= self.end_date:
+                self.status = self.Status.ACTIVE
+            elif now > self.end_date:
+                self.status = self.Status.ENDED
+
+        super().save(*args, **kwargs)
+
+    def is_running(self):
+        """Check if campaign is currently active"""
+        now = timezone.now()
+        return (
+                self.is_active and
+                self.status == self.Status.ACTIVE and
+                self.start_date <= now <= self.end_date
+        )
+
+    def time_remaining(self):
+        """Get time remaining in the campaign"""
+        if not self.is_running():
+            return None
+        return self.end_date - timezone.now()
+
+    def get_active_products(self):
+        """Get all active products in this campaign"""
+        return self.products.filter(is_active=True)
+
+    def increment_views(self):
+        """Increment view counter"""
+        self.total_views = F('total_views') + 1
+        self.save(update_fields=['total_views'])
+
+    def increment_spins(self):
+        """Increment spin counter"""
+        self.total_spins = F('total_spins') + 1
+        self.save(update_fields=['total_spins'])
+
+    def increment_conversions(self):
+        """Increment conversion counter"""
+        self.total_conversions = F('total_conversions') + 1
+        self.save(update_fields=['total_conversions'])
+
+
+class CampaignProduct(models.Model):
+    """
+    Link products to campaigns with specific promotion details
+    """
+    campaign = models.ForeignKey(Campaign, on_delete=models.CASCADE, related_name='campaign_products')
+    product = models.ForeignKey('Product', on_delete=models.CASCADE, related_name='campaign_products')
+
+    # Promotion Details
+    discount_type = models.CharField(
+        max_length=20,
+        choices=[
+            ('percentage', 'Percentage Off'),
+            ('fixed', 'Fixed Amount Off'),
+            ('special_price', 'Special Price'),
+        ],
+        default='percentage'
+    )
+    discount_value = models.DecimalField(max_digits=10, decimal_places=2)
+
+    # Display
+    position = models.IntegerField(default=0, help_text="Display order (lower = first)")
+    is_featured = models.BooleanField(default=False, help_text="Feature this product in the campaign")
+
+    # Stock
+    campaign_stock = models.IntegerField(null=True, blank=True, help_text="Limited stock for campaign")
+    stock_sold = models.IntegerField(default=0)
+
+    # Meta
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['position', '-created_at']
+        unique_together = ['campaign', 'product']
+        indexes = [
+            models.Index(fields=['campaign', 'is_featured']),
+            models.Index(fields=['position']),
+        ]
+
+    def __str__(self):
+        return f"{self.product.name} in {self.campaign.name}"
+
+    def get_campaign_price(self):
+        """Calculate the campaign price based on discount"""
+        base_price = self.product.price
+
+        if self.discount_type == 'percentage':
+            discount_amount = base_price * (self.discount_value / Decimal('100'))
+            return base_price - discount_amount
+        elif self.discount_type == 'fixed':
+            return max(base_price - self.discount_value, Decimal('0'))
+        elif self.discount_type == 'special_price':
+            return self.discount_value
+
+        return base_price
+
+    def get_discount_amount(self):
+        """Get the actual discount amount"""
+        return self.product.price - self.get_campaign_price()
+
+    def get_discount_percentage(self):
+        """Calculate discount percentage"""
+        if self.product.price > 0:
+            return int((self.get_discount_amount() / self.product.price) * 100)
+        return 0
+
+    def is_in_stock(self):
+        """Check if campaign stock is available"""
+        if self.campaign_stock is None:
+            return True  # Unlimited stock
+        return self.stock_sold < self.campaign_stock
+
+    def remaining_stock(self):
+        """Get remaining campaign stock"""
+        if self.campaign_stock is None:
+            return None  # Unlimited
+        return max(self.campaign_stock - self.stock_sold, 0)
+
+
+class WheelSpin(models.Model):
+    """
+    Track user spins on campaign wheels
+    """
+    campaign = models.ForeignKey(Campaign, on_delete=models.CASCADE, related_name='spins')
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='wheel_spins'
+    )
+    session_key = models.CharField(max_length=40, blank=True)
+
+    # Spin Result
+    prize_won = models.CharField(max_length=100)
+    prize_type = models.CharField(
+        max_length=20,
+        choices=[
+            ('discount', 'Discount'),
+            ('free_shipping', 'Free Shipping'),
+            ('gift', 'Free Gift'),
+            ('points', 'Loyalty Points'),
+            ('nothing', 'Try Again'),
+        ],
+        default='discount'
+    )
+    prize_value = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    # Redemption
+    is_redeemed = models.BooleanField(default=False)
+    redeemed_at = models.DateTimeField(null=True, blank=True)
+    promo_code = models.CharField(max_length=50, blank=True, help_text="Generated promo code for this prize")
+
+    # Meta
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['campaign', 'user']),
+            models.Index(fields=['session_key']),
+            models.Index(fields=['is_redeemed']),
+        ]
+
+    def __str__(self):
+        user_identifier = self.user.email if self.user else f"Session {self.session_key[:8]}"
+        return f"{user_identifier} won {self.prize_won} in {self.campaign.name}"
+
+    def generate_promo_code(self):
+        """Generate a unique promo code for this spin"""
+        if not self.promo_code:
+            prefix = 'WHEEL'
+            random_part = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(8))
+            self.promo_code = f"{prefix}{random_part}"
+            self.save(update_fields=['promo_code'])
+        return self.promo_code
+
+    def redeem(self):
+        """Mark prize as redeemed"""
+        if not self.is_redeemed:
+            self.is_redeemed = True
+            self.redeemed_at = timezone.now()
+            self.save(update_fields=['is_redeemed', 'redeemed_at'])

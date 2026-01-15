@@ -1153,7 +1153,65 @@
 </style>
 
 <script>
+// ============================================
+// QUICK CURRENCY SWITCH FUNCTION - GLOBAL
+// This MUST be defined before any HTML that uses it
+// ============================================
+function switchCurrency(currencyCode) {
+  console.log('switchCurrency called with:', currencyCode);
+
+  // Get CSRF token from existing form on the page
+  const existingCsrfInput = document.querySelector('input[name="csrfmiddlewaretoken"]');
+  const csrfToken = existingCsrfInput ? existingCsrfInput.value : '';
+
+  console.log('CSRF Token found:', csrfToken ? 'Yes' : 'No');
+  console.log('Currency code:', currencyCode);
+
+  if (!csrfToken) {
+    console.error('No CSRF token found!');
+    alert('Error: Unable to switch currency. Please refresh the page and try again.');
+    return;
+  }
+
+  // Create and submit form
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = '{% url "accounts:quick_currency_switch" %}';
+  form.style.display = 'none';
+
+  // Add CSRF token
+  const csrfInput = document.createElement('input');
+  csrfInput.type = 'hidden';
+  csrfInput.name = 'csrfmiddlewaretoken';
+  csrfInput.value = csrfToken;
+  form.appendChild(csrfInput);
+
+  // Add currency code
+  const currencyInput = document.createElement('input');
+  currencyInput.type = 'hidden';
+  currencyInput.name = 'currency_code';
+  currencyInput.value = currencyCode;
+  form.appendChild(currencyInput);
+
+  console.log('Form created, submitting...');
+  console.log('Action URL:', form.action);
+
+  // Append to body and submit
+  document.body.appendChild(form);
+  form.submit();
+}
+
+// Also attach to window object for extra safety
+window.switchCurrency = switchCurrency;
+
+console.log('switchCurrency function loaded:', typeof switchCurrency);
+</script>
+
+<script>
 document.addEventListener('DOMContentLoaded', function() {
+  // ============================================
+  // COUNTRY SELECT HANDLER
+  // ============================================
   const countrySelect = document.getElementById('countrySelect');
   const countryInfo = document.getElementById('countryInfo');
 
@@ -1190,126 +1248,79 @@ document.addEventListener('DOMContentLoaded', function() {
       countrySelect.dispatchEvent(new Event('change'));
     }
   }
-});
 
-// Quick currency switch function
-function switchCurrency(currencyCode) {
-  // Create and submit form
-  const form = document.createElement('form');
-  form.method = 'POST';
-  form.action = '{% url "accounts:quick_currency_switch" %}';
+  // ============================================
+  // TAB SWITCHING WITH TRANSITIONS
+  // ============================================
+  const tabTriggerList = [].slice.call(document.querySelectorAll('#profileTabs button'));
+  tabTriggerList.forEach(function (tabTrigger) {
+    tabTrigger.addEventListener('shown.bs.tab', function (event) {
+      // Add smooth transition effect
+      const targetPane = document.querySelector(event.target.getAttribute('data-bs-target'));
+      if (targetPane) {
+        targetPane.style.opacity = '0';
+        targetPane.style.transform = 'translateY(20px)';
 
-  const csrfToken = document.createElement('input');
-  csrfToken.type = 'hidden';
-  csrfToken.name = 'csrfmiddlewaretoken';
-  csrfToken.value = '{{ csrf_token }}';
-  form.appendChild(csrfToken);
-
-  const currencyInput = document.createElement('input');
-  currencyInput.type = 'hidden';
-  currencyInput.name = 'currency_code';
-  currencyInput.value = currencyCode;
-  form.appendChild(currencyInput);
-
-  document.body.appendChild(form);
-  form.submit();
-}
-</script>
-
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Enhanced tab switching with smooth transitions
-    const tabTriggerList = [].slice.call(document.querySelectorAll('#profileTabs button'));
-    tabTriggerList.forEach(function (tabTrigger) {
-        tabTrigger.addEventListener('shown.bs.tab', function (event) {
-            // Add smooth transition effect
-            const targetPane = document.querySelector(event.target.getAttribute('data-bs-target'));
-            if (targetPane) {
-                targetPane.style.opacity = '0';
-                targetPane.style.transform = 'translateY(20px)';
-
-                setTimeout(() => {
-                    targetPane.style.opacity = '1';
-                    targetPane.style.transform = 'translateY(0)';
-                }, 50);
-            }
-        });
-    });
-
-    // Password strength indicator (if needed)
-    const passwordInputs = document.querySelectorAll('input[type="password"]');
-    passwordInputs.forEach(input => {
-        input.addEventListener('input', function() {
-            // Add password strength validation here if needed
-            const strength = calculatePasswordStrength(this.value);
-            // Update UI based on strength
-        });
-    });
-
-    // Form validation feedback
-    const forms = document.querySelectorAll('.enhanced-form');
-    forms.forEach(form => {
-        form.addEventListener('submit', function(e) {
-            // Add custom validation if needed
-            const inputs = form.querySelectorAll('.form-control');
-            inputs.forEach(input => {
-                if (!input.checkValidity()) {
-                    input.classList.add('is-invalid');
-                } else {
-                    input.classList.remove('is-invalid');
-                    input.classList.add('is-valid');
-                }
-            });
-        });
-    });
-
-    // Auto-hide alerts after 5 seconds
-    const alerts = document.querySelectorAll('.alert');
-    alerts.forEach(alert => {
         setTimeout(() => {
-            if (alert.querySelector('.btn-close')) {
-                alert.querySelector('.btn-close').click();
-            }
-        }, 5000);
+          targetPane.style.opacity = '1';
+          targetPane.style.transform = 'translateY(0)';
+        }, 50);
+      }
     });
+  });
 
-    function calculatePasswordStrength(password) {
-        let strength = 0;
-        if (password.length >= 8) strength++;
-        if (/[a-z]/.test(password)) strength++;
-        if (/[A-Z]/.test(password)) strength++;
-        if (/[0-9]/.test(password)) strength++;
-        if (/[^A-Za-z0-9]/.test(password)) strength++;
-        return strength;
-    }
-});
-    // NEW: Country selection handler
-document.getElementById('countrySelect')?.addEventListener('change', function() {
-  const selectedOption = this.options[this.selectedIndex];
-  const countryInfo = document.getElementById('countryInfo');
+  // ============================================
+  // PASSWORD STRENGTH INDICATOR
+  // ============================================
+  const passwordInputs = document.querySelectorAll('input[type="password"]');
+  passwordInputs.forEach(input => {
+    input.addEventListener('input', function() {
+      // Add password strength validation here if needed
+      const strength = calculatePasswordStrength(this.value);
+      // Update UI based on strength
+    });
+  });
 
-  if (selectedOption.value) {
-    document.getElementById('selectedCountryCode').textContent = selectedOption.dataset.code;
-    document.getElementById('selectedPhoneCode').textContent = selectedOption.dataset.phone;
-    document.getElementById('selectedCurrency').textContent = selectedOption.dataset.currency;
-    countryInfo.style.display = 'block';
-  } else {
-    countryInfo.style.display = 'none';
+  function calculatePasswordStrength(password) {
+    let strength = 0;
+    if (password.length >= 8) strength++;
+    if (/[a-z]/.test(password)) strength++;
+    if (/[A-Z]/.test(password)) strength++;
+    if (/[0-9]/.test(password)) strength++;
+    if (/[^A-Za-z0-9]/.test(password)) strength++;
+    return strength;
   }
-});
 
-// Quick currency switch function
-function switchCurrency(currencyCode) {
-  document.getElementById('quickCurrencyCode').value = currencyCode;
-  document.getElementById('quickCurrencyForm').submit();
-}
+  // ============================================
+  // FORM VALIDATION FEEDBACK
+  // ============================================
+  const forms = document.querySelectorAll('.enhanced-form');
+  forms.forEach(form => {
+    form.addEventListener('submit', function(e) {
+      // Add custom validation if needed
+      const inputs = form.querySelectorAll('.form-control');
+      inputs.forEach(input => {
+        if (!input.checkValidity()) {
+          input.classList.add('is-invalid');
+        } else {
+          input.classList.remove('is-invalid');
+          input.classList.add('is-valid');
+        }
+      });
+    });
+  });
 
-// Initialize country info if country is already selected
-window.addEventListener('DOMContentLoaded', function() {
-  const countrySelect = document.getElementById('countrySelect');
-  if (countrySelect && countrySelect.value) {
-    countrySelect.dispatchEvent(new Event('change'));
-  }
+  // ============================================
+  // AUTO-HIDE ALERTS
+  // ============================================
+  const alerts = document.querySelectorAll('.alert');
+  alerts.forEach(alert => {
+    setTimeout(() => {
+      if (alert.querySelector('.btn-close')) {
+        alert.querySelector('.btn-close').click();
+      }
+    }, 5000);
+  });
 });
 </script>
 {% endblock %}

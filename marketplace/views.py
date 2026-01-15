@@ -6,7 +6,8 @@ from .models import (Category, Product, ProductView,
                      CartItem, Cart, CelebrityFeature, Wishlist,
                      SearchHistory, PopularSearch, ProductFeature, ProductImage,
                      ProductFeatureOption, ProductVariant, SharedCart, SocialCart, CartMember, PaymentShare,
-                     Career, CareerApplication, PressRelease, InvestorDocument, InvestorEvent,)
+                     Career, CareerApplication, PressRelease, InvestorDocument, InvestorEvent,
+                     Campaign, CampaignProduct, WheelSpin )
 from chat.models import ChatThread, ChatMessage
 from analytics.models import CartEvent
 from analytics.services import track_event
@@ -32,6 +33,7 @@ from .utils import (log_search, get_search_suggestions_with_history,
 from .utils import sync_social_items_totals
 from django.urls import reverse
 import json, uuid
+import random
 from datetime import timedelta
 from datetime import datetime
 from django.utils import timezone
@@ -108,15 +110,47 @@ def all_products(request):
 
 
 def product_list(request):
+    """Updated product list view with campaign support"""
     categories = Category.objects.filter(parent__isnull=True)[:6]
 
     # Base queryset for general lists
     base_qs = with_display_images(Product.objects.filter(is_active=True))
 
-    # These now ALL carry ProductImage prefetched
+    # Get active campaigns
+    now = timezone.now()
+    active_campaigns = Campaign.objects.filter(
+        is_active=True,
+        status=Campaign.Status.ACTIVE,
+        start_date__lte=now,
+        end_date__gte=now
+    ).prefetch_related('campaign_products__product')
+
+    # Flash promotion campaign (show wheel)
+    flash_campaign = active_campaigns.filter(
+        campaign_type=Campaign.CampaignType.FLASH_SALE,
+        enable_wheel=True
+    ).first()
+
+    # Trending campaign products
+    trending_campaign = active_campaigns.filter(
+        campaign_type=Campaign.CampaignType.TRENDING
+    ).first()
+
+    # Product lists
     products = with_display_images(Product.objects.all())
     featured_products = with_display_images(Product.objects.filter(is_active=True, is_featured=True))[:6]
-    trending_products = with_display_images(Product.objects.filter(is_active=True, is_trending=True))
+
+    # Trending products - only show if there's an active trending campaign
+    trending_products = Product.objects.none()
+    if trending_campaign:
+        trending_product_ids = trending_campaign.campaign_products.values_list('product_id', flat=True)
+        trending_products = with_display_images(
+            Product.objects.filter(
+                id__in=trending_product_ids,
+                is_active=True,
+                show_in_trending=True
+            )
+        )
 
     # Explore section (paginated)
     qs = base_qs.order_by("-sold_count", "-created_at")
@@ -151,16 +185,41 @@ def product_list(request):
                 .exclude(id=last_viewed_product.id)
             )[:8]
 
-    # Recommendations (ensure it returns queryset or list)
+    # Recommendations
     recommended_products = generate_recommendations(request, recently_viewed)
-
-    # If generate_recommendations returns a queryset: prefetch it
     if hasattr(recommended_products, "prefetch_related"):
         recommended_products = with_display_images(recommended_products)[:12]
     else:
-        # If it returns a python list of Products, prefetch by re-querying
         rec_ids = [p.id for p in recommended_products if getattr(p, "id", None)]
         recommended_products = with_display_images(Product.objects.filter(id__in=rec_ids, is_active=True))
+
+    # Check if user can spin wheel
+    user_can_spin = False
+    wheel_prizes = []
+    user_spins_left = 0
+    if flash_campaign:
+        wheel_prizes = flash_campaign.wheel_prizes or []
+        if flash_campaign.require_login and not request.user.is_authenticated:
+            user_can_spin = False
+        else:
+            # Count user's spins
+            if request.user.is_authenticated:
+                user_spins = WheelSpin.objects.filter(
+                    campaign=flash_campaign,
+                    user=request.user
+                ).count()
+            else:
+                session_key = request.session.session_key or _ensure_session(request)
+                user_spins = WheelSpin.objects.filter(
+                    campaign=flash_campaign,
+                    session_key=session_key
+                ).count()
+
+            user_spins_left = max(flash_campaign.max_spins_per_user - user_spins, 0)
+            user_can_spin = user_spins_left > 0
+
+        # Increment campaign views
+        flash_campaign.increment_views()
 
     return render(request, "marketplace/product_list.html", {
         "categories": categories,
@@ -171,6 +230,197 @@ def product_list(request):
         "recently_viewed": recently_viewed,
         "similar_items": similar_items,
         "recommended_products": recommended_products,
+        # Campaign data
+        "flash_campaign": flash_campaign,
+        "trending_campaign": trending_campaign,
+        "user_can_spin": user_can_spin,
+        "user_spins_left": user_spins_left,
+        "wheel_prizes": wheel_prizes,
+    })
+
+
+@require_POST
+@csrf_exempt
+def spin_wheel(request, slug):
+    """Handle wheel spin requests"""
+    try:
+        campaign = Campaign.objects.get(
+            slug=slug,
+            is_active=True,
+            status=Campaign.Status.ACTIVE
+        )
+
+        # Check if campaign is running
+        if not campaign.is_running():
+            return JsonResponse({
+                'success': False,
+                'error': 'Campaign is not currently active'
+            }, status=400)
+
+        # Check login requirement
+        if campaign.require_login and not request.user.is_authenticated:
+            return JsonResponse({
+                'success': False,
+                'error': 'Login required to spin',
+                'require_login': True
+            }, status=403)
+
+        # Get or create session
+        session_key = request.session.session_key
+        if not session_key:
+            session_key = _ensure_session(request)
+
+        # Check spin limit
+        if request.user.is_authenticated:
+            existing_spins = WheelSpin.objects.filter(
+                campaign=campaign,
+                user=request.user
+            ).count()
+        else:
+            existing_spins = WheelSpin.objects.filter(
+                campaign=campaign,
+                session_key=session_key
+            ).count()
+
+        if existing_spins >= campaign.max_spins_per_user:
+            return JsonResponse({
+                'success': False,
+                'error': 'You have used all your spins for this campaign'
+            }, status=400)
+
+        # Determine prize based on probabilities
+        prizes = campaign.wheel_prizes
+        if not prizes:
+            # Default prizes if none configured
+            prizes = [
+                {"label": "10% OFF", "probability": 0.25, "type": "discount", "value": 10},
+                {"label": "15% OFF", "probability": 0.15, "type": "discount", "value": 15},
+                {"label": "20% OFF", "probability": 0.10, "type": "discount", "value": 20},
+                {"label": "Free Shipping", "probability": 0.20, "type": "free_shipping", "value": 0},
+                {"label": "5% OFF", "probability": 0.20, "type": "discount", "value": 5},
+                {"label": "Try Again", "probability": 0.10, "type": "nothing", "value": 0},
+            ]
+
+        # Weighted random selection
+        total_probability = sum(p.get('probability', 0) for p in prizes)
+        rand = random.uniform(0, total_probability)
+
+        cumulative = 0
+        selected_prize = prizes[-1]  # Default to last prize
+
+        for prize in prizes:
+            cumulative += prize.get('probability', 0)
+            if rand <= cumulative:
+                selected_prize = prize
+                break
+
+        # Create spin record
+        spin = WheelSpin.objects.create(
+            campaign=campaign,
+            user=request.user if request.user.is_authenticated else None,
+            session_key=session_key if not request.user.is_authenticated else '',
+            prize_won=selected_prize.get('label', 'Prize'),
+            prize_type=selected_prize.get('type', 'discount'),
+            prize_value=Decimal(str(selected_prize.get('value', 0))),
+            ip_address=request.META.get('REMOTE_ADDR'),
+            user_agent=request.META.get('HTTP_USER_AGENT', '')[:1000]
+        )
+
+        # Generate promo code for valid prizes
+        promo_code = None
+        if selected_prize.get('type') != 'nothing':
+            promo_code = spin.generate_promo_code()
+
+        # Increment campaign spins
+        campaign.increment_spins()
+
+        # Calculate remaining spins
+        spins_left = campaign.max_spins_per_user - (existing_spins + 1)
+
+        return JsonResponse({
+            'success': True,
+            'prize': {
+                'label': selected_prize.get('label'),
+                'type': selected_prize.get('type'),
+                'value': float(selected_prize.get('value', 0)),
+                'promo_code': promo_code,
+            },
+            'spins_left': spins_left,
+            'message': f"Congratulations! You won {selected_prize.get('label')}!"
+        })
+
+    except Campaign.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': 'Campaign not found'
+        }, status=404)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': 'An error occurred. Please try again.'
+        }, status=500)
+
+
+@require_GET
+def campaign_detail(request, slug):
+    """View campaign details and products"""
+    campaign = get_object_or_404(
+        Campaign.objects.prefetch_related('campaign_products__product'),
+        slug=slug,
+        is_active=True
+    )
+
+    # Get campaign products
+    campaign_products = campaign.campaign_products.filter(
+        product__is_active=True
+    ).select_related('product').order_by('position')
+
+    # Add campaign prices to products
+    products_with_prices = []
+    for cp in campaign_products:
+        product = cp.product
+        product.campaign_price = cp.get_campaign_price()
+        product.campaign_discount_percentage = cp.get_discount_percentage()
+        product.campaign_discount_amount = cp.get_discount_amount()
+        product.campaign_stock_remaining = cp.remaining_stock()
+        products_with_prices.append(product)
+
+    # Paginate products
+    paginator = Paginator(products_with_prices, 24)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    # Check user spin eligibility
+    user_can_spin = False
+    user_spins_left = 0
+
+    if campaign.enable_wheel and campaign.is_running():
+        if campaign.require_login and not request.user.is_authenticated:
+            user_can_spin = False
+        else:
+            if request.user.is_authenticated:
+                user_spins = WheelSpin.objects.filter(
+                    campaign=campaign,
+                    user=request.user
+                ).count()
+            else:
+                session_key = request.session.session_key or _ensure_session(request)
+                user_spins = WheelSpin.objects.filter(
+                    campaign=campaign,
+                    session_key=session_key
+                ).count()
+
+            user_spins_left = max(campaign.max_spins_per_user - user_spins, 0)
+            user_can_spin = user_spins_left > 0
+
+    # Increment views
+    campaign.increment_views()
+
+    return render(request, 'marketplace/campaign_detail.html', {
+        'campaign': campaign,
+        'page_obj': page_obj,
+        'products': page_obj.object_list,
+        'user_can_spin': user_can_spin,
+        'user_spins_left': user_spins_left,
     })
 
 
@@ -987,7 +1237,11 @@ def product_detail(request, product_id):
     if request.user.is_authenticated:
         address = Address.objects.filter(user=request.user).first()
         if address:
-            parts = [address.address1, address.address2, address.country]
+            parts = [
+                address.address1,
+                address.address2,
+                str(address.country) if address.country else None
+            ]
             address_display = ', '.join(part for part in parts if part)
 
     # Chat messages
