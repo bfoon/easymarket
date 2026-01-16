@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% load humanize %}
 {% load static %}
+{% load currency_tags %}
 
 {% block title %}B2B Wholesale Cart · EasyMarket{% endblock %}
 {% block content %}
@@ -770,7 +771,7 @@
                                     <i class="fas fa-hand-holding-dollar"></i>
                                     Requested
                                 </div>
-                                <div class="b2b-cart-price-value">{{ request.user.preferred_currency.symbol|default:"D" }}{{ item.requested_unit_price|floatformat:2 }}</div>
+                                <div class="b2b-cart-price-value">{% display_money item.requested_unit_price|floatformat:2 %}</div>
                                 <div class="b2b-cart-price-label">per unit</div>
                                 {% else %}
                                 <div class="b2b-cart-no-price">—</div>
@@ -784,12 +785,12 @@
                             <div class="b2b-cart-price-section">
                                 {% if item.requested_unit_price %}
                                 <div class="b2b-cart-price-value" id="subtotal-{{ item.id }}">
-                                    {{ request.user.preferred_currency.symbol|default:"D" }}<span class="subtotal-amount" data-price="{{ item.requested_unit_price }}" data-qty="{{ item.quantity }}">{{ item.requested_unit_price|floatformat:2 }}</span>
+                                    {{ request.user.preferred_currency.symbol|default:"D" }}<span class="subtotal-amount" data-price="{% display_money item.requested_unit_price %}" data-qty="{{ item.quantity }}">{% display_money item.requested_unit_price|floatformat:2 %}</span>
                                 </div>
                                 <div class="b2b-cart-price-label">estimated</div>
                                 <script>
                                     (function() {
-                                        const price = parseFloat('{{ item.requested_unit_price }}');
+                                        const price = parseFloat('{% display_money item.requested_unit_price %}');
                                         const qty = parseInt('{{ item.quantity }}');
                                         const subtotal = (price * qty).toFixed(2);
                                         const elem = document.querySelector('#subtotal-{{ item.id }} .subtotal-amount');
@@ -840,12 +841,12 @@
 
             <div class="b2b-cart-summary-row">
                 <span class="b2b-cart-summary-label">Total Units</span>
-                <span class="b2b-cart-summary-value" id="totalUnits">{{ total_units|default:0 }}</span>
+                <span class="b2b-cart-summary-value" id="totalUnits">{% display_money total_units|default:0 %}</span>
             </div>
 
             <div class="b2b-cart-summary-total">
                 <span class="b2b-cart-total-label">Estimated Subtotal</span>
-                <span class="b2b-cart-total-value" id="grandTotal">{{ request.user.preferred_currency.symbol|default:"D" }}{{ subtotal|floatformat:2 }}</span>
+                <span class="b2b-cart-total-value" id="grandTotal">{% display_money subtotal|floatformat:2 %}</span>
             </div>
 
             <div class="b2b-cart-summary-note">

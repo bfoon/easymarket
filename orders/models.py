@@ -21,27 +21,290 @@ class PromoCode(models.Model):
         blank=True,
         related_name='promo_codes'
     )
+    discount_type = models.CharField(
+        max_length=20,
+        choices=[
+            ('percentage', 'Percentage'),
+            ('fixed', 'Fixed Amount'),
+            ('free_shipping', 'Free Shipping'),
+        ],
+        default='percentage'
+    )
+    discount_value = models.DecimalField(max_digits=10, decimal_places=2)
+    min_purchase_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text="Minimum order total required"
+    )
+    max_uses = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Maximum number of times code can be used (null = unlimited)"
+    )
     products = models.ManyToManyField('marketplace.Product', blank=True, related_name='promo_codes')
     is_active = models.BooleanField(default=True)
+    valid_from = models.DateTimeField(null=True, blank=True)
+    valid_until = models.DateTimeField(null=True, blank=True)
+    description = models.TextField(blank=True)
     usage_limit = models.PositiveIntegerField(default=0, help_text="0 means unlimited")
     usage_count = models.PositiveIntegerField(default=0)
-    created_at = models.DateTimeField(auto_now_add=True)
+
+    # ========== NEW FIELDS FOR WHEEL INTEGRATION ==========
+
+    source = models.CharField(
+        max_length=50,
+        choices=[
+            ('manual', 'Manual Creation'),
+            ('campaign_wheel', 'Campaign Wheel Prize'),
+            ('bulk_import', 'Bulk Import'),
+            ('api', 'API Generated'),
+            ('affiliate', 'Affiliate Program'),
+            ('loyalty', 'Loyalty Reward'),
+        ],
+        default='manual',
+        db_index=True,
+        help_text="How this promo code was created"
+    )
+
+    campaign = models.ForeignKey(
+        'marketplace.Campaign',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='generated_promo_codes',  # Changed from 'promo_codes'
+        help_text="Associated campaign (if from wheel)"
+    )
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_promo_codes',
+        help_text="Admin user who created this code"
+    )
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    # ========== OPTIONAL ADVANCED RESTRICTION FIELDS ==========
+    # Only add these if you need them - they provide fine-grained control
+
+    first_purchase_only = models.BooleanField(
+        default=False,
+        help_text="Only valid for user's first purchase"
+    )
+
+    allowed_users = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name='exclusive_promo_codes',
+        help_text="If set, only these users can use this code"
+    )
+
+    excluded_users = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name='excluded_from_promo_codes',
+        help_text="Users who cannot use this code"
+    )
+
+    # FIXED: Changed field names to avoid clash with existing 'products' field
+    valid_for_products = models.ManyToManyField(
+        'marketplace.Product',
+        blank=True,
+        related_name='restricted_promo_codes',  # Different related_name
+        help_text="If set, code only applies to these specific products"
+    )
+
+    valid_for_categories = models.ManyToManyField(
+        'marketplace.Category',
+        blank=True,
+        related_name='category_promo_codes',  # Clear related_name
+        help_text="If set, code only applies to products in these categories"
+    )
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "Promo Code"
+        verbose_name_plural = "Promo Codes"
+        indexes = [
+            models.Index(fields=['code']),
+            models.Index(fields=['is_active', 'valid_from', 'valid_until']),
+            models.Index(fields=['source']),
+            models.Index(fields=['campaign']),
+            models.Index(fields=['created_at']),
+        ]
 
     def __str__(self):
-        scope = f"{self.influencer.celebrity_name}" if self.influencer else "General"
-        return f"{self.code} - {self.discount_percentage}% ({scope})"
+        return f"{self.code} ({self.get_discount_type_display()})"
 
-    def is_valid(self):
+    def is_valid(self, user=None, cart_total=None, cart_items=None):
+        """
+        Check if promo code is valid for use.
+
+        Args:
+            user: User attempting to use the code
+            cart_total: Current cart total (Decimal)
+            cart_items: QuerySet of cart items (for product restrictions)
+
+        Returns:
+            tuple: (is_valid: bool, error_message: str or None)
+        """
+        # Check if active
         if not self.is_active:
-            return False
-        if self.usage_limit > 0 and self.usage_count >= self.usage_limit:
-            return False
-        return True
+            return False, "This promo code is not active."
+
+        # Check date validity
+        now = timezone.now()
+        if self.valid_from and now < self.valid_from:
+            return False, "This promo code is not yet valid."
+        if self.valid_until and now > self.valid_until:
+            return False, "This promo code has expired."
+
+        # Check usage limit
+        if self.max_uses and self.uses >= self.max_uses:
+            return False, "This promo code has reached its usage limit."
+
+        # Check minimum purchase
+        if cart_total and cart_total < self.min_purchase_amount:
+            return False, f"Minimum purchase of D{self.min_purchase_amount} required."
+
+        # User-specific validations
+        if user:
+            # Check if user is excluded
+            if self.excluded_users.filter(id=user.id).exists():
+                return False, "You are not eligible for this promo code."
+
+            # Check if only certain users allowed
+            if self.allowed_users.exists() and not self.allowed_users.filter(id=user.id).exists():
+                return False, "This promo code is not available to you."
+
+            # Check first purchase only
+            if self.first_purchase_only:
+                from orders.models import Order
+                if Order.objects.filter(user=user, status='completed').exists():
+                    return False, "This code is only valid for first-time customers."
+
+        # Product restrictions
+        if cart_items:
+            # If specific products are set, at least one cart item must match
+            if self.valid_for_products.exists():
+                cart_product_ids = set(cart_items.values_list('product_id', flat=True))
+                allowed_product_ids = set(self.valid_for_products.values_list('id', flat=True))
+
+                if not cart_product_ids.intersection(allowed_product_ids):
+                    return False, "This code is not valid for the products in your cart."
+
+            # If specific categories are set, at least one cart item must match
+            if self.valid_for_categories.exists():
+                from marketplace.models import Product
+                cart_products = Product.objects.filter(
+                    id__in=cart_items.values_list('product_id', flat=True)
+                )
+                cart_category_ids = set(cart_products.values_list('category_id', flat=True))
+                allowed_category_ids = set(self.valid_for_categories.values_list('id', flat=True))
+
+                if not cart_category_ids.intersection(allowed_category_ids):
+                    return False, "This code is not valid for the categories in your cart."
+
+        # Check if wheel prize already redeemed
+        if self.source == 'campaign_wheel':
+            if hasattr(self, 'wheel_spin') and self.wheel_spin:
+                if self.wheel_spin.is_redeemed:
+                    return False, "This wheel prize has already been used."
+
+                # Verify user owns this prize (if user is authenticated)
+                if user and self.wheel_spin.user and self.wheel_spin.user != user:
+                    return False, "This prize belongs to another user."
+
+        return True, None
+
+    def calculate_discount(self, cart_total, shipping_cost=None):
+        """
+        Calculate the discount amount for this promo code.
+
+        Args:
+            cart_total: Total cart value (Decimal)
+            shipping_cost: Shipping cost (Decimal), if applicable
+
+        Returns:
+            dict: {
+                'cart_discount': Decimal,
+                'shipping_discount': Decimal,
+                'total_discount': Decimal,
+                'final_cart_total': Decimal,
+                'final_shipping_cost': Decimal,
+            }
+        """
+        cart_discount = Decimal('0')
+        shipping_discount = Decimal('0')
+
+        if self.discount_type == 'percentage':
+            # Percentage discount on cart
+            cart_discount = (cart_total * self.discount_value / Decimal('100')).quantize(Decimal('0.01'))
+
+        elif self.discount_type == 'fixed':
+            # Fixed amount discount on cart (not exceeding cart total)
+            cart_discount = min(self.discount_value, cart_total)
+
+        elif self.discount_type == 'free_shipping':
+            # Free shipping
+            if shipping_cost:
+                shipping_discount = shipping_cost
+
+        total_discount = cart_discount + shipping_discount
+        final_cart_total = max(cart_total - cart_discount, Decimal('0'))
+        final_shipping_cost = max((shipping_cost or Decimal('0')) - shipping_discount, Decimal('0'))
+
+        return {
+            'cart_discount': cart_discount,
+            'shipping_discount': shipping_discount,
+            'total_discount': total_discount,
+            'final_cart_total': final_cart_total,
+            'final_shipping_cost': final_shipping_cost,
+        }
 
     def increment_usage(self):
-        if self.usage_limit == 0 or self.usage_count < self.usage_limit:
-            self.usage_count += 1
-            self.save()
+        """Increment the usage counter atomically"""
+        from django.db.models import F
+        PromoCode.objects.filter(pk=self.pk).update(uses=F('uses') + 1)
+        self.refresh_from_db()
+
+    def get_usage_percentage(self):
+        """Get usage as percentage (if max_uses is set)"""
+        if not self.max_uses:
+            return None
+        return (self.uses / self.max_uses) * 100 if self.max_uses > 0 else 0
+
+    @property
+    def is_expired(self):
+        """Check if code is expired"""
+        if not self.valid_until:
+            return False
+        return timezone.now() > self.valid_until
+
+    @property
+    def is_from_wheel(self):
+        """Check if this code came from campaign wheel"""
+        return self.source == 'campaign_wheel'
+
+    @property
+    def days_until_expiry(self):
+        """Get days until expiration"""
+        if not self.valid_until:
+            return None
+        delta = self.valid_until - timezone.now()
+        return max(delta.days, 0)
+
+    @property
+    def is_fully_used(self):
+        """Check if code has reached usage limit"""
+        if not self.max_uses:
+            return False
+        return self.uses >= self.max_uses
 
     def applies_to_product(self, product):
         """

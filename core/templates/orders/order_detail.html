@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load humanize %}
+{% load currency_tags %}
 
 {% block content %}
 <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
@@ -318,12 +319,12 @@
                   </td>
 
                   <td class="text-end">
-                    {# safer to show item-level unit price if you store it; fallback to product.price #}
-                    D{{ item.price_at_time|default:item.product.price|floatformat:2 }}
+
+                    {% display_money item.price_at_time|default:item.product.price %}
                   </td>
 
                   <td class="text-end pe-4">
-                    <strong class="text-primary">{{ request.user.preferred_currency.symbol|default:"D" }}{{ item.get_total_price|floatformat:2 }}</strong>
+                    <strong class="text-primary">{% display_money item.get_total_price|floatformat:2 %}</strong>
                   </td>
                 </tr>
                 {% endfor %}
@@ -509,13 +510,13 @@
         <div class="card-body p-4">
           <div class="summary-row d-flex justify-content-between mb-3 pb-3 border-bottom">
             <span class="text-muted">Subtotal</span>
-            <span class="fw-medium">{{ request.user.preferred_currency.symbol|default:"D" }}{{ order.get_subtotal|floatformat:2 }}</span>
+            <span class="fw-medium">{% display_money order.get_subtotal %}</span>
           </div>
 
           <div class="summary-row d-flex justify-content-between mb-3 pb-3 border-bottom">
             <span class="text-muted">Shipping</span>
             <span class="fw-medium">
-              {% if order.shipping_cost %}{{ request.user.preferred_currency.symbol|default:"D" }}{{ order.shipping_cost|floatformat:2 }}{% else %}
+              {% if order.shipping_cost %}{% display_money order.shipping_cost %}{% else %}
                 <span class="text-success fw-semibold">Free</span>
               {% endif %}
             </span>
@@ -524,31 +525,31 @@
           {% if order.promo_code and order.discount_amount %}
             <div class="summary-row d-flex justify-content-between mb-3 pb-3 border-bottom text-success">
               <span><i class="fas fa-tag me-1"></i> Discount</span>
-              <span class="fw-semibold">-{{ request.user.preferred_currency.symbol|default:"D" }}{{ order.discount_amount|floatformat:2 }}</span>
+              <span class="fw-semibold">-{% display_money order.discount_amount %}</span>
             </div>
           {% endif %}
 
           <div class="summary-row d-flex justify-content-between mb-4 pb-3 border-bottom">
             <span class="text-muted">Tax ({{ order.tax_rate|floatformat:1 }}%)</span>
-            <span class="fw-medium">{{ request.user.preferred_currency.symbol|default:"D" }}{{ order.get_tax_amount|floatformat:2 }}</span>
+            <span class="fw-medium">{% display_money order.get_tax_amount %}</span>
           </div>
 
           {% if order.promo_code and order.discount_amount %}
             <div class="d-flex justify-content-between mb-2 text-muted">
               <small>Original Total:</small>
-              <small class="text-decoration-line-through">{{ request.user.preferred_currency.symbol|default:"D" }}{{ order.get_subtotal_with_tax_and_shipping|floatformat:2 }}</small>
+              <small class="text-decoration-line-through">{% display_money order.get_subtotal_with_tax_and_shipping %}</small>
             </div>
           {% endif %}
 
           <div class="d-flex justify-content-between align-items-center mb-3 p-3 bg-light rounded">
             <strong class="fs-5">Total</strong>
-            <strong class="text-primary fs-4">{{ request.user.preferred_currency.symbol|default:"D" }}{{ order.get_total|floatformat:2 }}</strong>
+            <strong class="text-primary fs-4">{% display_money order.get_total %}</strong>
           </div>
 
           {% if order.promo_code and order.discount_amount %}
             <div class="alert alert-success py-2 mb-3">
               <i class="fas fa-check-circle me-1"></i>
-              <small>You saved <strong>{{ request.user.preferred_currency.symbol|default:"D" }}{{ order.discount_amount|floatformat:2 }}</strong>!</small>
+              <small>You saved <strong>{% display_money order.discount_amount %}</strong>!</small>
             </div>
           {% endif %}
 
@@ -641,7 +642,7 @@
                 </div>
                 <div class="text-end">
                   <span class="badge badge-{{ other_order.status|lower }}">{{ other_order.get_status_display }}</span>
-                  <div class="fw-bold text-primary mt-1">{{ request.user.preferred_currency.symbol|default:"D" }}{{ other_order.get_total|floatformat:2 }}</div>
+                  <div class="fw-bold text-primary mt-1">{% display_money other_order.get_total %}</div>
                 </div>
               </div>
               <div class="d-flex gap-2">
@@ -685,7 +686,7 @@
                                 <strong class="d-block">Order #{{ order.id }}</strong>
                                 <small class="text-muted">{{ order.items.count }} item{{ order.items.count|pluralize }}</small>
                             </div>
-                            <strong class="text-primary fs-4">{{ request.user.preferred_currency.symbol|default:"D" }}{{ order.get_total|floatformat:2 }}</strong>
+                            <strong class="text-primary fs-4">{% display_money order.get_total %}</strong>
                         </div>
                     </div>
 
@@ -830,7 +831,7 @@
                             </div>
                         </span>
                         <i class="fas fa-lock me-2" id="paymentIcon"></i>
-                        Pay {{ request.user.preferred_currency.symbol|default:"D" }}{{ order.get_total|floatformat:2 }}
+                        Pay {% display_money order.get_total %}
                     </button>
                 </div>
             </form>
@@ -870,7 +871,7 @@
                             <strong>Order #{{ order.id }}</strong>
                             <small class="d-block text-muted">{{ order.items.count }} item{{ order.items.count|pluralize }}</small>
                         </div>
-                        <strong class="text-primary">{{ request.user.preferred_currency.symbol|default:"D" }}{{ order.get_total|floatformat:2 }}</strong>
+                        <strong class="text-primary">{% display_money order.get_total %}</strong>
                     </div>
                 </div>
             </div>

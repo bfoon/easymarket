@@ -5,7 +5,7 @@ from django.urls import reverse
 from django.db.models import Avg, F
 from decimal import Decimal
 from django.utils import timezone
-import os, uuid, secrets, string
+import os, uuid, secrets, string, random
 from django.utils.text import slugify
 from django.db import transaction
 from django.db.models.functions import Lower
@@ -1807,67 +1807,207 @@ class CampaignProduct(models.Model):
 
 class WheelSpin(models.Model):
     """
-    Track user spins on campaign wheels
+    Records when users spin the campaign wheel and what they won.
+    Automatically creates PromoCode objects in the orders app for valid prizes.
     """
-    campaign = models.ForeignKey(Campaign, on_delete=models.CASCADE, related_name='spins')
+
+    campaign = models.ForeignKey(
+        'Campaign',
+        on_delete=models.CASCADE,
+        related_name='spins',
+        help_text="The campaign this spin belongs to"
+    )
+
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='wheel_spins'
+        related_name='wheel_spins',
+        help_text="User who spun (null for anonymous)"
     )
-    session_key = models.CharField(max_length=40, blank=True)
 
-    # Spin Result
-    prize_won = models.CharField(max_length=100)
+    session_key = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Session key for anonymous users"
+    )
+
+    # Prize Information
+    prize_won = models.CharField(
+        max_length=200,
+        help_text="Display name of prize (e.g., '10% OFF', 'Free Shipping')"
+    )
+
     prize_type = models.CharField(
-        max_length=20,
+        max_length=50,
         choices=[
-            ('discount', 'Discount'),
+            ('discount', 'Percentage Discount'),
+            ('fixed_amount', 'Fixed Amount Discount'),
             ('free_shipping', 'Free Shipping'),
-            ('gift', 'Free Gift'),
-            ('points', 'Loyalty Points'),
-            ('nothing', 'Try Again'),
+            ('nothing', 'No Prize / Try Again'),
         ],
-        default='discount'
+        default='discount',
+        help_text="Type of prize won"
     )
-    prize_value = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
-    # Redemption
-    is_redeemed = models.BooleanField(default=False)
-    redeemed_at = models.DateTimeField(null=True, blank=True)
-    promo_code = models.CharField(max_length=50, blank=True, help_text="Generated promo code for this prize")
+    prize_value = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        help_text="Discount percentage (e.g., 10 for 10%) or fixed amount"
+    )
 
-    # Meta
+    # Link to generated promo code
+    promo_code = models.OneToOneField(
+        'orders.PromoCode',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='wheel_spin',
+        help_text="Auto-generated promo code for this prize"
+    )
+
+    # Tracking
+    spun_at = models.DateTimeField(auto_now_add=True, db_index=True)
     ip_address = models.GenericIPAddressField(null=True, blank=True)
-    user_agent = models.TextField(blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    user_agent = models.CharField(max_length=1000, blank=True)
+
+    # Redemption tracking
+    is_redeemed = models.BooleanField(
+        default=False,
+        help_text="Has this prize been used in an order?"
+    )
+    redeemed_at = models.DateTimeField(null=True, blank=True)
+    order = models.ForeignKey(
+        'orders.Order',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='wheel_prizes_used',
+        help_text="Order where this prize was redeemed"
+    )
 
     class Meta:
-        ordering = ['-created_at']
+        ordering = ['-spun_at']
+        verbose_name = "Wheel Spin"
+        verbose_name_plural = "Wheel Spins"
         indexes = [
             models.Index(fields=['campaign', 'user']),
-            models.Index(fields=['session_key']),
+            models.Index(fields=['campaign', 'session_key']),
+            models.Index(fields=['spun_at']),
             models.Index(fields=['is_redeemed']),
         ]
 
     def __str__(self):
-        user_identifier = self.user.email if self.user else f"Session {self.session_key[:8]}"
-        return f"{user_identifier} won {self.prize_won} in {self.campaign.name}"
+        user_info = f"User {self.user.id}" if self.user else f"Session {self.session_key[:8]}..."
+        return f"{user_info} won {self.prize_won} - {self.campaign.name}"
 
     def generate_promo_code(self):
-        """Generate a unique promo code for this spin"""
-        if not self.promo_code:
-            prefix = 'WHEEL'
-            random_part = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(8))
-            self.promo_code = f"{prefix}{random_part}"
-            self.save(update_fields=['promo_code'])
-        return self.promo_code
+        """
+        Generate a unique promo code in the orders.PromoCode table.
 
-    def redeem(self):
-        """Mark prize as redeemed"""
-        if not self.is_redeemed:
-            self.is_redeemed = True
-            self.redeemed_at = timezone.now()
-            self.save(update_fields=['is_redeemed', 'redeemed_at'])
+        Returns:
+            str: The generated promo code, or None if prize type is 'nothing'
+        """
+        from orders.models import PromoCode
+
+        # Don't generate codes for "nothing" prizes
+        if self.prize_type == 'nothing':
+            return None
+
+        # Generate unique code with retry logic
+        max_attempts = 10
+        code = None
+
+        for attempt in range(max_attempts):
+            # Format: WHEEL-XXXXX (5 random chars)
+            code_suffix = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
+            code = f"WHEEL-{code_suffix}"
+
+            # Check uniqueness
+            if not PromoCode.objects.filter(code=code).exists():
+                break
+        else:
+            # Fallback if all attempts fail
+            import time
+            timestamp = int(time.time())
+            code = f"WHEEL-{timestamp % 100000:05d}"
+
+        # Calculate expiration date
+        campaign_end = self.campaign.end_date
+        thirty_days_from_now = timezone.now() + timezone.timedelta(days=30)
+
+        # Use earlier of campaign end or 30 days
+        if campaign_end:
+            expiry_date = min(campaign_end, thirty_days_from_now)
+        else:
+            expiry_date = thirty_days_from_now
+
+        # Map prize type to PromoCode fields
+        if self.prize_type == 'discount':
+            discount_type = 'percentage'
+            discount_value = self.prize_value
+        elif self.prize_type == 'fixed_amount':
+            discount_type = 'fixed'
+            discount_value = self.prize_value
+        elif self.prize_type == 'free_shipping':
+            discount_type = 'free_shipping'
+            discount_value = Decimal('0')
+        else:
+            discount_type = 'percentage'
+            discount_value = Decimal('0')
+
+        # Create the PromoCode
+        promo = PromoCode.objects.create(
+            code=code,
+            discount_type=discount_type,
+            discount_value=discount_value,
+            min_purchase_amount=Decimal('0'),  # No minimum for wheel prizes
+            max_uses=1,  # One-time use only
+            uses=0,
+            is_active=True,
+            valid_from=timezone.now(),
+            valid_until=expiry_date,
+            description=f"🎡 Wheel Prize: {self.prize_won} (Campaign: {self.campaign.name})",
+            # If your PromoCode model has these fields, uncomment:
+            # source='campaign_wheel',
+            # campaign=self.campaign,
+        )
+
+        # Link promo code to this spin
+        self.promo_code = promo
+        self.save(update_fields=['promo_code'])
+
+        return code
+
+    def mark_redeemed(self, order=None):
+        """
+        Mark this wheel spin prize as redeemed.
+
+        Args:
+            order: Optional Order object where prize was used
+        """
+        self.is_redeemed = True
+        self.redeemed_at = timezone.now()
+        if order:
+            self.order = order
+        self.save(update_fields=['is_redeemed', 'redeemed_at', 'order'])
+
+    def can_be_used(self):
+        """Check if this prize can still be used"""
+        if self.prize_type == 'nothing':
+            return False
+        if self.is_redeemed:
+            return False
+        if self.promo_code and not self.promo_code.is_active:
+            return False
+        if self.promo_code and self.promo_code.valid_until:
+            if timezone.now() > self.promo_code.valid_until:
+                return False
+        return True
+
+    @property
+    def code_string(self):
+        """Get the promo code string"""
+        return self.promo_code.code if self.promo_code else None

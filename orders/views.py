@@ -807,6 +807,13 @@ def complete_order(request, order_id):
     """Redirect to order detail page for completing pending orders"""
     order = get_object_or_404(Order, id=order_id, buyer=request.user)
 
+    # NEW: Mark wheel spin as redeemed if applicable
+    if order.promo_code and order.promo_code.source == 'campaign_wheel':
+        wheel_spins = order.promo_code.wheel_spins.all()
+        for spin in wheel_spins:
+            if not spin.is_redeemed:
+                spin.mark_redeemed()
+
     if order.status != 'pending':
         messages.warning(request, "This order is not in pending status.")
 
@@ -1423,7 +1430,7 @@ def order_stats(request):
 
     return render(request, 'orders/order_stats.html', {'stats': stats})
 
-login_required
+@login_required
 @require_http_methods(["GET"])
 def pending_orders_count_api(request):
     """API endpoint to get pending orders count for the current user"""
@@ -1495,3 +1502,325 @@ def copy_order_to_cart(request, order_id):
 
     messages.success(request, "Order copied to cart.")
     return redirect('marketplace:cart_view')
+
+
+@require_POST
+@login_required
+def apply_promo_code(request):
+    """
+    Apply a promo code to the user's cart.
+    Enhanced to handle campaign wheel prizes.
+    """
+    promo_code_str = request.POST.get('promo_code', '').strip().upper()
+
+    if not promo_code_str:
+        return JsonResponse({
+            'success': False,
+            'error': 'Please enter a promo code.'
+        }, status=400)
+
+    try:
+        # Get the promo code
+        promo = PromoCode.objects.select_related('campaign', 'wheel_spin').get(
+            code__iexact=promo_code_str
+        )
+
+        # Get user's cart
+        cart = Cart.objects.filter(user=request.user).first()
+        if not cart:
+            return JsonResponse({
+                'success': False,
+                'error': 'Your cart is empty.'
+            }, status=400)
+
+        # Calculate cart total
+        cart_items = CartItem.objects.filter(cart=cart).select_related('product')
+        cart_total = sum(
+            item.product.price * item.quantity
+            for item in cart_items
+        )
+        cart_total = Decimal(str(cart_total))
+
+        # Validate promo code
+        is_valid, error_message = promo.is_valid(
+            user=request.user,
+            cart_total=cart_total
+        )
+
+        if not is_valid:
+            return JsonResponse({
+                'success': False,
+                'error': error_message
+            }, status=400)
+
+        # Special handling for wheel prizes
+        if promo.source == 'campaign_wheel':
+            # Verify wheel spin ownership
+            if hasattr(promo, 'wheel_spin') and promo.wheel_spin:
+                wheel_spin = promo.wheel_spin
+
+                # Check if this wheel spin belongs to the current user
+                if wheel_spin.user and wheel_spin.user != request.user:
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'This wheel prize belongs to another user.'
+                    }, status=403)
+
+                # Check if already redeemed
+                if wheel_spin.is_redeemed:
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'This wheel prize has already been used.'
+                    }, status=400)
+
+        # Calculate discount
+        shipping_cost = Decimal('0')  # Get from your shipping calculation
+        discount_info = promo.calculate_discount(cart_total, shipping_cost)
+
+        # Store promo code in session
+        request.session['applied_promo_code'] = {
+            'code': promo.code,
+            'cart_discount': str(discount_info['cart_discount']),
+            'shipping_discount': str(discount_info['shipping_discount']),
+            'total_discount': str(discount_info['total_discount']),
+            'is_wheel_prize': promo.source == 'campaign_wheel',
+        }
+
+        return JsonResponse({
+            'success': True,
+            'promo_code': promo.code,
+            'discount_type': promo.get_discount_type_display(),
+            'cart_discount': float(discount_info['cart_discount']),
+            'shipping_discount': float(discount_info['shipping_discount']),
+            'total_discount': float(discount_info['total_discount']),
+            'final_cart_total': float(discount_info['final_cart_total']),
+            'final_shipping_cost': float(discount_info['final_shipping_cost']),
+            'message': f'✅ {promo.description or "Promo code applied successfully!"}',
+            'is_wheel_prize': promo.source == 'campaign_wheel',
+        })
+
+    except PromoCode.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid promo code. Please check and try again.'
+        }, status=404)
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': 'An error occurred while applying the promo code.'
+        }, status=500)
+
+
+@require_POST
+@login_required
+def remove_promo_code(request):
+    """Remove applied promo code from session"""
+    if 'applied_promo_code' in request.session:
+        del request.session['applied_promo_code']
+
+    return JsonResponse({
+        'success': True,
+        'message': 'Promo code removed.'
+    })
+
+
+@transaction.atomic
+@login_required
+def create_order_from_cart(request):
+    """
+    Create an order from cart with promo code application.
+    Enhanced to handle wheel prize redemption.
+    """
+    cart = Cart.objects.filter(user=request.user).first()
+    if not cart:
+        return JsonResponse({
+            'success': False,
+            'error': 'Your cart is empty.'
+        }, status=400)
+
+    cart_items = CartItem.objects.filter(cart=cart).select_related('product')
+    if not cart_items.exists():
+        return JsonResponse({
+            'success': False,
+            'error': 'Your cart is empty.'
+        }, status=400)
+
+    # Calculate totals
+    subtotal = sum(item.product.price * item.quantity for item in cart_items)
+    shipping_cost = Decimal('0')  # Calculate shipping
+
+    # Apply promo code if exists
+    promo_code = None
+    cart_discount = Decimal('0')
+    shipping_discount = Decimal('0')
+
+    promo_data = request.session.get('applied_promo_code')
+    if promo_data:
+        try:
+            promo_code = PromoCode.objects.get(code=promo_data['code'])
+
+            # Revalidate promo code
+            is_valid, error_message = promo_code.is_valid(
+                user=request.user,
+                cart_total=subtotal
+            )
+
+            if is_valid:
+                discount_info = promo_code.calculate_discount(subtotal, shipping_cost)
+                cart_discount = discount_info['cart_discount']
+                shipping_discount = discount_info['shipping_discount']
+            else:
+                # Promo code no longer valid
+                del request.session['applied_promo_code']
+                promo_code = None
+
+        except PromoCode.DoesNotExist:
+            del request.session['applied_promo_code']
+            promo_code = None
+
+    # Calculate final total
+    total_discount = cart_discount + shipping_discount
+    final_total = subtotal + shipping_cost - total_discount
+
+    # Create order
+    order = Order.objects.create(
+        user=request.user,
+        subtotal=subtotal,
+        shipping_cost=shipping_cost,
+        discount_amount=total_discount,
+        total=final_total,
+        promo_code=promo_code,
+        status='pending',
+    )
+
+    # Create order items
+    for cart_item in cart_items:
+        OrderItem.objects.create(
+            order=order,
+            product=cart_item.product,
+            quantity=cart_item.quantity,
+            price=cart_item.product.price,
+        )
+
+    # If promo code was used, increment usage
+    if promo_code:
+        promo_code.increment_usage()
+
+        # Mark wheel spin as redeemed if applicable
+        if promo_code.source == 'campaign_wheel':
+            if hasattr(promo_code, 'wheel_spin') and promo_code.wheel_spin:
+                promo_code.wheel_spin.mark_redeemed(order=order)
+
+    # Clear cart and session
+    cart_items.delete()
+    if 'applied_promo_code' in request.session:
+        del request.session['applied_promo_code']
+
+    return JsonResponse({
+        'success': True,
+        'order_id': order.id,
+        'order_number': order.order_number if hasattr(order, 'order_number') else str(order.id),
+        'total': float(final_total),
+        'message': 'Order created successfully!',
+    })
+
+
+# ==============================================================================
+# Admin view to check wheel prize usage
+# ==============================================================================
+
+@login_required
+def admin_wheel_prize_stats(request):
+    """
+    Admin view to see wheel prize statistics.
+    Requires staff permission.
+    """
+    if not request.user.is_staff:
+        return JsonResponse({
+            'error': 'Permission denied'
+        }, status=403)
+
+    from marketplace.models import WheelSpin, Campaign
+
+    # Get campaign stats
+    campaigns = Campaign.objects.filter(enable_wheel=True)
+
+    stats = []
+    for campaign in campaigns:
+        wheel_spins = WheelSpin.objects.filter(campaign=campaign)
+
+        total_spins = wheel_spins.count()
+        redeemed_spins = wheel_spins.filter(is_redeemed=True).count()
+        unredeemed_spins = total_spins - redeemed_spins
+
+        # Prize breakdown
+        prize_stats = {}
+        for spin in wheel_spins:
+            prize_name = spin.prize_won
+            if prize_name not in prize_stats:
+                prize_stats[prize_name] = {
+                    'count': 0,
+                    'redeemed': 0,
+                    'value': float(spin.prize_value)
+                }
+            prize_stats[prize_name]['count'] += 1
+            if spin.is_redeemed:
+                prize_stats[prize_name]['redeemed'] += 1
+
+        stats.append({
+            'campaign': campaign.name,
+            'campaign_slug': campaign.slug,
+            'total_spins': total_spins,
+            'redeemed': redeemed_spins,
+            'unredeemed': unredeemed_spins,
+            'redemption_rate': (redeemed_spins / total_spins * 100) if total_spins > 0 else 0,
+            'prizes': prize_stats,
+        })
+
+    return JsonResponse({
+        'success': True,
+        'stats': stats,
+    })
+
+
+# ==============================================================================
+# User view to see their wheel prizes
+# ==============================================================================
+
+@login_required
+def my_wheel_prizes(request):
+    """View user's wheel prizes and their status"""
+    from marketplace.models import WheelSpin
+
+    wheel_spins = WheelSpin.objects.filter(
+        user=request.user
+    ).select_related('campaign', 'promo_code', 'order').order_by('-spun_at')
+
+    prizes = []
+    for spin in wheel_spins:
+        prize_data = {
+            'campaign': spin.campaign.name,
+            'prize': spin.prize_won,
+            'spun_at': spin.spun_at.isoformat(),
+            'is_redeemed': spin.is_redeemed,
+            'promo_code': spin.code_string,
+            'can_use': spin.can_be_used(),
+        }
+
+        if spin.is_redeemed and spin.redeemed_at:
+            prize_data['redeemed_at'] = spin.redeemed_at.isoformat()
+            if spin.order:
+                prize_data['order_number'] = getattr(spin.order, 'order_number', str(spin.order.id))
+
+        if spin.promo_code:
+            prize_data['expires_at'] = spin.promo_code.valid_until.isoformat() if spin.promo_code.valid_until else None
+            prize_data['days_left'] = spin.promo_code.days_until_expiry
+
+        prizes.append(prize_data)
+
+    return render(request, 'orders/my_wheel_prizes.html', {
+        'prizes': prizes,
+        'total_prizes': len(prizes),
+        'active_prizes': len([p for p in prizes if p['can_use']]),
+    })

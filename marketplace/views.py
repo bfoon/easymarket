@@ -34,6 +34,7 @@ from .utils import sync_social_items_totals
 from django.urls import reverse
 import json, uuid
 import random
+import logging
 from datetime import timedelta
 from datetime import datetime
 from django.utils import timezone
@@ -57,7 +58,7 @@ import os
 
 # Get the custom User model
 User = get_user_model()
-
+logger = logging.getLogger(__name__)
 
 
 def _ensure_session(request):
@@ -240,32 +241,50 @@ def product_list(request):
 
 
 @require_POST
-@csrf_exempt
 def spin_wheel(request, slug):
-    """Handle wheel spin requests"""
+    """
+    Handle wheel spin requests.
+
+    FIXED ISSUES:
+    - Promo code now auto-generates correctly
+    - Prize value is included in response
+    - Better error handling
+    """
     try:
-        campaign = Campaign.objects.get(
+        # Import models
+        from marketplace.models import Campaign, WheelSpin
+        from orders.models import PromoCode
+
+        logger.info(f"=== Spin wheel request for campaign: {slug} ===")
+
+        # Get campaign
+        campaign = get_object_or_404(
+            Campaign,
             slug=slug,
             is_active=True,
             status=Campaign.Status.ACTIVE
         )
 
+        logger.info(f"Campaign found: {campaign.name}")
+
         # Check if campaign is running
         if not campaign.is_running():
+            logger.warning(f"Campaign {campaign.slug} is not running")
             return JsonResponse({
                 'success': False,
-                'error': 'Campaign is not currently active'
+                'error': 'This campaign is not currently active'
             }, status=400)
 
         # Check login requirement
         if campaign.require_login and not request.user.is_authenticated:
+            logger.info(f"Login required for campaign {campaign.slug}")
             return JsonResponse({
                 'success': False,
-                'error': 'Login required to spin',
+                'error': 'Please login to spin the wheel',
                 'require_login': True
             }, status=403)
 
-        # Get or create session
+        # Get or create session key
         session_key = request.session.session_key
         if not session_key:
             session_key = _ensure_session(request)
@@ -276,22 +295,28 @@ def spin_wheel(request, slug):
                 campaign=campaign,
                 user=request.user
             ).count()
+            user_identifier = f"User {request.user.id}"
         else:
             existing_spins = WheelSpin.objects.filter(
                 campaign=campaign,
                 session_key=session_key
             ).count()
+            user_identifier = f"Session {session_key[:8]}"
+
+        logger.info(f"{user_identifier} has {existing_spins}/{campaign.max_spins_per_user} spins")
 
         if existing_spins >= campaign.max_spins_per_user:
             return JsonResponse({
                 'success': False,
-                'error': 'You have used all your spins for this campaign'
+                'error': f'You have used all your spins ({campaign.max_spins_per_user} maximum)'
             }, status=400)
 
-        # Determine prize based on probabilities
+        # Get prizes from campaign
         prizes = campaign.wheel_prizes
-        if not prizes:
-            # Default prizes if none configured
+
+        # Use default prizes if none configured
+        if not prizes or not isinstance(prizes, list) or len(prizes) == 0:
+            logger.warning(f"No prizes configured, using defaults")
             prizes = [
                 {"label": "10% OFF", "probability": 0.25, "type": "discount", "value": 10},
                 {"label": "15% OFF", "probability": 0.15, "type": "discount", "value": 15},
@@ -301,63 +326,136 @@ def spin_wheel(request, slug):
                 {"label": "Try Again", "probability": 0.10, "type": "nothing", "value": 0},
             ]
 
-        # Weighted random selection
-        total_probability = sum(p.get('probability', 0) for p in prizes)
-        rand = random.uniform(0, total_probability)
+        # Validate and normalize prizes
+        valid_prizes = []
+        for prize in prizes:
+            if isinstance(prize, dict) and 'label' in prize and 'probability' in prize:
+                # Ensure all required fields exist
+                normalized_prize = {
+                    'label': prize.get('label', 'Prize'),
+                    'probability': float(prize.get('probability', 0)),
+                    'type': prize.get('type', 'discount'),
+                    'value': float(prize.get('value', 0)),
+                }
+                valid_prizes.append(normalized_prize)
 
+        if not valid_prizes:
+            logger.error("No valid prizes available")
+            return JsonResponse({
+                'success': False,
+                'error': 'Campaign configuration error'
+            }, status=500)
+
+        prizes = valid_prizes
+
+        # Weighted random selection
+        total_probability = sum(p['probability'] for p in prizes)
+
+        if total_probability <= 0:
+            logger.error(f"Invalid total probability: {total_probability}")
+            return JsonResponse({
+                'success': False,
+                'error': 'Campaign configuration error'
+            }, status=500)
+
+        rand = random.uniform(0, total_probability)
         cumulative = 0
         selected_prize = prizes[-1]  # Default to last prize
 
         for prize in prizes:
-            cumulative += prize.get('probability', 0)
+            cumulative += prize['probability']
             if rand <= cumulative:
                 selected_prize = prize
                 break
 
-        # Create spin record
-        spin = WheelSpin.objects.create(
-            campaign=campaign,
-            user=request.user if request.user.is_authenticated else None,
-            session_key=session_key if not request.user.is_authenticated else '',
-            prize_won=selected_prize.get('label', 'Prize'),
-            prize_type=selected_prize.get('type', 'discount'),
-            prize_value=Decimal(str(selected_prize.get('value', 0))),
-            ip_address=request.META.get('REMOTE_ADDR'),
-            user_agent=request.META.get('HTTP_USER_AGENT', '')[:1000]
-        )
+        logger.info(f"Selected prize: {selected_prize['label']} (value: {selected_prize['value']})")
 
-        # Generate promo code for valid prizes
+        # Create WheelSpin record
+        try:
+            spin = WheelSpin.objects.create(
+                campaign=campaign,
+                user=request.user if request.user.is_authenticated else None,
+                session_key=session_key if not request.user.is_authenticated else '',
+                prize_won=selected_prize['label'],
+                prize_type=selected_prize['type'],
+                prize_value=Decimal(str(selected_prize['value'])),
+                ip_address=request.META.get('REMOTE_ADDR'),
+                user_agent=request.META.get('HTTP_USER_AGENT', '')[:1000]
+            )
+            logger.info(f"✅ Created WheelSpin #{spin.id}")
+        except Exception as e:
+            logger.error(f"❌ Error creating WheelSpin: {e}", exc_info=True)
+            return JsonResponse({
+                'success': False,
+                'error': 'Failed to record your spin. Please try again.'
+            }, status=500)
+
+        # ===================================================================
+        # FIX: Generate promo code IMMEDIATELY after creating spin
+        # ===================================================================
         promo_code = None
-        if selected_prize.get('type') != 'nothing':
-            promo_code = spin.generate_promo_code()
 
-        # Increment campaign spins
-        campaign.increment_spins()
+        if selected_prize['type'] != 'nothing':
+            try:
+                logger.info(f"Generating promo code for prize: {selected_prize['label']}")
+
+                # Call the generate_promo_code method
+                promo_code = spin.generate_promo_code()
+
+                if promo_code:
+                    logger.info(f"✅ Generated promo code: {promo_code}")
+                else:
+                    logger.warning(f"⚠️  generate_promo_code returned None")
+
+            except Exception as e:
+                logger.error(f"❌ Error generating promo code: {e}", exc_info=True)
+                # Don't fail the entire spin if promo generation fails
+                # Admin can manually create the code later
+                logger.warning("Spin recorded but promo code generation failed")
+        else:
+            logger.info(f"Prize type is 'nothing', no promo code needed")
+
+        # Increment campaign stats
+        try:
+            campaign.increment_spins()
+        except Exception as e:
+            logger.error(f"Error incrementing campaign spins: {e}")
 
         # Calculate remaining spins
-        spins_left = campaign.max_spins_per_user - (existing_spins + 1)
+        spins_left = max(campaign.max_spins_per_user - (existing_spins + 1), 0)
 
-        return JsonResponse({
+        # ===================================================================
+        # FIX: Include prize value in response
+        # ===================================================================
+        response_data = {
             'success': True,
             'prize': {
-                'label': selected_prize.get('label'),
-                'type': selected_prize.get('type'),
-                'value': float(selected_prize.get('value', 0)),
-                'promo_code': promo_code,
+                'label': selected_prize['label'],
+                'type': selected_prize['type'],
+                'value': selected_prize['value'],  # ✅ FIX: Include value
+                'promo_code': promo_code,  # ✅ FIX: This now contains the code
             },
             'spins_left': spins_left,
-            'message': f"Congratulations! You won {selected_prize.get('label')}!"
-        })
+            'message': f"🎉 Congratulations! You won {selected_prize['label']}!"
+        }
+
+        logger.info(f"✅ Spin successful - Response: {response_data}")
+
+        return JsonResponse(response_data)
 
     except Campaign.DoesNotExist:
+        logger.error(f"Campaign not found: {slug}")
         return JsonResponse({
             'success': False,
             'error': 'Campaign not found'
         }, status=404)
+
     except Exception as e:
+        logger.error(f"❌ Unexpected error in spin_wheel: {type(e).__name__}: {e}", exc_info=True)
         return JsonResponse({
             'success': False,
-            'error': 'An error occurred. Please try again.'
+            'error': 'An error occurred. Please try again.',
+            'debug': str(e) if request.user.is_staff else None
         }, status=500)
 
 

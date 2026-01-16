@@ -3,6 +3,7 @@
 {% load static %}
 {% load humanize %}
 {% load marketplace_extras %}
+{% load currency_tags %}
 
 {% block content %}
 <!-- SEO and Performance Optimizations -->
@@ -11,7 +12,7 @@
 <meta property="og:description" content="{{ product.description|truncatechars:160 }}">
 <meta property="og:image" content="{{ product.image.url }}">
 <meta property="og:url" content="{{ request.build_absolute_uri }}">
-<meta property="product:price:amount" content="{{ product.price }}">
+<meta property="product:price:amount" content="{% display_money product.price %}">
 <meta property="product:price:currency" content="GMD">
 
 <!-- Structured Data for SEO -->
@@ -30,7 +31,7 @@
     "@type": "Offer",
     "url": "{{ request.build_absolute_uri }}",
     "priceCurrency": "GMD",
-    "price": "{{ product.price }}",
+    "price": "{% display_money product.price %}",
     "availability": "{% if product.is_in_stock %}https://schema.org/InStock{% else %}https://schema.org/OutOfStock{% endif %}"
   },
   "aggregateRating": {
@@ -409,7 +410,7 @@
           <!-- Price Section -->
           <div class="price-section" role="region" aria-label="Product pricing">
             <div class="price-display">
-              <span class="current-price">{{ request.user.preferred_currency.symbol|default:"D" }}{{ product.price|intcomma }}</span>
+              <span class="current-price">{% display_money product.price %}</span>
               {% if product.original_price %}
                 <span class="original-price">{{ request.user.preferred_currency.symbol|default:"D" }}{{ product.original_price|intcomma }}</span>
                 <span class="discount-badge">{{ product.discount_percentage|floatformat:0 }}% OFF</span>
@@ -679,7 +680,7 @@
       <div class="product-preview mb-3 p-2 bg-white rounded shadow-sm border-start border-success border-3">
         <div class="d-flex align-items-center gap-2">
           <i class="fas fa-box text-success" aria-hidden="true"></i>
-          <small><strong>{{ product.name }}</strong> - D{{ product.price }}</small>
+          <small><strong>{{ product.name }}</strong> - {% display_money product.price %}</small>
         </div>
       </div>
     {% endif %}
@@ -1039,7 +1040,7 @@
   <div class="em-sticky-inner">
     <div class="em-sticky-left">
       <div class="em-sticky-title">{{ product.name|truncatechars:28 }}</div>
-      <div class="em-sticky-price">{{ request.user.preferred_currency.symbol|default:"D" }}{{ product.price|intcomma }}</div>
+      <div class="em-sticky-price">{% display_money product.price %}</div>
     </div>
 
     <div class="em-sticky-actions">

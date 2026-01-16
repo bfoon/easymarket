@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load humanize %}
+{% load currency_tags %}
 
 {% block title %}B2B Marketplace – EasyMarket Wholesale{% endblock %}
 
@@ -1218,7 +1219,7 @@
                      data-product-store="{{ product.store.name }}"
                      data-product-image="{% if first_img %}{{ first_img.image.url }}{% elif product.image %}{{ product.image.url }}{% endif %}"
                      data-product-images='[{% if product.images.all %}{% for img in product.images.all %}"{{ img.image.url }}"{% if not forloop.last %},{% endif %}{% endfor %}{% elif product.image %}"{{ product.image.url }}"{% endif %}]'
-                     data-product-price="{% if product.b2b_price %}{{ product.b2b_price }}{% else %}{{ product.price }}{% endif %}"
+                     data-product-price="{% if product.b2b_price %}{% display_money product.b2b_price %}{% else %}{% display_money product.price %}{% endif %}"
                      data-product-moq="{{ product.b2b_min_quantity }}"
                      data-product-features="{% with variants=product.variants.all %}{% for v in variants|slice:':4' %}{{ v.feature_option.feature.name }}: {{ v.feature_option.value }}{% if not forloop.last %} | {% endif %}{% endfor %}{% endwith %}"
                      data-product-description="{{ product.description|default_if_none:''|truncatechars:250 }}">
@@ -1261,7 +1262,7 @@
                        data-product-store="{{ product.store.name|escapejs }}"
                        data-product-image="{% if product.image %}{{ product.image.url }}{% endif %}"
                        data-product-images='[{% for img in product.images.all %}"{{ img.image.url }}"{% if not forloop.last %},{% endif %}{% empty %}{% if product.image %}"{{ product.image.url }}"{% endif %}{% endfor %}]'
-                       data-product-price="{% if product.b2b_price %}{{ product.b2b_price }}{% else %}{{ product.price }}{% endif %}"
+                       data-product-price="{% if product.b2b_price %}{% display_money product.b2b_price %}{% else %}{% display_money product.price %}{% endif %}"
                        data-product-moq="{{ product.b2b_min_quantity }}"
                        data-product-description="{{ product.description|default_if_none:''|truncatechars:250|escapejs }}">
                         {{ product.name|truncatechars:45 }}
@@ -1280,12 +1281,12 @@
                     <div class="b2b-product-pricing">
                         {% if product.b2b_price %}
                         <div class="b2b-product-price">
-                            D{{ product.b2b_price }}
+                            {% display_money product.b2b_price %}
                             <span class="b2b-product-price-label">B2B</span>
                         </div>
                         {% else %}
                         <div class="b2b-product-price">
-                            {{ request.user.preferred_currency.symbol|default:"D" }}{{ product.price }}
+                            {% display_money product.price %}
                         </div>
                         {% endif %}
                     </div>
@@ -1297,14 +1298,16 @@
                     </div>
                     {% endif %}
 
-                    {% if product.b2b_tier_price %}
-                    <div class="b2b-product-tier">
-                        <strong>Tier Pricing Available</strong>
-                        {% for min_qty, tier_price in product.b2b_tier_price.items|slice:":2" %}
-                        <div>{{ min_qty }}+ → D{{ tier_price }}</div>
-                        {% endfor %}
-                    </div>
-                    {% endif %}
+                        {% if product.b2b_tier_price %}
+                          <div class="b2b-product-tier">
+                            <strong>Tier Pricing Available</strong>
+
+                            {% for min_qty, tier_price in product.b2b_tier_price.items|slice:":2" %}
+                              <div>{{ min_qty }}+ → {% display_money tier_price %}</div>
+                            {% endfor %}
+                          </div>
+                        {% endif %}
+
 
                     <div class="b2b-product-actions">
                         <button type="button"

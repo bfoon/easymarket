@@ -1,6 +1,7 @@
     {% extends "base.html" %}
     {% load static %}
     {% load humanize %}
+    {% load currency_tags %}
 
     {% block title %}Order {{ order.order_number|default:order.id }} · B2B Order Detail{% endblock %}
 
@@ -318,7 +319,7 @@
         <div class="col-12 col-md-3">
           <div class="sod-stat">
             <div class="k">Subtotal</div>
-            <div class="v">{{ request.user.preferred_currency.symbol|default:"D" }}{{ order.subtotal|default:0|floatformat:2|intcomma }}</div>
+            <div class="v">{% display_money order.subtotal %}</div>
             <div class="hint">Before shipping & discounts</div>
           </div>
         </div>
@@ -326,7 +327,7 @@
         <div class="col-12 col-md-3">
           <div class="sod-stat">
             <div class="k">Shipping</div>
-            <div class="v">{{ request.user.preferred_currency.symbol|default:"D" }}{{ order.shipping_cost|floatformat:2|intcomma }}</div>
+            <div class="v">{% display_money order.shipping_cost %}</div>
             <div class="hint">{% if order.shipping_method %}{{ order.shipping_method }}{% else %}Not set{% endif %}</div>
           </div>
         </div>
@@ -335,7 +336,7 @@
           <div class="sod-stat">
             <div class="k">Grand Total</div>
             <div class="v">
-              {{ request.user.preferred_currency.symbol|default:"D" }}{{ grand_total|floatformat:2|intcomma }}
+              {% display_money grand_total %}
             </div>
             <div class="hint">
               {% if order.is_b2b %}Final total depends on your pricing + shipping.{% else %}Automatically computed.{% endif %}
@@ -417,7 +418,7 @@
                                 {% if order.is_b2b and item.requested_unit_price %}
                                   <span class="ms-2 sod-chip">
                                     <i class="fas fa-handshake"></i>
-                                    Requested: {{ request.user.preferred_currency.symbol|default:"D" }}{{ item.requested_unit_price|floatformat:2|intcomma }}
+                                    Requested: {% display_money item.requested_unit_price %}
                                   </span>
                                 {% endif %}
                               </div>
@@ -434,7 +435,7 @@
                         <td>
                           {% if order.is_b2b %}
                             {% if item.seller_unit_price %}
-                              <span class="fw-bold">{{ request.user.preferred_currency.symbol|default:"D" }}{{ item.seller_unit_price|floatformat:2|intcomma }}</span>
+                              <span class="fw-bold">{% display_money item.seller_unit_price %}</span>
                               <div class="sod-mini text-muted">Seller price</div>
                             {% else %}
                               <span class="sod-chip pending"><i class="fas fa-exclamation-circle"></i>Not set</span>
@@ -442,14 +443,14 @@
                             {% endif %}
                           {% else %}
                             <span class="fw-bold">
-                              {{ item.unit_price|default:item.product.price|floatformat:2|intcomma }}
+                              {% display_money item.unit_price|default:item.product.price %}
                             </span>
                           {% endif %}
                         </td>
 
                         <td class="fw-bold">
-                          {{ request.user.preferred_currency.symbol|default:"D" }}{% widthratio item.get_effective_unit_price 1 item.quantity as linetotal %}
-                          {{ linetotal|floatformat:2|intcomma }}
+                          {% widthratio item.get_effective_unit_price 1 item.quantity as linetotal %}
+                          {% display_money linetotal %}
                         </td>
 
                         <td class="text-end">
@@ -728,14 +729,14 @@
 
                           <div class="small text-muted mt-1">
                             {% if item.requested_unit_price %}
-                              Buyer requested: <strong>{{ request.user.preferred_currency.symbol|default:"D" }}{{ item.requested_unit_price|floatformat:2|intcomma }}</strong>
+                              Buyer requested: <strong>{% display_money item.requested_unit_price %}</strong>
                             {% endif %}
                           </div>
                         </td>
 
                         <td class="small text-muted">
                           Default:
-                          {{ request.user.preferred_currency.symbol|default:"D" }}{% if item.product.b2b_price %}{{ item.product.b2b_price }} (B2B){% else %}{{ item.product.price }} (Retail){% endif %}
+                          {% if item.product.b2b_price %}{% display_money item.product.b2b_price %} (B2B){% else %}{% display_money item.product.price %} (Retail){% endif %}
                         </td>
                       </tr>
                     {% endfor %}

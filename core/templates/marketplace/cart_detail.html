@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load currency_tags %}
 
 {% block content %}
 <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
@@ -66,17 +67,17 @@
                           </div>
                           {% endif %}
                           <div class="d-md-none">
-                            <span class="fw-bold text-primary">{{ request.user.preferred_currency.symbol|default:"D" }}{{ item.product.price|floatformat:"2" }}</span>
+                            <span class="fw-bold text-primary">{% display_money item.product.price %}</span>
                             <span class="text-muted mx-2">×</span>
                             <span class="text-muted">{{ item.quantity }}</span>
                             <span class="text-muted mx-2">=</span>
-                            <span class="fw-bold text-success">{{ request.user.preferred_currency.symbol|default:"D" }}{{ item.subtotal|floatformat:"2" }}</span>
+                            <span class="fw-bold text-success">{% display_cart_money item.subtotal %}</span>
                           </div>
                         </div>
                       </div>
                     </td>
                     <td class="text-center d-none d-md-table-cell">
-                      <span class="fw-semibold text-dark">{{ request.user.preferred_currency.symbol|default:"D" }}{{ item.product.price|floatformat:"2" }}</span>
+                      <span class="fw-semibold text-dark">{% display_money item.product.price %}</span>
                     </td>
                     <td class="text-center">
                       <div class="d-flex justify-content-center">
@@ -97,7 +98,7 @@
                       </div>
                     </td>
                     <td class="text-center d-none d-lg-table-cell">
-                      <span class="fw-bold text-success fs-5 subtotal">{{ request.user.preferred_currency.symbol|default:"D" }}{{ item.subtotal|floatformat:"2" }}</span>
+                      <span class="fw-bold text-success fs-5 subtotal">{% display_cart_money item.subtotal %}</span>
                     </td>
                     <td class="text-center">
                       {% if item.can_remove %}
@@ -336,27 +337,40 @@
               <h5 class="mb-0 fw-bold"><i class="fas fa-receipt me-2 text-primary"></i> Order Summary</h5>
             </div>
             <div class="card-body">
-              <div class="d-flex justify-content-between mb-3 pb-2">
-                <span class="text-muted">Subtotal (<span id="item-count">{{ cart_count }}</span> items)</span>
-                <span class="fw-semibold order-summary-subtotal" id="order-subtotal">{{ request.user.preferred_currency.symbol|default:"D" }}{{ total_price|floatformat:"2" }}</span>
-              </div>
-              <div class="d-flex justify-content-between mb-3 pb-2">
-                <span class="text-muted">Shipping</span>
-                <span class="text-success fw-semibold"><i class="fas fa-truck me-1"></i> Free</span>
-              </div>
-              <div class="d-flex justify-content-between mb-3 pb-2">
-                <span class="text-muted">Tax</span>
-                <span id="tax-amount">{{ request.user.preferred_currency.symbol|default:"D" }}{{ tax_amount|default:"0.00"|floatformat:"2" }}</span>
-              </div>
-              <div class="d-flex justify-content-between mb-3 pb-2 promo-discount d-none">
-                <span class="text-success"><i class="fas fa-tags me-1"></i> Promo Discount</span>
-                <span class="text-success fw-semibold" id="promo-discount-amount">-{{ request.user.preferred_currency.symbol|default:"D" }}0.00</span>
-              </div>
-              <hr class="my-3">
-              <div class="d-flex justify-content-between mb-4">
-                <strong class="fs-5">Total</strong>
-                <strong class="text-success fs-4" id="total-price">{{ request.user.preferred_currency.symbol|default:"D" }}{{ final_total|default:total_price|floatformat:"2" }}</strong>
-              </div>
+            <div class="d-flex justify-content-between mb-3 pb-2">
+              <span class="text-muted">Subtotal (<span id="item-count">{{ cart_count }}</span> items)</span>
+              <span class="fw-semibold order-summary-subtotal" id="order-subtotal">
+                {% display_cart_money total_price %}
+              </span>
+            </div>
+
+            <div class="d-flex justify-content-between mb-3 pb-2">
+              <span class="text-muted">Shipping</span>
+              <span class="text-success fw-semibold"><i class="fas fa-truck me-1"></i> Free</span>
+            </div>
+
+            <div class="d-flex justify-content-between mb-3 pb-2">
+              <span class="text-muted">Tax</span>
+              <span id="tax-amount">
+                {% display_cart_money tax_amount|default:0 %}
+              </span>
+            </div>
+
+            <div class="d-flex justify-content-between mb-3 pb-2 promo-discount d-none">
+              <span class="text-success"><i class="fas fa-tags me-1"></i> Promo Discount</span>
+              <span class="text-success fw-semibold" id="promo-discount-amount">
+                -{% display_cart_money 0 %}
+              </span>
+            </div>
+
+            <hr class="my-3">
+
+            <div class="d-flex justify-content-between mb-4">
+              <strong class="fs-5">Total</strong>
+              <strong class="text-success fs-4" id="total-price">
+                {% display_cart_money final_total|default:total_price %}
+              </strong>
+            </div>
 
               <div class="d-grid gap-2">
                 <form action="{% url 'orders:checkout_cart' %}" method="post" id="checkoutForm">

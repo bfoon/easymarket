@@ -4,7 +4,7 @@
 {% load static %}
 
 {% block content %}
-
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
 <style>
 /* Campaign Detail Styles */
 .campaign-hero {
@@ -178,6 +178,16 @@
     background: {{ campaign.background_color }};
     border-color: {{ campaign.background_color }};
 }
+
+#openWheelBtn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3) !important;
+}
+
+#openWheelBtn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
 </style>
 
 <!-- Campaign Hero Section -->
@@ -193,12 +203,12 @@
                 <span class="campaign-badge">
                     <i class="fas fa-bolt me-2"></i>{{ campaign.get_campaign_type_display }}
                 </span>
-                
+
                 <h1 class="display-4 fw-bold mb-3">{{ campaign.title }}</h1>
                 <p class="lead mb-4">{{ campaign.description }}</p>
-                
+
                 <!-- Countdown Timer -->
-                <div class="countdown-timer d-inline-block" id="campaignCountdown" 
+                <div class="countdown-timer d-inline-block" id="campaignCountdown"
                      data-end-date="{{ campaign.end_date|date:'c' }}">
                     <div class="d-flex gap-3">
                         <div class="time-unit">
@@ -222,7 +232,7 @@
                         </div>
                     </div>
                 </div>
-                
+
                 <!-- Campaign Stats -->
                 <div class="campaign-stats">
                     <div class="row">
@@ -249,7 +259,7 @@
             {% if campaign.banner_image %}
             </div>
             <div class="col-lg-6">
-                <img src="{{ campaign.banner_image.url }}" alt="{{ campaign.title }}" 
+                <img src="{{ campaign.banner_image.url }}" alt="{{ campaign.title }}"
                      class="img-fluid rounded shadow-lg">
             </div>
         </div>
@@ -273,9 +283,19 @@
                 </div>
                 <div class="col-md-6 text-md-end">
                     {% if user_can_spin %}
-                    <button class="btn btn-primary" id="openWheelBtn">
+                    <button class="btn" id="openWheelBtn"
+                            style="background: linear-gradient(135deg, {{ campaign.background_color }} 0%, {{ campaign.background_color }}dd 100%);
+                                   color: {{ campaign.text_color }};
+                                   border: none;
+                                   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+                                   transition: all 0.3s ease;">
                         <i class="fas fa-gift me-2"></i>
                         Spin to Win! ({{ user_spins_left }} left)
+                    </button>
+                    {% elif campaign.enable_wheel and not user.is_authenticated and campaign.require_login %}
+                    <button class="btn btn-secondary" onclick="window.location.href='{% url 'accounts:login' %}?next={{ request.path }}'">
+                        <i class="fas fa-lock me-2"></i>
+                        Login to Spin
                     </button>
                     {% endif %}
                 </div>
@@ -298,22 +318,22 @@
                         -{{ product.campaign_discount_percentage }}% OFF
                     </div>
                     {% endif %}
-                    
+
                     <!-- Product Image -->
                     <div class="position-relative" style="padding-bottom: 100%; overflow: hidden;">
                         {% if product.display_image_url %}
-                        <img src="{{ product.display_image_url }}" 
+                        <img src="{{ product.display_image_url }}"
                              alt="{{ product.name }}"
                              class="position-absolute w-100 h-100"
                              style="object-fit: cover; top: 0; left: 0;"
                              loading="lazy">
                         {% else %}
-                        <div class="position-absolute w-100 h-100" 
+                        <div class="position-absolute w-100 h-100"
                              style="background: #f8f9fa; display: flex; align-items: center; justify-content: center; top: 0; left: 0;">
                             <i class="fas fa-image fa-3x text-muted"></i>
                         </div>
                         {% endif %}
-                        
+
                         <!-- Quick Actions -->
                         <div class="position-absolute top-0 end-0 p-2" style="z-index: 3;">
                             <button class="btn btn-light btn-sm rounded-circle shadow-sm mb-1"
@@ -324,13 +344,13 @@
                             </button>
                         </div>
                     </div>
-                    
+
                     <!-- Product Info -->
                     <div class="p-3">
                         <h6 class="mb-2" style="min-height: 2.5rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
                             {{ product.name }}
                         </h6>
-                        
+
                         <!-- Rating -->
                         <div class="d-flex align-items-center mb-2">
                             <div class="text-warning me-1" style="font-size: 0.85rem;">
@@ -344,17 +364,17 @@
                             </div>
                             <small class="text-muted">({{ product.reviews.count }})</small>
                         </div>
-                        
+
                         <!-- Price -->
                         <div class="price-comparison">
                             <span class="campaign-price">D{{ product.campaign_price|floatformat:0|intcomma }}</span>
                             <span class="original-price">D{{ product.price|floatformat:0|intcomma }}</span>
                         </div>
-                        
+
                         <div class="savings-badge">
                             Save D{{ product.campaign_discount_amount|floatformat:0|intcomma }}
                         </div>
-                        
+
                         <!-- Stock Indicator -->
                         {% if product.campaign_stock_remaining is not None %}
                             {% if product.campaign_stock_remaining <= 5 %}
@@ -369,9 +389,9 @@
                             </div>
                             {% endif %}
                         {% endif %}
-                        
+
                         <!-- Add to Cart -->
-                        <button class="btn btn-primary w-100 mt-3" 
+                        <button class="btn btn-primary w-100 mt-3"
                                 onclick="event.stopPropagation(); addToCart({{ product.id }}, 1, this)">
                             <i class="fas fa-shopping-cart me-2"></i>
                             Add to Cart
@@ -381,7 +401,7 @@
             </div>
             {% endfor %}
         </div>
-        
+
         <!-- Pagination -->
         {% if page_obj.has_other_pages %}
         <nav aria-label="Product pagination" class="mt-5">
@@ -396,7 +416,7 @@
                     </a>
                 </li>
                 {% endif %}
-                
+
                 {% for num in page_obj.paginator.page_range %}
                     {% if page_obj.number == num %}
                     <li class="page-item active">
@@ -408,7 +428,7 @@
                     </li>
                     {% endif %}
                 {% endfor %}
-                
+
                 {% if page_obj.has_next %}
                 <li class="page-item">
                     <a class="page-link" href="?page={{ page_obj.next_page_number }}">
@@ -422,7 +442,7 @@
             </ul>
         </nav>
         {% endif %}
-        
+
         {% else %}
         <div class="empty-state">
             <i class="fas fa-shopping-bag"></i>
@@ -442,27 +462,27 @@
 // Countdown Timer
 function initCountdown() {
     const endDate = new Date('{{ campaign.end_date|date:"c" }}');
-    
+
     function updateCountdown() {
         const now = new Date();
         const diff = endDate - now;
-        
+
         if (diff <= 0) {
             document.getElementById('campaignCountdown').innerHTML = '<p class="mb-0 fw-bold">Campaign Ended</p>';
             return;
         }
-        
+
         const days = Math.floor(diff / (1000 * 60 * 60 * 24));
         const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
         const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
         const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-        
+
         document.getElementById('days').textContent = String(days).padStart(2, '0');
         document.getElementById('hours').textContent = String(hours).padStart(2, '0');
         document.getElementById('minutes').textContent = String(minutes).padStart(2, '0');
         document.getElementById('seconds').textContent = String(seconds).padStart(2, '0');
     }
-    
+
     updateCountdown();
     setInterval(updateCountdown, 1000);
 }

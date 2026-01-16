@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% load humanize %}
 {% load static %}
+{% load currency_tags %}
 
 {% block title %}My B2B Orders{% endblock %}
 {% block content %}
@@ -776,7 +777,7 @@
 
                 <div class="order-right">
                     <div class="order-total">
-                        {{ request.user.preferred_currency.symbol|default:"D" }}{{ order.grand_total|floatformat:2|intcomma }}
+                        {% display_money order.grand_total %}
                     </div>
                     <div class="order-total-label">Order Total</div>
                 </div>
@@ -800,14 +801,14 @@
                             <div class="item-meta">
                                 <span class="item-quantity">{{ item.quantity }}× units</span>
                                 {% if item.unit_price %}
-                                <span>{{ request.user.preferred_currency.symbol|default:"D" }}{{ item.get_effective_unit_price|floatformat:2 }}/unit</span>
+                                <span>{% display_money item.get_effective_unit_price %}/unit</span>
                                 {% endif %}
                             </div>
                         </div>
                     </div>
                     <div class="item-price">
                         {% if item.unit_price %}
-                        <div class="item-total-price">D{{ item.line_total|floatformat:2|intcomma }}</div>
+                        <div class="item-total-price">{% display_money item.line_total %}</div>
                         {% else %}
                         <div class="item-total-price text-muted">Pending Price</div>
                         {% endif %}
@@ -840,7 +841,7 @@
                     </div>
                     <div class="meta-content">
                         <div class="meta-label">Subtotal</div>
-                        <div class="meta-value">{{ request.user.preferred_currency.symbol|default:"D" }}{{ order.items_total|floatformat:2|intcomma }}</div>
+                        <div class="meta-value">{% display_money order.items_total %}</div>
                     </div>
                 </div>
 
@@ -852,7 +853,7 @@
                         <div class="meta-label">Shipping</div>
                         <div class="meta-value">
                             {% if order.shipping_cost > 0 %}
-                            {{ request.user.preferred_currency.symbol|default:"D" }}{{ order.shipping_cost|floatformat:2|intcomma }}
+                            {% display_money order.shipping_cost %}
                             {% else %}
                             TBD
                             {% endif %}

@@ -2,6 +2,8 @@
 {% load humanize %}
 {% block content %}
 {% load custom_filters %}
+{% load currency_tags %}
+
 {% load static %}
 
 <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
@@ -1032,7 +1034,9 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Spin button handler
+    // ========================================================================
+    // FIX: Complete spin button handler with promo code generation
+    // ========================================================================
     const spinButton = document.getElementById('spinButton');
     if (spinButton) {
         spinButton.addEventListener('click', async function() {
@@ -1042,71 +1046,107 @@ document.addEventListener('DOMContentLoaded', function() {
             spinButton.textContent = 'SPINNING...';
 
             try {
-                // FIXED: Construct correct URL
+                // Construct correct URL
                 const spinUrl = "{% url 'marketplace:spin_wheel' flash_campaign.slug %}";
-
-                console.log('Spinning wheel, URL:', spinUrl);
+                console.log('🎯 Spinning wheel, URL:', spinUrl);
 
                 // Call API to determine prize
                 const response = await fetch(spinUrl, {
-                      method: 'POST',
-                      credentials: 'same-origin', // ✅ important
-                      headers: {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {
                         'Content-Type': 'application/json',
                         'X-CSRFToken': getCookie('csrftoken'),
                         'X-Requested-With': 'XMLHttpRequest'
-                      }
-                    });
+                    }
+                });
 
-                console.log('Response status:', response.status);
+                console.log('📡 Response status:', response.status);
 
                 // Check if response is JSON
                 const contentType = response.headers.get('content-type');
                 if (!contentType || !contentType.includes('application/json')) {
                     const text = await response.text();
-                    console.error('Non-JSON response:', text);
+                    console.error('❌ Non-JSON response:', text);
                     throw new Error('Server returned non-JSON response');
                 }
 
                 const data = await response.json();
-                console.log('Response data:', data);
+                console.log('📦 Response data:', data);
 
                 if (data.success) {
+                    // ============================================================
+                    // FIX: Log prize details including value and promo code
+                    // ============================================================
+                    console.log('🎁 Prize won:', {
+                        label: data.prize.label,
+                        type: data.prize.type,
+                        value: data.prize.value,
+                        promo_code: data.prize.promo_code
+                    });
+
                     // Find prize index
-                    const prizeIndex = wheelConfig.prizes.findIndex(p => p.label === data.prize.label);
+                    const prizeIndex = wheelConfig.prizes.findIndex(p =>
+                        p.label === data.prize.label ||
+                        p.label.toLowerCase().includes(data.prize.label.toLowerCase())
+                    );
+
+                    console.log('🎯 Prize index:', prizeIndex);
 
                     // Spin wheel
                     if (wheel) {
                         wheel.onSpinComplete = function() {
-                            // Show prize modal
+                            // ================================================
+                            // FIX: Show prize modal with complete prize data
+                            // ================================================
                             showPrizeModal(data.prize, data.spins_left);
 
                             // Update remaining spins
                             const spinsEl = document.getElementById('spinsRemaining');
-                            if (spinsEl) spinsEl.textContent = data.spins_left;
+                            if (spinsEl) {
+                                spinsEl.textContent = data.spins_left;
+                                console.log('📊 Spins remaining:', data.spins_left);
+                            }
+
+                            // Update open wheel button
+                            if (openWheelBtn) {
+                                if (data.spins_left > 0) {
+                                    openWheelBtn.innerHTML = `<i class="fas fa-gift me-2"></i>Spin to Win! (${data.spins_left} left)`;
+                                } else {
+                                    openWheelBtn.disabled = true;
+                                    openWheelBtn.innerHTML = '<i class="fas fa-check me-2"></i>No Spins Left';
+                                }
+                            }
 
                             // Hide wheel modal after a delay
                             setTimeout(() => {
                                 if (wheelModal) wheelModal.hide();
-                                spinButton.disabled = false;
-                                spinButton.textContent = 'SPIN!';
+                                spinButton.disabled = data.spins_left === 0;
+                                spinButton.textContent = data.spins_left > 0 ? 'SPIN!' : 'NO SPINS LEFT';
                             }, 1000);
                         };
 
                         wheel.spin(prizeIndex >= 0 ? prizeIndex : 0);
 
-                        // Show confetti
+                        // Show confetti for winning prizes
                         if (data.prize.type !== 'nothing') {
                             createConfetti();
                         }
                     }
                 } else {
+                    // Handle error response
+                    console.error('❌ Spin failed:', data.error);
                     alert(data.error || 'An error occurred');
                     spinButton.disabled = false;
                     spinButton.textContent = 'SPIN!';
+
+                    // Handle login requirement
+                    if (data.require_login) {
+                        window.location.href = '/accounts/login/?next=' + encodeURIComponent(window.location.pathname);
+                    }
                 }
             } catch (error) {
-                console.error('Error:', error);
+                console.error('❌ Error:', error);
                 alert('An error occurred: ' + error.message + '. Please check console for details.');
                 spinButton.disabled = false;
                 spinButton.textContent = 'SPIN!';
@@ -1115,6 +1155,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
+// ============================================================================
+// FIX: Updated showPrizeModal to display value and promo code correctly
+// ============================================================================
 function showPrizeModal(prize, spinsLeft) {
     const prizeTitle = document.getElementById('prizeTitle');
     const prizeMessage = document.getElementById('prizeMessage');
@@ -1122,30 +1165,87 @@ function showPrizeModal(prize, spinsLeft) {
     const prizeCode = document.getElementById('prizeCode');
     const prizeAnimation = document.getElementById('prizeAnimation');
 
-    if (prize.type === 'nothing') {
-        if (prizeAnimation) prizeAnimation.innerHTML = '<i class="fas fa-times-circle fa-4x" style="color: #ff4757;"></i>';
-        if (prizeTitle) prizeTitle.textContent = 'Better Luck Next Time!';
-        if (prizeMessage) prizeMessage.textContent = prize.label;
-        if (prizeCodeContainer) prizeCodeContainer.classList.add('d-none');
-    } else {
-        if (prizeAnimation) prizeAnimation.innerHTML = '<i class="fas fa-trophy fa-4x" style="color: #ffc048; animation: bounce 1s infinite;"></i>';
-        if (prizeTitle) prizeTitle.textContent = 'Congratulations! 🎉';
-        if (prizeMessage) prizeMessage.textContent = `You won: ${prize.label}`;
+    console.log('🎁 Showing prize modal:', prize);
 
+    if (prize.type === 'nothing') {
+        // "Try Again" or "Nothing" prize
+        if (prizeAnimation) {
+            prizeAnimation.innerHTML = '<i class="fas fa-times-circle fa-4x" style="color: #ff4757;"></i>';
+        }
+        if (prizeTitle) {
+            prizeTitle.textContent = 'Better Luck Next Time!';
+        }
+        if (prizeMessage) {
+            prizeMessage.textContent = prize.label;
+        }
+        if (prizeCodeContainer) {
+            prizeCodeContainer.classList.add('d-none');
+        }
+    } else {
+        // Winning prize
+        if (prizeAnimation) {
+            prizeAnimation.innerHTML = '<i class="fas fa-trophy fa-4x" style="color: #ffc048; animation: bounce 1s infinite;"></i>';
+        }
+        if (prizeTitle) {
+            prizeTitle.textContent = 'Congratulations! 🎉';
+        }
+
+        // ====================================================================
+        // FIX: Build prize message with value
+        // ====================================================================
+        let prizeText = `You won: ${prize.label}`;
+
+        // Add value to display if it exists and is not zero
+        if (prize.value && prize.value > 0) {
+            if (prize.type === 'discount') {
+                prizeText = `You won: ${prize.value}% OFF!`;
+            } else if (prize.type === 'fixed_amount') {
+                prizeText = `You won: D${prize.value} OFF!`;
+            }
+        } else if (prize.type === 'free_shipping') {
+            prizeText = `You won: Free Shipping!`;
+        }
+
+        if (prizeMessage) {
+            prizeMessage.textContent = prizeText;
+        }
+
+        console.log('💬 Prize message:', prizeText);
+
+        // ====================================================================
+        // FIX: Show promo code if available
+        // ====================================================================
         if (prize.promo_code) {
-            if (prizeCode) prizeCode.textContent = prize.promo_code;
-            if (prizeCodeContainer) prizeCodeContainer.classList.remove('d-none');
+            if (prizeCode) {
+                prizeCode.textContent = prize.promo_code;
+            }
+            if (prizeCodeContainer) {
+                prizeCodeContainer.classList.remove('d-none');
+            }
+            console.log('✅ Promo code displayed:', prize.promo_code);
         } else {
-            if (prizeCodeContainer) prizeCodeContainer.classList.add('d-none');
+            if (prizeCodeContainer) {
+                prizeCodeContainer.classList.add('d-none');
+            }
+            console.warn('⚠️  No promo code in prize data');
         }
     }
 
-    if (prizeModal) prizeModal.show();
+    // Show the prize modal
+    if (prizeModal) {
+        prizeModal.show();
+    }
 
+    // Hide "Spin to Win" button if no spins left
     if (spinsLeft === 0) {
         const openBtn = document.getElementById('openWheelBtn');
-        if (openBtn) openBtn.classList.add('d-none');
+        if (openBtn) {
+            openBtn.disabled = true;
+            openBtn.innerHTML = '<i class="fas fa-check me-2"></i>No Spins Left';
+        }
     }
+
+    console.log('📊 Spins left:', spinsLeft);
 }
 
 function createConfetti() {
@@ -1167,32 +1267,70 @@ function createConfetti() {
     }
 }
 
+// ============================================================================
+// FIX: Enhanced copyPromoCode with better feedback
+// ============================================================================
 function copyPromoCode() {
     const code = document.getElementById('prizeCode');
-    if (!code) return;
+    if (!code) {
+        console.error('❌ Promo code element not found');
+        return;
+    }
 
     const codeText = code.textContent;
-    navigator.clipboard.writeText(codeText).then(() => {
-        alert('Promo code copied to clipboard!');
-    }).catch(err => {
-        console.error('Failed to copy:', err);
+
+    // Modern clipboard API
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(codeText).then(() => {
+            console.log('✅ Promo code copied:', codeText);
+
+            // Visual feedback
+            const copyBtn = document.querySelector('[onclick="copyPromoCode()"]');
+            if (copyBtn) {
+                const originalText = copyBtn.innerHTML;
+                copyBtn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                copyBtn.classList.add('btn-success');
+
+                setTimeout(() => {
+                    copyBtn.innerHTML = originalText;
+                    copyBtn.classList.remove('btn-success');
+                }, 2000);
+            } else {
+                alert('Promo code copied: ' + codeText);
+            }
+        }).catch(err => {
+            console.error('❌ Failed to copy:', err);
+            fallbackCopy(codeText);
+        });
+    } else {
         // Fallback for older browsers
-        const textArea = document.createElement('textarea');
-        textArea.value = codeText;
-        document.body.appendChild(textArea);
-        textArea.select();
-        try {
-            document.execCommand('copy');
-            alert('Promo code copied to clipboard!');
-        } catch (err) {
-            console.error('Fallback copy failed:', err);
-        }
-        document.body.removeChild(textArea);
-    });
+        fallbackCopy(codeText);
+    }
+}
+
+function fallbackCopy(text) {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-999999px';
+    document.body.appendChild(textArea);
+    textArea.select();
+
+    try {
+        document.execCommand('copy');
+        console.log('✅ Promo code copied (fallback):', text);
+        alert('Promo code copied: ' + text);
+    } catch (err) {
+        console.error('❌ Fallback copy failed:', err);
+        alert('Failed to copy. Code: ' + text);
+    }
+
+    document.body.removeChild(textArea);
 }
 
 function shopNow() {
     if (prizeModal) prizeModal.hide();
+    if (wheelModal) wheelModal.hide();
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -1258,9 +1396,10 @@ function getCookie(name) {
                     {% endif %}
                 </div>
                 <div class="temu-trending-name">{{ product.name|truncatechars:18 }}</div>
-                <div class="temu-trending-price">
-                    {% if product.price %}{{ request.user.preferred_currency.symbol|default:"D" }}{{ product.price|intcomma }}{% else %}Price N/A{% endif %}
-                </div>
+                <span class="temu-current-price">
+  {% display_money product.price %}
+</span>
+
             </div>
             {% empty %}
             <div class="text-center py-3 w-100">
@@ -1353,8 +1492,9 @@ function getCookie(name) {
                     <!-- Pricing -->
                     <div class="temu-product-price">
                         <span class="temu-current-price">
-                            {% if product.price %}{{ request.user.preferred_currency.symbol|default:"D" }}{{ product.price|intcomma }}{% else %}Price N/A{% endif %}
+                          {% display_money product.price %}
                         </span>
+
                         {% if product.original_price %}
                         <span class="temu-original-price">{{ request.user.preferred_currency.symbol|default:"D" }}{{ product.original_price|intcomma }}</span>
                         {% endif %}
@@ -1455,7 +1595,9 @@ function getCookie(name) {
 
 
         <div class="exp-price-row">
-          <div class="temu-current-price">{% if product.price %}{{ request.user.preferred_currency.symbol|default:"D" }}{{ product.price|intcomma }}{% else %}—{% endif %}</div>
+          <span class="temu-current-price">
+              {% display_money product.price %}
+            </span>
           {% if product.original_price %}
             <div class="exp-orig">{{ request.user.preferred_currency.symbol|default:"D" }}{{ product.original_price|intcomma }}</div>
           {% endif %}
@@ -1622,7 +1764,10 @@ function getCookie(name) {
                     {% if product.price %}
                     <div class="mb-2">
                         <div class="d-flex align-items-baseline gap-2">
-                            <span class="temu-current-price">D{{ product.price|intcomma }}</span>
+                            <span class="temu-current-price">
+                              {% display_money product.price %}
+                            </span>
+
                             {% if product.original_price %}
                             <small class="text-muted text-decoration-line-through">D{{ product.original_price|intcomma }}</small>
                             {% endif %}

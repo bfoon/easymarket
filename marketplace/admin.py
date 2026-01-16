@@ -393,50 +393,111 @@ class CampaignProductAdmin(admin.ModelAdmin):
 
 @admin.register(WheelSpin)
 class WheelSpinAdmin(admin.ModelAdmin):
+    """Admin interface for WheelSpin model"""
+
     list_display = [
-        'user_display', 'campaign', 'prize_won', 'prize_type',
-        'prize_value', 'promo_code', 'is_redeemed', 'created_at'
-    ]
-    list_filter = ['campaign', 'prize_type', 'is_redeemed', 'created_at']
-    search_fields = ['user__email', 'user__username', 'session_key', 'prize_won', 'promo_code']  # Added search_fields
-    readonly_fields = [
-        'campaign', 'user', 'session_key', 'prize_won', 'prize_type',
-        'prize_value', 'promo_code', 'is_redeemed', 'redeemed_at',
-        'ip_address', 'user_agent', 'created_at'
+        'id',
+        'campaign',
+        'user_display',
+        'prize_won',
+        'prize_type',
+        'promo_code_display',
+        'is_redeemed',
+        'spun_at'  # Changed from 'created_at' to 'spun_at'
     ]
 
-    date_hierarchy = 'created_at'
+    list_filter = [
+        'campaign',
+        'prize_type',
+        'is_redeemed',
+        'spun_at'  # Changed from 'created_at' to 'spun_at'
+    ]
+
+    search_fields = [
+        'user__username',
+        'user__email',
+        'session_key',
+        'prize_won',
+        'promo_code__code'
+    ]
+
+    readonly_fields = [
+        'spun_at',  # Changed from 'created_at'
+        'redeemed_at',
+        'ip_address',
+        'user_agent',
+        'prize_won',
+        'prize_type',
+        'prize_value',
+        'session_key',
+    ]
+
+    raw_id_fields = ['user', 'campaign', 'promo_code', 'order']
+
+    date_hierarchy = 'spun_at'  # Changed from 'created_at' to 'spun_at'
 
     fieldsets = (
-        ('Spin Information', {
-            'fields': ('campaign', 'user', 'session_key', 'created_at')
+        ('Campaign & User', {
+            'fields': ('campaign', 'user', 'session_key')
         }),
         ('Prize Details', {
             'fields': ('prize_won', 'prize_type', 'prize_value', 'promo_code')
         }),
-        ('Redemption', {
-            'fields': ('is_redeemed', 'redeemed_at')
+        ('Redemption Status', {
+            'fields': ('is_redeemed', 'redeemed_at', 'order')
         }),
-        ('Technical', {
-            'fields': ('ip_address', 'user_agent'),
+        ('Tracking Information', {
+            'fields': ('spun_at', 'ip_address', 'user_agent'),
             'classes': ('collapse',)
-        })
+        }),
     )
 
     def user_display(self, obj):
+        """Display user or session info"""
         if obj.user:
-            return obj.user.email
-        return f'Guest ({obj.session_key[:8]}...)'
+            return f"{obj.user.username} ({obj.user.email})"
+        return f"Anonymous ({obj.session_key[:8]}...)" if obj.session_key else "Anonymous"
 
     user_display.short_description = 'User'
+    user_display.admin_order_field = 'user'
+
+    def promo_code_display(self, obj):
+        """Display promo code if exists"""
+        if obj.promo_code:
+            return obj.promo_code.code
+        return "-"
+
+    promo_code_display.short_description = 'Promo Code'
+    promo_code_display.admin_order_field = 'promo_code__code'
 
     def has_add_permission(self, request):
-        # Prevent manual creation of spins
+        """Prevent manual creation - spins should only come from wheel"""
         return False
 
-    def has_change_permission(self, request, obj=None):
-        # Only allow viewing, not editing
-        return False
+    def get_queryset(self, request):
+        """Optimize queries"""
+        qs = super().get_queryset(request)
+        return qs.select_related('campaign', 'user', 'promo_code', 'order')
+
+    actions = ['mark_as_redeemed', 'mark_as_unredeemed']
+
+    def mark_as_redeemed(self, request, queryset):
+        """Admin action to mark spins as redeemed"""
+        count = 0
+        for spin in queryset:
+            if not spin.is_redeemed:
+                spin.mark_redeemed()
+                count += 1
+        self.message_user(request, f"{count} wheel spin(s) marked as redeemed.")
+
+    mark_as_redeemed.short_description = "Mark selected spins as redeemed"
+
+    def mark_as_unredeemed(self, request, queryset):
+        """Admin action to mark spins as unredeemed (careful!)"""
+        count = queryset.update(is_redeemed=False, redeemed_at=None, order=None)
+        self.message_user(request, f"{count} wheel spin(s) marked as unredeemed.")
+
+    mark_as_unredeemed.short_description = "Mark selected spins as unredeemed"
 
 
 # Optional: Custom admin actions for campaigns

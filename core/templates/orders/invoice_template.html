@@ -1,3 +1,4 @@
+{% load currency_tags %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -490,16 +491,16 @@
 
             <td class="text-end">
               {% if per_unit_discount and per_unit_discount|floatformat:2 != "0.00" %}
-                <div class="price-old">{{ request.user.preferred_currency.symbol|default:"D" }}{{ base_unit|floatformat:2 }}</div>
+                <div class="price-old">{% display_money base_unit %}</div>
                 <div class="price-new">
-                  {{ request.user.preferred_currency.symbol|default:"D" }}{% if item.discounted_unit_price %}
-                    {{ item.discounted_unit_price|floatformat:2 }}
+                  {% if item.discounted_unit_price %}
+                    {% display_money item.discounted_unit_price %}
                   {% else %}
                     {{ base_unit|floatformat:2 }}
                   {% endif %}
                 </div>
               {% else %}
-                {{ request.user.preferred_currency.symbol|default:"D" }}{{ base_unit|floatformat:2 }}
+                {% display_money base_unit %}
               {% endif %}
             </td>
 
@@ -507,16 +508,16 @@
               {% if per_unit_discount and per_unit_discount|floatformat:2 != "0.00" %}
                 {% if item.discount_type == 'percent' %}
                   <div class="discount-ok">-{{ item.discount_value|floatformat:0 }}% /unit</div>
-                  <div class="text-muted" style="font-size:.85rem;">(-D{{ per_unit_discount|floatformat:2 }})</div>
+                  <div class="text-muted" style="font-size:.85rem;">(-{% display_money per_unit_discount %})</div>
                 {% else %}
-                  <div class="discount-ok">-{{ request.user.preferred_currency.symbol|default:"D" }}{{ per_unit_discount|floatformat:2 }} /unit</div>
+                  <div class="discount-ok">-{% display_money per_unit_discount %} /unit</div>
                 {% endif %}
               {% else %}
                 <span class="text-muted">—</span>
               {% endif %}
             </td>
 
-            <td class="text-end"><strong>{{ request.user.preferred_currency.symbol|default:"D" }}{{ item.get_total_price|floatformat:2 }}</strong></td>
+            <td class="text-end"><strong>{% display_money item.get_total_price %}</strong></td>
           </tr>
           {% endwith %}
           {% endfor %}
@@ -530,14 +531,14 @@
 
           <div class="kv">
             <div class="k">Subtotal (before discounts)</div>
-            <div class="v">{{ request.user.preferred_currency.symbol|default:"D" }}{{ subtotal|default:order.get_subtotal|floatformat:2 }}</div>
+            <div class="v">{% display_money subtotal|default:order.get_subtotal %}</div>
           </div>
 
           {% with discount_total=discount|default:order.discount_amount %}
             {% if discount_total and discount_total|floatformat:2 != "0.00" %}
               <div class="kv" style="color:var(--good); font-weight:900;">
                 <div class="k" style="color:var(--good);">Discounts</div>
-                <div class="v">-{{ request.user.preferred_currency.symbol|default:"D" }}{{ discount_total|floatformat:2 }}</div>
+                <div class="v">-{% display_money discount_total %}</div>
               </div>
             {% endif %}
           {% endwith %}
@@ -546,7 +547,7 @@
             {% if ship and ship|floatformat:2 != "0.00" %}
               <div class="kv">
                 <div class="k">Shipping</div>
-                <div class="v">{{ request.user.preferred_currency.symbol|default:"D" }}{{ ship|floatformat:2 }}</div>
+                <div class="v">{% display_money ship %}</div>
               </div>
             {% else %}
               <div class="kv">
@@ -558,7 +559,7 @@
 
           <div class="kv">
             <div class="k">Tax ({{ order.tax_rate|default:0|floatformat:1 }}%)</div>
-            <div class="v">{{ request.user.preferred_currency.symbol|default:"D" }}{{ tax_amount|default:order.get_tax_amount|floatformat:2 }}</div>
+            <div class="v">{% display_money tax_amount|default:order.get_tax_amount %}</div>
           </div>
 
           <div class="grand">
@@ -568,7 +569,7 @@
 
           {% with discount_total=discount|default:order.discount_amount %}
             {% if discount_total and discount_total|floatformat:2 != "0.00" %}
-              <div class="save-pill">You saved {{ request.user.preferred_currency.symbol|default:"D" }}{{ discount_total|floatformat:2 }} 🎉</div>
+              <div class="save-pill">You saved {% display_money discount_total %} 🎉</div>
             {% endif %}
           {% endwith %}
         </div>

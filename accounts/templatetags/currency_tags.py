@@ -14,9 +14,101 @@ from django import template
 from django.utils.safestring import mark_safe
 from decimal import Decimal
 from accounts.models import Currency
+from django.conf import settings
 from accounts.currency_utils import convert_currency, format_price, get_user_currency_preference
 
 register = template.Library()
+
+def _get_base_currency_code():
+    # Prefer DB "base" currency if you have it; otherwise fallback
+    base = Currency.objects.filter(is_base_currency=True, is_active=True).first()
+    if base:
+        return base.code
+    return getattr(settings, "BASE_CURRENCY_CODE", "GMD")
+
+
+@register.simple_tag(takes_context=True)
+def display_money(context, amount):
+    """
+    Usage:
+        {% display_money product.price %}
+    Converts from base currency -> user's preferred currency and formats with symbol.
+    """
+    request = context.get("request")
+    user = getattr(request, "user", None)
+
+    if amount is None:
+        return ""
+
+    # Ensure Decimal
+    try:
+        amount = Decimal(str(amount))
+    except Exception:
+        return str(amount)
+
+    # If no user (guest) just format as base currency
+    base_code = _get_base_currency_code()
+    if not user or not getattr(user, "is_authenticated", False):
+        return format_price(amount, currency_code=base_code)
+
+    preferred = get_user_currency_preference(user)
+    if not preferred:
+        return format_price(amount, currency_code=base_code)
+
+    # If same currency, no conversion needed
+    if preferred.code == base_code:
+        return format_price(amount, currency_code=base_code)
+
+    # Convert
+    result = convert_currency(amount, base_code, preferred.code)
+    if result.get("success"):
+        return format_price(result["converted_amount"], currency_code=preferred.code)
+
+    # Fallback (if rate missing)
+    return format_price(amount, currency_code=base_code)
+
+@register.simple_tag(takes_context=True)
+def display_cart_money(context, amount):
+    """
+    Usage:
+        {% display_cart_money item.subtotal %}
+    Converts cart subtotal from base currency to user's preferred currency.
+    """
+    request = context.get("request")
+    user = getattr(request, "user", None)
+
+    if amount is None:
+        return ""
+
+    try:
+        amount = Decimal(str(amount))
+    except Exception:
+        return str(amount)
+
+    base_code = _get_base_currency_code()
+
+    # Guest user → show base currency
+    if not user or not user.is_authenticated:
+        return format_price(amount, currency_code=base_code)
+
+    preferred = get_user_currency_preference(user)
+    if not preferred:
+        return format_price(amount, currency_code=base_code)
+
+    # Same currency → no conversion
+    if preferred.code == base_code:
+        return format_price(amount, currency_code=base_code)
+
+    # Convert
+    result = convert_currency(amount, base_code, preferred.code)
+    if result.get("success"):
+        return format_price(
+            result["converted_amount"],
+            currency_code=preferred.code
+        )
+
+    # Fallback
+    return format_price(amount, currency_code=base_code)
 
 
 @register.filter

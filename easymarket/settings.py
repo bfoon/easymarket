@@ -292,6 +292,7 @@ SEARCH_RESULTS_PER_PAGE = 12
 SEARCH_SUGGESTIONS_LIMIT = 8
 SEARCH_MIN_QUERY_LENGTH = 2
 
+EXCHANGE_RATE_API_KEY = config("EXCHANGE_RATE_API_KEY", default="")
 # -----------------------------------------------------------------------------
 # Google Maps / Geocoding
 # -----------------------------------------------------------------------------

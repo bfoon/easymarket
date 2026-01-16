@@ -1,0 +1,677 @@
+{% load static %}
+
+<!-- Wheel Component for Flash Campaigns -->
+<div class="wheel-wrapper" id="wheelWrapper">
+    <!-- Wheel Container -->
+    <div class="wheel-container">
+        <!-- Wheel Backdrop -->
+        <div class="wheel-backdrop"></div>
+
+        <!-- Canvas Wheel -->
+        <canvas id="wheelCanvas" width="400" height="400"></canvas>
+
+        <!-- Center Spin Button -->
+        <button type="button" id="spinButton" class="wheel-spin-btn"
+                {% if not user_can_spin %}disabled{% endif %}
+                data-campaign-slug="{{ campaign.slug }}"
+                data-spins-left="{{ user_spins_left }}">
+            <svg class="spin-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+            </svg>
+            <span class="spin-text">SPIN</span>
+        </button>
+
+        <!-- Pointer/Arrow -->
+        <div class="wheel-pointer">
+            <svg width="40" height="40" viewBox="0 0 40 40">
+                <path d="M20 5 L35 20 L20 25 L5 20 Z" fill="#FF6B35" stroke="#fff" stroke-width="2"/>
+            </svg>
+        </div>
+    </div>
+
+    <!-- Spins Remaining Counter -->
+    <div class="spins-counter">
+        <div class="spins-label">Spins Remaining:</div>
+        <div class="spins-value" id="spinsRemaining">{{ user_spins_left }}</div>
+    </div>
+
+    <!-- Login Required Message -->
+    {% if campaign.require_login and not user.is_authenticated %}
+    <div class="wheel-login-required">
+        <p>🔒 Please <a href="{% url 'accounts:login' %}?next={{ request.path }}">login</a> to spin the wheel!</p>
+    </div>
+    {% endif %}
+
+    <!-- No Spins Left Message -->
+    {% if user_can_spin == False and user.is_authenticated %}
+    <div class="wheel-no-spins" id="noSpinsMessage" {% if user_spins_left > 0 %}style="display: none;"{% endif %}>
+        <p>🎯 You've used all your spins for this campaign!</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Prize Modal -->
+<div id="prizeModal" class="prize-modal">
+    <div class="prize-modal-content">
+        <div class="prize-confetti">
+            <div class="confetti"></div>
+            <div class="confetti"></div>
+            <div class="confetti"></div>
+            <div class="confetti"></div>
+            <div class="confetti"></div>
+        </div>
+
+        <div class="prize-icon">🎉</div>
+        <h2 class="prize-title">Congratulations!</h2>
+        <div class="prize-result" id="prizeResult"></div>
+
+        <div class="prize-code-section" id="prizeCodeSection" style="display: none;">
+            <p class="prize-code-label">Your Promo Code:</p>
+            <div class="prize-code-display">
+                <code id="prizeCode" class="prize-code"></code>
+                <button type="button" class="copy-code-btn" id="copyCodeBtn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                    Copy
+                </button>
+            </div>
+            <p class="prize-expiry" id="prizeExpiry"></p>
+        </div>
+
+        <button type="button" class="close-modal-btn" id="closeModalBtn">Continue Shopping</button>
+    </div>
+</div>
+
+<style>
+.wheel-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 2rem;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 1rem;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    margin: 2rem 0;
+}
+
+.wheel-container {
+    position: relative;
+    width: 400px;
+    height: 400px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.wheel-backdrop {
+    position: absolute;
+    width: 420px;
+    height: 420px;
+    background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, transparent 70%);
+    border-radius: 50%;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 0.5; }
+    50% { transform: scale(1.05); opacity: 0.8; }
+}
+
+#wheelCanvas {
+    position: relative;
+    z-index: 1;
+    border-radius: 50%;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+    transition: transform 0.3s ease;
+}
+
+.wheel-spin-btn {
+    position: absolute;
+    z-index: 3;
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #FF6B35 0%, #f94c10 100%);
+    border: 4px solid #fff;
+    color: white;
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    transition: all 0.3s ease;
+    box-shadow: 0 6px 20px rgba(255, 107, 53, 0.5);
+}
+
+.wheel-spin-btn:hover:not(:disabled) {
+    transform: scale(1.1);
+    box-shadow: 0 8px 30px rgba(255, 107, 53, 0.7);
+}
+
+.wheel-spin-btn:active:not(:disabled) {
+    transform: scale(0.95);
+}
+
+.wheel-spin-btn:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+    opacity: 0.6;
+    box-shadow: none;
+}
+
+.wheel-spin-btn.spinning {
+    pointer-events: none;
+    animation: spinButton 0.6s linear infinite;
+}
+
+@keyframes spinButton {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.spin-icon {
+    width: 20px;
+    height: 20px;
+}
+
+.spin-text {
+    font-size: 0.75rem;
+    letter-spacing: 0.5px;
+}
+
+.wheel-pointer {
+    position: absolute;
+    top: -5px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2;
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
+}
+
+.spins-counter {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: rgba(255, 255, 255, 0.95);
+    padding: 0.75rem 1.5rem;
+    border-radius: 2rem;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.spins-label {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #333;
+}
+
+.spins-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #FF6B35;
+    min-width: 2rem;
+    text-align: center;
+}
+
+.wheel-login-required,
+.wheel-no-spins {
+    background: rgba(255, 255, 255, 0.95);
+    padding: 1rem 1.5rem;
+    border-radius: 0.5rem;
+    text-align: center;
+    font-weight: 500;
+    color: #333;
+}
+
+.wheel-login-required a {
+    color: #FF6B35;
+    text-decoration: underline;
+    font-weight: 600;
+}
+
+/* Prize Modal */
+.prize-modal {
+    display: none;
+    position: fixed;
+    z-index: 9999;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.prize-modal-content {
+    position: relative;
+    background: linear-gradient(135deg, #fff 0%, #f8f9fa 100%);
+    margin: 10% auto;
+    padding: 3rem 2rem;
+    border-radius: 1rem;
+    max-width: 500px;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    animation: slideIn 0.4s ease;
+}
+
+@keyframes slideIn {
+    from { transform: translateY(-50px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+.prize-confetti {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    pointer-events: none;
+    border-radius: 1rem;
+}
+
+.confetti {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    background: #FF6B35;
+    animation: confettiFall 3s linear infinite;
+}
+
+.confetti:nth-child(1) { left: 10%; animation-delay: 0s; background: #FF6B35; }
+.confetti:nth-child(2) { left: 30%; animation-delay: 0.5s; background: #667eea; }
+.confetti:nth-child(3) { left: 50%; animation-delay: 1s; background: #f94c10; }
+.confetti:nth-child(4) { left: 70%; animation-delay: 1.5s; background: #764ba2; }
+.confetti:nth-child(5) { left: 90%; animation-delay: 2s; background: #FF6B35; }
+
+@keyframes confettiFall {
+    from { top: -10px; transform: rotate(0deg); }
+    to { top: 100%; transform: rotate(360deg); }
+}
+
+.prize-icon {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+    animation: bounce 0.6s ease;
+}
+
+@keyframes bounce {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+}
+
+.prize-title {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #333;
+    margin-bottom: 1rem;
+}
+
+.prize-result {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #FF6B35;
+    margin-bottom: 1.5rem;
+}
+
+.prize-code-section {
+    background: #f8f9fa;
+    padding: 1.5rem;
+    border-radius: 0.5rem;
+    margin-bottom: 1.5rem;
+    border: 2px dashed #dee2e6;
+}
+
+.prize-code-label {
+    font-size: 0.9rem;
+    color: #666;
+    margin-bottom: 0.75rem;
+    font-weight: 600;
+}
+
+.prize-code-display {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.prize-code {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #333;
+    background: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.5rem;
+    letter-spacing: 2px;
+    border: 2px solid #FF6B35;
+}
+
+.copy-code-btn {
+    background: #FF6B35;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.3s ease;
+}
+
+.copy-code-btn:hover {
+    background: #f94c10;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(255, 107, 53, 0.4);
+}
+
+.copy-code-btn:active {
+    transform: translateY(0);
+}
+
+.prize-expiry {
+    font-size: 0.85rem;
+    color: #666;
+    margin-top: 0.5rem;
+}
+
+.close-modal-btn {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    padding: 1rem 2rem;
+    border-radius: 0.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+.close-modal-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .wheel-wrapper {
+        padding: 1rem;
+    }
+
+    .wheel-container {
+        width: 300px;
+        height: 300px;
+    }
+
+    #wheelCanvas {
+        width: 300px;
+        height: 300px;
+    }
+
+    .wheel-backdrop {
+        width: 320px;
+        height: 320px;
+    }
+
+    .prize-modal-content {
+        margin: 20% 1rem;
+        padding: 2rem 1rem;
+    }
+
+    .prize-title {
+        font-size: 1.5rem;
+    }
+
+    .prize-code {
+        font-size: 1.2rem;
+        padding: 0.5rem 1rem;
+    }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const canvas = document.getElementById('wheelCanvas');
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    const spinButton = document.getElementById('spinButton');
+    const campaignSlug = spinButton.dataset.campaignSlug;
+    const modal = document.getElementById('prizeModal');
+    const closeModalBtn = document.getElementById('closeModalBtn');
+    const copyCodeBtn = document.getElementById('copyCodeBtn');
+
+    // Default prizes (will be overridden by campaign prizes)
+    let prizes = [
+        { label: "10% OFF", color: "#FF6B35", textColor: "#fff" },
+        { label: "Free Shipping", color: "#667eea", textColor: "#fff" },
+        { label: "5% OFF", color: "#f94c10", textColor: "#fff" },
+        { label: "15% OFF", color: "#764ba2", textColor: "#fff" },
+        { label: "Try Again", color: "#95a5a6", textColor: "#fff" },
+        { label: "20% OFF", color: "#FF6B35", textColor: "#fff" }
+    ];
+
+    // Load prizes from campaign if available
+    {% if campaign.wheel_prizes %}
+    try {
+        const campaignPrizes = {{ campaign.wheel_prizes|safe }};
+        if (Array.isArray(campaignPrizes) && campaignPrizes.length > 0) {
+            prizes = campaignPrizes.map((p, idx) => ({
+                label: p.label || 'Prize',
+                color: p.color || ['#FF6B35', '#667eea', '#f94c10', '#764ba2', '#95a5a6', '#3498db'][idx % 6],
+                textColor: p.textColor || '#fff'
+            }));
+        }
+    } catch(e) {
+        console.error('Error parsing prizes:', e);
+    }
+    {% endif %}
+
+    let currentRotation = 0;
+    let isSpinning = false;
+
+    // Draw the wheel
+    function drawWheel() {
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        const radius = Math.min(centerX, centerY) - 10;
+        const sliceAngle = (2 * Math.PI) / prizes.length;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        prizes.forEach((prize, index) => {
+            const startAngle = index * sliceAngle + currentRotation;
+            const endAngle = startAngle + sliceAngle;
+
+            // Draw slice
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+            ctx.lineTo(centerX, centerY);
+            ctx.fillStyle = prize.color;
+            ctx.fill();
+
+            // Draw border
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            // Draw text
+            ctx.save();
+            ctx.translate(centerX, centerY);
+            ctx.rotate(startAngle + sliceAngle / 2);
+            ctx.textAlign = 'center';
+            ctx.fillStyle = prize.textColor;
+            ctx.font = 'bold 16px Arial';
+            ctx.fillText(prize.label, radius * 0.65, 5);
+            ctx.restore();
+        });
+
+        // Draw center circle
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, 45, 0, 2 * Math.PI);
+        ctx.fillStyle = '#fff';
+        ctx.fill();
+        ctx.strokeStyle = '#FF6B35';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+    }
+
+    // Initial draw
+    drawWheel();
+
+    // Spin function
+    function spinWheel() {
+        if (isSpinning) return;
+
+        isSpinning = true;
+        spinButton.disabled = true;
+        spinButton.classList.add('spinning');
+
+        // Send spin request
+        fetch(`{% url 'marketplace:spin_wheel' campaign.slug %}`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}',
+                'Content-Type': 'application/json'
+            },
+            credentials: 'same-origin'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Calculate winning angle
+                const prizeIndex = prizes.findIndex(p =>
+                    p.label === data.prize.label ||
+                    p.label.toLowerCase().includes(data.prize.label.toLowerCase())
+                ) || 0;
+
+                const sliceAngle = (2 * Math.PI) / prizes.length;
+                const targetAngle = (prizeIndex * sliceAngle) + (sliceAngle / 2);
+                const spinRevolutions = 5 + Math.random() * 3;
+                const finalRotation = (spinRevolutions * 2 * Math.PI) - targetAngle;
+
+                // Animate spin
+                animateSpin(finalRotation, 4000, () => {
+                    // Show prize modal
+                    showPrizeModal(data);
+
+                    // Update spins remaining
+                    const spinsRemainingEl = document.getElementById('spinsRemaining');
+                    if (spinsRemainingEl) {
+                        spinsRemainingEl.textContent = data.spins_left;
+                    }
+
+                    // Disable button if no spins left
+                    if (data.spins_left <= 0) {
+                        spinButton.disabled = true;
+                        const noSpinsMsg = document.getElementById('noSpinsMessage');
+                        if (noSpinsMsg) noSpinsMsg.style.display = 'block';
+                    }
+
+                    isSpinning = false;
+                    spinButton.classList.remove('spinning');
+                });
+            } else {
+                // Handle error
+                alert(data.error || 'Failed to spin. Please try again.');
+                isSpinning = false;
+                spinButton.disabled = false;
+                spinButton.classList.remove('spinning');
+
+                if (data.require_login) {
+                    window.location.href = '{% url "accounts:signoff" %}?next={{ request.path }}';
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Spin error:', error);
+            alert('An error occurred. Please try again.');
+            isSpinning = false;
+            spinButton.disabled = false;
+            spinButton.classList.remove('spinning');
+        });
+    }
+
+    // Animate wheel rotation
+    function animateSpin(targetRotation, duration, callback) {
+        const startRotation = currentRotation;
+        const startTime = Date.now();
+
+        function animate() {
+            const elapsed = Date.now() - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+
+            // Easing function (ease-out)
+            const eased = 1 - Math.pow(1 - progress, 3);
+
+            currentRotation = startRotation + (targetRotation * eased);
+            drawWheel();
+
+            if (progress < 1) {
+                requestAnimationFrame(animate);
+            } else {
+                currentRotation = currentRotation % (2 * Math.PI);
+                if (callback) callback();
+            }
+        }
+
+        animate();
+    }
+
+    // Show prize modal
+    function showPrizeModal(data) {
+        const prizeResult = document.getElementById('prizeResult');
+        const prizeCodeSection = document.getElementById('prizeCodeSection');
+        const prizeCode = document.getElementById('prizeCode');
+
+        prizeResult.textContent = `You won: ${data.prize.label}!`;
+
+        if (data.prize.promo_code) {
+            prizeCode.textContent = data.prize.promo_code;
+            prizeCodeSection.style.display = 'block';
+        } else {
+            prizeCodeSection.style.display = 'none';
+        }
+
+        modal.style.display = 'block';
+    }
+
+    // Event listeners
+    spinButton.addEventListener('click', spinWheel);
+
+    closeModalBtn.addEventListener('click', () => {
+        modal.style.display = 'none';
+    });
+
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.style.display = 'none';
+        }
+    });
+
+    copyCodeBtn.addEventListener('click', () => {
+        const code = document.getElementById('prizeCode').textContent;
+        navigator.clipboard.writeText(code).then(() => {
+            const originalText = copyCodeBtn.innerHTML;
+            copyCodeBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg> Copied!';
+            setTimeout(() => {
+                copyCodeBtn.innerHTML = originalText;
+            }, 2000);
+        });
+    });
+});
+</script>
