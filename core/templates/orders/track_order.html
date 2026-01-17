@@ -1,5 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load currency_tags %}
+{% load cart_image_tags %}
 
 {% block content %}
 <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
@@ -34,7 +36,7 @@
             <p class="text-muted mb-0 mt-2">
               <i class="far fa-calendar me-1"></i>
               Placed {{ order.created_at|date:"F d, Y" }} •
-              <strong class="text-dark">D{{ order.get_total|floatformat:2 }}</strong> •
+              <strong class="text-dark">{% display_money order.get_total|floatformat:2 %}</strong> •
               {{ order.items.count }} item{{ order.items.count|pluralize }}
               {% if order.expected_delivery_date %}
                 • <span class="ms-1"><i class="fas fa-truck-fast me-1"></i>
@@ -170,7 +172,7 @@
               </div>
               <div class="track-kv">
                 <div class="track-k">Total Amount</div>
-                <div class="track-v fw-bold text-primary">{{ request.user.preferred_currency.symbol|default:"D" }}{{ order.get_total|floatformat:2 }}</div>
+                <div class="track-v fw-bold text-primary">{% display_money order.get_total|floatformat:2 %}</div>
               </div>
               <div class="track-kv">
                 <div class="track-k">Items</div>
@@ -207,15 +209,10 @@
                 {% for item in order.items.all %}
                   <div class="track-item">
                     <div class="track-item-img">
-                      {% if item.product.image %}
-                        <img src="{{ item.product.image.url }}"
+                      {% get_color_image_url item.product item.selected_features as color_img_url %}
+                        <img src="{{ color_img_url|default:'' }}"
                              alt="{{ item.product.name }}"
                              loading="lazy">
-                      {% else %}
-                        <div class="track-item-placeholder">
-                          <i class="fas fa-image text-muted"></i>
-                        </div>
-                      {% endif %}
                     </div>
 
                     <div class="track-item-info">
@@ -224,7 +221,7 @@
                     </div>
 
                     <div class="track-item-price">
-                      <div class="fw-bold">{{ request.user.preferred_currency.symbol|default:"D" }}{{ item.get_total_price|floatformat:2 }}</div>
+                      <div class="fw-bold">{% display_money item.get_total_price|floatformat:2 %}</div>
                     </div>
                   </div>
                 {% endfor %}
