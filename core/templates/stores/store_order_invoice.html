@@ -1,5 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load currency_tags %}
+{% load cart_image_tags %}
 
 {% block title %}Invoice #{{ order.id }}{% endblock %}
 
@@ -119,9 +121,10 @@
                 <tr>
                   <td>
                     <div class="d-flex align-items-start">
-                      {% if item.product.display_image_url %}
-                        <img src="{{ item.product.display_image_url }}" alt="{{ item.product.name }}" class="me-3 rounded" style="width: 40px; height: 40px; object-fit: cover;">
-                      {% endif %}
+                      {% get_color_image_url item.product item.selected_features as color_img_url %}
+                        <img src="{{ color_img_url|default:'' }}" alt="{{ item.product.name }}" class="me-3 rounded" style="width: 40px; height: 40px; object-fit: cover;
+                          {% if item.selected_features.color or item.selected_features.color %}border:3px solid {% get_color_hex item.selected_features.color|default:item.selected_features.color %};{% endif %}"
+                        onerror="this.src='{% static 'img/placeholder.png' %}'">
                       <div>
                         <strong>{{ item.product.name }}</strong><br>
                         <span class="badge text-white px-2 py-1 small" style="background: linear-gradient(135deg, #007bff, #6610f2);">
@@ -143,16 +146,16 @@
                   {# Unit price: strike-through original if a discount applies #}
                   <td class="text-end">
                     {% if per_unit_discount and per_unit_discount|floatformat:2 != "0.00" %}
-                      <span class="text-muted text-decoration-line-through">{{ request.user.preferred_currency.symbol|default:"D" }}{{ base_unit|floatformat:2 }}</span><br>
+                      <span class="text-muted text-decoration-line-through">{% display_money base_unit %}</span><br>
                       <span class="fw-semibold">
-                        {{ request.user.preferred_currency.symbol|default:"D" }}{% if item.discounted_unit_price %}
-                           {{ item.discounted_unit_price|floatformat:2 }}
+                        {% if item.discounted_unit_price %}
+                           {% display_money item.discounted_unit_price %}
                          {% else %}
                            {{ base_unit|floatformat:2 }}
                          {% endif %}
                       </span>
                     {% else %}
-                      {{ request.user.preferred_currency.symbol|default:"D" }}{{ base_unit|floatformat:2 }}
+                      {% display_money base_unit %}
                     {% endif %}
                   </td>
 
@@ -161,9 +164,9 @@
                     {% if per_unit_discount and per_unit_discount|floatformat:2 != "0.00" %}
                       {% if item.discount_type == 'percent' %}
                         <span class="text-success">-{{ item.discount_value|floatformat:0 }}% /unit</span><br>
-                        <small class="text-muted">(-{{ request.user.preferred_currency.symbol|default:"D" }}{{ per_unit_discount|floatformat:2 }})</small>
-                      {% else %}
-                        <span class="text-success">-{{ request.user.preferred_currency.symbol|default:"D" }}{{ per_unit_discount|floatformat:2 }} /unit</span>
+                        <small class="text-muted">(-{% display_money per_unit_discount %})</small>
+                      {% else %}:2 }
+                        <span class="text-success">-{% display_money per_unit_discount %} /unit</span>
                       {% endif %}
                     {% else %}
                       <span class="text-muted">—</span>
@@ -171,7 +174,7 @@
                   </td>
 
                   {# Line total uses discounted price from model helper #}
-                  <td class="text-end"><strong>{{ request.user.preferred_currency.symbol|default:"D" }}{{ item.get_total_price|floatformat:2 }}</strong></td>
+                  <td class="text-end"><strong>{% display_money item.get_total_price %}</strong></td>
                 </tr>
                 {% endwith %}
                 {% endfor %}
@@ -214,31 +217,31 @@
                     <tbody>
                       <tr>
                         <td class="text-muted">Subtotal:</td>
-                        <td class="text-end">{{ request.user.preferred_currency.symbol|default:"D" }}{{ subtotal|floatformat:2 }}</td>
+                        <td class="text-end">{% display_money subtotal %}</td>
                       </tr>
 
                       {% if shipping %}
                       <tr>
                         <td class="text-muted">Shipping:</td>
-                        <td class="text-end">{{ request.user.preferred_currency.symbol|default:"D" }}{{ shipping|floatformat:2 }}</td>
+                        <td class="text-end">{% display_money shipping %}</td>
                       </tr>
                       {% endif %}
 
                       {% if discount %}
                       <tr class="text-success">
                         <td class="text-muted">Discount:</td>
-                        <td class="text-end">-{{ request.user.preferred_currency.symbol|default:"D" }}{{ discount|floatformat:2 }}</td>
+                        <td class="text-end">-{% display_money discount %}</td>
                       </tr>
                       {% endif %}
 
                       <tr>
                         <td class="text-muted">Tax ({{ order.tax_rate|floatformat:1 }}%):</td>
-                        <td class="text-end">{{ request.user.preferred_currency.symbol|default:"D" }}{{ tax_amount|floatformat:2 }}</td>
+                        <td class="text-end">{% display_money tax_amount %}</td>
                       </tr>
 
                       <tr class="fw-bold fs-6 border-top pt-2">
                         <td>Total:</td>
-                        <td class="text-end text-primary">{{ request.user.preferred_currency.symbol|default:"D" }}{{ total|floatformat:2 }}</td>
+                        <td class="text-end text-primary">{% display_money total %}</td>
                       </tr>
                     </tbody>
                   </table>

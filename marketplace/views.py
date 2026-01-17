@@ -29,7 +29,7 @@ from django.core.cache import cache
 from .utils import (log_search, get_search_suggestions_with_history,
                     build_cart_context, _coerce_int, _ensure_owner_membership,
                     _resolve_active_social_for, _resolve_active_cart_for_user,
-                    with_display_images)
+                    with_display_images, format_price_for_user)
 from .utils import sync_social_items_totals
 from django.urls import reverse
 import json, uuid
@@ -2767,7 +2767,7 @@ def search_suggestions(request):
                 suggestions.append({
                     'id': product.id,
                     'name': product.name,
-                    'price': str(product.price),
+                    'price': str(format_price_for_user(product.price, request.user)),
                     'category': category_name,
                     'image': product.image.url if hasattr(product, 'image') and product.image else None,
                     'url': product_url

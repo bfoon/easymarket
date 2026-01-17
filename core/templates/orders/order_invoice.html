@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load currency_tags %}
+{% load cart_image_tags %}
 
 {% block content %}
 <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
@@ -147,15 +148,12 @@
                   <tr>
                     <td>
                       <div class="d-flex align-items-center gap-3">
-                        {% if item.product.image %}
-                          <img src="{{ item.product.image.url }}"
+                        {% get_color_image_url item.product item.selected_features as color_img_url %}
+                          <img src="{{ color_img_url|default:'' }}"
                                alt="{{ item.product.name }}"
+                               style="{% if item.selected_features.color or item.selected_features.Color %}border:3px solid {% get_color_hex item.selected_features.color|default:item.selected_features.color %};{% endif %}"
+                               onerror="this.src='{% static 'img/placeholder.png' %}'"
                                class="inv-thumb">
-                        {% else %}
-                          <div class="inv-thumb placeholder">
-                            <i class="fas fa-image text-muted"></i>
-                          </div>
-                        {% endif %}
 
                         <div class="min-w-0">
                           <div class="fw-semibold">{{ item.product.name }}</div>
@@ -166,15 +164,20 @@
                             </div>
                           {% endif %}
 
-                          {% if item.selected_features %}
-                            <div class="mt-1 d-flex flex-wrap gap-1">
-                              {% for key, value in item.selected_features.items %}
-                                <span class="badge bg-light text-dark border">
-                                  {{ key|title }}: {{ value }}
-                                </span>
-                              {% endfor %}
-                            </div>
+                          {{% if item.selected_features %}
+                          <div class="mb-2">
+                            {% for key, value in item.selected_features.items %}
+                              <span class="badge bg-light text-dark border me-1 mb-1">
+                                {% if key|lower == 'color' %}
+                                  <span class="color-indicator"
+                                        style="display:inline-block;width:12px;height:12px;border-radius:50%;background-color:{% get_color_hex value %};border:1px solid #999;margin-right:5px;vertical-align:middle;"></span>
+                                {% endif %}
+                                {{ key|title }}: {{ value }}
+                              </span>
+                            {% endfor %}
+                          </div>
                           {% endif %}
+
                         </div>
                       </div>
                     </td>

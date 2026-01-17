@@ -402,6 +402,59 @@ def with_display_images(qs):
         )
     )
 
+
+def format_price_for_user(amount, user=None):
+    """
+    Reusable function that mimics display_money template tag
+    Use this anywhere you need to format prices in views
+
+    Args:
+        amount: Price amount (Decimal or float)
+        user: User object (optional, for guest users)
+
+    Returns:
+        Formatted price string (e.g., "D99.99" or "$1.50")
+    """
+    from accounts.models import Currency
+    from accounts.currency_utils import convert_currency, format_price, get_user_currency_preference
+    from decimal import Decimal
+
+    if amount is None:
+        return ""
+
+    # Ensure Decimal
+    try:
+        amount = Decimal(str(amount))
+    except:
+        return str(amount)
+
+    # Get base currency
+    base_currency = Currency.objects.filter(is_base_currency=True, is_active=True).first()
+    if not base_currency:
+        base_currency = Currency.objects.filter(code='GMD').first()
+    base_code = base_currency.code if base_currency else 'GMD'
+
+    # Guest user or no preference
+    if not user or not user.is_authenticated:
+        return format_price(amount, currency_code=base_code)
+
+    # Get user's preference
+    preferred = get_user_currency_preference(user)
+    if not preferred:
+        return format_price(amount, currency_code=base_code)
+
+    # Same currency - no conversion needed
+    if preferred.code == base_code:
+        return format_price(amount, currency_code=base_code)
+
+    # Convert to user's currency
+    result = convert_currency(amount, base_code, preferred.code)
+    if result.get("success"):
+        return format_price(result["converted_amount"], currency_code=preferred.code)
+
+    # Fallback to base currency
+    return format_price(amount, currency_code=base_code)
+
 def sync_social_items_totals(social):
     """
     Recompute each active member's items_total_amount as the sum of cart

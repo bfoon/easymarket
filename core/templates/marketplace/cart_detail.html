@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load currency_tags %}
+{% load cart_image_tags %}
 
 {% block content %}
 <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
@@ -51,18 +52,25 @@
                   <tr class="cart-item" data-item-id="{{ item.id }}" data-product-id="{{ item.product.id }}">
                     <td class="ps-4 py-3">
                       <div class="d-flex align-items-center gap-3">
-                        <img src="{{ item.product.display_image_url|default:'' }}"
-                             alt="{{ item.product.name }}"
-                             class="rounded-3 shadow-sm"
-                             style="width:90px;height:90px;object-fit:cover;"
-                             onerror="this.src='{% static 'img/placeholder.png' %}'">
+                        {% get_color_image_url item.product item.selected_features as color_img_url %}
+                      <img src="{{ color_img_url|default:'' }}"
+                           alt="{{ item.product.name }}"
+                           class="rounded-3 shadow-sm cart-item-image"
+                           style="width:90px;height:90px;object-fit:cover;{% if item.selected_features.color or item.selected_features.Color %}border:3px solid {% get_color_hex item.selected_features.color|default:item.selected_features.color %};{% endif %}"
+                           onerror="this.src='{% static 'img/placeholder.png' %}'">
                         <div class="flex-grow-1 min-w-0">
                           <h6 class="mb-1 fw-semibold text-truncate">{{ item.product.name }}</h6>
                           <p class="text-muted small mb-2"><i class="fas fa-tag me-1"></i>{{ item.product.category }}</p>
-                          {% if item.selected_features %}
+                         {% if item.selected_features %}
                           <div class="mb-2">
                             {% for key, value in item.selected_features.items %}
-                              <span class="badge bg-light text-dark border me-1 mb-1">{{ key|title }}: {{ value }}</span>
+                              <span class="badge bg-light text-dark border me-1 mb-1">
+                                {% if key|lower == 'color' %}
+                                  <span class="color-indicator"
+                                        style="display:inline-block;width:12px;height:12px;border-radius:50%;background-color:{% get_color_hex value %};border:1px solid #999;margin-right:5px;vertical-align:middle;"></span>
+                                {% endif %}
+                                {{ key|title }}: {{ value }}
+                              </span>
                             {% endfor %}
                           </div>
                           {% endif %}
@@ -428,6 +436,19 @@
   </div>
 </div>
 
+<style>
+.cart-item-image {
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.cart-item-image:hover {
+  transform: scale(1.05);
+}
+
+.color-indicator {
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+</style>
 <link rel="stylesheet" type="text/css" href="{% static 'css/cart.css' %}">
 <script src="{% static 'js/main.js' %}"></script>
 <script src="{% static 'js/cart.js' %}"></script>
