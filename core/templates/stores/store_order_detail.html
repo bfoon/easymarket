@@ -488,31 +488,48 @@
           </div>
 
           <!-- Shipping cost -->
-          <div class="mt-3">
-            <form method="post" action="{% url 'stores:set_shipping_cost' store.id order.id %}">
-              {% csrf_token %}
-              <label class="fw-bold mb-2"><i class="fas fa-truck-fast me-1 text-primary"></i> Shipping Cost ({% display_money order.shipping_cost %})</label>
-              <div class="input-group" style="max-width: 340px;">
-                <span class="input-group-text">D</span>
-                <input type="number" step="0.01" min="0" name="shipping_cost"
-                       class="form-control"
-                       value="{{ order.shipping_cost|default_if_none:'' }}"
-                       {% if order.status == 'shipped' or order.status == 'delivered' or order.status == 'cancelled' or all_items_shipped %}readonly disabled{% endif %}>
-                {% if order.status != 'shipped' and order.status != 'delivered' and order.status != 'cancelled' and not all_items_shipped %}
-                  <button class="btn btn-outline-primary" type="submit">
-                    <i class="fas fa-save me-1"></i>Save
-                  </button>
-                {% endif %}
-              </div>
-              {% if order.status == 'shipped' or order.status == 'delivered' or order.status == 'cancelled' or all_items_shipped %}
-                <div class="small text-muted mt-2">
-                  <i class="fas fa-lock me-1"></i>Locked after shipped/delivered/cancelled or all items to warehouse.
+            <div class="mt-3">
+              <form method="post" action="{% url 'stores:set_shipping_cost' store.id order.id %}">
+                {% csrf_token %}
+
+                <label class="fw-bold mb-2">
+                  <i class="fas fa-truck-fast me-1 text-primary"></i>
+                  Shipping Cost
+                  <span class="text-muted">
+                    ({{ shipping_display.formatted }})
+                  </span>
+                </label>
+
+                <div class="input-group" style="max-width: 340px;">
+                  <span class="input-group-text">{{ shipping_display.currency_code }}</span>
+
+                  <input type="number" step="0.01" min="0"
+                         name="shipping_cost"
+                         class="form-control"
+                         value="{{ shipping_display.amount|default_if_none:'' }}"
+                         {% if order.status == 'shipped' or order.status == 'delivered' or order.status == 'cancelled' or all_items_shipped %}readonly disabled{% endif %}>
+
+                  {# tell backend what currency the user typed #}
+                  <input type="hidden" name="currency_code" value="{{ shipping_display.currency_code }}">
+
+                  {% if order.status != 'shipped' and order.status != 'delivered' and order.status != 'cancelled' and not all_items_shipped %}
+                    <button class="btn btn-outline-primary" type="submit">
+                      <i class="fas fa-save me-1"></i>Save
+                    </button>
+                  {% endif %}
                 </div>
-              {% else %}
-                <div class="occ-mini mt-1">Shipping cost affects the buyer's final payable and delivery coordination.</div>
-              {% endif %}
-            </form>
-          </div>
+
+                {% if order.status == 'shipped' or order.status == 'delivered' or order.status == 'cancelled' or all_items_shipped %}
+                  <div class="small text-muted mt-2">
+                    <i class="fas fa-lock me-1"></i>Locked after shipped/delivered/cancelled or all items to warehouse.
+                  </div>
+                {% else %}
+                  <div class="occ-mini mt-1">
+                    Shipping cost affects the buyer's final payable and delivery coordination.
+                  </div>
+                {% endif %}
+              </form>
+            </div>
 
         </div>
       </div>
@@ -660,7 +677,7 @@
 
         <!-- line total -->
         <div class="occ-price">
-          {% display_money item.get_total_price %}
+          {% display_money order.get_subtotal %}
           <div class="occ-mini">line total</div>
         </div>
       </div>
@@ -674,7 +691,7 @@
           <div class="occ-mini">Includes item discounts & quantities</div>
         </div>
         <div class="fw-bold" style="font-size: 1.25rem; color:#059669;">
-          {% display_money store_subtotal %}
+          {% display_money order.get_total %}
         </div>
       </div>
 

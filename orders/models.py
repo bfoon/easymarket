@@ -314,7 +314,6 @@ class PromoCode(models.Model):
         return self.products.count() == 0 or self.products.filter(id=product.id).exists()
 
 
-
 class Order(models.Model):
     STATUS_CHOICES = [
         ('pending', 'Pending'),
@@ -365,11 +364,173 @@ class Order(models.Model):
 
     store_referral = models.ForeignKey('stores.StoreReferral', null=True, blank=True, on_delete=models.SET_NULL)
 
+    # NEW: currency used when entering order-level money fields (shipping/discount)
+    order_currency = models.ForeignKey(
+        'accounts.Currency',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='orders_priced_in',
+        help_text="Currency used when setting shipping/discount (conversion tracking)"
+    )
+
+    # OPTIONAL (recommended): save the rate used at the time of conversion
+    order_fx_rate = models.DecimalField(
+        max_digits=18,
+        decimal_places=8,
+        default=Decimal('1.0'),
+        help_text="FX rate snapshot used when converting to GMD"
+    )
+
     class Meta:
         ordering = ['-created_at']
 
     def __str__(self):
         return f"Order #{self.id} - {self.buyer.username}"
+
+    def _get_base_currency(self):
+        from accounts.models import Currency
+        base = Currency.objects.filter(is_base_currency=True, is_active=True).first()
+        if not base:
+            base = Currency.objects.filter(code='GMD', is_active=True).first()
+        return base
+
+    def _determine_source_currency(self, user, base_currency):
+        # Priority: existing order_currency (updates) -> user pref -> buyer pref -> base
+        if self.pk and self.order_currency:
+            return self.order_currency
+
+        if user and getattr(user, 'preferred_currency', None):
+            self.order_currency = user.preferred_currency
+            return user.preferred_currency
+
+        if self.buyer and getattr(self.buyer, 'preferred_currency', None):
+            self.order_currency = self.buyer.preferred_currency
+            return self.buyer.preferred_currency
+
+        self.order_currency = base_currency
+        return base_currency
+
+    def _convert_amount(self, amount: Decimal, from_code: str, to_code: str):
+        from accounts.currency_utils import convert_currency
+        if amount is None:
+            return None
+        try:
+            result = convert_currency(amount, from_code, to_code)
+            if result.get('success'):
+                fx = result.get('rate')
+                # ✅ only set snapshot once (or if it’s still 1.0)
+                if fx and (not self.order_fx_rate or self.order_fx_rate == Decimal("1.0")):
+                    self.order_fx_rate = Decimal(str(fx))
+                return Decimal(str(result['converted_amount']))
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Order currency conversion failed {from_code}->{to_code}: {e}")
+        return amount
+
+    def _snapshot_convert_from_gmd(self, amount_gmd: Decimal, target_currency=None):
+        """
+        Convert a GMD amount to order_currency using the stored order_fx_rate snapshot.
+
+        Assumes order_fx_rate = GMD per 1 unit of order_currency.
+        """
+        amount_gmd = Decimal(amount_gmd or 0)
+
+        base = self._get_base_currency()
+        base_code = base.code if base else "GMD"
+
+        # If no currency tracked, return GMD
+        if not self.order_currency or not self.order_fx_rate or self.order_fx_rate in [Decimal("0"), Decimal("0.0")]:
+            return amount_gmd, base_code
+
+        # If caller wants a different currency than order_currency, fallback to live conversion
+        # (Optional: if you ONLY want order currency always, remove this block)
+        if target_currency and getattr(target_currency, "code",
+                                       None) and target_currency.code != self.order_currency.code:
+            from accounts.currency_utils import convert_currency
+            r = convert_currency(amount_gmd, base_code, target_currency.code)
+            amt2 = r["converted_amount"] if r.get("success") else amount_gmd
+            return Decimal(amt2), target_currency.code
+
+        # Snapshot conversion to order_currency
+        if self.order_currency.code == base_code:
+            return amount_gmd, base_code
+
+        amt_foreign = (amount_gmd / self.order_fx_rate).quantize(Decimal("0.01"))
+        return amt_foreign, self.order_currency.code
+
+    def get_shipping_cost_in_currency(self, user=None, currency_code=None):
+        from accounts.models import Currency
+        from accounts.currency_utils import format_price
+
+        base = self._get_base_currency()
+        base_code = base.code if base else "GMD"
+
+        # Default target: user currency, else order currency, else base
+        target = None
+        if currency_code:
+            target = Currency.objects.filter(code=currency_code, is_active=True).first()
+        elif user and getattr(user, 'preferred_currency', None):
+            target = user.preferred_currency
+        elif self.order_currency:
+            target = self.order_currency
+        else:
+            target = base
+
+        amt_gmd = Decimal(self.shipping_cost or 0)
+
+        # ✅ If target equals order_currency, use snapshot conversion (locked)
+        if self.order_currency and target and target.code == self.order_currency.code and target.code != base_code:
+            amt2, code = self._snapshot_convert_from_gmd(amt_gmd, target_currency=target)
+            return {'amount': amt2, 'currency_code': code, 'formatted': format_price(amt2, code)}
+
+        # Otherwise: show in base (or optionally live convert to other currency)
+        if target and target.code == base_code:
+            return {'amount': amt_gmd.quantize(Decimal("0.01")), 'currency_code': base_code,
+                    'formatted': format_price(amt_gmd, base_code)}
+
+        # OPTIONAL: if you still want user preferred currency != order currency, allow live conversion
+        from accounts.currency_utils import convert_currency
+        r = convert_currency(amt_gmd, base_code, target.code)
+        amt2 = Decimal(str(r['converted_amount'])) if r.get('success') else amt_gmd
+        amt2 = amt2.quantize(Decimal("0.01"))
+        return {'amount': amt2, 'currency_code': target.code, 'formatted': format_price(amt2, target.code)}
+
+    def display_amount(self, amount_gmd: Decimal, user=None, currency_code=None):
+        from accounts.models import Currency
+        from accounts.currency_utils import format_price
+
+        base = self._get_base_currency()
+        base_code = base.code if base else "GMD"
+
+        # pick target
+        if currency_code:
+            target = Currency.objects.filter(code=currency_code, is_active=True).first()
+        elif user and getattr(user, 'preferred_currency', None):
+            target = user.preferred_currency
+        elif self.order_currency:
+            target = self.order_currency
+        else:
+            target = base
+
+        amount_gmd = Decimal(amount_gmd or 0)
+
+        # snapshot if showing in order currency
+        if self.order_currency and target and target.code == self.order_currency.code and target.code != base_code:
+            amt2, code = self._snapshot_convert_from_gmd(amount_gmd, target_currency=target)
+            return {'amount': amt2, 'currency_code': code, 'formatted': format_price(amt2, code)}
+
+        # base display
+        if target and target.code == base_code:
+            amt2 = amount_gmd.quantize(Decimal("0.01"))
+            return {'amount': amt2, 'currency_code': base_code, 'formatted': format_price(amt2, base_code)}
+
+        # optional live convert for other currencies
+        from accounts.currency_utils import convert_currency
+        r = convert_currency(amount_gmd, base_code, target.code)
+        amt2 = Decimal(str(r['converted_amount'])) if r.get('success') else amount_gmd
+        amt2 = amt2.quantize(Decimal("0.01"))
+        return {'amount': amt2, 'currency_code': target.code, 'formatted': format_price(amt2, target.code)}
 
     def get_subtotal(self):
         return sum(item.get_total_price() for item in self.items.all())
@@ -459,6 +620,27 @@ class Order(models.Model):
         return self.get_shipped_items_without_shipment().exists()
 
     def save(self, *args, **kwargs):
+        user = kwargs.pop('user', None)  # allow: order.save(user=request.user)
+
+        base_currency = self._get_base_currency()
+        if base_currency:
+            source_currency = self._determine_source_currency(user, base_currency)
+
+            # Convert ONLY if not already base
+            if source_currency and source_currency.code != base_currency.code:
+                if self.shipping_cost is not None:
+                    self.shipping_cost = self._convert_amount(
+                        Decimal(self.shipping_cost),
+                        source_currency.code,
+                        base_currency.code
+                    )
+                if self.discount_amount is not None:
+                    self.discount_amount = self._convert_amount(
+                        Decimal(self.discount_amount),
+                        source_currency.code,
+                        base_currency.code
+                    )
+
         is_new = self.pk is None
 
         # Status-based timestamps (only on updates)

@@ -653,7 +653,7 @@ class Store(models.Model):
         return self.country.strip().lower() in ['gambia', 'the gambia']
 
     def get_absolute_url(self):
-        return reverse('store:store_detail', kwargs={'slug': self.slug})
+        return reverse('stores:store_detail', kwargs={'slug': self.slug})
 
     def get_total_products(self):
         return self.products.filter(is_active=True).count()
@@ -757,89 +757,198 @@ class Store(models.Model):
 
     # ---------- NOTIFICATIONS / EMAILS ----------
 
-    @staticmethod
-    def send_bulk_emails_threaded(emails_data, store_name):
-        """
-        Helper for sending bulk emails (intended for use in a background thread).
-        emails_data: list of dicts with keys: email, name, title, message
-        """
-        from django.conf import settings
-        for email_data in emails_data:
-            try:
-                send_mail(
-                    subject=f"{store_name}: {email_data['title']}",
-                    message=f"Hi {email_data['name']},\n\n{email_data['message']}\n\nBest regards,\n{store_name}",
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=[email_data['email']],
-                    fail_silently=True,
-                )
-            except Exception as e:
-                print(f"Failed to send email to {email_data['email']}: {e}")
-
     def notify_followers(self, notification_type, title, message, product=None, **kwargs):
         """
-        Notify all users who follow this store (DB notification + email).
-        notification_type: 'new_product', 'price_decrease', 'price_increase', 'discount'
+        Notify all users who follow this store with HTML emails.
         """
-        from .models import StoreFollow, StoreNotification
+        from stores.models import StoreFollow, StoreNotification
+        import threading
+        from django.db import transaction
 
-        followers = StoreFollow.objects.filter(
-            store=self,
-            is_active=True
-        ).select_related('user')
+        followers = StoreFollow.objects.filter(store=self, is_active=True).select_related('user')
 
         notifications_to_create = []
-        emails_to_send = []
+        email_jobs = []  # collect jobs and run after DB commit
 
         for follow in followers:
-            should_notify = False
-            if notification_type == 'new_product' and follow.notify_new_products:
-                should_notify = True
-            elif notification_type in ['price_decrease', 'price_increase'] and follow.notify_price_changes:
-                should_notify = True
-            elif notification_type == 'discount' and follow.notify_discounts:
-                should_notify = True
+            should_notify = (
+                    (notification_type == 'new_product' and follow.notify_new_products) or
+                    (notification_type in ['price_decrease', 'price_increase'] and follow.notify_price_changes) or
+                    (notification_type == 'discount' and follow.notify_discounts)
+            )
 
-            if should_notify:
-                notifications_to_create.append(
-                    StoreNotification(
-                        user=follow.user,
-                        store=self,
-                        product=product,
-                        notification_type=notification_type,
-                        title=title,
-                        message=message,
-                        old_price=kwargs.get('old_price'),
-                        new_price=kwargs.get('new_price')
-                    )
+            if not should_notify:
+                continue
+
+            notifications_to_create.append(
+                StoreNotification(
+                    user=follow.user,
+                    store=self,
+                    product=product,
+                    notification_type=notification_type,
+                    title=title,
+                    message=message,
+                    old_price=kwargs.get('old_price'),
+                    new_price=kwargs.get('new_price'),
                 )
+            )
 
-                if follow.user.email:
-                    emails_to_send.append({
-                        'email': follow.user.email,
-                        'name': follow.user.get_full_name() or follow.user.username,
-                        'title': title,
-                        'message': message
-                    })
+            if follow.user.email:
+                # run after transaction commits (prevents “email sent but DB rolled back” issues)
+                email_jobs.append((follow.user.id, product.id if product else None, notification_type, title, kwargs))
 
         if notifications_to_create:
             StoreNotification.objects.bulk_create(notifications_to_create)
 
-        # Send emails (you can offload this to a thread / Celery)
-        from django.conf import settings
-        for email_data in emails_to_send:
-            try:
-                send_mail(
-                    subject=f"{self.name}: {email_data['title']}",
-                    message=f"Hi {email_data['name']},\n\n{email_data['message']}\n\nBest regards,\n{self.name}",
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=[email_data['email']],
-                    fail_silently=True,
-                )
-            except Exception as e:
-                print(f"Failed to send email to {email_data['email']}: {e}")
+            def _run_emails():
+                # start background threads AFTER commit
+                for user_id, product_id, ntype, subj_title, extra in email_jobs:
+                    t = threading.Thread(
+                        target=self.send_html_notification_email,
+                        args=(user_id, product_id, ntype, subj_title, extra),
+                        daemon=True
+                    )
+                    t.start()
+
+            transaction.on_commit(_run_emails)
 
         return len(notifications_to_create)
+
+    # ============================================================================
+    # EMAIL SENDING FUNCTION WITH HTML TEMPLATES (INSTANCE METHOD)
+    # ============================================================================
+
+    def send_html_notification_email(self, user_id, product_id, notification_type, title, extra_data):
+        """
+        Send HTML email notification to a user.
+        """
+        from django.core.mail import EmailMultiAlternatives
+        from django.template.loader import render_to_string
+        from django.utils.html import strip_tags
+        from urllib.parse import urljoin
+        from django.conf import settings
+        from django.contrib.auth import get_user_model
+        from marketplace.models import Product
+        import datetime
+        import logging
+
+        logger = logging.getLogger(__name__)
+        User = get_user_model()
+
+        try:
+            user = User.objects.get(id=user_id)
+            product = Product.objects.filter(id=product_id).select_related('category',
+                                                                           'store').first() if product_id else None
+
+            # Similar products
+            similar_products = []
+            if product and product.category:
+                similar_products = Product.objects.filter(
+                    category=product.category,
+                    is_active=True,
+                    store=self
+                ).exclude(id=product.id).order_by('-created_at')[:3]
+
+            # Domain / protocol
+            domain = getattr(settings, 'SITE_DOMAIN', None) or getattr(settings, 'SITE_URL', None) or 'localhost:8000'
+            protocol = 'https' if getattr(settings, 'USE_HTTPS', False) else 'http'
+            base = f"{protocol}://{domain}"
+
+            product_url = f"{protocol}://{domain}{product.get_absolute_url()}" if product else ""
+            store_url = f"{protocol}://{domain}{self.get_absolute_url()}"
+            unsubscribe_url = f"{protocol}://{domain}/account/notifications/"
+
+            def absolutize(path_or_url: str) -> str:
+                if not path_or_url:
+                    return ""
+                if path_or_url.startswith("http://") or path_or_url.startswith("https://"):
+                    return path_or_url
+                return urljoin(base, path_or_url)
+
+            # Image URL
+            product_image = ""
+            if product:
+                if getattr(product, "display_image_url", None):
+                    product_image = absolutize(product.display_image_url)
+                elif getattr(product, "image", None) and getattr(product.image, "url", None):
+                    product_image = absolutize(product.image.url)
+
+            # Template context
+            context = {
+                'user_name': user.get_full_name() or user.username,
+                'store_name': self.name,
+                'store_url': store_url,
+                'unsubscribe_url': unsubscribe_url,
+                'current_year': datetime.datetime.now().year,
+                'title': title,
+            }
+
+            if product:
+                context.update({
+                    'product_name': product.name,
+                    'product_description': product.description,
+                    'product_url': product_url,
+                    'product_image': product_image,
+                    'product_price': round(product.price, 2),
+                    'original_price': round(product.original_price, 2) if product.original_price else None,
+                    'discount_percentage': product.discount_percentage,
+                })
+
+                if getattr(product, 'specifications', None):
+                    specs_lines = product.specifications.split('\n')
+                    context['product_features'] = [line.strip() for line in specs_lines if line.strip()][:3]
+
+            # Price change data
+            if 'old_price' in extra_data and 'new_price' in extra_data and extra_data['old_price'] and extra_data[
+                'new_price']:
+                old_price = extra_data['old_price']
+                new_price = extra_data['new_price']
+                context.update({
+                    'old_price': round(old_price, 2),
+                    'new_price': round(new_price, 2),
+                    'savings_amount': round(old_price - new_price, 2),
+                    'discount_percentage': round(((old_price - new_price) / old_price) * 100, 1) if old_price else None,
+                })
+
+            if similar_products:
+                context['similar_products'] = [
+                    {
+                        'name': p.name,
+                        'price': round(p.price, 2),
+                        'url': f"{protocol}://{domain}{p.get_absolute_url()}",
+                        'image': (
+                            f"{protocol}://{domain}{p.display_image_url}"
+                            if getattr(p, 'display_image_url', None)
+                            else (f"{protocol}://{domain}{p.image.url}" if getattr(p, 'image', None) else "")
+                        ),
+                    }
+                    for p in similar_products
+                ]
+
+            template_map = {
+                'new_product': 'emails/new_product_email.html',
+                'price_decrease': 'emails/price_drop_email.html',
+                'price_increase': 'emails/price_update_email.html',
+            }
+            template_name = template_map.get(notification_type, 'emails/new_product_email.html')
+
+            html_content = render_to_string(template_name, context)
+            text_content = strip_tags(html_content)
+
+            subject = f"{self.name}: {title}"
+            from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None)
+            if not from_email:
+                raise ValueError("DEFAULT_FROM_EMAIL is not set in settings.")
+
+            email = EmailMultiAlternatives(subject, text_content, from_email, [user.email])
+            email.attach_alternative(html_content, "text/html")
+            email.send(fail_silently=False)
+
+            return True
+
+        except Exception as e:
+            logger.exception(f"Failed to send HTML email (store={self.id}) to user_id={user_id}: {e}")
+            return False
 
     # ---------- OVERRIDES ----------
 

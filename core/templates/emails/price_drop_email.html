@@ -1,0 +1,91 @@
+{% extends "emails/base_email.html" %}
+{% load currency_tags %}
+
+{% block content %}
+    <div class="greeting">
+        Hi {{ user_name }}! 🎉
+    </div>
+
+    <p style="font-size: 18px; color: #0f172a; line-height: 1.6; font-weight: 600;">
+        Exciting news! The price just dropped on a product you're following:
+    </p>
+
+    <!-- Main Product Card -->
+    <div class="product-card">
+        <a href="{{ product_url }}">
+            <img src="{{ product_image }}" alt="{{ product_name }}" class="product-image">
+        </a>
+
+        <div class="product-details">
+            <!-- Price Drop Badge -->
+            <div style="background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 12px 20px; border-radius: 8px; text-align: center; margin-bottom: 20px;">
+                <div style="font-size: 16px; font-weight: 600;">💰 Price Dropped!</div>
+                <div style="font-size: 24px; font-weight: 800; margin-top: 5px;">Save {{ discount_percentage }}%</div>
+            </div>
+
+            <h2 class="product-name">{{ product_name }}</h2>
+
+            <p class="product-description">
+                {{ product_description|truncatewords:20 }}
+            </p>
+
+            <!-- Price Comparison -->
+            <div style="background: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <table width="100%">
+                    <tr>
+                        <td width="50%" style="text-align: center; padding: 10px; border-right: 1px solid #e5e7eb;">
+                            <div style="font-size: 12px; color: #94a3b8; margin-bottom: 5px;">Was</div>
+                            <div style="font-size: 20px; color: #94a3b8; text-decoration: line-through;">{% display_money old_price %}</div>
+                        </td>
+                        <td width="50%" style="text-align: center; padding: 10px;">
+                            <div style="font-size: 12px; color: #10b981; margin-bottom: 5px;">Now</div>
+                            <div style="font-size: 28px; color: #10b981; font-weight: 800;">{% display_money new_price %}</div>
+                        </td>
+                    </tr>
+                </table>
+
+                <div style="text-align: center; margin-top: 15px; color: #059669; font-weight: 600;">
+                    You save {% display_money savings_amount %}!
+                </div>
+            </div>
+
+            <a href="{{ product_url }}" class="cta-button">
+                Buy Now at Lower Price →
+            </a>
+
+            <p style="text-align: center; color: #ef4444; font-size: 14px; margin-top: 15px;">
+                ⏰ Limited time offer - Grab it before it's gone!
+            </p>
+        </div>
+    </div>
+
+    <!-- Similar Products from Same Store -->
+    {% if similar_products %}
+    <div class="recommendations">
+        <h3 class="recommendations-title">More Great Deals from {{ store_name }}</h3>
+
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+            <tr>
+                {% for similar in similar_products %}
+                <td width="33%" style="padding: 5px;" valign="top">
+                    <a href="{{ similar.url }}" style="display: block; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; text-decoration: none;">
+                        <img src="{{ similar.image }}" alt="{{ similar.name }}" style="width: 100%; height: 140px; object-fit: cover; display: block;">
+                        <div style="padding: 12px;">
+                            <div style="font-size: 14px; font-weight: 600; color: #0f172a; margin-bottom: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                {{ similar.name }}
+                            </div>
+                            <div style="font-size: 16px; font-weight: 700; color: #2563eb;">
+                                D {{ similar.price }}
+                            </div>
+                        </div>
+                    </a>
+                </td>
+                {% if forloop.counter|divisibleby:3 %}
+                </tr><tr>
+                {% endif %}
+                {% endfor %}
+            </tr>
+        </table>
+    </div>
+    {% endif %}
+{% endblock %}

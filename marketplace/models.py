@@ -223,6 +223,7 @@ class ActiveProductManager(models.Manager):
     def get_queryset(self):
         return super().get_queryset().filter(is_active=True)
 
+
 class Product(models.Model):
     seller = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -235,13 +236,24 @@ class Product(models.Model):
         null=True
     )
 
-    price = models.DecimalField(max_digits=10, decimal_places=2)
+    price = models.DecimalField(max_digits=1000, decimal_places=2)
     original_price = models.DecimalField(
         max_digits=10,
         decimal_places=2,
         blank=True,
         null=True
     )
+
+    # ===== NEW FIELD FOR CURRENCY CONVERSION =====
+    price_currency = models.ForeignKey(
+        'accounts.Currency',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='products_priced_in',
+        help_text="Currency used when setting the price (for conversion tracking)"
+    )
+    # ==============================================
 
     description = models.TextField()
     specifications = models.TextField()
@@ -351,6 +363,206 @@ class Product(models.Model):
     def __str__(self):
         return self.name
 
+    # ========== CURRENCY CONVERSION METHODS (NEW) ==========
+
+    def _convert_prices_to_base_currency(self, user=None):
+        """
+        Convert price, original_price, b2b_price to GMD (base currency) if needed
+
+        Args:
+            user: User object to get currency preference from
+        """
+        from accounts.models import Currency
+        from accounts.currency_utils import convert_currency
+
+        # Get base currency (GMD)
+        base_currency = Currency.objects.filter(is_base_currency=True, is_active=True).first()
+        if not base_currency:
+            base_currency = Currency.objects.filter(code='GMD', is_active=True).first()
+
+        if not base_currency:
+            # No base currency configured, cannot convert
+            return
+
+        # Determine source currency
+        source_currency = self._determine_source_currency(user, base_currency)
+
+        # If already in GMD, no conversion needed
+        if source_currency.code == base_currency.code:
+            return
+
+        # Convert main price
+        if self.price is not None:
+            self.price = self._convert_price_field(
+                self.price,
+                source_currency.code,
+                base_currency.code
+            )
+
+        # Convert original_price
+        if self.original_price is not None:
+            self.original_price = self._convert_price_field(
+                self.original_price,
+                source_currency.code,
+                base_currency.code
+            )
+
+        # Convert B2B price
+        if self.b2b_price is not None:
+            self.b2b_price = self._convert_price_field(
+                self.b2b_price,
+                source_currency.code,
+                base_currency.code
+            )
+
+        # Convert auction prices
+        if self.auction_reserve_price is not None:
+            self.auction_reserve_price = self._convert_price_field(
+                self.auction_reserve_price,
+                source_currency.code,
+                base_currency.code
+            )
+
+        if self.auction_starting_bid is not None:
+            self.auction_starting_bid = self._convert_price_field(
+                self.auction_starting_bid,
+                source_currency.code,
+                base_currency.code
+            )
+
+        # Convert B2B tier pricing
+        if self.b2b_tier_price:
+            converted_tiers = {}
+            for min_qty, tier_price in self.b2b_tier_price.items():
+                converted_price = self._convert_price_field(
+                    Decimal(str(tier_price)),
+                    source_currency.code,
+                    base_currency.code
+                )
+                converted_tiers[min_qty] = str(converted_price)
+            self.b2b_tier_price = converted_tiers
+
+    def _determine_source_currency(self, user, base_currency):
+        """
+        Determine which currency the price is currently in
+
+        Priority:
+        1. Use price_currency if already set (for updates)
+        2. Use user's preferred currency (for new entries)
+        3. Use seller's preferred currency (fallback)
+        4. Assume base currency (GMD)
+        """
+        from accounts.models import Currency
+
+        # Check if this is an update and price_currency is set
+        if self.pk and self.price_currency:
+            return self.price_currency
+
+        # Use user's preferred currency (for creating/updating)
+        if user and hasattr(user, 'preferred_currency') and user.preferred_currency:
+            self.price_currency = user.preferred_currency
+            return user.preferred_currency
+
+        # Use seller's preferred currency
+        if self.seller and hasattr(self.seller, 'preferred_currency') and self.seller.preferred_currency:
+            self.price_currency = self.seller.preferred_currency
+            return self.seller.preferred_currency
+
+        # Default to base currency
+        self.price_currency = base_currency
+        return base_currency
+
+    def _convert_price_field(self, amount, from_code, to_code):
+        """
+        Convert a price amount from one currency to another
+
+        Returns:
+            Decimal: Converted amount or original amount if conversion fails
+        """
+        from accounts.currency_utils import convert_currency
+
+        if amount is None:
+            return amount
+
+        try:
+            result = convert_currency(amount, from_code, to_code)
+            if result.get('success'):
+                return result['converted_amount']
+        except Exception as e:
+            # Log error but don't fail the save
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Currency conversion failed for {from_code} to {to_code}: {e}")
+
+        # Return original amount if conversion fails
+        return amount
+
+    def get_price_in_currency(self, currency_code=None, user=None):
+        """
+        Get the product price in a specific currency
+
+        Args:
+            currency_code: Target currency code (e.g., 'USD')
+            user: User object (to use their preferred currency)
+
+        Returns:
+            dict: {'amount': Decimal, 'currency_code': str, 'formatted': str}
+        """
+        from accounts.models import Currency
+        from accounts.currency_utils import convert_currency, format_price
+
+        # Determine target currency
+        if currency_code:
+            try:
+                target_currency = Currency.objects.get(code=currency_code, is_active=True)
+            except Currency.DoesNotExist:
+                target_currency = None
+        elif user and hasattr(user, 'preferred_currency') and user.preferred_currency:
+            target_currency = user.preferred_currency
+        else:
+            # Default to base currency
+            target_currency = Currency.objects.filter(is_base_currency=True, is_active=True).first()
+
+        if not target_currency:
+            return {
+                'amount': self.price,
+                'currency_code': 'GMD',
+                'formatted': f'D {self.price}'
+            }
+
+        # Get base currency (prices are stored in GMD)
+        base_currency = Currency.objects.filter(is_base_currency=True, is_active=True).first()
+        if not base_currency:
+            base_currency = Currency.objects.filter(code='GMD', is_active=True).first()
+
+        # Convert from GMD to target currency
+        if base_currency.code == target_currency.code:
+            amount = round(self.price, 2)
+        else:
+            result = convert_currency(round(self.price, 2), base_currency.code, target_currency.code)
+            amount = result['converted_amount'] if result.get('success') else round(self.price, 2)
+
+        return {
+            'amount': round(amount, 2),
+            'currency_code': target_currency.code,
+            'formatted': format_price((round(amount, 2)) , currency_code=target_currency.code)
+        }
+
+    def get_display_price(self, user=None):
+        """
+        Get formatted price for display to user (in their preferred currency)
+
+        Args:
+            user: User object
+
+        Returns:
+            str: Formatted price string (e.g., "$12.50" or "D 625.00")
+        """
+        price_info = self.get_price_in_currency(user=user)
+        return price_info['formatted']
+
+    # ========== END CURRENCY CONVERSION METHODS ==========
+
     # ---------- AUCTION HELPERS ----------
 
     def create_auction(self, seller, starting_bid, end_date, **kwargs):
@@ -372,7 +584,6 @@ class Product(models.Model):
 
     @property
     def stock(self):
-        # Assumes Stock model has related_name="stock_records"
         return self.stock_records.first()
 
     @property
@@ -457,7 +668,6 @@ class Product(models.Model):
         """
         Primary ProductImage -> first ProductImage -> Product.image
         """
-        # If prefetched, this won't hit DB repeatedly
         imgs = getattr(self, "_prefetched_objects_cache", {}).get("images")
         if imgs is not None:
             primary = next((im for im in imgs if im.is_primary), None)
@@ -481,13 +691,10 @@ class Product(models.Model):
         Return the best B2B unit price for a given quantity using tier pricing if present,
         else fallback to b2b_price, else normal price.
         """
-        # If no B2B, just return retail price
         if not self.is_available_b2b:
             return self.price
 
-        # Use tier pricing if available
         if self.b2b_tier_price:
-            # keys are min_qty as strings
             applicable = []
             for min_qty_str, unit_price in self.b2b_tier_price.items():
                 try:
@@ -497,17 +704,15 @@ class Product(models.Model):
                 if quantity >= min_qty:
                     applicable.append((min_qty, Decimal(str(unit_price))))
             if applicable:
-                # pick highest min_qty <= quantity
                 applicable.sort(key=lambda x: x[0], reverse=True)
                 return applicable[0][1]
 
-        # fallback to default b2b price or retail price
         return self.b2b_price or self.price
 
     # ---------- IMAGES / COLORS ----------
 
     def get_image_for_color(self, color=None):
-        from .models import ProductImage  # adjust if ProductImage is in another module
+        from .models import ProductImage
         if color:
             color_image = ProductImage.get_primary_image_for_color(self, color)
             if color_image:
@@ -526,14 +731,7 @@ class Product(models.Model):
         return ProductImage.get_available_colors(self)
 
     def has_color_images(self):
-        # assumes ProductImage has related_name="images"
         return self.images.filter(color__isnull=False).exists()
-
-    def save(self, *args, **kwargs):
-        # Generate SKU if it doesn't exist
-        if not self.sku:
-            self.sku = self.generate_sku()
-        super().save(*args, **kwargs)
 
     # ---------- GENERATE SKU ----------
     @staticmethod
@@ -543,18 +741,15 @@ class Product(models.Model):
         Where X is a random alphanumeric character (uppercase)
         """
         while True:
-            # Generate 8 random alphanumeric characters (uppercase)
             random_part = ''.join(
                 secrets.choice(string.ascii_uppercase + string.digits)
                 for _ in range(8)
             )
             sku = f"EM-{random_part}"
 
-            # Check if SKU already exists
             if not Product.objects.filter(sku=sku).exists():
                 return sku
 
-    # Alternative: If you want letters only (no numbers)
     @staticmethod
     def generate_sku_letters_only():
         """Generate SKU with only letters: EM-ABCDEFGH"""
@@ -567,7 +762,6 @@ class Product(models.Model):
             if not Product.objects.filter(sku=sku).exists():
                 return sku
 
-    # Alternative: If you want to include product ID
     def generate_sku_with_id(self):
         """Generate SKU with ID: EM-12345-ABC"""
         if self.id:
@@ -577,7 +771,6 @@ class Product(models.Model):
             )
             return f"EM-{self.id}-{random_part}"
         else:
-            # Fallback to random if no ID yet
             return self.generate_sku()
 
     # ---------- Campaign function----------
@@ -602,10 +795,33 @@ class Product(models.Model):
         '''Check if product has an active campaign'''
         return self.active_campaign and self.active_campaign.is_running()
 
-
-    # ---------- SAVE OVERRIDE (NOTIFICATIONS, PRICE HISTORY, WISHLIST) ----------
+    # ========== MODIFIED SAVE METHOD WITH CURRENCY CONVERSION ==========
 
     def save(self, *args, **kwargs):
+        """
+        Enhanced save method with currency conversion
+
+        Usage:
+            # Creating/updating with user context
+            product.price = 10  # User enters in their currency
+            product.save(user=request.user)  # Converts to GMD
+
+            # If no user provided, uses seller's currency preference
+            product.save()
+        """
+        # Extract user from kwargs (used for currency conversion)
+        user = kwargs.pop('user', None)
+
+        # ===== CURRENCY CONVERSION HAPPENS FIRST =====
+        # This converts all prices to GMD BEFORE any other processing
+        self._convert_prices_to_base_currency(user)
+        # =============================================
+
+        # Generate SKU if it doesn't exist
+        if not self.sku:
+            self.sku = self.generate_sku()
+
+        # Track changes for notifications
         is_new = self.pk is None
         changed_fields = []
         old_price = None
@@ -613,7 +829,7 @@ class Product(models.Model):
         if not is_new:
             try:
                 old_instance = self.__class__.objects.get(pk=self.pk)
-                old_price = old_instance.price
+                old_price = old_instance.price  # This is already in GMD
 
                 for field in self._meta.fields:
                     name = field.name
@@ -626,23 +842,25 @@ class Product(models.Model):
             except self.__class__.DoesNotExist:
                 pass
 
+        # Call parent save (prices are now in GMD)
         super().save(*args, **kwargs)
 
-        # keep track of changed fields if you need this elsewhere
+        # Keep track of changed fields
         self._changed_fields = changed_fields or ['__created__']
 
-        # ---- store follower notifications: new product & price changes ----
+        # ---- Store follower notifications: new product & price changes ----
+        # All prices in notifications are in GMD
         if is_new and self.store:
             # New product notification
             self.store.notify_followers(
                 notification_type='new_product',
                 title=f'New Product: {self.name}',
-                message=f'Check out our latest product "{self.name}" now available for D{self.price}!',
+                message=f'Check out our latest product "{self.name}" now available for D{round(self.price, 2)}!',
                 product=self
             )
 
         elif old_price is not None and old_price != self.price and self.store:
-            # Price history
+            # Price history (both prices are in GMD)
             from stores.models import ProductPriceHistory
             ProductPriceHistory.objects.create(
                 product=self,

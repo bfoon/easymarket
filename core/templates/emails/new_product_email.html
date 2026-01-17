@@ -1,0 +1,76 @@
+{% extends "emails/base_email.html" %}
+
+{% block content %}
+    <div class="greeting">
+        Hi {{ user_name }}! 👋
+    </div>
+
+    <p style="font-size: 16px; color: #475569; line-height: 1.6;">
+        Great news! <strong>{{ store_name }}</strong> just added a new product that might interest you:
+    </p>
+
+    <!-- Main Product Card -->
+    <div class="product-card">
+        <a href="{{ product_url }}">
+            <img src="{{ product_image }}" alt="{{ product_name }}" class="product-image">
+        </a>
+
+        <div class="product-details">
+            <h2 class="product-name">{{ product_name }}</h2>
+
+            <p class="product-description">
+                {{ product_description|truncatewords:20 }}
+            </p>
+
+            <div class="price-container">
+                <span class="price-new">D {{ product_price }}</span>
+                {% if original_price %}
+                    <span class="price-old">D {{ original_price }}</span>
+                    <span class="discount-badge">{{ discount_percentage }}% OFF</span>
+                {% endif %}
+            </div>
+
+            {% if product_features %}
+            <ul style="color: #64748b; font-size: 14px; margin: 15px 0; padding-left: 20px;">
+                {% for feature in product_features %}
+                <li>{{ feature }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            <a href="{{ product_url }}" class="cta-button">
+                View Product Details →
+            </a>
+        </div>
+    </div>
+
+    <!-- Similar Products Recommendations -->
+    {% if similar_products %}
+    <div class="recommendations">
+        <h3 class="recommendations-title">You Might Also Like</h3>
+
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+            <tr>
+                {% for similar in similar_products %}
+                <td width="33%" style="padding: 5px;" valign="top">
+                    <a href="{{ similar.url }}" style="display: block; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; text-decoration: none;">
+                        <img src="{{ similar.image }}" alt="{{ similar.name }}" style="width: 100%; height: 140px; object-fit: cover; display: block;">
+                        <div style="padding: 12px;">
+                            <div style="font-size: 14px; font-weight: 600; color: #0f172a; margin-bottom: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                {{ similar.name }}
+                            </div>
+                            <div style="font-size: 16px; font-weight: 700; color: #2563eb;">
+                                D {{ similar.price }}
+                            </div>
+                        </div>
+                    </a>
+                </td>
+                {% if forloop.counter|divisibleby:3 %}
+                </tr><tr>
+                {% endif %}
+                {% endfor %}
+            </tr>
+        </table>
+    </div>
+    {% endif %}
+{% endblock %}

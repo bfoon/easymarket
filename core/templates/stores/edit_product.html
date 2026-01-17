@@ -1,11 +1,14 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load currency_tags %}
+{% load cart_image_tags %}
 
 {% block content %}
 <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
 <link rel="stylesheet" type="text/css" href="{% static 'css/edit_product.css' %}">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <style>
   :root{
     --em-primary:#2563eb;
@@ -403,6 +406,127 @@
     border-radius: 999px;
     font-weight:700;
   }
+  .alert-sm {
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+
+.alert-info {
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(16, 185, 129, 0.08));
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  color: #1e40af;
+}
+
+.alert-warning {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(251, 191, 36, 0.08));
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  color: #92400e;
+}
+/* Select2 Category Dropdown Customization */
+.select2-container--default .select2-selection--single {
+    height: 42px !important;
+    border: 1px solid var(--em-border) !important;
+    border-radius: 12px !important;
+    padding: 6px 12px !important;
+}
+
+.select2-container--default .select2-selection--single .select2-selection__rendered {
+    line-height: 28px !important;
+    padding-left: 0 !important;
+}
+
+.select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 40px !important;
+    right: 8px !important;
+}
+
+.select2-dropdown {
+    border: 1px solid var(--em-border) !important;
+    border-radius: 12px !important;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15) !important;
+}
+
+.select2-search--dropdown .select2-search__field {
+    border: 1px solid var(--em-border) !important;
+    border-radius: 8px !important;
+    padding: 8px 12px !important;
+}
+
+.select2-search--dropdown .select2-search__field:focus {
+    border-color: var(--em-primary) !important;
+    outline: none !important;
+}
+
+/* Optgroup styling */
+.select2-results__group {
+    font-weight: 800 !important;
+    color: var(--em-primary) !important;
+    padding: 10px 12px 6px 12px !important;
+    font-size: 0.9rem !important;
+    background: linear-gradient(to right, rgba(37, 99, 235, 0.05), transparent) !important;
+    border-bottom: 2px solid rgba(37, 99, 235, 0.2) !important;
+    margin-top: 8px !important;
+}
+
+/* Category options */
+.select2-results__option {
+    padding: 10px 12px !important;
+    font-size: 0.95rem !important;
+}
+
+/* Highlight on hover */
+.select2-results__option--highlighted {
+    background-color: rgba(37, 99, 235, 0.1) !important;
+    color: var(--em-text) !important;
+}
+
+/* Selected option */
+.select2-results__option[aria-selected=true] {
+    background-color: rgba(37, 99, 235, 0.15) !important;
+    font-weight: 600 !important;
+}
+
+/* Indentation for subcategories */
+.select2-results__option[data-level="1"] {
+    padding-left: 28px !important;
+}
+
+.select2-results__option[data-level="2"] {
+    padding-left: 44px !important;
+}
+
+.select2-results__option[data-level="3"] {
+    padding-left: 60px !important;
+}
+
+/* Focus state */
+.select2-container--default.select2-container--focus .select2-selection--single {
+    border-color: rgba(37, 99, 235, 0.5) !important;
+    box-shadow: 0 0 0 0.25rem rgba(37, 99, 235, 0.14) !important;
+}
+
+/* Placeholder text */
+.select2-container--default .select2-selection--single .select2-selection__placeholder {
+    color: var(--em-muted) !important;
+}
+
+/* Clear button */
+.select2-container--default .select2-selection--single .select2-selection__clear {
+    margin-right: 8px !important;
+    font-size: 1.2rem !important;
+    color: var(--em-muted) !important;
+}
+
+.select2-container--default .select2-selection--single .select2-selection__clear:hover {
+    color: var(--em-danger) !important;
+}
+#priceConversionPreview,
+#originalPriceConversionPreview {
+  padding: 6px 10px;
+  background: rgba(37, 99, 235, 0.05);
+  border-radius: 6px;
+  border-left: 3px solid rgba(37, 99, 235, 0.4);
+}
 
   @media (max-width: 768px){
     .dual-listbox-row{ flex-direction: column; }
@@ -491,80 +615,124 @@
                   <div class="form-text"><small><span id="nameCounter">0</span>/100 characters</small></div>
                 </div>
 
-                <!-- Category -->
-                  <div class="mb-3">
-                    <label class="form-label fw-bold" for="category">Category</label>
+          <!-- Category Section -->
+            <div class="mb-3">
+              <label class="form-label fw-bold" for="category">
+                <i class="fa-solid fa-folder-tree text-primary me-2"></i>
+                Category
+              </label>
 
-                    {% with selected_cat=product_form.category.value %}
-                      <select class="form-select" name="category" id="category">
-                        <option value="">Select Category</option>
+              <select class="form-select" name="category" id="category">
+                <option value="">Select Category</option>
 
-                        {% for root in categories %}
-                          {% if root.is_root %}
-                            <!-- ROOT -->
-                            <option value="{{ root.id }}"
-                                    style="font-weight:700;"
-                                    {% if selected_cat == root.id|stringformat:"s" %}selected{% endif %}>
-                              {{ root.name }}
-                            </option>
+                {% for root in categories %}
+                  <!-- ROOT CATEGORY -->
+                  <option value="{{ root.id }}"
+                          style="font-weight:700;"
+                          {% if product.category and product.category.id == root.id %}selected{% endif %}>
+                    {{ root.name }}
+                  </option>
 
-                            <!-- CHILDREN -->
-                            {% for child in root.get_all_subcategories %}
-                              <option value="{{ child.id }}"
-                                      {% if selected_cat == child.id|stringformat:"s" %}selected{% endif %}>
-                                {{ child.get_full_name }}
-                              </option>
-                            {% endfor %}
-                          {% endif %}
-                        {% endfor %}
-                      </select>
-                    {% endwith %}
+                  <!-- CHILD CATEGORIES (with indentation) -->
+                  {% for child in root.get_all_subcategories %}
+                    <option value="{{ child.id }}"
+                            {% if product.category and product.category.id == child.id %}selected{% endif %}>
+                      &nbsp;&nbsp;└─ {{ child.get_full_name }}
+                    </option>
+                  {% endfor %}
+                {% endfor %}
+              </select>
 
-                    {% if product_form.category.errors %}
-                      <div class="invalid-feedback d-block">{{ product_form.category.errors.0 }}</div>
-                    {% endif %}
-                    <div class="form-text">Choose the most relevant category.</div>
-                  </div>
+              {% if product_form.category.errors %}
+                <div class="invalid-feedback d-block">{{ product_form.category.errors.0 }}</div>
+              {% endif %}
+              <div class="form-text">Choose the most relevant category for your product.</div>
+            </div>
 
                 <!-- Pricing -->
                 <div class="row g-3">
-  <div class="col-md-6">
-    <div class="mb-3">
-      <label for="{{ product_form.price.id_for_label }}" class="form-label fw-bold">
-        Current Price ({{ request.user.preferred_currency.code|default:"GMD" }}) <span class="text-danger">*</span>
-      </label>
-      <div class="input-group">
-        <span class="input-group-text currency-symbol">{{ request.user.preferred_currency.symbol|default:"D" }}</span>
-        {{ product_form.price }}
-      </div>
-      <div id="{{ product_form.price.id_for_label }}-feedback" class="invalid-feedback">
-        {% if product_form.price.errors %}{{ product_form.price.errors.0 }}{% endif %}
-      </div>
-      <div class="form-text">
-        <small class="text-muted">
-          <i class="fas fa-info-circle me-1"></i>
-          Prices stored in GMD • Displayed in: {{ request.user.preferred_currency.code|default:"GMD" }}
-        </small>
-      </div>
-    </div>
-  </div>
+                <div class="col-md-6 mb-3">
+                <label for="{{ product_form.price.id_for_label }}" class="form-label fw-semibold">
+                  <i class="fa-solid fa-tag text-primary me-2"></i>
+                  Price <span class="text-danger">*</span>
+                </label>
 
-  <div class="col-md-6">
-    <div class="mb-3">
-      <label for="{{ product_form.original_price.id_for_label }}" class="form-label fw-bold">
-        Original Price ({{ request.user.preferred_currency.code|default:"GMD" }})
-      </label>
-      <div class="input-group">
-        <span class="input-group-text currency-symbol">{{ request.user.preferred_currency.symbol|default:"D" }}</span>
-        {{ product_form.original_price }}
-      </div>
-      <div id="{{ product_form.original_price.id_for_label }}-feedback" class="invalid-feedback">
-        {% if product_form.original_price.errors %}{{ product_form.original_price.errors.0 }}{% endif %}
-      </div>
-      <div class="form-text"><small id="discountInfo" class="em-muted"></small></div>
-    </div>
-  </div>
-</div>
+                <!-- Currency Conversion Info Alert -->
+                {% if currency_info.is_different %}
+                <div class="alert alert-info alert-sm mb-2 py-2 px-3" style="font-size: 0.85rem;">
+                  <i class="fas fa-info-circle me-1"></i>
+                  <strong>Currency Conversion Active:</strong>
+                  <br>
+                  <small>
+                    You're entering prices in <strong>{{ currency_info.user_currency.code }}</strong>.
+                    They will be stored as <strong>{{ currency_info.base_currency.code }}</strong> (base currency).
+                    <br>
+                    <span class="text-muted">
+                      Current price: <strong>{{ product.price }} {{ currency_info.base_currency.code }}</strong>
+                      {% if currency_info.rate_to_base %}
+                      (Rate: 1 {{ currency_info.user_currency.code }} = {{ currency_info.rate_to_base }} {{ currency_info.base_currency.code }})
+                      {% endif %}
+                    </span>
+                  </small>
+                </div>
+                {% endif %}
+
+                <div class="input-group">
+                  <span class="input-group-text currency-symbol">{{ request.user.preferred_currency.symbol|default:"D" }}</span>
+                  {{ product_form.price }}
+                </div>
+
+                <!-- Show converted value in real-time -->
+                {% if currency_info.is_different %}
+                <small class="text-muted d-block mt-1" id="priceConversionPreview">
+                  <i class="fas fa-exchange-alt me-1"></i>
+                  <span id="convertedPriceDisplay"></span>
+                </small>
+                {% endif %}
+
+                <div id="{{ product_form.price.id_for_label }}-feedback" class="invalid-feedback">
+                  {% if product_form.price.errors %}{{ product_form.price.errors.0 }}{% endif %}
+                </div>
+              </div>
+
+
+                <div class="col-md-6 mb-3">
+                <label for="{{ product_form.original_price.id_for_label }}" class="form-label fw-semibold">
+                  <i class="fa-solid fa-receipt text-muted me-2"></i>
+                  Original Price (Optional)
+                </label>
+
+                <!-- Currency Conversion Info Alert for Original Price -->
+                {% if currency_info.is_different %}
+                <div class="alert alert-warning alert-sm mb-2 py-2 px-3" style="font-size: 0.85rem;">
+                  <i class="fas fa-exclamation-triangle me-1"></i>
+                  <small>
+                    <strong>Current stored value:</strong> {{ product.original_price|default:"Not set" }} {{ currency_info.base_currency.code }}
+                  </small>
+                </div>
+                {% endif %}
+
+                <div class="input-group">
+                  <span class="input-group-text currency-symbol">{{ request.user.preferred_currency.symbol|default:"D" }}</span>
+                  {{ product_form.original_price }}
+                </div>
+
+                <!-- Show converted value in real-time -->
+                {% if currency_info.is_different %}
+                <small class="text-muted d-block mt-1" id="originalPriceConversionPreview">
+                  <i class="fas fa-exchange-alt me-1"></i>
+                  <span id="convertedOriginalPriceDisplay"></span>
+                </small>
+                {% endif %}
+
+                <div id="{{ product_form.original_price.id_for_label }}-feedback" class="invalid-feedback">
+                  {% if product_form.original_price.errors %}{{ product_form.original_price.errors.0 }}{% endif %}
+                </div>
+
+                <!-- Discount info display (keep existing) -->
+                <small id="discountInfo" class="text-muted d-block mt-1"></small>
+              </div>
+              </div>
                 <!-- Active Promo Codes -->
                 {% if product.promo_codes.exists %}
                 <div class="mb-3">
@@ -1085,7 +1253,72 @@
     </div>
   </div>
 </div>
+<script>
+// Initialize Select2 for Category Dropdown
+$(document).ready(function() {
+    // Initialize Select2
+    $('#category').select2({
+        placeholder: 'Search or select a category...',
+        allowClear: true,
+        width: '100%',
+        theme: 'default',
 
+        // Custom matcher for better search
+        matcher: function(params, data) {
+            // If there are no search terms, return all data
+            if ($.trim(params.term) === '') {
+                return data;
+            }
+
+            // Do not display the item if there is no 'text' property
+            if (typeof data.text === 'undefined') {
+                return null;
+            }
+
+            // Search in the full category path (including parent categories)
+            var searchTerm = params.term.toLowerCase();
+            var dataText = data.text.toLowerCase();
+
+            // Check if the search term is in the text
+            if (dataText.indexOf(searchTerm) > -1) {
+                return data;
+            }
+
+            // Return null if the term should not be displayed
+            return null;
+        },
+
+        // Custom template for results (with icons)
+        templateResult: function(category) {
+            if (!category.id) {
+                return category.text;
+            }
+
+            var level = $(category.element).data('level') || 0;
+            var indent = '&nbsp;&nbsp;'.repeat(level);
+            var icon = level === 0 ? '<i class="fas fa-folder me-2"></i>' : '<i class="fas fa-angle-right me-2 text-muted"></i>';
+
+            var $category = $(
+                '<span>' + indent + icon + category.text + '</span>'
+            );
+
+            return $category;
+        },
+
+        // Custom template for selected item
+        templateSelection: function(category) {
+            if (!category.id) {
+                return category.text;
+            }
+
+            return $('<span><i class="fas fa-tag me-2 text-primary"></i>' + category.text + '</span>');
+        }
+    });
+
+    // Optional: Add icon to show it's searchable
+    $('.select2-selection__arrow').html('<i class="fas fa-search"></i>');
+});
+</script>
 <script>
   window.storeId = "{{ store.id }}";
   window.productId = "{{ product.id }}";
@@ -1525,7 +1758,107 @@
     updateDiscountInfo();
   });
 </script>
+<script>
+// Real-time currency conversion preview with proper rounding
+{% if currency_info.is_different %}
+(function() {
+  const priceInput = document.querySelector('[name="price"]');
+  const originalPriceInput = document.querySelector('[name="original_price"]');
+  const convertedPriceDisplay = document.getElementById('convertedPriceDisplay');
+  const convertedOriginalPriceDisplay = document.getElementById('convertedOriginalPriceDisplay');
 
+  const userCurrency = '{{ currency_info.user_currency.code }}';
+  const baseCurrency = '{{ currency_info.base_currency.code }}';
+  const rateToBase = {{ currency_info.rate_to_base|default:"1" }};
+
+  // Helper function to round to 2 decimal places
+  function roundToTwo(num) {
+    return Math.round((num + Number.EPSILON) * 100) / 100;
+  }
+
+  function updateConversionPreview() {
+    // Convert price
+    if (priceInput && convertedPriceDisplay) {
+      const priceValue = parseFloat(priceInput.value) || 0;
+      if (priceValue > 0) {
+        // Round to 2 decimal places
+        const convertedPrice = roundToTwo(priceValue * rateToBase);
+        convertedPriceDisplay.innerHTML = `
+          Will be stored as: <strong>${convertedPrice.toFixed(2)} ${baseCurrency}</strong>
+        `;
+        convertedPriceDisplay.parentElement.style.display = 'block';
+      } else {
+        convertedPriceDisplay.parentElement.style.display = 'none';
+      }
+    }
+
+    // Convert original price
+    if (originalPriceInput && convertedOriginalPriceDisplay) {
+      const originalPriceValue = parseFloat(originalPriceInput.value) || 0;
+      if (originalPriceValue > 0) {
+        // Round to 2 decimal places
+        const convertedOriginalPrice = roundToTwo(originalPriceValue * rateToBase);
+        convertedOriginalPriceDisplay.innerHTML = `
+          Will be stored as: <strong>${convertedOriginalPrice.toFixed(2)} ${baseCurrency}</strong>
+        `;
+        convertedOriginalPriceDisplay.parentElement.style.display = 'block';
+      } else {
+        convertedOriginalPriceDisplay.parentElement.style.display = 'none';
+      }
+    }
+  }
+
+  // Add event listeners
+  if (priceInput) {
+    priceInput.addEventListener('input', updateConversionPreview);
+  }
+  if (originalPriceInput) {
+    originalPriceInput.addEventListener('input', updateConversionPreview);
+  }
+
+  // Run once on page load
+  updateConversionPreview();
+})();
+{% endif %}
+</script>
+<script>
+// Enhanced Currency-Aware Discount Calculator with proper rounding
+document.addEventListener('DOMContentLoaded', function() {
+    const priceInput = document.querySelector('[name="price"]');
+    const originalPriceInput = document.querySelector('[name="original_price"]');
+    const discountInfo = document.getElementById('discountInfo');
+
+    // Helper function to round to 2 decimal places
+    function roundToTwo(num) {
+        return Math.round((num + Number.EPSILON) * 100) / 100;
+    }
+
+    function updateDiscountInfo() {
+      const price = parseFloat(priceInput?.value) || 0;
+      const originalPrice = parseFloat(originalPriceInput?.value) || 0;
+
+      if (price && originalPrice && originalPrice > price) {
+        const discount = roundToTwo(((originalPrice - price) / originalPrice * 100));
+        const currencySymbol = '{{ request.user.preferred_currency.symbol|default:"D" }}';
+        const savings = roundToTwo(originalPrice - price);
+
+        discountInfo.innerHTML = `
+          <i class="fas fa-tag text-success me-1"></i>
+          <span class="text-success fw-bold">${discount.toFixed(2)}% OFF</span>
+          <span class="text-muted"> • Save ${currencySymbol}${savings.toFixed(2)}</span>
+        `;
+      } else {
+        discountInfo.innerHTML = '';
+      }
+    }
+
+    priceInput?.addEventListener('input', updateDiscountInfo);
+    originalPriceInput?.addEventListener('input', updateDiscountInfo);
+
+    // Run on page load
+    updateDiscountInfo();
+});
+</script>
 <script src="{% static 'js/product_form.js' %}"></script>
 <script src="{% static 'js/product-page-manager.js' %}"></script>
 {% endblock %}

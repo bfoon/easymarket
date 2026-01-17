@@ -3,6 +3,7 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import Sum, Count, Q, OuterRef, Subquery, IntegerField, Value
 from django.utils import timezone
 from django.db import models
+from decimal import Decimal
 from datetime import datetime, timedelta
 from django.urls import reverse
 import calendar
@@ -28,7 +29,7 @@ from .forms import ProductForm, ProductImageForm, ProductVariantForm, ProductFea
 from django.db import transaction
 from accounts.models import AdminLog
 import re
-from decimal import Decimal, InvalidOperation
+from decimal import InvalidOperation, ROUND_HALF_UP
 from accounts.utils import log_admin_action
 from .models import Store, StoreFollow, StoreNotification, StoreFavorite, B2BInquiry
 from reviews.models import Review
@@ -1934,9 +1935,9 @@ def edit_product(request, store_id, product_id):
 
             if isinstance(old, bool):
                 new = field in request.POST
-            elif isinstance(old, Decimal):
+            elif isinstance(old, bool):
                 try:
-                    new = Decimal(new) if new else None
+                    new = round(new, 2) if new else None
                 except:
                     continue
 
@@ -1978,23 +1979,36 @@ def edit_product(request, store_id, product_id):
         # Create new promo
         new_code = request.POST.get('promo_code')
         new_discount = request.POST.get('promo_discount')
+
         if new_code and new_discount:
             try:
-                promo = PromoCode.objects.create(
-                    code=new_code.strip(),
-                    discount_percentage=int(new_discount),
-                    is_active=True
-                )
-                promo.products.add(product)
-                AdminLog.objects.create(
-                    action_type='promo_create',
-                    related_model='PromoCode',
-                    related_object_id=str(promo.id),
-                    message=f"New promo '{promo.code}' created and linked to '{product.name}'",
-                    created_by=request.user
-                )
-            except (ValueError, TypeError):
-                messages.error(request, 'Invalid discount percentage')
+                from decimal import Decimal
+                code = new_code.strip().upper()
+                discount = int(new_discount)
+
+                if PromoCode.objects.filter(code=code).exists():
+                    messages.error(request, f'Promo code {code} already exists')
+                else:
+                    promo = PromoCode.objects.create(
+                        code=code,
+                        discount_percentage=discount,
+                        discount_value=Decimal(str(discount)),  # ← REQUIRED FIELD!
+                        discount_type='percentage',  # ← SET TYPE
+                        is_active=True,
+                        source='manual',  # ← TRACK SOURCE
+                        created_by=request.user  # ← TRACK CREATOR
+                    )
+                    promo.products.add(product)
+                    AdminLog.objects.create(
+                        action_type='promo_create',
+                        related_model='PromoCode',
+                        related_object_id=str(promo.id),
+                        message=f"New promo '{promo.code}' ({discount}% off) created and linked to '{product.name}'",
+                        created_by=request.user
+                    )
+                    messages.success(request, f'Promo code {code} ({discount}% off) created!')
+            except Exception as e:
+                messages.error(request, f'Error creating promo code: {str(e)}')
 
         if product_form.is_valid() and image_formset.is_valid():
             with transaction.atomic():
@@ -2005,7 +2019,10 @@ def edit_product(request, store_id, product_id):
                 product._log_user = request.user
                 product.is_active = 'is_active' in request.POST
                 product.used = 'used' in request.POST
-                product.save()
+
+                # ===== CURRENCY CONVERSION: Pass user when saving =====
+                product.save(user=request.user)  # This triggers automatic conversion
+                # ======================================================
 
                 if field_diffs:
                     AdminLog.objects.create(
@@ -2044,7 +2061,6 @@ def edit_product(request, store_id, product_id):
                 handle_image_variant_assignments(request, product)
 
                 # Handle variant updates with dual listbox data
-                # Track current variants before changes
                 old_variants = set(
                     ProductVariant.objects.filter(product=product)
                     .select_related('feature_option__feature')
@@ -2090,9 +2106,6 @@ def edit_product(request, store_id, product_id):
                             created_by=request.user
                         )
 
-                # Note: Price change notification is now handled automatically in the Product.save() method
-                # No need to manually call notify_followers here
-
                 messages.success(request, f'Product updated successfully! {len(variant_names)} variants selected.')
                 return redirect('stores:manage_store_products', store_id=store.id)
         else:
@@ -2107,9 +2120,38 @@ def edit_product(request, store_id, product_id):
                 messages.error(request, error)
 
     else:
-        # GET request - initialize forms
+        # ===== GET REQUEST: Convert prices to user's currency for display =====
         product_form = ProductForm(instance=product)
         image_formset = ImageFormSet(queryset=ProductImage.objects.none())
+
+        # Convert prices to user's preferred currency for form display
+        if request.user.preferred_currency:
+            user_currency_code = request.user.preferred_currency.code
+
+            # Get prices in user's currency
+            price_info = product.get_price_in_currency(user=request.user)
+
+            # Update form initial values with converted prices
+            product_form.initial['price'] = price_info['amount']
+
+            # Convert original_price if it exists
+            if product.original_price:
+                from accounts.models import Currency
+                from accounts.currency_utils import convert_currency
+
+                base_currency = Currency.objects.filter(is_base_currency=True, is_active=True).first()
+                if not base_currency:
+                    base_currency = Currency.objects.filter(code='GMD', is_active=True).first()
+
+                if base_currency:
+                    original_price_result = convert_currency(
+                        product.original_price,
+                        base_currency.code,
+                        user_currency_code
+                    )
+                    if original_price_result.get('success'):
+                        product_form.initial['original_price'] = original_price_result['converted_amount']
+        # ========================================================================
 
     # Prepare boolean fields for template
     boolean_fields = [
@@ -2127,6 +2169,36 @@ def edit_product(request, store_id, product_id):
     # Get all active promo codes
     all_promos = PromoCode.objects.filter(is_active=True)
 
+    # ===== NEW: Add currency information to context =====
+    user_currency = request.user.preferred_currency if request.user.preferred_currency else None
+
+    # Get base currency for display
+    from accounts.models import Currency
+    base_currency = Currency.objects.filter(is_base_currency=True, is_active=True).first()
+    if not base_currency:
+        base_currency = Currency.objects.filter(code='GMD', is_active=True).first()
+
+    # Add currency conversion info for template
+    currency_info = None
+    if user_currency and base_currency and user_currency.code != base_currency.code:
+        # Get current exchange rate
+        rate = user_currency.get_exchange_rate_to(base_currency) if hasattr(user_currency,
+                                                                            'get_exchange_rate_to') else None
+        if not rate:
+            # Try getting from base to user currency
+            rate_obj = base_currency.get_exchange_rate_to(user_currency) if hasattr(base_currency,
+                                                                                    'get_exchange_rate_to') else None
+            if rate_obj:
+                rate = 1 / rate_obj
+
+        currency_info = {
+            'user_currency': user_currency,
+            'base_currency': base_currency,
+            'rate_to_base': round(rate, 2),
+            'is_different': True
+        }
+    # ====================================================
+
     context = {
         'store': store,
         'product': product,
@@ -2134,8 +2206,9 @@ def edit_product(request, store_id, product_id):
         'image_formset': image_formset,
         'boolean_fields': boolean_fields,
         'all_promos': all_promos,
-        'all_feature_options': all_feature_options,  # For dual listbox
+        'all_feature_options': all_feature_options,
         'stock_quantity': stock.quantity,
+        'currency_info': currency_info,
     }
 
     return render(request, 'stores/edit_product.html', context)
@@ -2310,6 +2383,9 @@ def store_order_detail(request, store_id, order_id):
     ).aggregate(total=Sum('item_total'))
     subtotal = subtotal_qs['total'] or 0
 
+    # Display shipping in the viewer's currency (store owner)
+    shipping_display = order.get_shipping_cost_in_currency(user=request.user)
+
     # Check if all items are shipped to warehouse
     all_items_shipped = not store_order_items.filter(shipped_to_warehouse=False).exists()
 
@@ -2320,6 +2396,7 @@ def store_order_detail(request, store_id, order_id):
         'buyer': order.buyer,
         'store_subtotal': subtotal,
         'all_items_shipped': all_items_shipped,
+        'shipping_display': shipping_display,  # dict: {amount, currency_code, formatted}
     }
     return render(request, 'stores/store_order_detail.html', context)
 
