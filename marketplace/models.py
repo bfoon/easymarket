@@ -255,8 +255,10 @@ class Product(models.Model):
     )
     # ==============================================
 
-    description = models.TextField()
-    specifications = models.TextField()
+    description = models.TextField(blank=True,
+        null=True)
+    specifications = models.TextField(blank=True,
+        null=True)
     image = models.ImageField(upload_to='products/')
     video = models.FileField(
         upload_to='product_videos/',
@@ -851,11 +853,17 @@ class Product(models.Model):
         # ---- Store follower notifications: new product & price changes ----
         # All prices in notifications are in GMD
         if is_new and self.store:
+            # Convert price to float for formatting (handles both Decimal and string)
+            try:
+                price_value = float(self.price) if self.price else 0.0
+            except (ValueError, TypeError):
+                price_value = 0.0
+
             # New product notification
             self.store.notify_followers(
                 notification_type='new_product',
                 title=f'New Product: {self.name}',
-                message=f'Check out our latest product "{self.name}" now available for D{round(self.price, 2)}!',
+                message=f'Check out our latest product "{self.name}" now available for D{price_value:.2f}!',
                 product=self
             )
 
@@ -868,13 +876,27 @@ class Product(models.Model):
                 new_price=self.price
             )
 
+            # Convert prices to float for safe formatting
+            try:
+                old_price_val = float(old_price) if old_price else 0.0
+                new_price_val = float(self.price) if self.price else 0.0
+            except (ValueError, TypeError):
+                old_price_val = 0.0
+                new_price_val = 0.0
+
             # Store follower notifications on price change
             if self.price < old_price:
-                discount_percent = round(((old_price - self.price) / old_price) * 100, 1)
+                # Calculate discount percentage safely
+                if old_price_val > 0:
+                    discount_percent = ((old_price_val - new_price_val) / old_price_val) * 100
+                    discount_percent = round(discount_percent, 1)
+                else:
+                    discount_percent = 0.0
+
                 self.store.notify_followers(
                     notification_type='price_decrease',
                     title=f'Price Drop: {self.name}',
-                    message=f'Price dropped by {discount_percent}% from D{old_price} to D{self.price}!',
+                    message=f'Price dropped by {discount_percent}% from D{old_price_val:.2f} to D{new_price_val:.2f}!',
                     product=self,
                     old_price=old_price,
                     new_price=self.price
@@ -883,7 +905,7 @@ class Product(models.Model):
                 self.store.notify_followers(
                     notification_type='price_increase',
                     title=f'Price Update: {self.name}',
-                    message=f'Price updated from D{old_price} to D{self.price}.',
+                    message=f'Price updated from D{old_price_val:.2f} to D{new_price_val:.2f}.',
                     product=self,
                     old_price=old_price,
                     new_price=self.price

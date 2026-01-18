@@ -48,6 +48,7 @@ from django.conf import settings
 from django.core.mail import send_mail
 from itertools import groupby
 from django.views.decorators.csrf import csrf_exempt
+from .signals import add_initial_stock
 from operator import attrgetter
 from django.apps import apps
 
@@ -704,19 +705,23 @@ def toggle_store_status(request, store_id):
 
 @login_required
 def add_product(request, store_id):
-    """Add a product to a specific store."""
-    store = get_object_or_404(Store, id=store_id, owner=request.user)
+    """
+    Add a product to a specific store.
 
-    # Get all categories for the dropdown
+    Warehouse and stock entry creation happen automatically in the background.
+    This view only handles:
+    1. Product creation
+    2. Adding initial stock if provided
+    """
+    store = get_object_or_404(Store, id=store_id, owner=request.user)
     categories = Category.objects.all()
 
     if request.method == 'POST':
-        # Validate and process form data
+        # Validate the form data
         errors = validate_product_data(request.POST, request.FILES)
 
         if errors:
-            # Add error messages
-            for field, error in errors.items():
+            for _, error in errors.items():
                 messages.error(request, error)
             return render(request, 'stores/add_product.html', {
                 'store': store,
@@ -726,42 +731,93 @@ def add_product(request, store_id):
             })
 
         try:
-            # Create the product with seller and store
-            product = Product.objects.create(
-                seller=request.user,
-                store=store,  # ✅ Ensure store is assigned here
-                name=request.POST.get('name').strip(),
-                category_id=request.POST.get('category') if request.POST.get('category') else None,
-                price=request.POST.get('price'),
-                original_price=request.POST.get('original_price') if request.POST.get('original_price') else None,
-                description=request.POST.get('description', '').strip(),
-                specifications=request.POST.get('specifications', '').strip(),
-                image=request.FILES.get('image'),
-                video=request.FILES.get('video'),
-                is_featured=bool(request.POST.get('is_featured')),
-                is_trending=bool(request.POST.get('is_trending')),
-                has_30_day_return=bool(request.POST.get('has_30_day_return')),
-                free_shipping=bool(request.POST.get('free_shipping')),
-            )
+            with transaction.atomic():
+                # -----------------------------
+                # 1) Create Product with proper Decimal conversion
+                # -----------------------------
 
-            # Set initial stock if provided
-            initial_stock = request.POST.get('initial_stock')
-            if initial_stock:
+                # Convert prices from string to Decimal
+                price_str = request.POST.get('price')
+                original_price_str = request.POST.get('original_price')
+
                 try:
-                    stock_quantity = int(initial_stock)
-                    product.increase_stock(stock_quantity)
-                except (ValueError, TypeError):
-                    pass
+                    price = Decimal(price_str) if price_str else None
+                except (InvalidOperation, ValueError, TypeError):
+                    raise ValueError(f"Invalid price value: {price_str}")
 
-            messages.success(request, f'Product "{product.name}" added successfully.')
+                try:
+                    original_price = Decimal(original_price_str) if original_price_str else None
+                except (InvalidOperation, ValueError, TypeError):
+                    original_price = None
+
+                product = Product(
+                    seller=request.user,
+                    store=store,
+                    name=(request.POST.get('name') or '').strip(),
+                    category_id=request.POST.get('category') or None,
+                    price=price,
+                    original_price=original_price,
+                    description=(request.POST.get('description') or '').strip(),
+                    specifications=(request.POST.get('specifications') or '').strip(),
+                    image=request.FILES.get('image'),
+                    video=request.FILES.get('video'),
+                    is_featured=bool(request.POST.get('is_featured')),
+                    is_trending=bool(request.POST.get('is_trending')),
+                    has_30_day_return=bool(request.POST.get('has_30_day_return')),
+                    free_shipping=bool(request.POST.get('free_shipping')),
+                )
+
+                # Save the product
+                # This automatically triggers the signal that creates stock entry
+                product.save(user=request.user)
+
+                # -----------------------------
+                # 2) Add Initial Stock (if provided)
+                # -----------------------------
+                initial_stock = request.POST.get('initial_stock', '').strip()
+                if initial_stock:
+                    try:
+                        qty = int(initial_stock)
+                        if qty > 0:
+                            # Use the helper function from signals
+                            success, message = add_initial_stock(
+                                product=product,
+                                quantity=qty,
+                                user=request.user,
+                                notes=f"Initial stock added during product creation"
+                            )
+
+                            if not success:
+                                messages.warning(
+                                    request,
+                                    f'Product added but stock update failed: {message}'
+                                )
+                            else:
+                                logger.info(
+                                    f"Added {qty} units of initial stock for product '{product.name}'"
+                                )
+                    except (ValueError, TypeError):
+                        messages.warning(
+                            request,
+                            f'Product added but initial stock value was invalid: {initial_stock}'
+                        )
+
+            messages.success(
+                request,
+                f'Product "{product.name}" added successfully! '
+                f'Warehouse stock tracking is active.'
+            )
             return redirect('stores:store_dashboard', store_id=store.id)
 
         except Exception as e:
-            messages.error(request, 'An error occurred while creating the product. Please try again.')
+            error_msg = f'Failed to add product: {str(e)}'
+            logger.error(error_msg, exc_info=True)
+            messages.error(request, error_msg)
             return render(request, 'stores/add_product.html', {
                 'store': store,
                 'categories': categories,
-                'form_data': request.POST
+                'form_data': request.POST,
+                'errors': {"__all__": str(e)},
             })
 
     return render(request, 'stores/add_product.html', {
@@ -769,16 +825,23 @@ def add_product(request, store_id):
         'categories': categories
     })
 
-
 def validate_product_data(data, files=None):
-    """Validate product form data and return errors if any."""
+    """
+    Validate product form data.
+
+    Returns:
+        dict: Dictionary of field errors, empty if valid
+    """
     errors = {}
 
-    # Required fields validation
-    required_fields = ['name', 'price', 'description']
+    required_fields = ['name', 'price', 'description', 'specifications']
     for field in required_fields:
         if not data.get(field) or not data.get(field).strip():
             errors[field] = f'{field.replace("_", " ").title()} is required.'
+
+    # Require image (because Product.image is required in the model)
+    if not files or not files.get('image'):
+        errors['image'] = 'Product image is required.'
 
     # Price validation
     price = data.get('price')
@@ -801,42 +864,6 @@ def validate_product_data(data, files=None):
                 errors['original_price'] = 'Original price must be higher than the current price.'
         except (ValueError, TypeError):
             errors['original_price'] = 'Please enter a valid original price.'
-
-    # Initial stock validation
-    initial_stock = data.get('initial_stock')
-    if initial_stock:
-        try:
-            stock_value = int(initial_stock)
-            if stock_value < 0:
-                errors['initial_stock'] = 'Stock quantity cannot be negative.'
-        except (ValueError, TypeError):
-            errors['initial_stock'] = 'Please enter a valid stock quantity.'
-
-    # File validation
-    if files:
-        # Image validation
-        image_file = files.get('image')
-        if image_file:
-            # Check file size (5MB limit)
-            if image_file.size > 5 * 1024 * 1024:
-                errors['image'] = 'Image must be less than 5MB.'
-
-            # Check file type
-            allowed_image_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
-            if image_file.content_type not in allowed_image_types:
-                errors['image'] = 'Image must be a JPEG, PNG, GIF, or WebP file.'
-
-        # Video validation
-        video_file = files.get('video')
-        if video_file:
-            # Check file size (50MB limit)
-            if video_file.size > 50 * 1024 * 1024:
-                errors['video'] = 'Video must be less than 50MB.'
-
-            # Check file type
-            allowed_video_types = ['video/mp4', 'video/avi', 'video/mov', 'video/wmv']
-            if video_file.content_type not in allowed_video_types:
-                errors['video'] = 'Video must be an MP4, AVI, MOV, or WMV file.'
 
     return errors
 
