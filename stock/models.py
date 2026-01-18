@@ -14,7 +14,10 @@ class Warehouse(models.Model):
     city = models.CharField(max_length=100, blank=True)
     state = models.CharField(max_length=100, blank=True)
     country = models.CharField(max_length=100, blank=True)
-    capacity = models.CharField(max_length=100, blank=True)
+    capacity = models.PositiveIntegerField(
+        default=0,
+        help_text="Maximum storage capacity in units (0 = unlimited)"
+    )
     postal_code = models.CharField(max_length=20, blank=True)
 
     # Geocode fields
@@ -58,6 +61,37 @@ class Warehouse(models.Model):
         if self.has_geocode:
             return (float(self.latitude), float(self.longitude))
         return None
+
+    @property
+    def total_stock(self):
+        """Get total stock quantity across all products in this warehouse"""
+        from django.db.models import Sum
+        result = self.stock_items.aggregate(total=Sum('quantity'))
+        return result['total'] or 0
+
+    @property
+    def utilization_percent(self):
+        """Calculate warehouse capacity utilization percentage"""
+        if not self.capacity or self.capacity == 0:
+            return 0  # Unlimited capacity
+        total = self.total_stock
+        if total == 0:
+            return 0
+        return min(100, round((total / self.capacity) * 100, 1))
+
+    @property
+    def available_capacity(self):
+        """Get remaining capacity"""
+        if not self.capacity or self.capacity == 0:
+            return None  # Unlimited
+        return max(0, self.capacity - self.total_stock)
+
+    @property
+    def is_over_capacity(self):
+        """Check if warehouse is over capacity"""
+        if not self.capacity or self.capacity == 0:
+            return False  # Unlimited capacity
+        return self.total_stock > self.capacity
 
 
 class Stock(models.Model):

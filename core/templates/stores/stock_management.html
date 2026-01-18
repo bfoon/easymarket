@@ -1,6 +1,8 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load humanize %}
+{% load currency_tags %}
+{% load cart_image_tags %}
 
 {% block title %}Warehouse & Stock Management - {{ store.name }}{% endblock %}
 
@@ -538,6 +540,110 @@
     color: white;
     border-left: 4px solid #164d82;
 }
+.warehouse-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1.5rem;
+    border-radius: 3rem;
+    font-weight: 700;
+    font-size: 0.875rem;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.warehouse-status::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0) 100%);
+    pointer-events: none;
+}
+
+.warehouse-status:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+/* Active Status - Green with pulse */
+.warehouse-status-active {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    border: 2px solid rgba(16, 185, 129, 0.3);
+}
+/* ===== ADVANCED ANIMATED VERSION ===== */
+
+.warehouse-status-container {
+    position: relative;
+}
+
+.animate-glow {
+    position: relative;
+    animation: subtleGlow 3s ease-in-out infinite;
+}
+
+@keyframes subtleGlow {
+    0%, 100% {
+        filter: brightness(1);
+    }
+    50% {
+        filter: brightness(1.1);
+    }
+}
+
+.status-icon-wrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.status-icon {
+    font-size: 1.25rem;
+    position: relative;
+    z-index: 2;
+}
+
+.status-ripple {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.3);
+    animation: ripple 2s ease-out infinite;
+}
+
+@keyframes ripple {
+    0% {
+        transform: translate(-50%, -50%) scale(0.8);
+        opacity: 0.8;
+    }
+    100% {
+        transform: translate(-50%, -50%) scale(2);
+        opacity: 0;
+    }
+}
+
+.status-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+}
+
+.status-subtext {
+    font-size: 0.625rem;
+    opacity: 0.9;
+    font-weight: 600;
+    text-transform: none;
+}
 
 /* Responsive Adjustments */
 @media (max-width: 768px) {
@@ -644,18 +750,41 @@
     <div class="warehouse-section">
         <div class="warehouse-header">
             <div>
-                <h4><i class="fas fa-building me-2"></i>{{ warehouse.name }}</h4>
+                <h4><i class="fas fa-building me-2"></i>{{ warehouse.name|default:"Main Warehouse" }}</h4>
                 <p class="text-muted mb-0">{{ warehouse.address }}</p>
             </div>
             <div class="d-flex gap-2 align-items-center">
-                <span class="warehouse-status {{ warehouse.status|lower }}">
-                    <i class="fas fa-circle"></i>
-                    {{ warehouse.get_status_display|default:"Active" }}
-                </span>
+              <div class="warehouse-status-container">
+                    <span class="warehouse-status warehouse-status-{{ warehouse.status|default:'active' }} animate-glow">
+                        <span class="status-icon-wrapper">
+                            <i class="fas {{ warehouse.status_icon|default:'fa-circle' }} status-icon"></i>
+                            <span class="status-ripple"></span>
+                        </span>
+                        <span class="status-details">
+                            <span class="status-text">{{ warehouse.get_status_display|default:"Active" }}</span>
+                            <span class="status-subtext">
+                                {% if warehouse.total_stock %}
+                                    {{ warehouse.total_stock|intcomma }} units stored
+                                {% else %}
+                                    Ready for operation
+                                {% endif %}
+                            </span>
+                        </span>
+                        {% if warehouse.utilization_percent %}
+                        <span class="status-percentage">
+                            <span class="percentage-value">{{ warehouse.utilization_percent }}%</span>
+                            <div class="percentage-bar">
+                                <div class="percentage-fill" style="width: {{ warehouse.utilization_percent }}%"></div>
+                            </div>
+                        </span>
+                        {% endif %}
+                    </span>
+                </div>
                 <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#warehouseModal" onclick="editWarehouse()">
                     <i class="fas fa-edit me-1"></i>Edit Warehouse
                 </button>
-            </div>
+
+        </div>
         </div>
 
         <div class="warehouse-info-grid">
@@ -735,7 +864,7 @@
         </div>
         <div class="stock-card info">
             <i class="fas fa-dollar-sign stock-card-icon"></i>
-            <div class="stock-number">D{{ total_value|floatformat:2|intcomma }}</div>
+            <div class="stock-number">{% display_money total_value %}</div>
             <div class="stock-label">Total Value</div>
         </div>
     </div>
@@ -837,7 +966,7 @@
                             <span class="badge bg-primary">{{ product.category.name }}</span>
                         </td>
                         <td>
-                            <strong style="color: var(--b2b-primary);">D{{ product.price|floatformat:2 }}</strong>
+                            <strong style="color: var(--b2b-primary);">{% display_money product.price %}</strong>
                         </td>
                         <td>
                             <strong class="stock-quantity" style="font-size: 1.1rem; color: var(--b2b-dark);">{{ product.warehouse_qty }}</strong>
@@ -941,7 +1070,7 @@
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form id="warehouseForm" method="POST" action="{% url 'stores:manage_warehouse' store.id %}">
+            <form id="warehouseForm" method="post" action="{% url 'stores:update_warehouse' store.id %}">
                 {% csrf_token %}
                 <div class="modal-body">
                     <div class="row g-3">
@@ -983,8 +1112,9 @@
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Capacity (units)</label>
-                            <input type="number" name="capacity" id="warehouseCapacity" class="form-control"
-                                   placeholder="10000" min="0" value="{{ warehouse.capacity|default:'' }}">
+                            <input type="number" class="form-control" id="warehouseCapacity"
+                            name="capacity" placeholder="10000" min="0" step="1"
+                            value="{{ warehouse.capacity|default:'0' }}">
                             <small class="text-muted">Leave empty for unlimited</small>
                         </div>
                         <div class="col-12">

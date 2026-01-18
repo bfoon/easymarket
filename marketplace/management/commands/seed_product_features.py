@@ -2,28 +2,214 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.apps import apps
 
-
 DEFAULT_FEATURES = {
-    # Fashion / Shoes
-    "Color": ["Black", "White", "Grey", "Navy", "Brown", "Red", "Blue", "Green", "Beige"],
-    "Size": ["EU 39", "EU 40", "EU 41", "EU 42", "EU 43", "EU 44", "EU 45", "EU 46"],
-    "Shoe Size": ["EU 39", "EU 40", "EU 41", "EU 42", "EU 43", "EU 44", "EU 45", "EU 46"],
-    "Fit": ["Slim", "Regular", "Loose"],
-    "Material": ["Leather", "Synthetic Leather", "Mesh", "Canvas", "Suede", "Rubber"],
-    "Style": ["Casual", "Street", "Smart Casual", "Sport", "Formal"],
-    "Gender": ["Men", "Women", "Unisex"],
-    "Condition": ["New", "Used", "Refurbished"],
+    # Extensive Color Options with Hex Codes (format: "ColorName|#HexCode")
+    "Color": [
+        # Basic Colors
+        "Black|#000000",
+        "White|#FFFFFF",
+        "Grey|#808080",
+        "Silver|#C0C0C0",
+        "Charcoal|#36454F",
 
-    # General ecommerce
-    "Capacity": ["16GB", "32GB", "64GB", "128GB", "256GB", "512GB", "1TB"],
-    "Storage": ["128GB", "256GB", "512GB", "1TB", "2TB"],
-    "RAM": ["2GB", "3GB", "4GB", "6GB", "8GB", "12GB", "16GB", "32GB"],
-    "Network": ["2G", "3G", "4G", "5G", "Wi-Fi"],
-    "Voltage": ["110V", "220V", "Dual Voltage"],
-    "Warranty": ["No Warranty", "3 Months", "6 Months", "1 Year", "2 Years"],
+        # Blues
+        "Navy|#000080",
+        "Blue|#0000FF",
+        "Light Blue|#ADD8E6",
+        "Sky Blue|#87CEEB",
+        "Royal Blue|#4169E1",
+        "Midnight Blue|#191970",
+        "Teal|#008080",
+        "Turquoise|#40E0D0",
+        "Aqua|#00FFFF",
+        "Cyan|#00FFFF",
 
-    # For listings control
-    "Pack Size": ["1", "2", "3", "5", "10"],
+        # Reds & Pinks
+        "Red|#FF0000",
+        "Dark Red|#8B0000",
+        "Crimson|#DC143C",
+        "Burgundy|#800020",
+        "Maroon|#800000",
+        "Pink|#FFC0CB",
+        "Hot Pink|#FF69B4",
+        "Rose|#FF007F",
+        "Coral|#FF7F50",
+        "Salmon|#FA8072",
+
+        # Greens
+        "Green|#008000",
+        "Dark Green|#006400",
+        "Forest Green|#228B22",
+        "Olive|#808000",
+        "Lime|#00FF00",
+        "Mint|#98FF98",
+        "Emerald|#50C878",
+        "Sage|#9DC183",
+        "Sea Green|#2E8B57",
+
+        # Yellows & Oranges
+        "Yellow|#FFFF00",
+        "Gold|#FFD700",
+        "Mustard|#FFDB58",
+        "Beige|#F5F5DC",
+        "Cream|#FFFDD0",
+        "Ivory|#FFFFF0",
+        "Orange|#FFA500",
+        "Burnt Orange|#CC5500",
+        "Peach|#FFE5B4",
+        "Apricot|#FBCEB1",
+
+        # Purples
+        "Purple|#800080",
+        "Violet|#EE82EE",
+        "Lavender|#E6E6FA",
+        "Plum|#DDA0DD",
+        "Mauve|#E0B0FF",
+        "Magenta|#FF00FF",
+        "Indigo|#4B0082",
+
+        # Browns
+        "Brown|#A52A2A",
+        "Tan|#D2B48C",
+        "Khaki|#C3B091",
+        "Camel|#C19A6B",
+        "Chocolate|#D2691E",
+        "Coffee|#6F4E37",
+        "Espresso|#4E3B31",
+        "Mocha|#967969",
+
+        # Neutrals & Pastels
+        "Nude|#E3BC9A",
+        "Blush|#DE5D83",
+        "Taupe|#483C32",
+        "Sand|#C2B280",
+        "Stone|#8D918D",
+        "Ash|#B2BEB5",
+        "Slate|#708090",
+
+        # Multi-color (using gradient-like representation)
+        "Multi-Color|#FF00FF",
+        "Rainbow|#FF0000",
+        "Tie-Dye|#9370DB",
+        "Camouflage|#78866B",
+        "Floral Print|#FF69B4",
+        "Animal Print|#D2691E"
+    ],
+
+    # Product Class/Grade
+    "Class": ["A", "B", "C", "D", "Premium", "Standard", "Economy"],
+    "Grade": ["A+", "A", "B+", "B", "C+", "C"],
+    "Quality": ["Premium", "High Quality", "Standard", "Budget", "Economy"],
+    "Tier": ["Platinum", "Gold", "Silver", "Bronze", "Basic"],
+
+    # Fashion / Clothing Sizes
+    "Size": ["XXS", "XS", "S", "M", "L", "XL", "XXL", "3XL", "4XL", "5XL"],
+    "Numeric Size": ["0", "2", "4", "6", "8", "10", "12", "14", "16", "18", "20", "22"],
+    "Shoe Size": [
+        # EU Sizes
+        "EU 35", "EU 36", "EU 37", "EU 38", "EU 39", "EU 40", "EU 41", "EU 42",
+        "EU 43", "EU 44", "EU 45", "EU 46", "EU 47", "EU 48",
+        # US Sizes
+        "US 5", "US 6", "US 7", "US 8", "US 9", "US 10", "US 11", "US 12", "US 13", "US 14"
+    ],
+    "Waist Size": ["28", "30", "32", "34", "36", "38", "40", "42", "44", "46"],
+    "Length": ["Short", "Regular", "Long", "Extra Long"],
+    "Inseam": ["28", "30", "32", "34", "36"],
+
+    # Fit & Style
+    "Fit": ["Slim Fit", "Regular Fit", "Relaxed Fit", "Loose Fit", "Oversized", "Athletic Fit", "Tailored"],
+    "Cut": ["Straight", "Tapered", "Bootcut", "Skinny", "Baggy", "Cropped"],
+    "Neckline": ["Crew Neck", "V-Neck", "Round Neck", "Scoop Neck", "Turtleneck", "Polo"],
+    "Sleeve Length": ["Sleeveless", "Short Sleeve", "3/4 Sleeve", "Long Sleeve"],
+    "Style": ["Casual", "Street", "Smart Casual", "Sport", "Formal", "Business", "Athletic", "Vintage", "Modern"],
+
+    # Material & Fabric
+    "Material": [
+        # Leather
+        "Leather", "Genuine Leather", "Full Grain Leather", "Top Grain Leather", "Synthetic Leather", "PU Leather",
+        "Suede", "Nubuck",
+        # Fabrics
+        "Cotton", "Organic Cotton", "Polyester", "Nylon", "Spandex", "Elastane", "Lycra",
+        "Denim", "Canvas", "Linen", "Silk", "Wool", "Cashmere", "Fleece", "Velvet",
+        # Technical
+        "Mesh", "Gore-Tex", "Microfiber", "Rubber", "EVA", "Memory Foam",
+        # Blends
+        "Cotton Blend", "Poly-Cotton", "Cotton-Spandex"
+    ],
+    "Fabric Type": ["Knit", "Woven", "Jersey", "French Terry", "Corduroy", "Chambray"],
+    "Lining": ["Lined", "Unlined", "Partially Lined", "Fleece Lined", "Thermal Lined"],
+
+    # Product Features
+    "Pattern": ["Solid", "Striped", "Checkered", "Plaid", "Floral", "Geometric", "Abstract", "Polka Dot", "Camouflage"],
+    "Closure Type": ["Zipper", "Button", "Snap", "Velcro", "Lace-Up", "Pull-On", "Buckle", "Magnetic"],
+    "Collar Type": ["Spread Collar", "Point Collar", "Button-Down", "Mandarin", "No Collar", "Hood"],
+
+    # Gender & Age
+    "Gender": ["Men", "Women", "Unisex", "Boys", "Girls", "Kids"],
+    "Age Group": ["Adults", "Teens", "Kids", "Toddlers", "Infants"],
+
+    # Condition & Authenticity
+    "Condition": ["New with Tags", "New without Tags", "Like New", "Very Good", "Good", "Fair", "Used", "Refurbished"],
+    "Authenticity": ["Authentic", "Original", "Licensed", "Replica"],
+
+    # Electronics - Storage & Memory
+    "Storage": ["16GB", "32GB", "64GB", "128GB", "256GB", "512GB", "1TB", "2TB", "4TB", "8TB"],
+    "RAM": ["2GB", "3GB", "4GB", "6GB", "8GB", "12GB", "16GB", "32GB", "64GB", "128GB"],
+    "Memory Type": ["DDR3", "DDR4", "DDR5", "LPDDR4", "LPDDR5"],
+
+    # Electronics - Display
+    "Screen Size": ['5"', '5.5"', '6"', '6.5"', '6.7"', '7"', '10"', '11"', '12"', '13"', '14"', '15"', '17"', '21"',
+                    '24"', '27"', '32"'],
+    "Resolution": ["HD", "Full HD", "2K", "4K", "8K", "Retina", "AMOLED", "OLED"],
+    "Refresh Rate": ["60Hz", "90Hz", "120Hz", "144Hz", "165Hz", "240Hz"],
+
+    # Electronics - Performance
+    "Processor": ["Intel i3", "Intel i5", "Intel i7", "Intel i9", "AMD Ryzen 3", "AMD Ryzen 5", "AMD Ryzen 7",
+                  "AMD Ryzen 9", "Apple M1", "Apple M2", "Apple M3"],
+    "Graphics": ["Integrated", "NVIDIA GTX", "NVIDIA RTX", "AMD Radeon", "Intel Iris"],
+    "Battery": ["3000mAh", "4000mAh", "5000mAh", "6000mAh", "7000mAh"],
+
+    # Electronics - Connectivity
+    "Network": ["2G", "3G", "4G", "4G LTE", "5G", "Wi-Fi Only"],
+    "Connectivity": ["Wi-Fi", "Bluetooth", "NFC", "GPS", "USB-C", "Lightning", "Micro USB"],
+    "Ports": ["HDMI", "USB 3.0", "USB-C", "Thunderbolt", "Ethernet", "Audio Jack"],
+
+    # Electronics - Operating System
+    "OS": ["Windows 10", "Windows 11", "macOS", "Linux", "Chrome OS", "Android", "iOS", "iPadOS"],
+
+    # Power & Energy
+    "Voltage": ["110V", "220V", "240V", "Dual Voltage", "Universal"],
+    "Wattage": ["25W", "50W", "100W", "150W", "200W", "300W", "500W", "1000W"],
+    "Energy Rating": ["A+++", "A++", "A+", "A", "B", "C", "D"],
+
+    # Warranty & Support
+    "Warranty": ["No Warranty", "1 Month", "3 Months", "6 Months", "1 Year", "2 Years", "3 Years", "Lifetime"],
+    "Support": ["24/7 Support", "Business Hours", "Online Only", "No Support"],
+
+    # Packaging & Quantity
+    "Pack Size": ["1", "2", "3", "4", "5", "6", "10", "12", "24", "50", "100"],
+    "Packaging": ["Retail Box", "Original Box", "Bulk Pack", "Gift Box", "Eco-Friendly"],
+
+    # Weight & Dimensions
+    "Weight": ["Light (< 1kg)", "Medium (1-5kg)", "Heavy (5-10kg)", "Extra Heavy (> 10kg)"],
+    "Dimensions": ["Compact", "Standard", "Large", "Extra Large"],
+
+    # Features & Specifications
+    "Features": ["Waterproof", "Water Resistant", "Dustproof", "Shockproof", "Wireless", "Rechargeable", "Foldable",
+                 "Portable"],
+    "Season": ["Spring", "Summer", "Fall", "Winter", "All Season"],
+    "Usage": ["Indoor", "Outdoor", "Indoor/Outdoor", "Professional", "Home Use"],
+
+    # Brand Type
+    "Brand Type": ["Original Brand", "Generic", "OEM", "Private Label"],
+
+    # Certification
+    "Certification": ["CE", "FCC", "RoHS", "ISO", "FDA Approved", "UL Listed", "Energy Star"],
+
+    # Special Categories
+    "Fragrance": ["Unscented", "Lavender", "Rose", "Vanilla", "Citrus", "Fresh", "Woody", "Floral"],
+    "Flavor": ["Original", "Chocolate", "Vanilla", "Strawberry", "Mint", "Coffee", "Caramel"],
+    "Ingredients": ["Organic", "Natural", "Vegan", "Gluten-Free", "Sugar-Free", "Dairy-Free"],
 }
 
 
@@ -100,15 +286,31 @@ class Command(BaseCommand):
                 if not val:
                     continue
 
+                # Parse color code if present (format: "ColorName|#HexCode")
+                color_name = val
+                color_code = None
+                if '|' in val:
+                    parts = val.split('|')
+                    color_name = parts[0].strip()
+                    color_code = parts[1].strip() if len(parts) > 1 else None
+
                 if dry_run:
-                    self.stdout.write(f"  [DRY-RUN] option: {feature_name} = {val}")
+                    self.stdout.write(f"  [DRY-RUN] option: {feature_name} = {color_name}" +
+                                      (f" (color: {color_code})" if color_code else ""))
                     continue
 
                 # prevent duplicates per feature
                 opt_obj, o_created = Option.objects.get_or_create(
                     feature=feature_obj,
-                    value=val
+                    value=color_name,
+                    defaults={'color_code': color_code} if color_code else {}
                 )
+
+                # Update color_code if option already exists but didn't have one
+                if not o_created and color_code and not opt_obj.color_code:
+                    opt_obj.color_code = color_code
+                    opt_obj.save()
+
                 created_options += int(o_created)
 
         # 2) Optionally create variants for all products

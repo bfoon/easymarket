@@ -1216,7 +1216,8 @@ def product_detail(request, product_id):
         feature_map[feature_name][feature_option.value] = {
             'id': feature_option.id,
             'value': feature_option.value,
-            'feature_name': feature_name
+            'feature_name': feature_name,
+            'color_code': feature_option.color_code if hasattr(feature_option, 'color_code') else None
         }
 
     # Convert to sorted lists for template

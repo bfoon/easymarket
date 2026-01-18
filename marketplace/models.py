@@ -953,6 +953,16 @@ class ProductFeature(models.Model):
 class ProductFeatureOption(models.Model):
     feature = models.ForeignKey(ProductFeature, related_name='options', on_delete=models.CASCADE)
     value = models.CharField(max_length=100)  # e.g. "Red", "Large"
+    color_code = models.CharField(
+        max_length=7,
+        blank=True,
+        null=True,
+        help_text='Hex color code (e.g., #FF0000 for red)'
+    )
+
+    def clean(self):
+        if self.feature.name.lower() == "color" and not self.color_code:
+            raise ValidationError("Color variants must have a color code.")
 
     def __str__(self):
         return f"{self.feature.name}: {self.value}"

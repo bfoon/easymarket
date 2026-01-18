@@ -103,6 +103,14 @@
   .thumbnail-gallery{ padding-bottom:.25rem; }
   .thumbnail-item img{ transition: transform .15s ease, outline-color .15s ease; }
   .thumbnail-item:hover img{ transform: translateY(-2px); }
+.thumbnail-item { position: relative; }
+.thumbnail-badge{
+  position:absolute;
+  right:6px;
+  bottom:6px;
+  z-index:5;
+  pointer-events:none;
+}
 
   /* Mobile sticky buy bar */
   .em-sticky-buy{
@@ -265,7 +273,7 @@
           <!-- Main Image Container -->
           <div class="main-image-container">
             <div class="image-wrapper">
-              <img src="{{ product.image.url }}"
+              <img src="{% if product.images.all %}{{ product.images.all.0.image.url }}{% else %}{{ product.image.url }}{% endif %}"
                    alt="{{ product.name }}"
                    class="main-product-image"
                    id="mainProductImage"
@@ -284,6 +292,7 @@
                  role="tablist"
                  aria-label="Product image thumbnails">
 
+              {% if not product.images.all %}
               <button class="thumbnail-item active"
                       data-image="{{ product.image.url }}"
                       data-features="{}"
@@ -296,9 +305,10 @@
                      loading="lazy"
                      onerror="this.style.display='none'; this.parentElement.innerHTML='<div style=&quot;display:flex;align-items:center;justify-content:center;height:100%;background:#f8f9fa;color:#999;&quot;><i class=&quot;fas fa-image&quot;></i></div>'">
               </button>
+              {% endif %}
 
               {% for img in product.images.all %}
-              <button class="thumbnail-item"
+              <button class="thumbnail-item{% if forloop.first %} active{% endif %}"
                       data-image="{{ img.image.url }}"
                       data-features='{% if img.variants.exists %}{
                         {% for variant in img.variants.all %}
@@ -307,7 +317,7 @@
                         {% endfor %}
                       }{% else %}{}{% endif %}'
                       role="tab"
-                      aria-selected="false"
+                      aria-selected="{% if forloop.first %}true{% else %}false{% endif %}"
                       aria-label="Product image {{ forloop.counter }}"
                       tabindex="0">
                 <img src="{{ img.image.url }}"
@@ -316,11 +326,20 @@
                      onerror="this.style.display='none'; this.parentElement.innerHTML='<div style=&quot;display:flex;align-items:center;justify-content:center;height:100%;background:#f8f9fa;color:#999;&quot;><i class=&quot;fas fa-image&quot;></i></div>'">
 
                 {% if img.variants.exists %}
-                <div class="thumbnail-badge">
-                  {% for variant in img.variants.all %}
-                    {{ variant.value|first|upper }}
-                  {% endfor %}
+                {% with first_variant=img.variants.first %}
+                <div class="thumbnail-badge"
+                     style="
+                       background-color: {% if first_variant.color_code %}{{ first_variant.color_code }}{% else %}#e5e7eb{% endif %};
+                       width: 20px;
+                       height: 20px;
+                       border-radius: 50%;
+                       border: 2px solid #fff;
+                       box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                     "
+                     title="{{ first_variant.value }}">
                 </div>
+
+                {% endwith %}
                 {% endif %}
               </button>
               {% endfor %}
@@ -458,7 +477,7 @@
                          {% if forloop.first %}checked{% endif %}>
                   <span class="d-inline-flex align-items-center gap-2">
                     <span class="color-swatch"
-                          style="width:14px;height:14px;border-radius:50%;background-color: {{ option.value|get_color_code }};"></span>
+                          style="width:14px;height:14px;border-radius:50%;background-color: {% if option.color_code %}{{ option.color_code }}{% else %}{{ option.value|lower }}{% endif %};"></span>
                     <span class="color-name">{{ option.value }}</span>
                   </span>
                 </label>
@@ -1115,7 +1134,9 @@
 <script>
   window.PRODUCT_FEATURES = {
     imageFeatures: {
+      {% if not product.images.all %}
       "{{ product.image.url }}": {},
+      {% endif %}
       {% for img in product.images.all %}
         {% if img.variants.exists %}
         "{{ img.image.url }}": {

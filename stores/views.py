@@ -15,7 +15,7 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 from django.http import HttpResponseRedirect
 from django.utils.text import slugify
-from django.db.models import Q, Avg, F, FloatField, DecimalField, ExpressionWrapper
+from django.db.models import Q, Avg, F, FloatField, DecimalField, ExpressionWrapper, Case, When
 from django.db.models.functions import Coalesce
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.http import JsonResponse, HttpResponseBadRequest
@@ -3128,117 +3128,364 @@ def store_settings(request, store_id):
 
 
 @login_required
-@store_owner_required
 def stock_management(request, store_id):
-    """
-    Main stock management view with correct stats + correct stock display (warehouse_qty).
-    """
-    store = get_object_or_404(Store, id=store_id)
+    """Stock management view that matches the template requirements"""
+    store = get_object_or_404(Store, id=store_id, owner=request.user)
 
-    warehouse = getattr(store, "warehouse", None)
-    if not warehouse:
-        # show template but with empty context, user can create warehouse
-        return render(request, "stores/stock_management.html", {
-            "store": store,
-            "warehouse": None,
-            "products": [],
-            "categories": Category.objects.all().order_by("name"),
-            "total_products": 0,
-            "in_stock_count": 0,
-            "low_stock_count": 0,
-            "out_of_stock_count": 0,
-            "total_value": Decimal("0.00"),
-        })
+    # Get warehouse
+    warehouse = store.warehouse
 
-    # ---- Filters from TEMPLATE (keep your UI working) ----
-    search_query = (request.GET.get("search") or "").strip()
-    category_filter = (request.GET.get("category") or "").strip()
-    stock_status = (request.GET.get("stock_status") or "").strip()  # in_stock / low_stock / out_of_stock
-    sort_by = (request.GET.get("sort") or "name").strip()  # name/stock/price/updated
+    # Get all products for this seller
+    products_queryset = Product.objects.filter(seller=request.user).select_related('category')
 
-    # Base product set (matches your store architecture used elsewhere)
-    products_qs = Product.objects.filter(
-        seller=store.owner,
-        is_active=True
-    ).select_related("category")
+    # Initialize stats variables
+    total_stock = 0
+    total_value = Decimal('0.00')
+    in_stock_count = 0
+    low_stock_count = 0
+    out_of_stock_count = 0
+    utilization_percent = 0
+
+    # Calculate stats if warehouse exists
+    if warehouse:
+        # Annotate products with warehouse stock quantity
+        products_queryset = products_queryset.annotate(
+            warehouse_qty=Case(
+                When(
+                    stock_records__warehouse=warehouse,
+                    then=F('stock_records__quantity')
+                ),
+                default=Value(0),
+                output_field=IntegerField()
+            ),
+            warehouse_stock_value=Case(
+                When(
+                    stock_records__warehouse=warehouse,
+                    then=ExpressionWrapper(
+                        F('stock_records__quantity') * F('stock_records__unit_cost'),
+                        output_field=DecimalField(max_digits=15, decimal_places=2)
+                    )
+                ),
+                default=Value(0),
+                output_field=DecimalField(max_digits=15, decimal_places=2)
+            ),
+            low_stock_threshold=Value(10, output_field=IntegerField())
+        )
+
+        # Calculate totals using Stock model
+        stock_stats = Stock.objects.filter(
+            warehouse=warehouse,
+            product__seller=request.user
+        ).aggregate(
+            total_qty=Sum('quantity'),
+            total_val=Sum(
+                ExpressionWrapper(
+                    F('quantity') * F('product__price'),
+                    output_field=DecimalField(max_digits=15, decimal_places=2)
+                )
+            ),
+            in_stock=Count('id', filter=Q(quantity__gt=10)),
+            low_stock=Count('id', filter=Q(quantity__gt=0, quantity__lte=10)),
+            out_of_stock=Count('id', filter=Q(quantity=0))
+        )
+
+        total_stock = stock_stats['total_qty'] or 0
+        total_value = stock_stats['total_val'] or Decimal('0.00')
+        in_stock_count = stock_stats['in_stock'] or 0
+        low_stock_count = stock_stats['low_stock'] or 0
+        out_of_stock_count = stock_stats['out_of_stock'] or 0
+
+        # Get utilization from warehouse property
+        utilization_percent = warehouse.utilization_percent if hasattr(warehouse, 'utilization_percent') else 0
+
+    else:
+        # No warehouse - annotate with zero stock
+        products_queryset = products_queryset.annotate(
+            warehouse_qty=Value(0, output_field=IntegerField()),
+            warehouse_stock_value=Value(0, output_field=DecimalField()),
+            low_stock_threshold=Value(10, output_field=IntegerField())
+        )
+
+    # Apply filters
+    search_query = request.GET.get('search', '')
+    stock_status = request.GET.get('stock_status', '')
+    category_id = request.GET.get('category', '')
+    sort_by = request.GET.get('sort', 'name')
 
     if search_query:
-        products_qs = products_qs.filter(
+        products_queryset = products_queryset.filter(
             Q(name__icontains=search_query) |
             Q(sku__icontains=search_query)
         )
 
-    if category_filter:
-        products_qs = products_qs.filter(category_id=category_filter)
+    if category_id:
+        products_queryset = products_queryset.filter(category_id=category_id)
 
-    # Annotate with stock qty for THIS warehouse (SAFE name; no property collisions)
-    stock_qty_sub = Stock.objects.filter(
-        product=OuterRef("pk"),
-        warehouse=warehouse
-    ).values("quantity")[:1]
+    if warehouse and stock_status:
+        if stock_status == 'in_stock':
+            products_queryset = products_queryset.filter(warehouse_qty__gt=10)
+        elif stock_status == 'low_stock':
+            products_queryset = products_queryset.filter(warehouse_qty__gt=0, warehouse_qty__lte=10)
+        elif stock_status == 'out_of_stock':
+            products_queryset = products_queryset.filter(warehouse_qty=0)
 
-    products_qs = products_qs.annotate(
-        warehouse_qty=Coalesce(Subquery(stock_qty_sub), Value(0))
-    )
-
-    # ---- Stats (based on search/category filters, NOT the stock_status filter) ----
-    total_products = products_qs.count()
-    in_stock_count = products_qs.filter(warehouse_qty__gt=5).count()
-    low_stock_count = products_qs.filter(warehouse_qty__gt=0, warehouse_qty__lte=5).count()
-    out_of_stock_count = products_qs.filter(warehouse_qty=0).count()
-
-    # ---- Apply stock_status filter ONLY for the table listing ----
-    if stock_status == "in_stock":
-        products_qs = products_qs.filter(warehouse_qty__gt=5)
-    elif stock_status == "low_stock":
-        products_qs = products_qs.filter(warehouse_qty__gt=0, warehouse_qty__lte=5)
-    elif stock_status == "out_of_stock":
-        products_qs = products_qs.filter(warehouse_qty=0)
-
-    # ---- Sorting ----
-    if sort_by == "stock":
-        products_qs = products_qs.order_by("-warehouse_qty", "name")
-    elif sort_by == "price":
-        products_qs = products_qs.order_by("-price", "name")
-    elif sort_by == "updated":
-        products_qs = products_qs.order_by("-updated_at", "name") if hasattr(Product, "updated_at") else products_qs.order_by("-created_at")
+    # Apply sorting
+    if sort_by == 'name':
+        products_queryset = products_queryset.order_by('name')
+    elif sort_by == 'stock':
+        products_queryset = products_queryset.order_by('-warehouse_qty')
+    elif sort_by == 'price':
+        products_queryset = products_queryset.order_by('-price')
+    elif sort_by == 'updated':
+        products_queryset = products_queryset.order_by('-updated_at')
     else:
-        products_qs = products_qs.order_by("name")
+        products_queryset = products_queryset.order_by('name')
 
-    # ---- Pagination ----
-    paginator = Paginator(products_qs, 20)
-    page_number = request.GET.get("page", 1)
-    products_page = paginator.get_page(page_number)
+    # Pagination
+    paginator = Paginator(products_queryset, 25)  # 25 products per page
+    page = request.GET.get('page', 1)
 
-    # Total value of stock in this warehouse
-    total_value_expr = ExpressionWrapper(
-        F("quantity") * F("unit_cost"),
-        output_field=DecimalField(max_digits=14, decimal_places=2)
-    )
-    total_value = (
-        Stock.objects.filter(warehouse=warehouse)
-        .aggregate(total=Coalesce(Sum(total_value_expr), Value(Decimal("0.00"))))["total"]
-        or Decimal("0.00")
-    )
+    try:
+        products = paginator.page(page)
+    except PageNotAnInteger:
+        products = paginator.page(1)
+    except EmptyPage:
+        products = paginator.page(paginator.num_pages)
 
+    # Get categories for filter dropdown
     categories = Category.objects.filter(
-        product__seller=store.owner,
-        product__is_active=True
-    ).distinct().order_by("name")
+        product__seller=request.user
+    ).distinct().order_by('name')
 
-    return render(request, "stores/stock_management.html", {
-        "store": store,
-        "warehouse": warehouse,
-        "products": products_page,
-        "categories": categories,
+    # Total products count
+    total_products = products_queryset.count()
 
-        # stats
-        "total_products": total_products,
-        "in_stock_count": in_stock_count,
-        "low_stock_count": low_stock_count,
-        "out_of_stock_count": out_of_stock_count,
-        "total_value": total_value,
-    })
+    context = {
+        'store': store,
+        'warehouse': warehouse,
+        'products': products,  # This is what the template expects
+        'categories': categories,
+
+        # Stats for summary cards
+        'total_products': total_products,
+        'total_stock': total_stock,
+        'total_value': total_value,
+        'in_stock_count': in_stock_count,
+        'low_stock_count': low_stock_count,
+        'out_of_stock_count': out_of_stock_count,
+        'utilization_percent': utilization_percent,
+
+        # Filters (for maintaining state)
+        'search_query': search_query,
+        'stock_status': stock_status,
+        'selected_category': category_id,
+        'sort_by': sort_by,
+    }
+
+    return render(request, 'stores/stock_management.html', context)
+
+
+@login_required
+@require_POST
+def update_stock_quantity(request, store_id, product_id):
+    """Update stock quantity for a product"""
+    store = get_object_or_404(Store, id=store_id, owner=request.user)
+    product = get_object_or_404(Product, id=product_id, seller=request.user)
+    warehouse = store.warehouse
+
+    if not warehouse:
+        return JsonResponse({
+            'success': False,
+            'message': 'No warehouse configured for this store'
+        }, status=400)
+
+    try:
+        # Get or create stock record
+        stock, created = Stock.objects.get_or_create(
+            product=product,
+            warehouse=warehouse,
+            defaults={'quantity': 0, 'unit_cost': product.price or Decimal('0.00')}
+        )
+
+        old_quantity = stock.quantity
+        quantity = int(request.POST.get('quantity', 0))
+        adjustment_type = request.POST.get('type', 'set')
+        notes = request.POST.get('notes', '')
+        ship_to_warehouse = request.POST.get('ship_to_warehouse', 'false').lower() == 'true'
+
+        # Calculate new quantity based on adjustment type
+        if adjustment_type == 'set':
+            new_quantity = quantity
+            movement_qty = new_quantity - old_quantity
+        elif adjustment_type == 'add':
+            new_quantity = old_quantity + quantity
+            movement_qty = quantity
+        elif adjustment_type == 'subtract':
+            new_quantity = max(0, old_quantity - quantity)
+            movement_qty = -(old_quantity - new_quantity)
+        else:
+            return JsonResponse({
+                'success': False,
+                'message': 'Invalid adjustment type'
+            }, status=400)
+
+        # Update stock
+        stock.quantity = new_quantity
+        stock.save()
+
+        # Create stock movement record
+        movement_type = 'ADJUSTMENT'
+        if ship_to_warehouse:
+            movement_type = 'PURCHASE'
+            notes = notes or 'Stock received from store shipment'
+
+        StockMovement.objects.create(
+            product=product,
+            warehouse=warehouse,
+            movement_type=movement_type,
+            quantity=movement_qty,
+            reference_number=f'ADJ-{stock.id}-{timezone.now().strftime("%Y%m%d%H%M%S")}',
+            notes=notes,
+            created_by=request.user
+        )
+
+        return JsonResponse({
+            'success': True,
+            'message': f'Stock updated successfully: {old_quantity} → {new_quantity} units',
+            'new_quantity': new_quantity,
+            'old_quantity': old_quantity,
+        })
+
+    except ValueError as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'Invalid quantity value: {str(e)}'
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': f'Error updating stock: {str(e)}'
+        }, status=500)
+
+
+@login_required
+@require_POST
+def update_warehouse(request, store_id):
+    """Create or update warehouse information"""
+    store = get_object_or_404(Store, id=store_id, owner=request.user)
+
+    try:
+        # Get or create warehouse
+        if store.warehouse:
+            warehouse = store.warehouse
+            created = False
+        else:
+            warehouse = Warehouse()
+            created = True
+
+        # Update warehouse fields
+        warehouse.name = request.POST.get('warehouse_name', '').strip()
+        warehouse.code = request.POST.get('warehouse_code', '').strip().upper()
+        warehouse.address = request.POST.get('address', '').strip()
+        warehouse.city = request.POST.get('city', '').strip()
+        warehouse.state = request.POST.get('state', '').strip()
+        warehouse.country = request.POST.get('country', 'USA').strip()
+        warehouse.postal_code = request.POST.get('postal_code', '').strip()
+
+        # Handle capacity (convert to integer)
+        capacity_str = request.POST.get('capacity', '0').strip()
+        try:
+            warehouse.capacity = int(capacity_str) if capacity_str else 0
+        except ValueError:
+            warehouse.capacity = 0
+
+        # Handle coordinates
+        latitude_str = request.POST.get('latitude', '').strip()
+        longitude_str = request.POST.get('longitude', '').strip()
+
+        try:
+            warehouse.latitude = Decimal(latitude_str) if latitude_str else None
+        except:
+            warehouse.latitude = None
+
+        try:
+            warehouse.longitude = Decimal(longitude_str) if longitude_str else None
+        except:
+            warehouse.longitude = None
+
+        warehouse.manager = request.user
+        warehouse.is_active = True
+        warehouse.save()
+
+        # Link to store if newly created
+        if created:
+            store.warehouse = warehouse
+            store.save()
+
+        messages.success(
+            request,
+            f"Warehouse '{warehouse.name}' {'created' if created else 'updated'} successfully!"
+        )
+
+        return redirect('stores:stock_management', store_id=store_id)
+
+    except Exception as e:
+        messages.error(request, f'Error saving warehouse: {str(e)}')
+        return redirect('stores:stock_management', store_id=store_id)
+
+
+@login_required
+def export_stock(request, store_id):
+    """Export stock data to CSV"""
+    store = get_object_or_404(Store, id=store_id, owner=request.user)
+    warehouse = store.warehouse
+
+    if not warehouse:
+        messages.error(request, 'No warehouse configured')
+        return redirect('stores:stock_management', store_id=store_id)
+
+    # Create CSV response
+    response = HttpResponse(content_type='text/csv')
+    response[
+        'Content-Disposition'] = f'attachment; filename="stock_export_{store.id}_{timezone.now().strftime("%Y%m%d")}.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow([
+        'Product ID', 'SKU', 'Product Name', 'Category',
+        'Quantity', 'Reserved', 'Available', 'Unit Cost',
+        'Stock Value', 'Reorder Level', 'Status'
+    ])
+
+    stocks = Stock.objects.filter(
+        warehouse=warehouse,
+        product__seller=request.user
+    ).select_related('product', 'product__category')
+
+    for stock in stocks:
+        # Determine status
+        if stock.quantity == 0:
+            status = 'Out of Stock'
+        elif stock.quantity <= stock.reorder_level:
+            status = 'Low Stock'
+        else:
+            status = 'In Stock'
+
+        writer.writerow([
+            stock.product.id,
+            stock.product.sku or '',
+            stock.product.name,
+            stock.product.category.name if stock.product.category else 'Uncategorized',
+            stock.quantity,
+            stock.reserved_quantity,
+            stock.available_quantity,
+            float(stock.unit_cost),
+            float(stock.stock_value),
+            stock.reorder_level,
+            status
+        ])
+
+    return response
+
 
 @login_required
 def stock_history(request, store_id, product_id):

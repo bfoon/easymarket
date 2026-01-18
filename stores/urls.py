@@ -36,6 +36,17 @@ urlpatterns = [
 
     # Stock management
     path('manage/<uuid:store_id>/stock/', views.stock_management, name='stock_management'),
+    path('manage/<uuid:store_id>/stock/<int:product_id>/update/',
+         views.update_stock_quantity,
+         name='update_stock_quantity'),
+
+    path('manage/<uuid:store_id>/warehouse/update/',
+         views.update_warehouse,
+         name='update_warehouse'),
+
+    path('manage/<uuid:store_id>/stock/export/',
+         views.export_stock,
+         name='export_stock'),
     path('manage/<uuid:store_id>/stock/<int:product_id>/update/', views.update_stock, name='update_stock'),
     path('manage/<uuid:store_id>/inventory/history/', views.inventory_history, name='inventory_history'),
     path(

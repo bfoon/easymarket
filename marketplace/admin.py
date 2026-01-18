@@ -4,19 +4,21 @@ from .models import (Product, Category, ProductImage, ProductView,
                      SearchHistory, PopularSearch, ProductFeature, ProductFeatureOption,
                      ProductVariant, SharedCart, Subscription, Career, CareerApplication,
                      PressRelease, InvestorDocument, InvestorEvent,
-                     SocialCart, CartMember, CartInvite, PaymentShare, Contribution, Campaign, CampaignProduct, WheelSpin)
+                     SocialCart, CartMember, CartInvite, PaymentShare, Contribution, Campaign, CampaignProduct,
+                     WheelSpin)
 from django.utils.html import format_html
 from django.urls import path
-from django.http import JsonResponse
-from .utils import ColorUtils
-from django.http import HttpResponse
+from django.http import JsonResponse, HttpResponse
 from django.utils import timezone
 import csv
 from django.urls import reverse
+
+
 class CategoryAdmin(admin.ModelAdmin):
     list_display = ('name', 'parent',)
     list_filter = ('parent',)
     search_fields = ('name',)
+
 
 admin.site.register(Category, CategoryAdmin)
 admin.site.register(Product)
@@ -26,9 +28,87 @@ admin.site.register(Cart)
 admin.site.register(CartItem)
 admin.site.register(CelebrityFeature)
 admin.site.register(Wishlist)
-admin.site.register(ProductFeature)
-admin.site.register(ProductFeatureOption)
-admin.site.register(ProductVariant)
+
+
+@admin.register(ProductFeature)
+class ProductFeatureAdmin(admin.ModelAdmin):
+    list_display = ('name', 'get_options_count')
+    search_fields = ('name',)
+
+    def get_options_count(self, obj):
+        """Display count of options for this feature"""
+        count = obj.options.count()
+        return format_html(
+            '<a href="/admin/marketplace/productfeatureoption/?feature__id__exact={}">{} option{}</a>',
+            obj.id,
+            count,
+            's' if count != 1 else ''
+        )
+
+    get_options_count.short_description = "Options"
+
+
+@admin.register(ProductFeatureOption)
+class ProductFeatureOptionAdmin(admin.ModelAdmin):
+    list_display = ('feature', 'value', 'color_preview', 'color_code')
+    list_filter = ('feature',)
+    search_fields = ('value', 'feature__name')
+    list_editable = ('color_code',)
+
+    def color_preview(self, obj):
+        """Display color preview if color_code exists"""
+        if obj.color_code:
+            return format_html(
+                '<div style="width: 30px; height: 30px; background-color: {}; border: 2px solid #ddd; border-radius: 4px; display: inline-block;"></div>',
+                obj.color_code
+            )
+        return "-"
+
+    color_preview.short_description = "Color"
+
+
+@admin.register(ProductVariant)
+class ProductVariantAdmin(admin.ModelAdmin):
+    list_display = ('product', 'get_feature_name', 'get_option_value', 'get_image_preview')
+    list_filter = ('feature_option__feature',)
+    search_fields = ('product__name', 'feature_option__value')
+    raw_id_fields = ('product',)
+
+    def get_feature_name(self, obj):
+        """Display feature name"""
+        return obj.feature_option.feature.name
+
+    get_feature_name.short_description = "Feature"
+    get_feature_name.admin_order_field = 'feature_option__feature__name'
+
+    def get_option_value(self, obj):
+        """Display option value with color preview if applicable"""
+        if obj.feature_option.color_code:
+            return format_html(
+                '<div style="display: flex; align-items: center; gap: 8px;">'
+                '<div style="width: 20px; height: 20px; background-color: {}; border: 2px solid #ddd; border-radius: 50%;"></div>'
+                '<span>{}</span>'
+                '</div>',
+                obj.feature_option.color_code,
+                obj.feature_option.value
+            )
+        return obj.feature_option.value
+
+    get_option_value.short_description = "Value"
+    get_option_value.admin_order_field = 'feature_option__value'
+
+    def get_image_preview(self, obj):
+        """Display variant image if exists"""
+        if hasattr(obj, 'image') and obj.image:
+            return format_html(
+                '<img src="{}" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px;" />',
+                obj.image.url
+            )
+        return "-"
+
+    get_image_preview.short_description = "Image"
+
+
 admin.site.register(SharedCart)
 
 
@@ -39,6 +119,7 @@ class SearchHistoryAdmin(admin.ModelAdmin):
     search_fields = ['query', 'user__username']
     readonly_fields = ['timestamp']
     date_hierarchy = 'timestamp'
+
 
 @admin.register(PopularSearch)
 class PopularSearchAdmin(admin.ModelAdmin):
@@ -52,8 +133,8 @@ class PopularSearchAdmin(admin.ModelAdmin):
 class ProductImageInline(admin.TabularInline):
     model = ProductImage
     extra = 1
-    fields = ('image', 'color', 'is_primary', 'alt_text', 'image_preview', 'suggest_color_link')
-    readonly_fields = ('image_preview', 'suggest_color_link')
+    fields = ('image', 'is_primary', 'alt_text', 'image_preview')
+    readonly_fields = ('image_preview',)
 
     def image_preview(self, obj):
         if obj.image:
@@ -65,23 +146,13 @@ class ProductImageInline(admin.TabularInline):
 
     image_preview.short_description = "Preview"
 
-    def suggest_color_link(self, obj):
-        if obj.pk and obj.image:
-            return format_html(
-                '<a href="#" onclick="suggestColor({})" class="button">Suggest Color</a>',
-                obj.pk
-            )
-        return "Save first"
-
-    suggest_color_link.short_description = "AI Suggestion"
-
 
 class ProductImageAdmin(admin.ModelAdmin):
-    list_display = ('product', 'color', 'is_primary', 'image_preview', 'created_at')
-    list_filter = ('color', 'is_primary', 'created_at')
-    search_fields = ('product__name', 'color', 'alt_text')
+    list_display = ('product', 'get_variants_display', 'is_primary', 'image_preview', 'created_at')
+    list_filter = ('is_primary', 'created_at')
+    search_fields = ('product__name', 'alt_text')
     list_editable = ('is_primary',)
-    actions = ['suggest_colors_for_selected']
+    filter_horizontal = ('variants',)
 
     def image_preview(self, obj):
         if obj.image:
@@ -93,50 +164,17 @@ class ProductImageAdmin(admin.ModelAdmin):
 
     image_preview.short_description = "Preview"
 
-    def suggest_colors_for_selected(self, request, queryset):
-        """Admin action to suggest colors for selected images"""
-        updated = 0
-        for image in queryset:
-            if not image.color:
-                suggested_color = ColorUtils.suggest_color_from_image(image)
-                if suggested_color:
-                    image.color = suggested_color
-                    image.save()
-                    updated += 1
+    def get_variants_display(self, obj):
+        """Display variants associated with this image"""
+        variants = obj.variants.all()
+        if variants.exists():
+            variant_list = ', '.join([f"{v.feature.name}: {v.value}" for v in variants[:3]])
+            if variants.count() > 3:
+                variant_list += f" (+{variants.count() - 3} more)"
+            return variant_list
+        return "No variants"
 
-        self.message_user(request, f'Updated {updated} images with color suggestions.')
-
-    suggest_colors_for_selected.short_description = "Suggest colors for selected images"
-
-    def get_urls(self):
-        urls = super().get_urls()
-        custom_urls = [
-            path('suggest-color/<int:image_id>/', self.suggest_color_view, name='suggest-color'),
-        ]
-        return custom_urls + urls
-
-    def suggest_color_view(self, request, image_id):
-        """AJAX view to suggest color for an image"""
-        try:
-            image = ProductImage.objects.get(id=image_id)
-            suggested_color = ColorUtils.suggest_color_from_image(image)
-            return JsonResponse({
-                'success': True,
-                'suggested_color': suggested_color
-            })
-        except ProductImage.DoesNotExist:
-            return JsonResponse({
-                'success': False,
-                'error': 'Image not found'
-            })
-        except Exception as e:
-            return JsonResponse({
-                'success': False,
-                'error': str(e)
-            })
-
-    class Media:
-        js = ('admin/js/color_suggestions.js',)
+    get_variants_display.short_description = "Variants"
 
 
 @admin.register(Subscription)
@@ -169,6 +207,7 @@ class SubscriptionAdmin(admin.ModelAdmin):
 
         return response
 
+
 @admin.register(Career)
 class CareerAdmin(admin.ModelAdmin):
     list_display = ("title", "department", "location", "employment_type", "is_active", "created_at")
@@ -177,12 +216,14 @@ class CareerAdmin(admin.ModelAdmin):
     prepopulated_fields = {"slug": ("title",)}
     date_hierarchy = "created_at"
 
+
 @admin.register(CareerApplication)
 class CareerApplicationAdmin(admin.ModelAdmin):
     list_display = ("application_code", "full_name", "job", "status", "created_at")
     list_filter = ("status", "job__department")
     search_fields = ("application_code", "full_name", "email", "job__title")
     readonly_fields = ("application_code", "created_at", "updated_at", "ip_address", "user_agent")
+
 
 @admin.register(PressRelease)
 class PressReleaseAdmin(admin.ModelAdmin):
@@ -193,6 +234,7 @@ class PressReleaseAdmin(admin.ModelAdmin):
     date_hierarchy = "publish_at"
     readonly_fields = ("created_at", "updated_at")
 
+
 @admin.register(InvestorDocument)
 class InvestorDocumentAdmin(admin.ModelAdmin):
     list_display = ("title", "category", "is_published", "publish_at")
@@ -201,6 +243,7 @@ class InvestorDocumentAdmin(admin.ModelAdmin):
     prepopulated_fields = {"slug": ("title",)}
     date_hierarchy = "publish_at"
     readonly_fields = ("created_at", "updated_at")
+
 
 @admin.register(InvestorEvent)
 class InvestorEventAdmin(admin.ModelAdmin):
@@ -212,22 +255,26 @@ class InvestorEventAdmin(admin.ModelAdmin):
 
 @admin.register(SocialCart)
 class SocialCartAdmin(admin.ModelAdmin):
-    list_display = ('id','cart','owner','status','is_active','created_at')
-    search_fields = ('invite_code','owner__username')
+    list_display = ('id', 'cart', 'owner', 'status', 'is_active', 'created_at')
+    search_fields = ('invite_code', 'owner__username')
+
 
 @admin.register(CartMember)
 class CartMemberAdmin(admin.ModelAdmin):
-    list_display = ('social_cart','user','role','status','joined_at')
-    list_filter = ('role','status')
+    list_display = ('social_cart', 'user', 'role', 'status', 'joined_at')
+    list_filter = ('role', 'status')
+
 
 @admin.register(PaymentShare)
 class PaymentShareAdmin(admin.ModelAdmin):
-    list_display = ('social_cart','member','percentage','fixed_amount','items_total_amount','amount_due','is_active')
+    list_display = (
+    'social_cart', 'member', 'percentage', 'fixed_amount', 'items_total_amount', 'amount_due', 'is_active')
+
 
 @admin.register(Contribution)
 class ContributionAdmin(admin.ModelAdmin):
-    list_display = ('social_cart','member','provider','amount','status','provider_ref','created_at')
-    list_filter = ('provider','status')
+    list_display = ('social_cart', 'member', 'provider', 'amount', 'status', 'provider_ref', 'created_at')
+    list_filter = ('provider', 'status')
 
 
 @admin.register(Campaign)

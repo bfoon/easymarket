@@ -531,6 +531,16 @@
   overflow: hidden;
   min-height: 2.1em;
 }
+/* Hover slideshow effect */
+.js-hover-swap {
+  transition: opacity .18s ease, transform .28s ease;
+  will-change: opacity, transform;
+}
+
+.js-hover-swap.is-swapping {
+  opacity: .55;
+  transform: translateX(-6px) scale(1.02);
+}
 
 
 @media (max-width:1100px){.exp-products-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
@@ -1382,9 +1392,15 @@ function getCookie(name) {
                 <div class="position-relative">
                     {% if product.display_image_url %}
                         <img src="{{ product.display_image_url }}"
-                             class="temu-trending-image"
+                             class="temu-trending-image js-hover-swap"
                              alt="{{ product.name }}"
                              loading="lazy"
+                             data-images="{% if product.images.all %}
+                                {{ product.display_image_url }}
+                                {% for im in product.images.all %}
+                                  {% if im.image %}|{{ im.image.url }}{% endif %}
+                                {% endfor %}
+                              {% endif %}"
                              onerror="this.onerror=null; this.src='{% static 'images/no-image.png' %}'; this.style.display='none'; this.nextElementSibling.style.display='flex';">
                         <div class="temu-trending-image d-none" style="background: #f8f9fa; display: flex; align-items: center; justify-content: center; color: #999;">
                             <i class="fas fa-image"></i>
@@ -1397,8 +1413,8 @@ function getCookie(name) {
                 </div>
                 <div class="temu-trending-name">{{ product.name|truncatechars:18 }}</div>
                 <span class="temu-current-price">
-  {% display_money product.price %}
-</span>
+          {% display_money product.price %}
+        </span>
 
             </div>
             {% empty %}
@@ -1434,9 +1450,15 @@ function getCookie(name) {
                 <div class="temu-product-image-container">
                     {% if product.display_image_url %}
                         <img src="{{ product.display_image_url }}"
-                             class="temu-product-image"
+                             class="temu-product-image js-hover-swap"
                              alt="{{ product.name }}"
                              loading="lazy"
+                              data-images="{% if product.images.all %}
+                                    {{ product.display_image_url }}
+                                    {% for im in product.images.all %}
+                                      {% if im.image %}|{{ im.image.url }}{% endif %}
+                                    {% endfor %}
+                                  {% endif %}"
                              onerror="this.onerror=null; this.src='{% static 'images/no-image.png' %}'; if(!this.src.includes('no-image.png')) this.style.display='none'; this.nextElementSibling.style.display='flex';">
                         <div class="temu-product-image d-none" style="background: #f8f9fa; display: flex; align-items: center; justify-content: center; color: #999; flex-direction: column;">
                             <i class="fas fa-image fa-2x"></i>
@@ -1559,9 +1581,18 @@ function getCookie(name) {
       <div class="exp-img">
         {% if product.display_image_url %}
       <img src="{{ product.display_image_url }}"
-           alt="{{ product.name }}"
-           loading="lazy"
-           onerror="this.onerror=null; this.src='{% static 'images/no-image.png' %}';">
+          alt="{{ product.name }}"
+          loading="lazy"
+          class="js-hover-swap"
+
+          data-images="{% if product.images.all %}
+            {{ product.display_image_url }}
+            {% for im in product.images.all %}
+              {% if im.image %}|{{ im.image.url }}{% endif %}
+            {% endfor %}
+          {% endif %}"
+
+          onerror="this.onerror=null; this.src='{% static 'images/no-image.png' %}';">
         {% else %}
           <img src="{{ product.image.url }}" alt="No image" loading="lazy">
         {% endif %}
@@ -1935,6 +1966,65 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
 });
+</script>
+<script>
+(function () {
+  const INTERVAL_MS = 900;
+
+  function parseImages(el) {
+    const raw = (el.dataset.images || "").trim();
+    if (!raw) return [];
+    // split, trim, remove empties, dedupe
+    const arr = raw.split("|").map(s => s.trim()).filter(Boolean);
+    return [...new Set(arr)];
+  }
+
+  function attachHoverSlider(imgEl) {
+    const images = parseImages(imgEl);
+    if (images.length < 2) return; // only swap if more than 1 image
+
+    const firstSrc = images[0];
+    let idx = 0;
+    let timer = null;
+
+    function swapTo(nextIdx) {
+      imgEl.classList.add("is-swapping");
+      // quick fade-ish transition
+      setTimeout(() => {
+        imgEl.src = images[nextIdx];
+        imgEl.classList.remove("is-swapping");
+      }, 120);
+    }
+
+    function start() {
+      if (timer) return;
+      timer = setInterval(() => {
+        idx = (idx + 1) % images.length;
+        swapTo(idx);
+      }, INTERVAL_MS);
+    }
+
+    function stop() {
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+      // reset to first image
+      idx = 0;
+      swapTo(0);
+      imgEl.src = firstSrc;
+    }
+
+    // Mouse hover
+    imgEl.addEventListener("mouseenter", start);
+    imgEl.addEventListener("mouseleave", stop);
+
+    // Touch safety: don’t auto-cycle on mobile scroll
+    imgEl.addEventListener("touchstart", () => {}, {passive:true});
+  }
+
+  document.querySelectorAll("img.js-hover-swap").forEach(attachHoverSlider);
+})();
 </script>
 
 
