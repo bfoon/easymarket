@@ -2047,9 +2047,11 @@ def edit_product(request, store_id, product_id):
                 product.is_active = 'is_active' in request.POST
                 product.used = 'used' in request.POST
 
-                # ===== CURRENCY CONVERSION: Pass user when saving =====
-                product.save(user=request.user)  # This triggers automatic conversion
-                # ======================================================
+                # ===== CURRENCY CONVERSION FIX =====
+                # Always pass user context for proper currency handling
+                # The backend will determine if conversion is needed based on user preference
+                product.save(user=request.user)
+                # ===================================
 
                 if field_diffs:
                     AdminLog.objects.create(

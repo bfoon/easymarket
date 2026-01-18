@@ -448,29 +448,32 @@ class Product(models.Model):
         """
         Determine which currency the price is currently in
 
-        Priority:
-        1. Use price_currency if already set (for updates)
-        2. Use user's preferred currency (for new entries)
+        Priority (CORRECTED):
+        1. Use user's preferred currency if provided (CRITICAL for correct updates)
+        2. Use price_currency if already set (for updates without user context)
         3. Use seller's preferred currency (fallback)
         4. Assume base currency (GMD)
         """
         from accounts.models import Currency
 
-        # Check if this is an update and price_currency is set
-        if self.pk and self.price_currency:
-            return self.price_currency
-
-        # Use user's preferred currency (for creating/updating)
+        # Check user's preferred currency FIRST
+        # This ensures when a GMD user updates a product, we know the input is in GMD
         if user and hasattr(user, 'preferred_currency') and user.preferred_currency:
+            # Update price_currency to reflect current input currency
             self.price_currency = user.preferred_currency
             return user.preferred_currency
+
+        # Check if this is an update and price_currency is set
+        # Only use this if no user context was provided
+        if self.pk and self.price_currency:
+            return self.price_currency
 
         # Use seller's preferred currency
         if self.seller and hasattr(self.seller, 'preferred_currency') and self.seller.preferred_currency:
             self.price_currency = self.seller.preferred_currency
             return self.seller.preferred_currency
 
-        # Default to base currency
+        # Default to base currency (GMD)
         self.price_currency = base_currency
         return base_currency
 
