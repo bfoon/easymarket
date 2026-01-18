@@ -794,7 +794,7 @@ class Store(models.Model):
             )
 
             if follow.user.email:
-                # run after transaction commits (prevents “email sent but DB rolled back” issues)
+                # run after transaction commits (prevents "email sent but DB rolled back" issues)
                 email_jobs.append((follow.user.id, product.id if product else None, notification_type, title, kwargs))
 
         if notifications_to_create:
@@ -820,12 +820,11 @@ class Store(models.Model):
 
     def send_html_notification_email(self, user_id, product_id, notification_type, title, extra_data):
         """
-        Send HTML email notification to a user.
+        Send HTML email notification to a user with ABSOLUTE image URLs.
         """
         from django.core.mail import EmailMultiAlternatives
         from django.template.loader import render_to_string
         from django.utils.html import strip_tags
-        from urllib.parse import urljoin
         from django.conf import settings
         from django.contrib.auth import get_user_model
         from marketplace.models import Product
@@ -849,29 +848,72 @@ class Store(models.Model):
                     store=self
                 ).exclude(id=product.id).order_by('-created_at')[:3]
 
-            # Domain / protocol
-            domain = getattr(settings, 'SITE_DOMAIN', None) or getattr(settings, 'SITE_URL', None) or 'localhost:8000'
-            protocol = 'https' if getattr(settings, 'USE_HTTPS', False) else 'http'
-            base = f"{protocol}://{domain}"
+            # ============================================================
+            # FIX 1: Better base URL building
+            # ============================================================
 
-            product_url = f"{protocol}://{domain}{product.get_absolute_url()}" if product else ""
-            store_url = f"{protocol}://{domain}{self.get_absolute_url()}"
-            unsubscribe_url = f"{protocol}://{domain}/account/notifications/"
+            # Try to get base URL from settings
+            # Priority: SITE_URL > SITE_DOMAIN > Fallback
+            site_url = getattr(settings, 'SITE_URL', None)
 
-            def absolutize(path_or_url: str) -> str:
+            if site_url:
+                # SITE_URL should be complete: 'https://yourdomain.com'
+                base_url = site_url.rstrip('/')
+            else:
+                # Fallback to building from SITE_DOMAIN
+                domain = getattr(settings, 'SITE_DOMAIN', 'localhost:8000')
+                protocol = 'https' if getattr(settings, 'USE_HTTPS', False) else 'http'
+                base_url = f"{protocol}://{domain}"
+
+            # ============================================================
+            # FIX 2: Improved absolutize function
+            # ============================================================
+
+            def absolutize(path_or_url):
+                """Convert any path/URL to absolute URL for emails."""
                 if not path_or_url:
                     return ""
-                if path_or_url.startswith("http://") or path_or_url.startswith("https://"):
-                    return path_or_url
-                return urljoin(base, path_or_url)
 
-            # Image URL
+                # Convert to string (handles ImageFieldFile objects)
+                url_str = str(path_or_url)
+
+                # If it has .url attribute (ImageField), get the URL
+                if hasattr(path_or_url, 'url'):
+                    url_str = path_or_url.url
+
+                # Already absolute?
+                if url_str.startswith('http://') or url_str.startswith('https://'):
+                    return url_str
+
+                # Ensure it starts with /
+                if not url_str.startswith('/'):
+                    url_str = '/' + url_str
+
+                # Combine with base URL
+                return f"{base_url}{url_str}"
+
+            # ============================================================
+            # FIX 3: Build URLs properly
+            # ============================================================
+
+            product_url = absolutize(product.get_absolute_url()) if product else ""
+            store_url = absolutize(self.get_absolute_url())
+            unsubscribe_url = absolutize('/account/notifications/')
+
+            # ============================================================
+            # FIX 4: Get product image with proper absolute URL
+            # ============================================================
+
             product_image = ""
             if product:
-                if getattr(product, "display_image_url", None):
+                # Try display_image_url first (property that gets primary image)
+                if hasattr(product, 'display_image_url') and product.display_image_url:
                     product_image = absolutize(product.display_image_url)
-                elif getattr(product, "image", None) and getattr(product.image, "url", None):
-                    product_image = absolutize(product.image.url)
+                # Fallback to main image field
+                elif hasattr(product, 'image') and product.image:
+                    product_image = absolutize(product.image)
+
+            logger.info(f"Product image URL: {product_image}")  # Debug log
 
             # Template context
             context = {
@@ -886,45 +928,63 @@ class Store(models.Model):
             if product:
                 context.update({
                     'product_name': product.name,
-                    'product_description': product.description,
+                    'product_description': product.description or '',
                     'product_url': product_url,
-                    'product_image': product_image,
-                    'product_price': round(product.price, 2),
-                    'original_price': round(product.original_price, 2) if product.original_price else None,
+                    'product_image': product_image,  # Now absolute URL
+                    'product_price': round(float(product.price), 2),
+                    'original_price': round(float(product.original_price), 2) if product.original_price else None,
                     'discount_percentage': product.discount_percentage,
                 })
 
-                if getattr(product, 'specifications', None):
+                if hasattr(product, 'specifications') and product.specifications:
                     specs_lines = product.specifications.split('\n')
                     context['product_features'] = [line.strip() for line in specs_lines if line.strip()][:3]
 
             # Price change data
-            if 'old_price' in extra_data and 'new_price' in extra_data and extra_data['old_price'] and extra_data[
-                'new_price']:
-                old_price = extra_data['old_price']
-                new_price = extra_data['new_price']
-                context.update({
-                    'old_price': round(old_price, 2),
-                    'new_price': round(new_price, 2),
-                    'savings_amount': round(old_price - new_price, 2),
-                    'discount_percentage': round(((old_price - new_price) / old_price) * 100, 1) if old_price else None,
-                })
+            if 'old_price' in extra_data and 'new_price' in extra_data:
+                old_price = extra_data.get('old_price')
+                new_price = extra_data.get('new_price')
+
+                if old_price and new_price:
+                    try:
+                        old_price_float = float(old_price)
+                        new_price_float = float(new_price)
+                        savings = old_price_float - new_price_float
+                        discount = ((savings / old_price_float) * 100) if old_price_float > 0 else 0
+
+                        context.update({
+                            'old_price': round(old_price_float, 2),
+                            'new_price': round(new_price_float, 2),
+                            'savings_amount': round(savings, 2),
+                            'discount_percentage': round(discount, 1),
+                        })
+                    except (ValueError, TypeError) as e:
+                        logger.error(f"Error processing prices: {e}")
+
+            # ============================================================
+            # FIX 5: Similar products with absolute URLs
+            # ============================================================
 
             if similar_products:
-                context['similar_products'] = [
-                    {
-                        'name': p.name,
-                        'price': round(p.price, 2),
-                        'url': f"{protocol}://{domain}{p.get_absolute_url()}",
-                        'image': (
-                            f"{protocol}://{domain}{p.display_image_url}"
-                            if getattr(p, 'display_image_url', None)
-                            else (f"{protocol}://{domain}{p.image.url}" if getattr(p, 'image', None) else "")
-                        ),
-                    }
-                    for p in similar_products
-                ]
+                similar_list = []
+                for p in similar_products:
+                    # Get image URL
+                    img_url = ""
+                    if hasattr(p, 'display_image_url') and p.display_image_url:
+                        img_url = absolutize(p.display_image_url)
+                    elif hasattr(p, 'image') and p.image:
+                        img_url = absolutize(p.image)
 
+                    similar_list.append({
+                        'name': p.name,
+                        'price': round(float(p.price), 2),
+                        'url': absolutize(p.get_absolute_url()),
+                        'image': img_url,  # Absolute URL
+                    })
+
+                context['similar_products'] = similar_list
+
+            # Select template
             template_map = {
                 'new_product': 'emails/new_product_email.html',
                 'price_decrease': 'emails/price_drop_email.html',
@@ -932,22 +992,23 @@ class Store(models.Model):
             }
             template_name = template_map.get(notification_type, 'emails/new_product_email.html')
 
+            # Render email
             html_content = render_to_string(template_name, context)
             text_content = strip_tags(html_content)
 
+            # Send email
             subject = f"{self.name}: {title}"
-            from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', None)
-            if not from_email:
-                raise ValueError("DEFAULT_FROM_EMAIL is not set in settings.")
+            from_email = getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@easymarket.gm')
 
             email = EmailMultiAlternatives(subject, text_content, from_email, [user.email])
             email.attach_alternative(html_content, "text/html")
             email.send(fail_silently=False)
 
+            logger.info(f"✅ Sent {notification_type} email to {user.email}")
             return True
 
         except Exception as e:
-            logger.exception(f"Failed to send HTML email (store={self.id}) to user_id={user_id}: {e}")
+            logger.exception(f"❌ Failed to send HTML email (store={self.id}) to user_id={user_id}: {e}")
             return False
 
     # ---------- OVERRIDES ----------
