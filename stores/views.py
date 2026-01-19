@@ -15,8 +15,8 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 from django.http import HttpResponseRedirect
 from django.utils.text import slugify
-from django.db.models import Q, Avg, F, FloatField, DecimalField, ExpressionWrapper, Case, When
-from django.db.models.functions import Coalesce
+from django.db.models import  Q, Avg, F, FloatField, DecimalField, ExpressionWrapper, Case, When
+from django.db.models.functions import TruncDate, TruncMonth, Coalesce
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.http import JsonResponse, HttpResponseBadRequest
 from django.views.decorators.http import require_POST
@@ -3906,188 +3906,622 @@ def export_stock(request, store_id):
 
 
 @login_required
-@store_owner_required
 def financial_dashboard(request, store_id):
-    """Financial overview and management for the store"""
-    store = get_object_or_404(Store, id=store_id, owner=request.user)
+    """
+    Financial dashboard for store owners
+    Shows revenue, commission calculations, and earnings
 
-    # Date range for analysis
-    end_date = timezone.now().date()
+    FIELD NAME FIXES APPLIED:
+    - Uses 'price_at_time' instead of 'price' in OrderItem
+    - Uses 'buyer' instead of 'user' in Order
+    """
+    # Get store and verify ownership
+    store = get_object_or_404(Store, id=store_id)
+
+    # Check if user is owner or manager
+    if not (request.user == store.owner or store.managers.filter(id=request.user.id).exists()):
+        from django.http import HttpResponseForbidden
+        return HttpResponseForbidden("You don't have permission to view this store's financial data")
+
+    # Get date range from query params
+    end_date = timezone.now()
     start_date = end_date - timedelta(days=30)
 
-    # Get date range from request if provided
-    if request.GET.get('date_from'):
-        start_date = datetime.strptime(request.GET.get('date_from'), '%Y-%m-%d').date()
-    if request.GET.get('date_to'):
-        end_date = datetime.strptime(request.GET.get('date_to'), '%Y-%m-%d').date()
+    # Check for custom date range
+    date_from = request.GET.get('date_from')
+    date_to = request.GET.get('date_to')
 
-    # Sales data
-    order_items = OrderItem.objects.filter(
-        product__seller=store.owner,
-        order__created_at__date__gte=start_date,
-        order__created_at__date__lte=end_date,
-        order__status__in=['delivered', 'shipped', 'processing']
-    )
+    if date_from and date_to:
+        try:
+            start_date = timezone.make_aware(datetime.strptime(date_from, '%Y-%m-%d'))
+            end_date = timezone.make_aware(datetime.strptime(date_to, '%Y-%m-%d'))
+            # Set end_date to end of day
+            end_date = end_date.replace(hour=23, minute=59, second=59)
+        except ValueError:
+            # Invalid date format, use defaults
+            pass
 
-    total_revenue = sum(item.get_total_price() for item in order_items)
-    total_orders = order_items.values('order').distinct().count()
-    total_items_sold = order_items.aggregate(total=Sum('quantity'))['total'] or 0
+    # Get store's products
+    store_products = Product.objects.filter(seller=store.owner)
+    store_product_ids = list(store_products.values_list('id', flat=True))
 
-    # Commission calculations
-    commission_amount = total_revenue * (store.commission_rate / 100)
-    net_revenue = total_revenue - commission_amount
+    # Get order items for this store in date range
+    # FIX: Use price_at_time instead of price
+    current_period_items = OrderItem.objects.filter(
+        product_id__in=store_product_ids,
+        order__created_at__gte=start_date,
+        order__created_at__lte=end_date,
+        order__status__in=['pending', 'processing', 'shipped', 'delivered', 'completed']
+    ).select_related('order', 'product')
 
-    # Monthly breakdown
-    monthly_data = []
-    current_date = start_date
-    while current_date <= end_date:
-        month_start = current_date.replace(day=1)
-        if current_date.month == 12:
-            month_end = current_date.replace(year=current_date.year + 1, month=1, day=1) - timedelta(days=1)
-        else:
-            month_end = current_date.replace(month=current_date.month + 1, day=1) - timedelta(days=1)
-
-        month_orders = OrderItem.objects.filter(
-            product__seller=store.owner,
-            order__created_at__date__gte=month_start,
-            order__created_at__date__lte=month_end,
-            order__status__in=['delivered', 'shipped', 'processing']
-        )
-
-        month_revenue = sum(item.get_total_price() for item in month_orders)
-        month_commission = month_revenue * (store.commission_rate / 100)
-
-        monthly_data.append({
-            'month': month_start.strftime('%B %Y'),
-            'revenue': float(month_revenue),
-            'commission': float(month_commission),
-            'net': float(month_revenue - month_commission),
-            'orders': month_orders.values('order').distinct().count()
-        })
-
-        if current_date.month == 12:
-            current_date = current_date.replace(year=current_date.year + 1, month=1)
-        else:
-            current_date = current_date.replace(month=current_date.month + 1)
-
-    # Top selling products
-    top_products = Product.objects.filter(
-        seller=store.owner
-    ).annotate(
-        total_sold=Sum('order_items__quantity'),
+    # Calculate financial metrics
+    # FIX: Use price_at_time instead of price
+    financial_metrics = current_period_items.aggregate(
         total_revenue=Sum(
             ExpressionWrapper(
-                F('order_items__quantity') * F('order_items__price_at_time'),
+                F('quantity') * F('price_at_time'),
+                output_field=DecimalField()
+            )
+        ),
+        total_orders=Count('order', distinct=True),
+        total_items_sold=Sum('quantity')
+    )
+
+    # Extract metrics with defaults
+    total_revenue = financial_metrics['total_revenue'] or Decimal('0')
+    total_orders = financial_metrics['total_orders'] or 0
+    total_items_sold = financial_metrics['total_items_sold'] or 0
+
+    # Commission calculation
+    # Check if store has commission_rate, otherwise use default
+    commission_rate = getattr(store, 'commission_rate', Decimal('5.0'))  # Default 5%
+    commission_amount = (total_revenue * commission_rate) / Decimal('100')
+    net_revenue = total_revenue - commission_amount
+
+    # Monthly data for chart (last 6 months)
+    six_months_ago = timezone.now() - timedelta(days=180)
+
+    # FIX: Use price_at_time instead of price
+    monthly_data_query = OrderItem.objects.filter(
+        product_id__in=store_product_ids,
+        order__created_at__gte=six_months_ago,
+        order__status__in=['pending', 'processing', 'shipped', 'delivered', 'completed']
+    ).annotate(
+        month=TruncMonth('order__created_at')
+    ).values('month').annotate(
+        revenue=Sum(
+            ExpressionWrapper(
+                F('quantity') * F('price_at_time'),
                 output_field=DecimalField()
             )
         )
-    ).filter(total_sold__gt=0).order_by('-total_revenue')[:10]
+    ).order_by('month')
 
-    # Recent transactions
-    recent_orders = Order.objects.filter(
-        items__product__seller=store.owner
-    ).distinct().order_by('-created_at')[:5]
+    # Format monthly data for chart
+    monthly_data_list = []
+    for item in monthly_data_query:
+        month_name = item['month'].strftime('%b')
+        revenue = float(item['revenue'] or 0)
+        commission = revenue * float(commission_rate) / 100
+        net = revenue - commission
 
+        monthly_data_list.append({
+            'month': month_name,
+            'revenue': revenue,
+            'commission': commission,
+            'net': net
+        })
+
+    # Recent orders (last 10)
+    # FIX: Use 'buyer' instead of 'user'
+    recent_order_ids = current_period_items.values_list('order_id', flat=True).distinct()[:10]
+    recent_orders_qs = Order.objects.filter(
+        id__in=recent_order_ids
+    ).select_related('buyer').order_by('-created_at')[:10]
+
+    # Calculate totals for recent orders
+    # FIX: Can't set property, so create new list with calculated totals
+    recent_orders = []
+    for order in recent_orders_qs:
+        # Calculate total for this store's items in this order
+        order_items = current_period_items.filter(order=order)
+        order_total = order_items.aggregate(
+            total=Sum(
+                ExpressionWrapper(
+                    F('quantity') * F('price_at_time'),
+                    output_field=DecimalField()
+                )
+            )
+        )['total'] or Decimal('0')
+
+        # Create a dict with order and its total
+        recent_orders.append({
+            'order': order,
+            'total': order_total,
+            'order_number': getattr(order, 'order_number', str(order.id)[:8]),
+            'created_at': order.created_at,
+            'buyer': order.buyer,
+            'buyer_name': order.buyer.get_full_name() if hasattr(order.buyer, 'get_full_name') else order.buyer.username
+        })
+
+    # Top selling products
+    # FIX: Use price_at_time instead of price
+    top_products_data = current_period_items.values(
+        'product__id',
+        'product__name',
+        'product__category__name'
+    ).annotate(
+        units_sold=Sum('quantity'),
+        total_revenue=Sum(
+            ExpressionWrapper(
+                F('quantity') * F('price_at_time'),
+                output_field=DecimalField()
+            )
+        ),
+        avg_price=Avg('price_at_time')
+    ).order_by('-total_revenue')[:10]
+
+    # Get actual product objects for top sellers
+    top_product_ids = [p['product__id'] for p in top_products_data]
+    products_objects = Product.objects.filter(id__in=top_product_ids)
+
+    # Create products dict for easy lookup
+    products_dict = {p.id: p for p in products_objects}
+
+    # Combine product objects with stats
+    top_products = []
+    max_revenue = top_products_data[0]['total_revenue'] if top_products_data else 1
+
+    for item in top_products_data:
+        product = products_dict.get(item['product__id'])
+        if product:
+            performance_percentage = (float(item['total_revenue']) / float(max_revenue)) * 100
+
+            top_products.append({
+                'product': product,
+                'name': item['product__name'],
+                'category': item['product__category__name'] or 'Uncategorized',
+                'units_sold': item['units_sold'],
+                'total_revenue': item['total_revenue'],
+                'avg_price': item['avg_price'],
+                'performance_percentage': performance_percentage
+            })
+
+    # Payment schedule (upcoming payments)
+    # This is a placeholder - implement based on your payment system
+    next_payment_date = timezone.now() + timedelta(days=7)
+    pending_balance = net_revenue  # Simplified - adjust based on your payout logic
+
+    # Prepare context
     context = {
         'store': store,
         'start_date': start_date,
         'end_date': end_date,
+
+        # Financial metrics
         'total_revenue': total_revenue,
+        'commission_rate': commission_rate,
         'commission_amount': commission_amount,
         'net_revenue': net_revenue,
         'total_orders': total_orders,
         'total_items_sold': total_items_sold,
-        'monthly_data': json.dumps(monthly_data),
-        'top_products': top_products,
+
+        # Chart data
+        'monthly_data': json.dumps(monthly_data_list),
+
+        # Recent activity
         'recent_orders': recent_orders,
-        'commission_rate': store.commission_rate,
+        'top_products': top_products,
+
+        # Payment info
+        'next_payment_date': next_payment_date,
+        'pending_balance': pending_balance,
     }
 
     return render(request, 'stores/financial_dashboard.html', context)
 
 
+# Optional: Export financial report
+@login_required
+def export_financial_report(request, store_id):
+    """
+    Export financial report as CSV or PDF
+    """
+    import csv
+    from django.http import HttpResponse
+
+    store = get_object_or_404(Store, id=store_id)
+
+    # Check permissions
+    if not (request.user == store.owner or store.managers.filter(id=request.user.id).exists()):
+        from django.http import JsonResponse
+        return JsonResponse({'success': False, 'error': 'Permission denied'}, status=403)
+
+    # Get parameters from request
+    if request.method == 'POST':
+        import json
+        data = json.loads(request.body)
+        report_type = data.get('type', 'complete_report')
+        start_date_str = data.get('start_date')
+        end_date_str = data.get('end_date')
+    else:
+        report_type = request.GET.get('type', 'complete_report')
+        start_date_str = request.GET.get('start_date')
+        end_date_str = request.GET.get('end_date')
+
+    # Parse dates
+    try:
+        start_date = timezone.make_aware(datetime.strptime(start_date_str, '%Y-%m-%d'))
+        end_date = timezone.make_aware(datetime.strptime(end_date_str, '%Y-%m-%d'))
+    except:
+        end_date = timezone.now()
+        start_date = end_date - timedelta(days=30)
+
+    # Get store products
+    store_products = Product.objects.filter(seller=store.owner)
+    store_product_ids = list(store_products.values_list('id', flat=True))
+
+    # Get order items
+    order_items = OrderItem.objects.filter(
+        product_id__in=store_product_ids,
+        order__created_at__gte=start_date,
+        order__created_at__lte=end_date,
+        order__status__in=['pending', 'processing', 'shipped', 'delivered', 'completed']
+    ).select_related('order', 'product').order_by('-order__created_at')
+
+    # Create CSV response
+    response = HttpResponse(content_type='text/csv')
+    response[
+        'Content-Disposition'] = f'attachment; filename="financial_report_{store.slug}_{start_date.date()}_to_{end_date.date()}.csv"'
+
+    writer = csv.writer(response)
+
+    # Write header
+    writer.writerow([
+        'Date',
+        'Order Number',
+        'Product',
+        'Quantity',
+        'Unit Price',
+        'Total',
+        'Status'
+    ])
+
+    # Write data
+    for item in order_items:
+        writer.writerow([
+            item.order.created_at.strftime('%Y-%m-%d %H:%M'),
+            getattr(item.order, 'order_number', item.order.id),
+            item.product.name,
+            item.quantity,
+            f"{item.price_at_time:.2f}",
+            f"{(item.quantity * item.price_at_time):.2f}",
+            item.order.status
+        ])
+
+    # Write summary
+    writer.writerow([])
+    writer.writerow(['Summary'])
+
+    total_revenue = sum(item.quantity * item.price_at_time for item in order_items)
+    commission_rate = getattr(store, 'commission_rate', Decimal('5.0'))
+    commission_amount = (total_revenue * commission_rate) / Decimal('100')
+    net_revenue = total_revenue - commission_amount
+
+    writer.writerow(['Total Revenue', f"{total_revenue:.2f}"])
+    writer.writerow(['Commission Rate', f"{commission_rate}%"])
+    writer.writerow(['Commission Amount', f"{commission_amount:.2f}"])
+    writer.writerow(['Net Earnings', f"{net_revenue:.2f}"])
+
+    return response
+
 @login_required
 @store_owner_required
 def sales_analytics(request, store_id):
-    """Detailed sales analytics and reporting"""
-    store = get_object_or_404(Store, id=store_id, owner=request.user)
+    """
+    Sales analytics dashboard for store owners
+    Shows revenue, orders, and performance metrics filtered by store
 
-    # Date range
-    end_date = timezone.now().date()
-    start_date = end_date - timedelta(days=30)
+    FIELD NAME FIXES APPLIED:
+    - Uses 'price_at_time' instead of 'price' in OrderItem
+    - Uses 'buyer' instead of 'user' in Order
+    """
+    # Get store and verify ownership
+    store = get_object_or_404(Store, id=store_id)
 
-    if request.GET.get('period') == '7days':
+    # Check if user is owner or manager
+    if not (request.user == store.owner or store.managers.filter(id=request.user.id).exists()):
+        from django.http import HttpResponseForbidden
+        return HttpResponseForbidden("You don't have permission to view this store's analytics")
+
+    # Get period from query params (default: last 30 days)
+    period = request.GET.get('period', '30days')
+
+    # Calculate date range based on period
+    end_date = timezone.now()
+
+    if period == '7days':
         start_date = end_date - timedelta(days=7)
-    elif request.GET.get('period') == '90days':
+        period_label = 'Last 7 Days'
+    elif period == '30days':
+        start_date = end_date - timedelta(days=30)
+        period_label = 'Last 30 Days'
+    elif period == '90days':
         start_date = end_date - timedelta(days=90)
-    elif request.GET.get('period') == 'year':
+        period_label = 'Last 90 Days'
+    elif period == '1year':
         start_date = end_date - timedelta(days=365)
+        period_label = 'Last Year'
+    elif period == 'custom':
+        # Handle custom date range
+        start_str = request.GET.get('start_date')
+        end_str = request.GET.get('end_date')
 
-    # Daily sales data for charts
-    daily_sales = []
-    current_date = start_date
-    while current_date <= end_date:
-        day_orders = OrderItem.objects.filter(
-            product__seller=store.owner,
-            order__created_at__date=current_date,
-            order__status__in=['delivered', 'shipped', 'processing']
-        )
+        if start_str and end_str:
+            start_date = timezone.make_aware(datetime.strptime(start_str, '%Y-%m-%d'))
+            end_date = timezone.make_aware(datetime.strptime(end_str, '%Y-%m-%d'))
+            period_label = f'{start_str} to {end_str}'
+        else:
+            start_date = end_date - timedelta(days=30)
+            period_label = 'Last 30 Days'
+    else:
+        start_date = end_date - timedelta(days=30)
+        period_label = 'Last 30 Days'
 
-        day_revenue = sum(item.get_total_price() for item in day_orders)
-        day_orders_count = day_orders.values('order').distinct().count()
+    # Get all products from this store
+    store_products = Product.objects.filter(seller=store.owner)
+    store_product_ids = list(store_products.values_list('id', flat=True))
 
-        daily_sales.append({
-            'date': current_date.strftime('%Y-%m-%d'),
-            'revenue': float(day_revenue),
-            'orders': day_orders_count,
-            'items': day_orders.aggregate(total=Sum('quantity'))['total'] or 0
-        })
+    # Get orders containing this store's products in the date range
+    current_period_orders = OrderItem.objects.filter(
+        product_id__in=store_product_ids,
+        order__created_at__gte=start_date,
+        order__created_at__lte=end_date,
+        order__status__in=['pending', 'processing', 'shipped', 'delivered', 'completed']
+    ).select_related('order', 'product')
 
-        current_date += timedelta(days=1)
-
-    # Category performance
-    category_performance = Product.objects.filter(
-        seller=store.owner
-    ).values(
-        'category__name'
-    ).annotate(
-        total_sold=Sum('order_items__quantity'),
-        revenue=Sum(
+    # Calculate current period metrics
+    # FIX: Use price_at_time instead of price
+    current_metrics = current_period_orders.aggregate(
+        total_revenue=Sum(
             ExpressionWrapper(
-                F('order_items__quantity') * F('order_items__price_at_time'),
+                F('quantity') * F('price_at_time'),
                 output_field=DecimalField()
             )
         ),
-        total_revenue=F('revenue'),
-        avg_price=Avg('price')
-    ).filter(total_sold__gt=0).order_by('-total_revenue')
-    total_revenue = sum(day['revenue'] for day in daily_sales)
+        total_orders=Count('order', distinct=True),
+        total_items_sold=Sum('quantity'),
+        avg_order_value=Avg(
+            ExpressionWrapper(
+                F('quantity') * F('price_at_time'),
+                output_field=DecimalField()
+            )
+        )
+    )
 
+    # Get previous period for comparison
+    period_length = (end_date - start_date).days
+    previous_start = start_date - timedelta(days=period_length)
+    previous_end = start_date
+
+    previous_period_orders = OrderItem.objects.filter(
+        product_id__in=store_product_ids,
+        order__created_at__gte=previous_start,
+        order__created_at__lt=previous_end,
+        order__status__in=['pending', 'processing', 'shipped', 'delivered', 'completed']
+    )
+
+    # FIX: Use price_at_time instead of price
+    previous_metrics = previous_period_orders.aggregate(
+        total_revenue=Sum(
+            ExpressionWrapper(
+                F('quantity') * F('price_at_time'),
+                output_field=DecimalField()
+            )
+        ),
+        total_orders=Count('order', distinct=True),
+        total_items_sold=Sum('quantity')
+    )
+
+    # Calculate percentage changes
+    def calculate_change(current, previous):
+        if previous and previous > 0:
+            change = ((current - previous) / previous) * 100
+            return {
+                'value': round(change, 1),
+                'direction': 'up' if change > 0 else 'down' if change < 0 else 'neutral',
+                'class': 'positive' if change > 0 else 'negative' if change < 0 else 'neutral'
+            }
+        return {'value': 0, 'direction': 'neutral', 'class': 'neutral'}
+
+    revenue_change = calculate_change(
+        current_metrics['total_revenue'] or 0,
+        previous_metrics['total_revenue'] or 0
+    )
+
+    orders_change = calculate_change(
+        current_metrics['total_orders'] or 0,
+        previous_metrics['total_orders'] or 0
+    )
+
+    items_change = calculate_change(
+        current_metrics['total_items_sold'] or 0,
+        previous_metrics['total_items_sold'] or 0
+    )
+
+    # Daily sales data for chart
+    # FIX: Use price_at_time instead of price
+    daily_sales = current_period_orders.annotate(
+        date=TruncDate('order__created_at')
+    ).values('date').annotate(
+        revenue=Sum(
+            ExpressionWrapper(
+                F('quantity') * F('price_at_time'),
+                output_field=DecimalField()
+            )
+        ),
+        orders=Count('order', distinct=True),
+        items_sold=Sum('quantity')
+    ).order_by('date')
+
+    # Convert to list for JSON serialization
+    daily_sales_list = [
+        {
+            'date': item['date'].isoformat(),
+            'revenue': float(item['revenue'] or 0),
+            'orders': item['orders'] or 0,
+            'items_sold': item['items_sold'] or 0
+        }
+        for item in daily_sales
+    ]
+
+    # Category performance
+    # FIX: Use price_at_time instead of price
+    category_performance = current_period_orders.values(
+        'product__category__name'
+    ).annotate(
+        total_revenue=Sum(
+            ExpressionWrapper(
+                F('quantity') * F('price_at_time'),
+                output_field=DecimalField()
+            )
+        ),
+        total_sold=Sum('quantity'),
+        order_count=Count('order', distinct=True)
+    ).order_by('-total_revenue')[:10]
+
+    # Convert to list for template
+    category_performance_list = [
+        {
+            'category__name': item['product__category__name'] or 'Uncategorized',
+            'total_revenue': float(item['total_revenue'] or 0),
+            'total_sold': item['total_sold'] or 0,
+            'order_count': item['order_count'] or 0
+        }
+        for item in category_performance
+    ]
+
+    # Top selling products
+    # FIX: Use price_at_time instead of price
+    top_products = current_period_orders.values(
+        'product__id',
+        'product__name',
+        'product__price'
+    ).annotate(
+        total_sold=Sum('quantity'),
+        total_revenue=Sum(
+            ExpressionWrapper(
+                F('quantity') * F('price_at_time'),
+                output_field=DecimalField()
+            )
+        )
+    ).order_by('-total_revenue')[:5]
+
+    # Get actual product objects for top sellers
+    top_product_ids = [p['product__id'] for p in top_products]
+    top_products_objects = Product.objects.filter(id__in=top_product_ids)
+
+    # Create a map of product stats
+    top_products_data = []
+    for product in top_products_objects:
+        stats = next((p for p in top_products if p['product__id'] == product.id), None)
+        if stats:
+            top_products_data.append({
+                'product': product,
+                'total_sold': stats['total_sold'],
+                'total_revenue': stats['total_revenue']
+            })
+
+    # Customer insights
+    # FIX: Order model uses 'buyer' not 'user'
+    unique_customers = current_period_orders.values('order__buyer').distinct().count()
+
+    # Generate insights
+    insights = []
+
+    # Revenue insight
+    if revenue_change['direction'] == 'up':
+        insights.append({
+            'type': 'success',
+            'icon': 'fa-trending-up',
+            'title': 'Revenue Growth',
+            'message': f"Your revenue increased by {revenue_change['value']}% compared to the previous period. Great job!"
+        })
+    elif revenue_change['direction'] == 'down':
+        insights.append({
+            'type': 'warning',
+            'icon': 'fa-exclamation-triangle',
+            'title': 'Revenue Decline',
+            'message': f"Revenue decreased by {abs(revenue_change['value'])}%. Consider running promotions or checking product pricing."
+        })
+
+    # Top category insight
+    if category_performance_list:
+        top_category = category_performance_list[0]
+        insights.append({
+            'type': 'tip',
+            'icon': 'fa-lightbulb',
+            'title': 'Top Category',
+            'message': f"{top_category['category__name']} is your best performing category with D{top_category['total_revenue']:,.2f} in revenue."
+        })
+
+    # Customer base insight
+    if unique_customers > 0:
+        avg_revenue_per_customer = (current_metrics['total_revenue'] or 0) / unique_customers
+        insights.append({
+            'type': 'tip',
+            'icon': 'fa-users',
+            'title': 'Customer Value',
+            'message': f"You have {unique_customers} unique customers with an average spend of D{avg_revenue_per_customer:,.2f}."
+        })
+
+    # Low stock warning (only if Product has 'stock' field)
+    try:
+        low_stock_products = store_products.filter(stock__lte=10, stock__gt=0).count()
+        if low_stock_products > 0:
+            insights.append({
+                'type': 'warning',
+                'icon': 'fa-box',
+                'title': 'Low Stock Alert',
+                'message': f"You have {low_stock_products} product(s) running low on stock. Restock soon to avoid missed sales!"
+            })
+    except:
+        # If Product model doesn't have 'stock' field, skip this insight
+        pass
+
+    # Prepare context
     context = {
         'store': store,
+        'period': period,
+        'period_label': period_label,
         'start_date': start_date,
         'end_date': end_date,
-        'daily_sales': json.dumps(daily_sales),
-        'category_performance': category_performance,
-        'period': request.GET.get('period', '30days'),
-        'total_revenue': total_revenue,  # ✅ now included
+
+        # Metrics
+        'total_revenue': current_metrics['total_revenue'] or 0,
+        'total_orders': current_metrics['total_orders'] or 0,
+        'total_items_sold': current_metrics['total_items_sold'] or 0,
+        'avg_order_value': current_metrics['avg_order_value'] or 0,
+
+        # Changes
+        'revenue_change': revenue_change,
+        'orders_change': orders_change,
+        'items_change': items_change,
+
+        # Data for charts (JSON)
+        'daily_sales': json.dumps(daily_sales_list),
+        'category_performance': json.dumps(category_performance_list),
+
+        # Lists for template
+        'category_performance_list': category_performance_list,
+        'top_products': top_products_data,
+        'unique_customers': unique_customers,
+
+        # Insights
+        'insights': insights,
     }
 
     return render(request, 'stores/sales_analytics.html', context)
-
-
-@login_required
-@require_POST
-def export_financial_report(request, store_id):
-    """Export financial report as CSV"""
-    store = get_object_or_404(Store, id=store_id, owner=request.user)
-
-    # This would implement CSV export functionality
-    # For now, return a JSON response
-    return JsonResponse({
-        'success': True,
-        'message': 'Report export initiated. You will receive an email when ready.'
-    })
 
 
 # Store API management

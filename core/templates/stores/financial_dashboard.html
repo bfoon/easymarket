@@ -105,7 +105,7 @@
 
 .transaction-item {
     display: flex;
-    justify-content: between;
+    justify-content: space-between;
     align-items: center;
     padding: 0.75rem 0;
     border-bottom: 1px solid #e9ecef;
@@ -168,12 +168,12 @@
 </style>
 <div class="container-fluid py-4">
     <!-- Header -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
         <div>
             <h1 class="h3 mb-0">Financial Dashboard</h1>
-            <p class="text-muted">Track your store's financial performance and earnings</p>
+            <p class="text-muted mb-0">Track your store's financial performance and earnings</p>
         </div>
-        <div class="d-flex gap-2">
+        <div class="d-flex gap-2 flex-wrap">
             <a href="{% url 'stores:sales_analytics' store.id %}" class="btn btn-outline-primary">
                 <i class="fas fa-chart-line me-2"></i>Analytics
             </a>
@@ -217,8 +217,8 @@
             </div>
             <div class="financial-number">D{{ total_revenue|floatformat:2|intcomma }}</div>
             <div class="financial-label">Total Revenue</div>
-            <div class="metric-trend trend-up">
-                <i class="fas fa-arrow-up me-1"></i>12.5% from last period
+            <div class="metric-trend trend-neutral">
+                <i class="fas fa-chart-line me-1"></i>Gross sales
             </div>
         </div>
 
@@ -229,7 +229,7 @@
             <div class="financial-number">D{{ commission_amount|floatformat:2|intcomma }}</div>
             <div class="financial-label">Commission ({{ commission_rate }}%)</div>
             <div class="metric-trend trend-neutral">
-                <i class="fas fa-minus me-1"></i>Same rate
+                <i class="fas fa-minus me-1"></i>Platform fee
             </div>
         </div>
 
@@ -240,7 +240,7 @@
             <div class="financial-number">D{{ net_revenue|floatformat:2|intcomma }}</div>
             <div class="financial-label">Net Earnings</div>
             <div class="metric-trend trend-up">
-                <i class="fas fa-arrow-up me-1"></i>8.3% from last period
+                <i class="fas fa-check me-1"></i>Your profit
             </div>
         </div>
 
@@ -251,7 +251,7 @@
             <div class="financial-number">{{ total_orders|intcomma }}</div>
             <div class="financial-label">Total Orders</div>
             <div class="metric-trend trend-up">
-                <i class="fas fa-arrow-up me-1"></i>{{ total_items_sold|intcomma }} items sold
+                <i class="fas fa-box me-1"></i>{{ total_items_sold|intcomma }} items sold
             </div>
         </div>
     </div>
@@ -268,19 +268,19 @@
             </div>
             <div class="col-md-3">
                 <div class="text-center">
-                    <div class="h4 text-info">D{{ total_revenue|floatformat:2 }}</div>
+                    <div class="h4 text-info">D{{ total_revenue|floatformat:2|intcomma }}</div>
                     <small class="text-muted">Gross Revenue</small>
                 </div>
             </div>
             <div class="col-md-3">
                 <div class="text-center">
-                    <div class="h4 text-warning">D{{ commission_amount|floatformat:2 }}</div>
+                    <div class="h4 text-warning">D{{ commission_amount|floatformat:2|intcomma }}</div>
                     <small class="text-muted">Commission Fee</small>
                 </div>
             </div>
             <div class="col-md-3">
                 <div class="text-center">
-                    <div class="h4 text-success">D{{ net_revenue|floatformat:2 }}</div>
+                    <div class="h4 text-success">D{{ net_revenue|floatformat:2|intcomma }}</div>
                     <small class="text-muted">Your Earnings</small>
                 </div>
             </div>
@@ -303,16 +303,16 @@
             <div class="recent-transactions">
                 <h5 class="mb-3"><i class="fas fa-history me-2"></i>Recent Orders</h5>
                 <div class="transaction-list">
-                    {% for order in recent_orders %}
+                    {% for item in recent_orders %}
                     <div class="transaction-item">
                         <div class="transaction-details">
-                            <div class="fw-bold">Order #{{ order.order_number }}</div>
-                            <small class="text-muted">{{ order.created_at|date:"M d, Y H:i" }}</small>
+                            <div class="fw-bold">Order #{{ item.order_number }}</div>
+                            <small class="text-muted">{{ item.created_at|date:"M d, Y H:i" }}</small>
                             <br>
-                            <small class="text-muted">{{ order.buyer.get_full_name|default:order.buyer.username }}</small>
+                            <small class="text-muted">{{ item.buyer_name }}</small>
                         </div>
                         <div class="transaction-amount">
-                            D{{ order.get_total|floatformat:2 }}
+                            D{{ item.total|floatformat:2|intcomma }}
                         </div>
                     </div>
                     {% empty %}
@@ -350,12 +350,12 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for product in top_products %}
+                    {% for item in top_products %}
                     <tr>
                         <td>
                             <div class="d-flex align-items-center">
-                                {% if product.image %}
-                                    <img src="{{ product.image.url }}" alt="{{ product.name }}"
+                                {% if item.product.images.first %}
+                                    <img src="{{ item.product.images.first.image.url }}" alt="{{ item.name }}"
                                          class="rounded me-2" style="width: 40px; height: 40px; object-fit: cover;">
                                 {% else %}
                                     <div class="bg-light rounded me-2 d-flex align-items-center justify-content-center"
@@ -364,41 +364,39 @@
                                     </div>
                                 {% endif %}
                                 <div>
-                                    <div class="fw-bold">{{ product.name|truncatechars:30 }}</div>
-                                    <small class="text-muted">ID: {{ product.id }}</small>
+                                    <div class="fw-bold">{{ item.name }}</div>
                                 </div>
                             </div>
                         </td>
                         <td>
-                            {% if product.category %}
-                                <span class="badge bg-secondary">{{ product.category.name }}</span>
-                            {% else %}
-                                <span class="text-muted">-</span>
-                            {% endif %}
+                            <span class="badge bg-secondary">{{ item.category }}</span>
                         </td>
                         <td>
-                            <strong>{{ product.total_sold|default:0|intcomma }}</strong>
+                            <strong>{{ item.units_sold|intcomma }}</strong>
                         </td>
                         <td>
-                            <strong class="text-success">D{{ product.total_revenue|default:0|floatformat:2|intcomma }}</strong>
+                            <span class="text-success fw-bold">D{{ item.total_revenue|floatformat:2|intcomma }}</span>
                         </td>
                         <td>
-                            D{{ product.price|floatformat:2 }}
+                            D{{ item.avg_price|floatformat:2|intcomma }}
                         </td>
                         <td>
-                            <div class="progress" style="height: 8px;">
-                                {% widthratio product.total_revenue top_products.0.total_revenue 100 as percentage %}
-                                <div class="progress-bar bg-success" style="width: {{ percentage }}%"></div>
+                            <div class="progress" style="height: 20px;">
+                                <div class="progress-bar bg-success" role="progressbar"
+                                     style="width: {{ item.performance_percentage }}%"
+                                     aria-valuenow="{{ item.performance_percentage }}"
+                                     aria-valuemin="0" aria-valuemax="100">
+                                    {{ item.performance_percentage|floatformat:0 }}%
+                                </div>
                             </div>
-                            <small class="text-muted">{{ percentage }}%</small>
                         </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="6" class="text-center py-4">
-                            <i class="fas fa-chart-bar fa-2x text-muted mb-2"></i>
+                        <td colspan="6" class="text-center text-muted py-4">
+                            <i class="fas fa-box-open fa-2x mb-2"></i>
                             <br>
-                            <span class="text-muted">No sales data available for this period</span>
+                            No sales data available yet
                         </td>
                     </tr>
                     {% endfor %}
@@ -408,100 +406,25 @@
     </div>
 
     <!-- Export Section -->
-    <div class="export-section">
-        <h5 class="mb-3"><i class="fas fa-download me-2"></i>Export Financial Reports</h5>
-        <p class="text-muted mb-3">Download detailed financial reports for accounting and tax purposes.</p>
-
-        <div class="row">
-            <div class="col-md-6">
-                <div class="d-grid gap-2">
-                    <button class="btn btn-outline-primary" onclick="exportReport('revenue')">
-                        <i class="fas fa-file-excel me-2"></i>Export Revenue Report
-                    </button>
-                    <button class="btn btn-outline-secondary" onclick="exportReport('commission')">
-                        <i class="fas fa-file-pdf me-2"></i>Export Commission Report
-                    </button>
-                </div>
-            </div>
-            <div class="col-md-6">
-                <div class="d-grid gap-2">
-                    <button class="btn btn-outline-info" onclick="exportReport('transactions')">
-                        <i class="fas fa-file-csv me-2"></i>Export Transaction History
-                    </button>
-                    <button class="btn btn-outline-success" onclick="exportReport('summary')">
-                        <i class="fas fa-file-alt me-2"></i>Export Summary Report
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <div class="alert alert-info mt-3">
-            <i class="fas fa-info-circle me-2"></i>
-            <strong>Note:</strong> Reports include data for the selected date range.
-            For tax purposes, ensure you download end-of-year reports.
+    <div class="export-section mt-4">
+        <h5 class="mb-3"><i class="fas fa-download me-2"></i>Export Financial Report</h5>
+        <p class="text-muted">Download detailed financial reports for your records</p>
+        <div class="d-flex gap-2 flex-wrap">
+            <button class="btn btn-outline-primary" onclick="exportReport('csv')">
+                <i class="fas fa-file-csv me-2"></i>Export as CSV
+            </button>
+            <button class="btn btn-outline-success" onclick="exportReport('excel')">
+                <i class="fas fa-file-excel me-2"></i>Export as Excel
+            </button>
+            <button class="btn btn-outline-danger" onclick="exportReport('pdf')">
+                <i class="fas fa-file-pdf me-2"></i>Export as PDF
+            </button>
         </div>
     </div>
 
-    <!-- Payment Information -->
-    <div class="row mt-4">
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-header">
-                    <h6 class="mb-0"><i class="fas fa-credit-card me-2"></i>Payment Settings</h6>
-                </div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <strong>Bank Account:</strong>
-                        {% if store.bank_account_number %}
-                            <span class="text-muted">****{{ store.bank_account_number|slice:"-4:" }}</span>
-                        {% else %}
-                            <span class="text-danger">Not configured</span>
-                        {% endif %}
-                    </div>
-                    <div class="mb-3">
-                        <strong>Bank Name:</strong>
-                        <span>{{ store.bank_name|default:"Not specified" }}</span>
-                    </div>
-                    <div class="mb-3">
-                        <strong>Next Payment:</strong>
-                        <span class="text-primary">Friday, Next Week</span>
-                    </div>
-                    <a href="{% url 'stores:store_settings' store.id %}?tab=financial" class="btn btn-outline-primary btn-sm">
-                        <i class="fas fa-edit me-1"></i>Update Payment Info
-                    </a>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-header">
-                    <h6 class="mb-0"><i class="fas fa-calendar me-2"></i>Payment Schedule</h6>
-                </div>
-                <div class="card-body">
-                    <div class="timeline">
-                        <div class="timeline-item">
-                            <div class="timeline-marker bg-success"></div>
-                            <div class="timeline-content">
-                                <strong>Last Payment</strong>
-                                <br>
-                                <small class="text-muted">Dec 15, 2023 - D2,450.00</small>
-                            </div>
-                        </div>
-                        <div class="timeline-item">
-                            <div class="timeline-marker bg-primary"></div>
-                            <div class="timeline-content">
-                                <strong>Next Payment</strong>
-                                <br>
-                                <small class="text-muted">Dec 22, 2023 - Estimated D{{ net_revenue|floatformat:2 }}</small>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
 </div>
+
+{% csrf_token %}
 
 <script>
 // Ensure Chart.js is loaded and DOM is ready
@@ -515,17 +438,12 @@ document.addEventListener('DOMContentLoaded', function() {
         window.revenueChartInstance.destroy();
     }
 
-    // Sample data - replace with your actual data
-    const monthlyData = {{ monthly_data|default:"[]"|safe }};
+    // Get monthly data from context
+    const monthlyData = {{ monthly_data|safe }};
 
     // Fallback data if no monthly_data is provided
     const defaultData = [
-        {month: 'Jan', revenue: 1000, commission: 50, net: 950},
-        {month: 'Feb', revenue: 1200, commission: 60, net: 1140},
-        {month: 'Mar', revenue: 1500, commission: 75, net: 1425},
-        {month: 'Apr', revenue: 1300, commission: 65, net: 1235},
-        {month: 'May', revenue: 1800, commission: 90, net: 1710},
-        {month: 'Jun', revenue: 2000, commission: 100, net: 1900}
+        {month: 'Jan', revenue: 0, commission: 0, net: 0}
     ];
 
     const chartData = monthlyData.length > 0 ? monthlyData : defaultData;
@@ -642,44 +560,29 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Export functions
 function exportReport(type) {
+    // Get CSRF token
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
     // Show loading message
     const btn = event.target;
     const originalText = btn.innerHTML;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Generating...';
     btn.disabled = true;
 
-    // Simulate export process
+    // Create download link directly
+    const startDate = '{{ start_date|date:"Y-m-d" }}';
+    const endDate = '{{ end_date|date:"Y-m-d" }}';
+    const url = `{% url 'stores:export_financial_report' store.id %}?type=${type}&start_date=${startDate}&end_date=${endDate}`;
+
+    // Download file
+    window.location.href = url;
+
+    // Reset button after short delay
     setTimeout(() => {
-        // In production, replace with actual export API call
-        fetch(`{% url 'stores:export_financial_report' store.id %}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value || ''
-            },
-            body: JSON.stringify({
-                type: type,
-                start_date: '{{ start_date|date:"Y-m-d" }}',
-                end_date: '{{ end_date|date:"Y-m-d" }}'
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                showToast('success', data.message);
-            } else {
-                showToast('error', 'Export failed. Please try again.');
-            }
-        })
-        .catch(error => {
-            console.error('Export error:', error);
-            showToast('error', 'An error occurred during export.');
-        })
-        .finally(() => {
-            btn.innerHTML = originalText;
-            btn.disabled = false;
-        });
-    }, 2000);
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+        showToast('success', 'Download started!');
+    }, 1000);
 }
 
 function showToast(type, message) {
@@ -698,51 +601,6 @@ function showToast(type, message) {
             toast.parentNode.removeChild(toast);
         }
     }, 5000);
-}
-
-// Timeline styles - only add once
-if (!document.querySelector('#timeline-styles')) {
-    const timelineStyles = document.createElement('style');
-    timelineStyles.id = 'timeline-styles';
-    timelineStyles.textContent = `
-        .timeline {
-            position: relative;
-            padding-left: 2rem;
-        }
-
-        .timeline-item {
-            position: relative;
-            margin-bottom: 1rem;
-        }
-
-        .timeline-item:before {
-            content: '';
-            position: absolute;
-            left: -1.5rem;
-            top: 0.5rem;
-            bottom: -1rem;
-            width: 2px;
-            background: #e9ecef;
-        }
-
-        .timeline-item:last-child:before {
-            display: none;
-        }
-
-        .timeline-marker {
-            position: absolute;
-            left: -1.75rem;
-            top: 0.25rem;
-            width: 0.5rem;
-            height: 0.5rem;
-            border-radius: 50%;
-        }
-
-        .timeline-content {
-            padding-left: 0.5rem;
-        }
-    `;
-    document.head.appendChild(timelineStyles);
 }
 </script>
 {% endblock %}

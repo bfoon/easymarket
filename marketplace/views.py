@@ -84,26 +84,54 @@ def _track_cart_event(request, event: str):
         pass
 
 def all_products(request):
+    """
+        Alternative approach: Show categories at multiple levels intelligently.
+        This version shows root categories if they have products, OR shows their
+        child categories if those have products but the root doesn't.
+        """
     parent_categories = Category.objects.filter(parent__isnull=True, is_active=True)
     category_products = []
 
-    for category in parent_categories:
-        # Get all subcategories recursively
-        all_subcategories = category.get_all_subcategories()
-        related_category_ids = [category.id] + [sub.id for sub in all_subcategories]
+    for root_category in parent_categories:
+        # Get all descendants
+        all_descendants = root_category.get_all_subcategories()
+        all_related_ids = [root_category.id] + [sub.id for sub in all_descendants]
 
-        # Fetch products from parent and subcategories
-        products = Product.objects.filter(
-            category_id__in=related_category_ids,
+        # Check if root category itself has products
+        root_products = Product.objects.filter(
+            category_id=root_category.id,
             is_active=True
-        ).order_by('?')[:4]
+        )
 
-        if products.exists():
+        if root_products.exists():
+            # Root has products, show it
+            products_to_show = root_products.order_by('?')[:4]
             category_products.append({
-                'category': category,
-                'products': products,
-                'subcategories': all_subcategories  # Optional for template use
+                'category': root_category,
+                'products': products_to_show,
+                'subcategories': root_category.get_subcategories()
             })
+        else:
+            # Root has no products, check immediate children (level 2)
+            immediate_children = root_category.get_subcategories()
+
+            for child_category in immediate_children:
+                # Get all descendants of this child
+                child_descendants = child_category.get_all_subcategories()
+                child_related_ids = [child_category.id] + [sub.id for sub in child_descendants]
+
+                # Get products from child and its descendants
+                child_products = Product.objects.filter(
+                    category_id__in=child_related_ids,
+                    is_active=True
+                ).order_by('?')[:4]
+
+                if child_products.exists():
+                    category_products.append({
+                        'category': child_category,
+                        'products': child_products,
+                        'subcategories': child_category.get_subcategories()
+                    })
 
     return render(request, 'marketplace/all_products.html', {
         'category_products': category_products
@@ -1490,19 +1518,70 @@ def used_products_view(request):
     return render(request, 'marketplace/used_products.html', context)
 
 def category_products(request, slug):
+    """
+       Full-featured version with search, sorting, and pagination.
+       Best for: Large catalogs (100+ products)
+       """
     category = get_object_or_404(Category, id=slug)
 
-    # Get IDs of the category and its subcategories
-    subcategories = category.children.all()
-    related_category_ids = [category.id] + list(subcategories.values_list('id', flat=True))
+    # Get all descendants
+    all_subcategories = category.get_all_subcategories()
+    related_category_ids = [category.id] + [sub.id for sub in all_subcategories]
 
-    # Fetch products belonging to the category and its subcategories
-    products = Product.objects.filter(category_id__in=related_category_ids, is_active=True)
+    # Base queryset
+    products = Product.objects.filter(
+        category_id__in=related_category_ids,
+        is_active=True
+    ).select_related('category', 'seller')
+
+    # Search within category
+    search_query = request.GET.get('q', '').strip()
+    if search_query:
+        products = products.filter(
+            Q(name__icontains=search_query) |
+            Q(description__icontains=search_query) |
+            Q(category__name__icontains=search_query)
+        )
+
+    # Sorting
+    sort_by = request.GET.get('sort', '-created_at')
+    valid_sorts = {
+        'newest': '-created_at',
+        'oldest': 'created_at',
+        'price_low': 'price',
+        'price_high': '-price',
+        'name_az': 'name',
+        'name_za': '-name',
+        'popular': '-sold_count',
+    }
+
+    sort_order = valid_sorts.get(sort_by, '-created_at')
+    products = products.order_by(sort_order)
+
+    # Pagination
+    items_per_page = int(request.GET.get('per_page', 24))
+    items_per_page = min(items_per_page, 100)  # Max 100 items per page
+
+    paginator = Paginator(products, items_per_page)
+    page = request.GET.get('page', 1)
+
+    try:
+        page_obj = paginator.page(page)
+    except PageNotAnInteger:
+        page_obj = paginator.page(1)
+    except EmptyPage:
+        page_obj = paginator.page(paginator.num_pages)
+
+    immediate_subcategories = category.get_subcategories()
 
     return render(request, 'marketplace/category_products.html', {
         'category': category,
-        'subcategories': subcategories,
-        'products': products,
+        'subcategories': immediate_subcategories,
+        'products': page_obj.object_list,
+        'page_obj': page_obj,
+        'total_products': paginator.count,
+        'search_query': search_query,
+        'current_sort': sort_by,
     })
 
 

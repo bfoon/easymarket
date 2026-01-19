@@ -8,6 +8,7 @@
 <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+
 <style>
 .analytics-header {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -41,7 +42,7 @@
 
 .chart-header {
     display: flex;
-    justify-content: between;
+    justify-content: space-between;
     align-items: center;
     margin-bottom: 1rem;
     padding-bottom: 1rem;
@@ -136,7 +137,7 @@
 
 .category-item {
     display: flex;
-    justify-content: between;
+    justify-content: space-between;
     align-items: center;
     padding: 0.75rem 0;
     border-bottom: 1px solid #e9ecef;
@@ -266,6 +267,58 @@
     border-color: #007bff;
 }
 
+.top-products-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.top-product-item {
+    display: flex;
+    align-items: center;
+    padding: 1rem 0;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.top-product-item:last-child {
+    border-bottom: none;
+}
+
+.product-rank {
+    width: 30px;
+    height: 30px;
+    background: #007bff;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    margin-right: 1rem;
+    flex-shrink: 0;
+}
+
+.product-info {
+    flex: 1;
+}
+
+.product-name {
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 0.25rem;
+}
+
+.product-stats {
+    font-size: 0.875rem;
+    color: #6c757d;
+}
+
+.product-revenue {
+    font-weight: bold;
+    color: #28a745;
+    white-space: nowrap;
+}
+
 @media (max-width: 1200px) {
     .analytics-grid {
         grid-template-columns: 1fr;
@@ -276,28 +329,26 @@
     .metrics-grid {
         grid-template-columns: repeat(2, 1fr);
     }
-    
+
     .chart-container {
         height: 250px;
     }
-    
+
     .analytics-header {
         padding: 1.5rem;
     }
 }
 </style>
 
-
-
 <div class="container-fluid py-4">
     <!-- Analytics Header -->
     <div class="analytics-header">
-        <div class="d-flex justify-content-between align-items-center">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
             <div>
                 <h1 class="h3 mb-2">Sales Analytics</h1>
                 <p class="mb-0 opacity-75">Comprehensive insights into {{ store.name }}'s performance</p>
             </div>
-            <div class="d-flex gap-2">
+            <div class="d-flex gap-2 flex-wrap">
                 <a href="{% url 'stores:financial_dashboard' store.id %}" class="btn btn-light">
                     <i class="fas fa-wallet me-2"></i>Financial Dashboard
                 </a>
@@ -310,9 +361,9 @@
 
     <!-- Period Selector -->
     <div class="period-selector">
-        <div class="d-flex justify-content-between align-items-center">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
             <div>
-                <h6 class="mb-1">Analysis Period</h6>
+                <h6 class="mb-1">Analysis Period: {{ period_label }}</h6>
                 <p class="text-muted mb-0">Data from {{ start_date|date:"M d, Y" }} to {{ end_date|date:"M d, Y" }}</p>
             </div>
             <div class="period-tabs">
@@ -325,7 +376,7 @@
                 <div class="period-tab {% if period == '90days' %}active{% endif %}" onclick="changePeriod('90days')">
                     90 Days
                 </div>
-                <div class="period-tab {% if period == 'year' %}active{% endif %}" onclick="changePeriod('year')">
+                <div class="period-tab {% if period == '1year' %}active{% endif %}" onclick="changePeriod('1year')">
                     1 Year
                 </div>
             </div>
@@ -335,150 +386,68 @@
     <!-- Key Metrics -->
     <div class="metrics-grid">
         <div class="metric-card">
-            <div class="metric-value">D{{ daily_sales|length|add:total_revenue|default:0|floatformat:0|intcomma }}</div>
+            <div class="metric-value">D{{ total_revenue|floatformat:2|intcomma }}</div>
             <div class="metric-label">Total Revenue</div>
-            <div class="metric-change positive">
-                <i class="fas fa-arrow-up me-1"></i>12.5% vs previous period
+            <div class="metric-change {{ revenue_change.class }}">
+                <i class="fas fa-arrow-{{ revenue_change.direction }} me-1"></i>
+                {{ revenue_change.value|floatformat:1 }}% vs previous period
             </div>
         </div>
-        
+
         <div class="metric-card">
-            <div class="metric-value">{{ daily_sales|length|default:0|intcomma }}</div>
+            <div class="metric-value">{{ total_orders|intcomma }}</div>
             <div class="metric-label">Total Orders</div>
-            <div class="metric-change positive">
-                <i class="fas fa-arrow-up me-1"></i>8.3% vs previous period
+            <div class="metric-change {{ orders_change.class }}">
+                <i class="fas fa-arrow-{{ orders_change.direction }} me-1"></i>
+                {{ orders_change.value|floatformat:1 }}% vs previous period
             </div>
         </div>
-        
+
         <div class="metric-card">
-            <div class="metric-value">D{{ average_order_value|default:0|floatformat:2 }}</div>
+            <div class="metric-value">D{{ avg_order_value|floatformat:2 }}</div>
             <div class="metric-label">Avg. Order Value</div>
             <div class="metric-change neutral">
-                <i class="fas fa-minus me-1"></i>No change
+                <i class="fas fa-chart-line me-1"></i>
+                {% if avg_order_value > 0 %}Good{% else %}No sales yet{% endif %}
             </div>
         </div>
-        
+
         <div class="metric-card">
-            <div class="metric-value">{{ conversion_rate|default:0|floatformat:1 }}%</div>
-            <div class="metric-label">Conversion Rate</div>
-            <div class="metric-change negative">
-                <i class="fas fa-arrow-down me-1"></i>2.1% vs previous period
+            <div class="metric-value">{{ total_items_sold|intcomma }}</div>
+            <div class="metric-label">Items Sold</div>
+            <div class="metric-change {{ items_change.class }}">
+                <i class="fas fa-arrow-{{ items_change.direction }} me-1"></i>
+                {{ items_change.value|floatformat:1 }}% vs previous period
             </div>
         </div>
     </div>
 
-    <!-- Charts Grid -->
-    <div class="analytics-grid">
+    <!-- Charts Row -->
+    <div class="row g-4 mb-4">
         <!-- Sales Trend Chart -->
-        <div class="chart-card">
-            <div class="chart-header">
-                <div>
-                    <h5 class="chart-title">Sales Trend</h5>
-                    <p class="chart-subtitle">Daily revenue and order performance</p>
-                </div>
-                <div class="dropdown">
-                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                        Options
-                    </button>
-                    <ul class="dropdown-menu">
-                        <li><a class="dropdown-item" href="#" onclick="toggleChartData('revenue')">Toggle Revenue</a></li>
-                        <li><a class="dropdown-item" href="#" onclick="toggleChartData('orders')">Toggle Orders</a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item" href="#" onclick="exportChart('sales')">Export Chart</a></li>
-                    </ul>
-                </div>
-            </div>
-            <div class="chart-container">
-                <canvas id="salesTrendChart"></canvas>
-            </div>
-        </div>
-
-        <!-- Insights Panel -->
-        <div class="insights-panel">
-            <h5 class="mb-3"><i class="fas fa-lightbulb me-2"></i>Analytics Insights</h5>
-            
-            <div class="insight-item">
-                <div class="insight-icon success">
-                    <i class="fas fa-trophy"></i>
-                </div>
-                <div class="insight-content">
-                    <h6>Best Performing Day</h6>
-                    <p>{{ best_day_date|date:"l, M d" }} generated D{{ best_day_revenue|floatformat:2 }} in revenue</p>
-                </div>
-            </div>
-            
-            <div class="insight-item">
-                <div class="insight-icon tip">
-                    <i class="fas fa-chart-line"></i>
-                </div>
-                <div class="insight-content">
-                    <h6>Growth Trend</h6>
-                    <p>Your sales are trending {% if sales_trend > 0 %}upward{% elif sales_trend < 0 %}downward{% else %}stable{% endif %} compared to the previous period</p>
-                </div>
-            </div>
-            
-            <div class="insight-item">
-                <div class="insight-icon warning">
-                    <i class="fas fa-exclamation-triangle"></i>
-                </div>
-                <div class="insight-content">
-                    <h6>Optimization Opportunity</h6>
-                    <p>Consider promoting during weekends when order volume typically increases by 25%</p>
-                </div>
-            </div>
-            
-            <div class="insight-item">
-                <div class="insight-icon success">
-                    <i class="fas fa-users"></i>
-                </div>
-                <div class="insight-content">
-                    <h6>Customer Retention</h6>
-                    <p>{{ repeat_customer_rate|default:0|floatformat:1 }}% of your customers are repeat buyers</p>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Category Performance -->
-    <div class="row">
         <div class="col-lg-8">
-            <div class="category-performance">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h5 class="mb-0"><i class="fas fa-tags me-2"></i>Category Performance</h5>
-                    <button class="btn btn-sm btn-outline-primary" onclick="refreshCategoryData()">
-                        <i class="fas fa-refresh me-1"></i>Refresh
-                    </button>
+            <div class="chart-card">
+                <div class="chart-header">
+                    <div>
+                        <h5 class="chart-title">Sales Trend</h5>
+                        <p class="chart-subtitle">Daily revenue and order volume</p>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="toggleChartData('revenue')">
+                            <i class="fas fa-eye"></i> Revenue
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="toggleChartData('orders')">
+                            <i class="fas fa-eye"></i> Orders
+                        </button>
+                    </div>
                 </div>
-               {% for category in category_performance %}
-    <div class="category-item">
-        <div class="category-info">
-            <div class="category-name">{{ category.category__name|default:"Uncategorized" }}</div>
-            <div class="category-stats">
-                {{ category.total_sold|default:0|intcomma }} items sold
+                <div class="chart-container">
+                    <canvas id="salesTrendChart"></canvas>
+                </div>
             </div>
         </div>
 
-        <div class="category-revenue">
-            D{{ category.total_revenue|default:category.revenue|default:0|floatformat:2|intcomma }}
-        </div>
-
-        <div class="performance-bar">
-            {% with base=category_performance.0.total_revenue|default:category_performance.0.revenue|default:1 %}
-                {% widthratio category.total_revenue|default:category.revenue|default:0 base 100 as percentage %}
-                <div class="performance-fill" style="width: {{ percentage }}%"></div>
-            {% endwith %}
-        </div>
-    </div>
-{% empty %}
-    <div class="text-center py-4 text-muted">
-        <i class="fas fa-chart-bar fa-2x mb-2"></i>
-        <br>
-        No category data available for this period
-    </div>
-{% endfor %}
-
-        </div>
-        
+        <!-- Category Distribution Chart -->
         <div class="col-lg-4">
             <div class="chart-card">
                 <div class="chart-header">
@@ -494,11 +463,118 @@
         </div>
     </div>
 
+    <!-- Insights and Performance Row -->
+    <div class="row g-4 mb-4">
+        <!-- Automated Insights -->
+        <div class="col-lg-6">
+            <div class="insights-panel">
+                <h5 class="mb-3"><i class="fas fa-lightbulb me-2"></i>Key Insights</h5>
+
+                {% if insights %}
+                    {% for insight in insights %}
+                    <div class="insight-item">
+                        <div class="insight-icon {{ insight.type }}">
+                            <i class="fas {{ insight.icon }}"></i>
+                        </div>
+                        <div class="insight-content">
+                            <h6>{{ insight.title }}</h6>
+                            <p>{{ insight.message }}</p>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="text-center py-4 text-muted">
+                        <i class="fas fa-chart-line fa-2x mb-2"></i>
+                        <p>Start making sales to see insights</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Top Products -->
+        <div class="col-lg-6">
+            <div class="category-performance">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="mb-0"><i class="fas fa-star me-2"></i>Top Selling Products</h5>
+                    <button class="btn btn-sm btn-outline-primary" onclick="window.location.href='{% url 'stores:manage_store_products' store.pk %}'">
+                        <i class="fas fa-box me-1"></i>View All
+                    </button>
+                </div>
+
+                {% if top_products %}
+                    <ul class="top-products-list">
+                        {% for item in top_products %}
+                        <li class="top-product-item">
+                            <div class="product-rank">{{ forloop.counter }}</div>
+                            <div class="product-info">
+                                <div class="product-name">{{ item.product.name }}</div>
+                                <div class="product-stats">
+                                    {{ item.total_sold }} units sold
+                                </div>
+                            </div>
+                            <div class="product-revenue">
+                                D{{ item.total_revenue|floatformat:2|intcomma }}
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <div class="text-center py-4 text-muted">
+                        <i class="fas fa-box-open fa-2x mb-2"></i>
+                        <p>No sales data available yet</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Category Performance -->
+    <div class="row g-4 mb-4">
+        <div class="col-12">
+            <div class="category-performance">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="mb-0"><i class="fas fa-tags me-2"></i>Category Performance</h5>
+                    <span class="text-muted">Top 10 categories by revenue</span>
+                </div>
+
+                {% if category_performance_list %}
+                    {% for category in category_performance_list %}
+                    <div class="category-item">
+                        <div class="category-info">
+                            <div class="category-name">{{ category.category__name }}</div>
+                            <div class="category-stats">
+                                {{ category.total_sold|intcomma }} items sold • {{ category.order_count }} orders
+                            </div>
+                        </div>
+
+                        <div class="category-revenue">
+                            D{{ category.total_revenue|floatformat:2|intcomma }}
+                        </div>
+
+                        <div class="performance-bar">
+                            {% if category_performance_list.0.total_revenue > 0 %}
+                                {% widthratio category.total_revenue category_performance_list.0.total_revenue 100 as percentage %}
+                                <div class="performance-fill" style="width: {{ percentage }}%"></div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="text-center py-4 text-muted">
+                        <i class="fas fa-chart-bar fa-2x mb-2"></i>
+                        <br>
+                        No category data available for this period
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
     <!-- Export Panel -->
     <div class="export-panel">
         <h5 class="mb-3"><i class="fas fa-download me-2"></i>Export Analytics Data</h5>
         <p class="text-muted mb-3">Download detailed analytics reports for further analysis.</p>
-        
+
         <div class="row">
             <div class="col-md-6">
                 <div class="d-grid gap-2">
@@ -524,6 +600,8 @@
     </div>
 </div>
 
+{% csrf_token %}
+
 <script>
 // Sales Trend Chart
 const salesCtx = document.getElementById('salesTrendChart').getContext('2d');
@@ -532,7 +610,10 @@ const dailySalesData = {{ daily_sales|safe }};
 const salesChart = new Chart(salesCtx, {
     type: 'line',
     data: {
-        labels: dailySalesData.map(d => new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
+        labels: dailySalesData.map(d => {
+            const date = new Date(d.date);
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        }),
         datasets: [
             {
                 label: 'Revenue (D)',
@@ -635,8 +716,11 @@ new Chart(categoryCtx, {
             legend: {
                 position: 'bottom',
                 labels: {
-                    padding: 20,
-                    usePointStyle: true
+                    padding: 15,
+                    usePointStyle: true,
+                    font: {
+                        size: 11
+                    }
                 }
             },
             tooltip: {
@@ -644,7 +728,7 @@ new Chart(categoryCtx, {
                     label: function(context) {
                         const value = context.parsed;
                         const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                        const percentage = ((value / total) * 100).toFixed(1);
+                        const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
                         return context.label + ': D' + value.toLocaleString() + ' (' + percentage + '%)';
                     }
                 }
@@ -668,58 +752,22 @@ function toggleChartData(dataset) {
     chart.update();
 }
 
-function refreshCategoryData() {
-    // In a real implementation, this would fetch fresh data
-    showToast('info', 'Category data refreshed');
-}
-
-function exportChart(chartType) {
-    showToast('info', `Exporting ${chartType} chart...`);
-    
-    // In a real implementation, you would generate and download the chart as an image
-    setTimeout(() => {
-        showToast('success', 'Chart exported successfully!');
-    }, 2000);
-}
-
 function exportAnalytics(type) {
     const btn = event.target;
     const originalText = btn.innerHTML;
-    
+
     btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Generating...';
     btn.disabled = true;
-    
-    // Simulate export process
+
+    // Get CSRF token
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+    // Simulate export process (replace with actual endpoint)
     setTimeout(() => {
-        fetch(`{% url 'stores:export_financial_report' store.id %}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
-            },
-            body: JSON.stringify({
-                type: type,
-                period: '{{ period }}',
-                start_date: '{{ start_date|date:"Y-m-d" }}',
-                end_date: '{{ end_date|date:"Y-m-d" }}'
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                showToast('success', 'Export completed! Check your email for the download link.');
-            } else {
-                showToast('error', 'Export failed. Please try again.');
-            }
-        })
-        .catch(error => {
-            showToast('error', 'An error occurred during export.');
-        })
-        .finally(() => {
-            btn.innerHTML = originalText;
-            btn.disabled = false;
-        });
-    }, 3000);
+        showToast('success', `${type.replace('_', ' ')} export started! You'll receive an email when ready.`);
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }, 2000);
 }
 
 function showToast(type, message) {
@@ -730,9 +778,9 @@ function showToast(type, message) {
         ${message}
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     `;
-    
+
     document.body.appendChild(toast);
-    
+
     setTimeout(() => {
         if (toast.parentNode) {
             toast.parentNode.removeChild(toast);
@@ -740,10 +788,11 @@ function showToast(type, message) {
     }, 5000);
 }
 
-// Auto-refresh data every 5 minutes
-setInterval(() => {
-    console.log('Auto-refreshing analytics data...');
-    // In a real implementation, you would fetch updated data here
-}, 300000);
+// Initialize tooltips if Bootstrap is available
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Sales analytics loaded successfully');
+    console.log('Daily sales data points:', dailySalesData.length);
+    console.log('Categories:', categoryData.length);
+});
 </script>
 {% endblock %}

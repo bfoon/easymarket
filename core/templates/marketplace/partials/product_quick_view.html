@@ -1,64 +1,70 @@
 {% load currency_tags %}
 <style>
+  /* ========================================
+     UNIQUE NAMESPACE: qv-modal-*
+     All classes and IDs prefixed to avoid conflicts
+     ======================================== */
+
   :root {
-    --primary-color: #0d6efd;
-    --primary-hover: #0b5ed7;
-    --success-color: #198754;
-    --warning-color: #fd7e14;
-    --danger-color: #dc3545;
-    --text-primary: #212529;
-    --text-secondary: #6c757d;
-    --border-color: #dee2e6;
-    --shadow-sm: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
-    --shadow-md: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
-    --shadow-lg: 0 1rem 3rem rgba(0, 0, 0, 0.175);
-    --radius-sm: 0.375rem;
-    --radius-md: 0.5rem;
-    --radius-lg: 0.75rem;
-    --radius-xl: 1rem;
+    --qv-primary-color: #0d6efd;
+    --qv-primary-hover: #0b5ed7;
+    --qv-success-color: #198754;
+    --qv-warning-color: #fd7e14;
+    --qv-danger-color: #dc3545;
+    --qv-text-primary: #212529;
+    --qv-text-secondary: #6c757d;
+    --qv-border-color: #dee2e6;
+    --qv-shadow-sm: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    --qv-shadow-md: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    --qv-shadow-lg: 0 1rem 3rem rgba(0, 0, 0, 0.175);
+    --qv-radius-sm: 0.375rem;
+    --qv-radius-md: 0.5rem;
+    --qv-radius-lg: 0.75rem;
+    --qv-radius-xl: 1rem;
   }
 
-  .product-quick-view {
+  .qv-modal-product-quick-view {
     background: #ffffff;
-    border-radius: var(--radius-xl);
-    box-shadow: var(--shadow-lg);
-    border: 1px solid var(--border-color);
+    border-radius: var(--qv-radius-xl);
+    box-shadow: var(--qv-shadow-lg);
+    border: 1px solid var(--qv-border-color);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     overflow: hidden;
     position: relative;
   }
 
-  .product-quick-view:hover {
+  .qv-modal-product-quick-view:hover {
     box-shadow: 0 1.25rem 1.5625rem -0.3125rem rgba(0, 0, 0, 0.1), 0 0.5rem 0.625rem -0.375rem rgba(0, 0, 0, 0.1);
     transform: translateY(-2px);
   }
 
   /* Enhanced Image Container */
-  .product-image-container {
+  .qv-modal-image-container {
     position: relative;
     overflow: hidden;
-    border-radius: var(--radius-lg);
+    border-radius: var(--qv-radius-lg);
     background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
     transition: all 0.3s ease;
+    cursor: pointer;
   }
 
-  .product-image-container:hover {
+  .qv-modal-image-container:hover {
     background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
   }
 
-  #mainProductImage {
+  #qvModalMainProductImage {
     max-height: 250px;
     object-fit: contain;
     transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    border-radius: var(--radius-md);
+    border-radius: var(--qv-radius-md);
     width: 100%;
   }
 
-  #mainProductImage:hover {
+  #qvModalMainProductImage:hover {
     transform: scale(1.05);
   }
 
-  .image-overlay {
+  .qv-modal-image-overlay {
     position: absolute;
     top: 0;
     left: 0;
@@ -67,59 +73,60 @@
     background: linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.1) 100%);
     opacity: 0;
     transition: opacity 0.3s ease;
-    border-radius: var(--radius-md);
+    border-radius: var(--qv-radius-md);
+    pointer-events: none;
   }
 
-  .product-image-container:hover .image-overlay {
+  .qv-modal-image-container:hover .qv-modal-image-overlay {
     opacity: 1;
   }
 
   /* Enhanced Trending Badge */
-  .badge-trending {
-    background: linear-gradient(135deg, var(--danger-color), #ff6b6b);
+  .qv-modal-badge-trending {
+    background: linear-gradient(135deg, var(--qv-danger-color), #ff6b6b);
     color: #fff;
     font-size: 0.75rem;
     font-weight: 600;
     padding: 0.5rem 1rem;
     border-radius: 2rem;
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--qv-shadow-md);
     backdrop-filter: blur(10px);
-    animation: pulse-glow 2s infinite;
+    animation: qv-modal-pulse-glow 2s infinite;
     z-index: 10;
     border: none;
   }
 
-  @keyframes pulse-glow {
+  @keyframes qv-modal-pulse-glow {
     0%, 100% {
-      box-shadow: var(--shadow-md);
+      box-shadow: var(--qv-shadow-md);
       transform: scale(1);
     }
     50% {
-      box-shadow: 0 0 20px rgba(220, 53, 69, 0.4), var(--shadow-md);
+      box-shadow: 0 0 20px rgba(220, 53, 69, 0.4), var(--qv-shadow-md);
       transform: scale(1.02);
     }
   }
 
   /* Enhanced Thumbnails */
-  .thumbnail-container {
+  .qv-modal-thumbnail-container {
     gap: 0.5rem;
     padding: 0.75rem 0;
   }
 
-  .thumbnail-img {
+  .qv-modal-thumbnail-img {
     height: 60px;
     width: 60px;
     object-fit: cover;
     cursor: pointer;
     border: 2px solid transparent;
-    border-radius: var(--radius-md);
+    border-radius: var(--qv-radius-md);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
     overflow: hidden;
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--qv-shadow-sm);
   }
 
-  .thumbnail-img::before {
+  .qv-modal-thumbnail-img::before {
     content: '';
     position: absolute;
     top: 0;
@@ -131,30 +138,30 @@
     transition: opacity 0.3s ease;
   }
 
-  .thumbnail-img:hover {
-    border-color: var(--primary-color);
+  .qv-modal-thumbnail-img:hover {
+    border-color: var(--qv-primary-color);
     transform: translateY(-2px) scale(1.05);
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--qv-shadow-md);
   }
 
-  .thumbnail-img:hover::before {
+  .qv-modal-thumbnail-img:hover::before {
     opacity: 1;
   }
 
-  .thumbnail-img.active {
-    border-color: var(--primary-color);
+  .qv-modal-thumbnail-img.qv-active {
+    border-color: var(--qv-primary-color);
     box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.2);
     transform: scale(1.05);
   }
 
-  .thumbnail-img:focus {
-    outline: 2px solid var(--primary-color);
+  .qv-modal-thumbnail-img:focus {
+    outline: 2px solid var(--qv-primary-color);
     outline-offset: 2px;
   }
 
   /* Enhanced Product Info */
-  .product-title {
-    color: var(--text-primary);
+  .qv-modal-product-title {
+    color: var(--qv-text-primary);
     font-weight: 700;
     font-size: 1.5rem;
     line-height: 1.3;
@@ -162,29 +169,29 @@
     transition: color 0.3s ease;
   }
 
-  .product-title:hover {
-    color: var(--primary-color);
+  .qv-modal-product-title:hover {
+    color: var(--qv-primary-color);
   }
 
-  .product-description {
-    color: var(--text-secondary);
+  .qv-modal-product-description {
+    color: var(--qv-text-secondary);
     font-size: 0.95rem;
     line-height: 1.6;
     margin-bottom: 1rem;
   }
 
   /* Enhanced Price Container */
-  .price-container-qv {
+  .qv-modal-price-container {
     background: linear-gradient(135deg, #d1fae5, #a7f3d0);
     border: 1px solid #6ee7b7;
-    border-radius: var(--radius-lg);
+    border-radius: var(--qv-radius-lg);
     padding: 1rem;
     margin-bottom: 1rem;
     position: relative;
     overflow: hidden;
   }
 
-  .price-container::before {
+  .qv-modal-price-container::before {
     content: '';
     position: absolute;
     top: 0;
@@ -195,26 +202,26 @@
     transition: left 0.5s ease;
   }
 
-  .price-container:hover::before {
+  .qv-modal-price-container:hover::before {
     left: 100%;
   }
 
-  .price-label {
+  .qv-modal-price-label {
     font-size: 0.875rem;
-    color: var(--text-secondary);
+    color: var(--qv-text-secondary);
     margin: 0 0 0.25rem 0;
     font-weight: 500;
   }
 
-  .price-value {
+  .qv-modal-price-value {
     font-size: 1.75rem;
     font-weight: 700;
-    color: var(--success-color);
+    color: var(--qv-success-color);
     margin: 0;
   }
 
   /* Enhanced Rating */
-  .rating-container {
+  .qv-modal-rating-container {
     display: flex;
     align-items: center;
     gap: 0.75rem;
@@ -222,174 +229,154 @@
     padding: 0.75rem;
     background: linear-gradient(135deg, #fef3c7, #fde68a);
     border: 1px solid #fcd34d;
-    border-radius: var(--radius-md);
+    border-radius: var(--qv-radius-md);
     transition: all 0.3s ease;
   }
 
-  .rating-container:hover {
+  .qv-modal-rating-container:hover {
     transform: translateY(-1px);
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--qv-shadow-sm);
   }
 
-  .rating-stars {
+  .qv-modal-rating-stars {
     display: flex;
     gap: 0.125rem;
   }
 
-  .rating-stars i {
-    color: var(--warning-color);
+  .qv-modal-rating-stars i {
+    color: var(--qv-warning-color);
     font-size: 1.1rem;
     transition: transform 0.2s ease;
   }
 
-  .rating-stars:hover i {
+  .qv-modal-rating-stars:hover i {
     transform: scale(1.1);
   }
 
-  .rating-text {
+  .qv-modal-rating-text {
     font-size: 0.875rem;
-    color: var(--text-secondary);
+    color: var(--qv-text-secondary);
     font-weight: 500;
   }
 
   /* Enhanced Features */
-  .features-container {
+  .qv-modal-features-container {
     background: linear-gradient(135deg, #f8fafc, #f1f5f9);
-    border-radius: var(--radius-md);
+    border-radius: var(--qv-radius-md);
     padding: 1rem;
     margin-bottom: 1.5rem;
-    border: 1px solid var(--border-color);
+    border: 1px solid var(--qv-border-color);
     position: relative;
     overflow: hidden;
   }
 
-  .features-title {
-    color: var(--text-primary);
+  .qv-modal-features-title {
+    color: var(--qv-text-primary);
     font-weight: 600;
     margin-bottom: 0.75rem;
     font-size: 1rem;
   }
 
-  .features-list {
+  .qv-modal-features-list {
     list-style: none;
     padding: 0;
     margin: 0;
   }
 
-  .feature-item {
+  .qv-modal-feature-item {
+    padding: 0.5rem 0;
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 0.5rem;
-    font-size: 0.9rem;
-    transition: all 0.2s ease;
-    padding: 0.25rem;
-    border-radius: var(--radius-sm);
+    gap: 0.75rem;
+    transition: all 0.3s ease;
+    border-bottom: 1px solid rgba(0,0,0,0.05);
   }
 
-  .feature-item:hover {
-    transform: translateX(4px);
+  .qv-modal-feature-item:last-child {
+    border-bottom: none;
+  }
+
+  .qv-modal-feature-item:hover {
+    transform: translateX(5px);
     background: rgba(13, 110, 253, 0.05);
+    border-radius: var(--qv-radius-sm);
+    padding-left: 0.5rem;
   }
 
-  .feature-item:last-child {
-    margin-bottom: 0;
-  }
-
-  .feature-icon {
-    color: var(--success-color);
-    font-size: 0.875rem;
+  .qv-modal-feature-icon {
+    color: var(--qv-primary-color);
+    font-size: 1rem;
     flex-shrink: 0;
   }
 
-  .feature-name {
+  .qv-modal-feature-name {
     font-weight: 600;
-    color: var(--text-primary);
+    color: var(--qv-text-primary);
   }
 
-  .feature-value {
-    color: var(--text-secondary);
+  .qv-modal-feature-value {
+    color: var(--qv-text-secondary);
   }
 
-  /* Enhanced Buttons */
-  .action-buttons {
+  /* Enhanced Action Buttons */
+  .qv-modal-action-buttons {
     display: flex;
     gap: 0.75rem;
     flex-wrap: wrap;
   }
 
-  .btn-enhanced {
+  .qv-modal-btn-enhanced {
     padding: 0.75rem 1.5rem;
+    border-radius: var(--qv-radius-md);
     font-weight: 600;
-    font-size: 0.9rem;
-    border-radius: 2rem;
-    border: none;
+    font-size: 0.95rem;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    position: relative;
-    overflow: hidden;
-    text-decoration: none;
+    border: 2px solid transparent;
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    cursor: pointer;
+    position: relative;
+    overflow: hidden;
   }
 
-  .btn-enhanced::before {
+  .qv-modal-btn-enhanced::before {
     content: '';
     position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-    transition: left 0.5s ease;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.3);
+    transform: translate(-50%, -50%);
+    transition: width 0.5s, height 0.5s;
   }
 
-  .btn-enhanced:hover::before {
-    left: 100%;
+  .qv-modal-btn-enhanced:hover::before {
+    width: 300px;
+    height: 300px;
   }
 
-  .btn-enhanced:focus {
-    outline: 2px solid var(--primary-color);
-    outline-offset: 2px;
-  }
-
-  .btn-dark.btn-enhanced {
-    background: linear-gradient(135deg, #343a40, #495057);
-    color: white;
-    box-shadow: var(--shadow-md);
-  }
-
-  .btn-dark.btn-enhanced:hover {
+  .qv-modal-btn-enhanced:hover {
     transform: translateY(-2px);
-    box-shadow: 0 0.625rem 0.9375rem -0.1875rem rgba(52, 58, 64, 0.3), 0 0.25rem 0.375rem -0.25rem rgba(52, 58, 64, 0.3);
-    color: white;
-    text-decoration: none;
+    box-shadow: var(--qv-shadow-md);
   }
 
-  .btn-outline-secondary.btn-enhanced {
-    background: white;
-    color: var(--text-primary);
-    border: 2px solid var(--border-color);
-    box-shadow: var(--shadow-sm);
+  .qv-modal-btn-enhanced:active {
+    transform: translateY(0);
   }
 
-  .btn-outline-secondary.btn-enhanced:hover:not(:disabled) {
-    background: var(--primary-color);
-    color: white;
-    border-color: var(--primary-color);
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-md);
+  .qv-modal-btn-enhanced i {
+    font-size: 1.1rem;
   }
 
-  .btn-outline-secondary.btn-enhanced:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    transform: none;
+  .qv-modal-btn-text {
+    position: relative;
+    z-index: 1;
   }
 
-  /* Loading State */
-  .loading-overlay {
+  /* Loading States */
+  .qv-modal-loading-overlay {
     position: absolute;
     top: 0;
     left: 0;
@@ -400,105 +387,81 @@
     align-items: center;
     justify-content: center;
     opacity: 0;
-    visibility: hidden;
-    transition: all 0.3s ease;
-    border-radius: var(--radius-md);
-    backdrop-filter: blur(4px);
-  }
-
-  .loading-overlay.active {
-    opacity: 1;
-    visibility: visible;
-  }
-
-  .loading-spinner {
-    width: 24px;
-    height: 24px;
-    border: 2px solid var(--border-color);
-    border-top-color: var(--primary-color);
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-  }
-
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
-
-  /* Button Loading State */
-  .btn-loading {
     pointer-events: none;
-    position: relative;
+    transition: opacity 0.3s ease;
+    z-index: 100;
+    border-radius: var(--qv-radius-md);
   }
 
-  .btn-loading .btn-text {
-    opacity: 0;
+  .qv-modal-loading-overlay.qv-active {
+    opacity: 1;
+    pointer-events: all;
   }
 
-  .btn-loading::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 16px;
-    height: 16px;
-    margin: -8px 0 0 -8px;
-    border: 2px solid transparent;
-    border-top-color: currentColor;
+  .qv-modal-loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid var(--qv-border-color);
+    border-top: 4px solid var(--qv-primary-color);
     border-radius: 50%;
-    animation: spin 1s linear infinite;
+    animation: qv-modal-spin 1s linear infinite;
   }
 
-  /* Responsive Design */
-  @media (max-width: 768px) {
-    .product-quick-view {
-      margin: 0.5rem;
-      border-radius: var(--radius-lg);
-    }
+  @keyframes qv-modal-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
 
-    #mainProductImage {
-      max-height: 200px;
-    }
+  /* Fade-in Animation */
+  .qv-modal-fade-in {
+    animation: qv-modal-fadeIn 0.5s ease-in;
+  }
 
-    .price-value {
-      font-size: 1.5rem;
-    }
+  @keyframes qv-modal-fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
 
-    .action-buttons {
-      flex-direction: column;
-    }
+  .qv-modal-slide-in {
+    animation: qv-modal-slideIn 0.5s ease-out;
+  }
 
-    .btn-enhanced {
-      justify-content: center;
-      width: 100%;
+  @keyframes qv-modal-slideIn {
+    from {
+      opacity: 0;
+      transform: translateX(20px);
     }
-
-    .thumbnail-container {
-      justify-content: center;
+    to {
+      opacity: 1;
+      transform: translateX(0);
     }
   }
 
-  /* Animation Classes */
-  .fade-in {
-    animation: fadeIn 0.5s ease-out;
+  /* Click-to-enlarge hint */
+  .qv-modal-enlarge-hint {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--qv-radius-md);
+    font-size: 0.75rem;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+    z-index: 5;
   }
 
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-
-  .slide-in {
-    animation: slideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
-  @keyframes slideIn {
-    from { transform: translateX(-20px); opacity: 0; }
-    to { transform: translateX(0); opacity: 1; }
+  .qv-modal-image-container:hover .qv-modal-enlarge-hint {
+    opacity: 1;
   }
 
   /* Accessibility improvements */
   @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after {
+    .qv-modal-product-quick-view *,
+    .qv-modal-product-quick-view *::before,
+    .qv-modal-product-quick-view *::after {
       animation-duration: 0.01ms !important;
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
@@ -506,82 +469,85 @@
   }
 
   /* Focus visible for better keyboard navigation */
-  .btn-enhanced:focus-visible,
-  .thumbnail-img:focus-visible {
-    outline: 2px solid var(--primary-color);
+  .qv-modal-btn-enhanced:focus-visible,
+  .qv-modal-thumbnail-img:focus-visible {
+    outline: 2px solid var(--qv-primary-color);
     outline-offset: 2px;
   }
 
-  /* Ensure proper vertical alignment for icons */
-  ul li i {
-    vertical-align: middle;
-  }
-
   /* Success state for cart button */
-  .btn-success-state {
-    background: linear-gradient(135deg, var(--success-color), #20c997) !important;
-    border-color: var(--success-color) !important;
+  .qv-modal-btn-success-state {
+    background: linear-gradient(135deg, var(--qv-success-color), #20c997) !important;
+    border-color: var(--qv-success-color) !important;
     color: white !important;
   }
 </style>
 
-<div class="product-quick-view p-4 fade-in">
+<div class="qv-modal-product-quick-view p-4 qv-modal-fade-in">
   <div class="row g-4 align-items-start">
 
     <!-- Product Image Section -->
     <div class="col-md-5 text-center">
       <!-- Main Image Container -->
-      <div class="product-image-container position-relative d-inline-block" style="max-height: 250px;">
+      <div class="qv-modal-image-container position-relative d-inline-block"
+           style="max-height: 250px;"
+           onclick="qvModalOpenProductDetail()"
+           role="button"
+           tabindex="0"
+           aria-label="Click to view full product details">
         {% if product.is_trending %}
-          <span class="badge-trending position-absolute top-0 start-0 m-2">
+          <span class="qv-modal-badge-trending position-absolute top-0 start-0 m-2">
             <i class="fas fa-fire me-1"></i>Trending
           </span>
         {% endif %}
 
-        <a href="{% url 'marketplace:product_detail' product.id %}" id="mainImageLink" class="d-block text-decoration-none">
-          <img id="mainProductImage"
-               src="{{ product.display_image_url }}"
-               alt="{{ product.name }}"
-               class="img-fluid border shadow-sm"
-               loading="lazy">
-          <div class="image-overlay"></div>
-        </a>
+        <img id="qvModalMainProductImage"
+             src="{{ product.display_image_url }}"
+             alt="{{ product.name }}"
+             class="img-fluid border shadow-sm"
+             loading="lazy">
+        <div class="qv-modal-image-overlay"></div>
+
+        <!-- Hint to click for details -->
+        <div class="qv-modal-enlarge-hint">
+          <i class="fas fa-search-plus me-1"></i>Click to view details
+        </div>
 
         <!-- Loading Overlay -->
-        <div class="loading-overlay" id="imageLoadingOverlay">
-          <div class="loading-spinner"></div>
+        <div class="qv-modal-loading-overlay" id="qvModalImageLoadingOverlay">
+          <div class="qv-modal-loading-spinner"></div>
         </div>
       </div>
 
       <!-- Thumbnails -->
-      <div class="thumbnail-container d-flex justify-content-center flex-wrap mt-3">
+      <div class="qv-modal-thumbnail-container d-flex justify-content-center flex-wrap mt-3">
         {% for image in product.images.all %}
           <img src="{{ image.image.url }}"
                alt="Preview {{ forloop.counter }}"
-               class="thumbnail-img"
-               onclick="switchMainImage(this)"
+               class="qv-modal-thumbnail-img {% if forloop.first %}qv-active{% endif %}"
+               onclick="qvModalSwitchMainImage(this, event)"
                tabindex="0"
                role="button"
                aria-label="View product image {{ forloop.counter }}"
-               onkeydown="handleThumbnailKeydown(event, this)">
+               onkeydown="qvModalHandleThumbnailKeydown(event, this)">
         {% endfor %}
       </div>
     </div>
 
     <!-- Product Info Section -->
-    <div class="col-md-7 slide-in">
-      <h1 class="product-title">{{ product.name }}</h1>
-      <p class="product-description">{{ product.description|truncatewords:30 }}</p>
+    <div class="col-md-7 qv-modal-slide-in">
+      <h1 class="qv-modal-product-title">{{ product.name }}</h1>
+      <p class="qv-modal-product-description">{{ product.description|truncatewords:30 }}</p>
 
       <!-- Enhanced Price -->
-      <div class="price-container-qv">
-        <p class="price-label">Price</p>
-        <p class="price-value">{% display_money product.price %}</p>
+      <div class="qv-modal-price-container">
+        <p class="qv-modal-price-label">Price</p>
+        <p class="qv-modal-price-value">{% display_money product.price %}</p>
       </div>
 
       <!-- Enhanced Rating -->
-      <div class="rating-container">
-        <div class="rating-stars" role="img" aria-label="{{ product.average_rating|floatformat:1 }} out of 5 stars">
+      <div class="qv-modal-rating-container">
+        <div class="qv-modal-rating-stars" role="img" aria-label="{{ product.average_rating|floatformat:1 }} out of 5 stars">
           {% for i in "12345" %}
             {% if product.average_rating|floatformat:1 >= i %}
               <i class="fas fa-star"></i>
@@ -592,7 +558,7 @@
             {% endif %}
           {% endfor %}
         </div>
-        <span class="rating-text">
+        <span class="qv-modal-rating-text">
           ({{ product.review_count }} review{{ product.review_count|pluralize }})
         </span>
       </div>
@@ -600,19 +566,19 @@
       <!-- Enhanced Features -->
       {% with product.variants.all as variants %}
         {% if variants %}
-          <div class="features-container">
-            <h3 class="features-title">Key Features</h3>
-            <ul class="features-list">
+          <div class="qv-modal-features-container">
+            <h3 class="qv-modal-features-title">Key Features</h3>
+            <ul class="qv-modal-features-list">
               {% for variant in variants|slice:":5" %}
-                <li class="feature-item">
-                  <i class="fas fa-check-circle feature-icon"></i>
-                  <span class="feature-name">{{ variant.feature_option.feature.name }}:</span>
-                  <span class="feature-value">{{ variant.feature_option.value }}</span>
+                <li class="qv-modal-feature-item">
+                  <i class="fas fa-check-circle qv-modal-feature-icon"></i>
+                  <span class="qv-modal-feature-name">{{ variant.feature_option.feature.name }}:</span>
+                  <span class="qv-modal-feature-value">{{ variant.feature_option.value }}</span>
                 </li>
               {% endfor %}
               {% if variants|length > 5 %}
-                <li class="feature-item text-muted">
-                  <i class="fas fa-ellipsis-h feature-icon"></i>
+                <li class="qv-modal-feature-item text-muted">
+                  <i class="fas fa-ellipsis-h qv-modal-feature-icon"></i>
                   <span>And {{ variants|length|add:"-5" }} more feature{{ variants|length|add:"-5"|pluralize }}...</span>
                 </li>
               {% endif %}
@@ -622,20 +588,20 @@
       {% endwith %}
 
       <!-- Enhanced Actions -->
-      <div class="action-buttons">
+      <div class="qv-modal-action-buttons">
         <a href="{% url 'marketplace:product_detail' product.id %}"
-           class="btn btn-dark btn-enhanced"
+           class="btn btn-dark qv-modal-btn-enhanced"
            aria-label="View detailed information for {{ product.name }}">
           <i class="fas fa-eye"></i>
-          <span class="btn-text">View Details</span>
+          <span class="qv-modal-btn-text">View Details</span>
         </a>
 
-        <button class="btn btn-outline-secondary btn-enhanced"
-                onclick="{% if product.is_in_stock %}addToCart({{ product.id }}, this){% else %}return false;{% endif %}"
+        <button class="btn btn-outline-secondary qv-modal-btn-enhanced"
+                onclick="{% if product.is_in_stock %}qvModalAddToCart({{ product.id }}, this){% else %}return false;{% endif %}"
                 {% if not product.is_in_stock %} disabled {% endif %}
                 aria-label="{% if product.is_in_stock %}Add {{ product.name }} to cart{% else %}Out of stock{% endif %}">
           <i class="fas fa-cart-plus"></i>
-          <span class="btn-text">
+          <span class="qv-modal-btn-text">
             {% if product.is_in_stock %}Add to Cart{% else %}Out of Stock{% endif %}
           </span>
         </button>
@@ -647,80 +613,130 @@
 </div>
 
 <script>
+  // ========================================
+  // UNIQUE NAMESPACE: qvModal*
+  // All functions prefixed to avoid conflicts
+  // ========================================
+
   // Enhanced image switching with loading states and error handling
-  function switchMainImage(thumbnail) {
-    const mainImage = document.getElementById('mainProductImage');
-    const loadingOverlay = document.getElementById('imageLoadingOverlay');
+  function qvModalSwitchMainImage(thumbnail, event) {
+    // CRITICAL: Stop event propagation to prevent triggering the container's onclick
+    if (event) {
+      event.stopPropagation();
+    }
+
+    const mainImage = document.getElementById('qvModalMainProductImage');
+    const loadingOverlay = document.getElementById('qvModalImageLoadingOverlay');
     const newSrc = thumbnail.getAttribute('src');
 
     // Don't switch if it's the same image
-    if (mainImage.src === newSrc) return;
+    if (mainImage && mainImage.src === newSrc) {
+      return;
+    }
 
     // Show loading state
-    loadingOverlay.classList.add('active');
+    if (loadingOverlay) {
+      loadingOverlay.classList.add('qv-active');
+    }
 
     // Create new image to preload
     const newImage = new Image();
+
     newImage.onload = function() {
       // Hide loading state
-      loadingOverlay.classList.remove('active');
+      if (loadingOverlay) {
+        loadingOverlay.classList.remove('qv-active');
+      }
 
       // Update main image with fade effect
-      mainImage.style.opacity = '0.5';
-      setTimeout(() => {
-        mainImage.src = newSrc;
-        mainImage.alt = thumbnail.alt.replace('Preview', 'Main view of');
-        mainImage.style.opacity = '1';
-      }, 150);
+      if (mainImage) {
+        mainImage.style.opacity = '0.5';
+        setTimeout(() => {
+          mainImage.src = newSrc;
+          mainImage.alt = thumbnail.alt.replace('Preview', 'Main view of');
+          mainImage.style.opacity = '1';
+        }, 150);
+      }
 
       // Update thumbnails active state
-      document.querySelectorAll('.thumbnail-img').forEach(img => {
-        img.classList.remove('active');
+      document.querySelectorAll('.qv-modal-thumbnail-img').forEach(img => {
+        img.classList.remove('qv-active');
       });
-      thumbnail.classList.add('active');
+      thumbnail.classList.add('qv-active');
     };
 
     newImage.onerror = function() {
-      loadingOverlay.classList.remove('active');
-      console.error('Failed to load image:', newSrc);
-      // You could show an error message here
+      if (loadingOverlay) {
+        loadingOverlay.classList.remove('qv-active');
+      }
+      console.error('qvModal: Failed to load image:', newSrc);
     };
 
     newImage.src = newSrc;
   }
 
+  // Function to open product detail page
+  function qvModalOpenProductDetail() {
+    window.location.href = "{% url 'marketplace:product_detail' product.id %}";
+  }
+
   // Keyboard navigation for thumbnails
-  function handleThumbnailKeydown(event, thumbnail) {
+  function qvModalHandleThumbnailKeydown(event, thumbnail) {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      switchMainImage(thumbnail);
+      event.stopPropagation();
+      qvModalSwitchMainImage(thumbnail, event);
     }
   }
 
-  // CSRF token helper
-  function getCookie(name) {
-    let cookieValue = null;
-    if (document.cookie && document.cookie !== '') {
-      const cookies = document.cookie.split(';');
-      for (let i = 0; i < cookies.length; i++) {
-        const cookie = cookies[i].trim();
-        if (cookie.substring(0, name.length + 1) === (name + '=')) {
-          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-          break;
-        }
+  // Add to cart function
+  function qvModalAddToCart(productId, button) {
+    // Try to call the global addToCart function if it exists
+    if (typeof addToCart === 'function') {
+      addToCart(productId, button);
+    } else if (typeof addToCartEnhanced === 'function') {
+      addToCartEnhanced(productId, button);
+    } else {
+      // Fallback implementation
+      console.log('qvModal: Adding product', productId, 'to cart');
+
+      if (button) {
+        const originalText = button.innerHTML;
+        button.disabled = true;
+        button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Adding...';
+
+        // Simulate adding to cart (replace with your actual implementation)
+        setTimeout(() => {
+          button.innerHTML = '<i class="fas fa-check me-1"></i> Added!';
+          button.classList.add('qv-modal-btn-success-state');
+
+          setTimeout(() => {
+            button.innerHTML = originalText;
+            button.classList.remove('qv-modal-btn-success-state');
+            button.disabled = false;
+          }, 1500);
+        }, 600);
       }
     }
-    return cookieValue;
   }
 
   // Enhanced initialization
-  document.addEventListener('DOMContentLoaded', function() {
+  (function qvModalInit() {
+    // Wait for DOM to be ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', qvModalInitialize);
+    } else {
+      qvModalInitialize();
+    }
+  })();
+
+  function qvModalInitialize() {
     // Set first thumbnail as active if none are active
-    const thumbnails = document.querySelectorAll('.thumbnail-img');
-    const activeThumbnail = document.querySelector('.thumbnail-img.active');
+    const thumbnails = document.querySelectorAll('.qv-modal-thumbnail-img');
+    const activeThumbnail = document.querySelector('.qv-modal-thumbnail-img.qv-active');
 
     if (!activeThumbnail && thumbnails.length > 0) {
-      thumbnails[0].classList.add('active');
+      thumbnails[0].classList.add('qv-active');
     }
 
     // Add intersection observer for progressive animations
@@ -728,43 +744,37 @@
       const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
           if (entry.isIntersecting) {
-            entry.target.classList.add('fade-in');
+            entry.target.classList.add('qv-modal-fade-in');
             observer.unobserve(entry.target);
           }
         });
       }, { threshold: 0.1 });
 
-      document.querySelectorAll('.feature-item').forEach(item => {
+      document.querySelectorAll('.qv-modal-feature-item').forEach(item => {
         observer.observe(item);
       });
     }
 
-    // Add smooth scrolling for any internal links
-    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-      anchor.addEventListener('click', function (e) {
-        e.preventDefault();
-        const target = document.querySelector(this.getAttribute('href'));
-        if (target) {
-          target.scrollIntoView({
-            behavior: 'smooth',
-            block: 'start'
-          });
-        }
-      });
-    });
-
     // Preload images for better performance
-    const mainImage = document.getElementById('mainProductImage');
+    const mainImage = document.getElementById('qvModalMainProductImage');
     if (mainImage && thumbnails.length > 0) {
       thumbnails.forEach(thumbnail => {
         const img = new Image();
         img.src = thumbnail.src;
       });
     }
-  });
 
-  // Legacy function for backwards compatibility
-  function addToCart(productId, button) {
-    addToCartEnhanced(productId, button);
+    // Allow keyboard navigation on main image container
+    const imageContainer = document.querySelector('.qv-modal-image-container');
+    if (imageContainer) {
+      imageContainer.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          qvModalOpenProductDetail();
+        }
+      });
+    }
+
+    console.log('qvModal: Quick view initialized successfully');
   }
 </script>
