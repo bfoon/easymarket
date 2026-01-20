@@ -18,8 +18,8 @@ urlpatterns = [
     path("explore/more/", views.explore_more, name="explore_more"),
 
     # Cart
-    path('cart/', views.cart_view, name='cart'),                  # primary
-    path('cart/view/', views.cart_view, name='cart_view'),        # optional alias (kept to avoid breaking links)
+    path('cart/', views.cart_view, name='cart'),  # primary
+    path('cart/view/', views.cart_view, name='cart_view'),  # optional alias (kept to avoid breaking links)
     path('cart/preview/', views.cart_preview, name='cart_preview'),
 
     path('add-to-cart/<int:product_id>/', views.add_to_cart, name='add_to_cart'),
@@ -63,19 +63,27 @@ urlpatterns = [
 
     path("shipping/", views.shipping_info, name="shipping_info"),
 
+    # Social Cart URLs
     path('cart/social/create/', social_cart.create_social_cart, name='create_social_cart'),
     path('cart/invite/send/', social_cart.send_cart_invite, name='send_cart_invite'),
     path('cart/invite/join/<str:invite_code>/', social_cart.join_open_social_cart, name='join_open_social_cart'),
     path('cart/invite/accept/<str:code>/', social_cart.accept_cart_invite, name='accept_cart_invite'),
     path('cart/share/set/', social_cart.set_share, name='set_share'),
     path('cart/pay/start/', social_cart.start_my_payment, name='start_my_payment'),
-    path('cart/member/leave/', social_cart.leave_cart, name='leave_cart'),
+    path('cart/member/leave/', social_cart.leave_cart, name='leave_social_cart'),
     path('cart/member/remove/<int:member_id>/', social_cart.remove_member, name='remove_member'),  # owner-only
     path("cart/split/set/", social_cart.set_split_mode, name="set_split_mode"),
+    path('cart/social/status/', social_cart.social_cart_status, name='social_cart_status'),
+    path("cart/social/live/", social_cart.social_cart_live, name="social_cart_live"),
+
+    # Member approval/rejection URLs - matching template names
+    path('cart/member/approve/<int:member_id>/', social_cart.approve_member, name='approve_social_member'),
+    path('cart/member/reject/<int:member_id>/', social_cart.reject_member, name='reject_social_member'),
+    path('cart/member/block/<int:member_id>/', social_cart.block_member, name='block_member'),
+    path("social-cart/set-checkout-members/", social_cart.set_checkout_members, name="set_checkout_members"),
+
 
     # Campaign URLs
     path('campaigns/<slug:slug>/', views.campaign_detail, name='campaign_detail'),
     path('campaigns/<slug:slug>/spin/', views.spin_wheel, name='spin_wheel')
-
-
 ]

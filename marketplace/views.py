@@ -7,7 +7,7 @@ from .models import (Category, Product, ProductView,
                      SearchHistory, PopularSearch, ProductFeature, ProductImage,
                      ProductFeatureOption, ProductVariant, SharedCart, SocialCart, CartMember, PaymentShare,
                      Career, CareerApplication, PressRelease, InvestorDocument, InvestorEvent,
-                     Campaign, CampaignProduct, WheelSpin )
+                     Campaign, CampaignProduct, WheelSpin)
 from chat.models import ChatThread, ChatMessage
 from analytics.models import CartEvent
 from analytics.services import track_event
@@ -40,7 +40,6 @@ from datetime import datetime
 from django.utils import timezone
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.db.models import Q, Count, F, Sum, Avg
-from decimal import Decimal
 from django.contrib import messages
 from collections import Counter
 from accounts.utils import log_admin_action
@@ -82,6 +81,7 @@ def _track_cart_event(request, event: str):
         )
     except Exception:
         pass
+
 
 def all_products(request):
     """
@@ -551,11 +551,35 @@ def campaign_detail(request, slug):
 
 
 @require_GET
+@require_GET
 def explore_more(request):
+    """
+    AJAX endpoint for infinite scroll pagination of explore products.
+
+    Returns paginated products sorted by popularity (sold_count) and recency.
+    Includes display images for hover/slide functionality.
+
+    Query Parameters:
+        page (int): Page number (default: 1)
+        per_page (int): Items per page (default: 12)
+
+    Returns:
+        JsonResponse: {
+            'success': bool,
+            'html': str (rendered product cards),
+            'has_next': bool,
+            'next_page': int | None
+        }
+
+    Security:
+        - GET only (enforced by @require_GET)
+        - No authentication required (public product browsing)
+        - Integer coercion prevents injection attacks
+    """
     page = int(request.GET.get("page", "1"))
     per_page = int(request.GET.get("per_page", "12"))
 
-    qs = Product.objects.filter(is_active=True).order_by("-sold_count", "-created_at")
+    qs = with_display_images(Product.objects.filter(is_active=True)).order_by("-sold_count", "-created_at")
     paginator = Paginator(qs, per_page)
     page_obj = paginator.get_page(page)
 
@@ -571,6 +595,7 @@ def explore_more(request):
         "has_next": page_obj.has_next(),
         "next_page": page_obj.next_page_number() if page_obj.has_next() else None,
     })
+
 
 def generate_recommendations(request, recently_viewed):
     recommended_products = []
@@ -858,7 +883,7 @@ def get_more_recommendations(request):
                 'id': product.id,
                 'name': product.name,
                 'price': str(product.price),
-                'image_url': product.display_image_url,   # ✅ primary -> first -> product.image
+                'image_url': product.display_image_url,  # ✅ primary -> first -> product.image
                 'url': product.get_absolute_url if hasattr(product, "get_absolute_url") else f'/products/{product.id}/',
                 'rating': getattr(product, 'average_rating', 0),
                 'is_trending': product.is_trending,
@@ -1063,9 +1088,9 @@ def get_enhanced_collaborative_recommendations(user, recently_viewed):
 
     # Get their recently viewed products
     collaborative_products = Product.objects.filter(is_active=True,
-        productview__user__in=similar_users,
-        productview__viewed_at__gte=timezone.now() - timedelta(days=60)
-    ).exclude(
+                                                    productview__user__in=similar_users,
+                                                    productview__viewed_at__gte=timezone.now() - timedelta(days=60)
+                                                    ).exclude(
         id__in=[p.id for p in recently_viewed]
     ).annotate(
         similarity_score=Count('productview__user', distinct=True)
@@ -1210,6 +1235,7 @@ def get_recommendation_insights(request, recently_viewed):
 
     return insights
 
+
 def serialize_products(products):
     serialized = []
     for product in products:
@@ -1308,9 +1334,84 @@ def product_detail(request, product_id):
             request.session['recently_viewed'] = recently_viewed
 
     # Recommended products
-    recommended_items = Product.objects.filter(
-        category=product.category, is_active=True
-    ).exclude(id=product.id)[:4]
+    # ----------------------------------------------------
+    # Recommended products (Also-bought first, then top-selling in root tree)
+    # ----------------------------------------------------
+    RECOMMENDATION_LIMIT = 12
+
+    # Build category scope: root category of this product, and ALL descendants
+    category_ids = []
+    if product.category:
+        root = product.category.get_root()
+        category_ids = [root.id] + [c.id for c in root.get_all_subcategories()]
+
+    selected_ids = []
+    recommended_items = []
+
+    # 1) PRIORITY: "Bought together" (co-purchased in same orders)
+    try:
+        from orders.models import OrderItem  # import here to avoid circular imports
+
+        order_ids = (
+            OrderItem.objects
+            .filter(product=product)
+            .values_list("order_id", flat=True)
+            .distinct()
+        )
+
+        also_bought_rows = (
+            OrderItem.objects
+            .filter(order_id__in=order_ids)
+            .exclude(product=product)
+            .values("product_id")
+            .annotate(freq=Count("id"))
+            .order_by("-freq")
+        )
+
+        also_bought_ids = [r["product_id"] for r in also_bought_rows]
+
+        if also_bought_ids:
+            also_bought_qs = Product.objects.filter(
+                is_active=True,
+                id__in=also_bought_ids,
+            ).exclude(id=product.id)
+
+            # Keep them relevant: if product has a category tree, constrain to it
+            if category_ids:
+                also_bought_qs = also_bought_qs.filter(category_id__in=category_ids)
+
+            also_bought_qs = with_display_images(also_bought_qs.select_related("category"))
+
+            # Preserve frequency order (because id__in doesn't preserve order)
+            also_bought_map = {p.id: p for p in also_bought_qs}
+            for pid in also_bought_ids:
+                if pid in also_bought_map and pid not in selected_ids:
+                    recommended_items.append(also_bought_map[pid])
+                    selected_ids.append(pid)
+                    if len(recommended_items) >= RECOMMENDATION_LIMIT:
+                        break
+
+    except Exception:
+        # If orders app isn't ready / any issue, just skip also-bought
+        pass
+
+    # 2) FILL: Top-selling in the SAME ROOT TREE (root + descendants)
+    if len(recommended_items) < RECOMMENDATION_LIMIT:
+        fallback_qs = Product.objects.filter(is_active=True).exclude(
+            id__in=[product.id] + selected_ids
+        )
+
+        if category_ids:
+            fallback_qs = fallback_qs.filter(category_id__in=category_ids)
+        elif product.category_id:
+            # If for some reason no tree was built, at least stay in same category
+            fallback_qs = fallback_qs.filter(category_id=product.category_id)
+
+        fallback_qs = with_display_images(
+            fallback_qs.select_related("category").order_by("-sold_count", "-created_at")
+        )[: (RECOMMENDATION_LIMIT - len(recommended_items))]
+
+        recommended_items.extend(list(fallback_qs))
 
     # Featured celebrities
     featured_celebrities = CelebrityFeature.objects.filter(products=product)[:8]
@@ -1414,9 +1515,11 @@ def product_detail(request, product_id):
         'store': seller_store,  # Add this for the template references
     })
 
+
 def product_quick_view(request, product_id):
     product = get_object_or_404(Product, id=product_id, is_active=True)
     return render(request, 'marketplace/partials/product_quick_view.html', {'product': product})
+
 
 def hot_picks(request):
     """
@@ -1450,6 +1553,7 @@ def hot_picks(request):
     return render(request, 'marketplace/hot_picks.html', {
         'hot_products_by_category': hot_products_by_category
     })
+
 
 def used_products_view(request):
     """
@@ -1516,6 +1620,7 @@ def used_products_view(request):
     }
 
     return render(request, 'marketplace/used_products.html', context)
+
 
 def category_products(request, slug):
     """
@@ -1826,7 +1931,9 @@ def category_products_ajax(request, pk):
         }
     })
 
+
 CART_TAX_RATE = getattr(settings, "CART_TAX_RATE", Decimal("0.00"))
+
 
 def _resolve_active_cart_for_user(user):
     """
@@ -1878,10 +1985,10 @@ def _collect_selected_features(request):
         except Exception:
             payload = {}
         selected_features = (
-            payload.get("selected_features")
-            or payload.get("features")
-            or {}
-        ) or {}
+                                    payload.get("selected_features")
+                                    or payload.get("features")
+                                    or {}
+                            ) or {}
         # Ensure dict
         if not isinstance(selected_features, dict):
             selected_features = {}
@@ -1889,8 +1996,8 @@ def _collect_selected_features(request):
 
     # FORM body (x-www-form-urlencoded / multipart)
     raw_feats = (
-        request.POST.get("selected_features")
-        or request.POST.get("features")
+            request.POST.get("selected_features")
+            or request.POST.get("features")
     )
 
     if raw_feats:
@@ -2026,6 +2133,7 @@ def add_to_cart(request, product_id):
         }
     )
 
+
 def cart_preview(request):
     """
     Returns a small HTML snippet (partial) with up to 5 items + subtotal.
@@ -2033,15 +2141,33 @@ def cart_preview(request):
     ctx = build_cart_context(request, limit=5)
     return render(request, "marketplace/partials/cart_preview.html", ctx)
 
+
 def cart_view(request):
     ctx = build_cart_context(request, limit=None)
     return render(request, "marketplace/cart_detail.html", ctx)
 
 
-@csrf_exempt
+@require_GET
 def get_cart_count(request):
     """
-    Returns counts/totals. If user has an active SocialCart, we use that cart.
+    AJAX endpoint to retrieve cart counts and totals.
+
+    Returns cart summary for authenticated users (including social carts) and guests.
+    Calculates subtotal, tax, and final total.
+
+    Returns:
+        JsonResponse: {
+            'success': bool,
+            'cart_count': int (total quantity),
+            'cart_total': str (formatted decimal),
+            'tax_amount': str (formatted decimal),
+            'final_total': str (formatted decimal)
+        }
+
+    Security:
+        - GET only (safe, idempotent operation)
+        - No CSRF needed for GET requests
+        - Handles both authenticated and anonymous users
     """
     CART_TAX_RATE = Decimal("0.085")
 
@@ -2085,9 +2211,11 @@ def get_cart_count(request):
             }
         )
     except Exception as e:
+        logger.error(f"Error in get_cart_count: {str(e)}", exc_info=True)
         return JsonResponse(
-            {"success": False, "message": f"Error getting cart count: {str(e)}"}
+            {"success": False, "message": "Error retrieving cart information"}
         )
+
 
 def get_cart_context(request):
     """
@@ -2119,13 +2247,44 @@ def get_cart_context(request):
     return {"cart_count": cart_count, "cart_total": cart_total}
 
 
-@csrf_exempt
 @require_POST
 def update_cart_quantity(request):
     """
-    Update cart item quantity for authenticated users (prefers SocialCart) and guests.
+    AJAX endpoint to update cart item quantities.
 
-    Analytics: Tracks add_to_cart or remove_from_cart based on action
+    Handles both authenticated users (with SocialCart support) and guest sessions.
+    Tracks analytics events for add/remove actions.
+
+    POST Parameters:
+        cart_item_id (str, optional): For authenticated users
+        product_id (str, optional): Alternative identifier
+        session_key (str, required for guests): Session cart key
+        quantity (int, optional): Exact quantity to set
+        action (str, optional): 'increase' or 'decrease'
+
+    Returns:
+        JsonResponse: {
+            'success': bool,
+            'quantity': int,
+            'subtotal': str,
+            'total_price': str,
+            'tax_amount': str,
+            'final_total': str,
+            'item_count': int,
+            'cart_count': int,
+            'message': str
+        }
+
+    Security:
+        - CSRF protection enabled (removed @csrf_exempt)
+        - Requires valid CSRF token from frontend
+        - Input validation: quantity clamped to 1-99
+        - Ownership validation for authenticated users
+        - Session isolation for guest users
+
+    Note:
+        Frontend must include CSRF token in POST requests:
+        headers: {'X-CSRFToken': getCookie('csrftoken')}
     """
     CART_TAX_RATE = Decimal("0.085")
 
@@ -2310,7 +2469,8 @@ def update_cart_quantity(request):
     except ValueError:
         return JsonResponse({"success": False, "message": "Invalid quantity value"})
     except Exception as e:
-        return JsonResponse({"success": False, "message": f"An error occurred: {str(e)}"})
+        logger.error(f"Error in update_cart_quantity: {str(e)}", exc_info=True)
+        return JsonResponse({"success": False, "message": "Unable to update cart. Please try again."})
 
 
 @require_POST
@@ -2541,19 +2701,44 @@ def toggle_wishlist(request, product_id):
 
 @login_required
 def my_wishlist(request):
-    """Display user's wishlist"""
+    """Display user's wishlist with related product data."""
     items = Wishlist.objects.filter(user=request.user).select_related('product')
     return render(request, 'wishlist/my_wishlist.html', {'items': items})
 
 
-@login_required
-def my_wishlist(request):
-    items = Wishlist.objects.filter(user=request.user).select_related('product')
-    return render(request, 'wishlist/my_wishlist.html', {'items': items})
-
-@csrf_exempt
 @require_POST
 def apply_promo_code(request):
+    """
+    AJAX endpoint to apply promotional codes to cart.
+
+    Validates promo code, calculates discount, and stores in session.
+    Supports both authenticated users and guest carts.
+
+    POST Parameters:
+        promo_code (str): Promotional code to apply (case-insensitive)
+
+    Returns:
+        JsonResponse: {
+            'success': bool,
+            'discount': str (formatted decimal),
+            'total_price': str (subtotal after discount),
+            'tax_amount': str,
+            'final_total': str,
+            'item_count': int,
+            'message': str
+        }
+
+    Security:
+        - CSRF protection enabled (removed @csrf_exempt)
+        - Requires valid CSRF token from frontend
+        - Validates promo code existence and active status
+        - Checks usage limits via is_valid() method
+        - Input sanitization: strip() and upper()
+
+    Note:
+        Frontend must include CSRF token in POST requests:
+        headers: {'X-CSRFToken': getCookie('csrftoken')}
+    """
     try:
         promo_code_str = request.POST.get('promo_code', '').strip().upper()
 
@@ -2634,10 +2819,13 @@ def apply_promo_code(request):
         })
 
     except Exception as e:
+        logger.error(f"Error in apply_promo_code: {str(e)}", exc_info=True)
         return JsonResponse({
             'success': False,
-            'message': f'An error occurred: {str(e)}'
+            'message': 'Unable to apply promo code. Please try again.'
         })
+
+
 def trending_products_view(request):
     """
     Display trending products with celebrity features and sorting options
@@ -2681,7 +2869,8 @@ def get_celebrity_features():
     """
     Fetch active celebrity features from the database, ordered by featured_order and created_at.
     """
-    return CelebrityFeature.objects.filter(is_active=True).prefetch_related('products').order_by('featured_order', '-created_at')
+    return CelebrityFeature.objects.filter(is_active=True).prefetch_related('products').order_by('featured_order',
+                                                                                                 '-created_at')
 
 
 def get_trending_categories():
@@ -2878,33 +3067,124 @@ def clear_search_history(request):
 
 @login_required
 def share_cart(request):
+    """
+    Generate shareable cart link with QR code.
+
+    Returns cart share URL and QR code for easy sharing.
+    The QR code can be scanned to directly access the shared cart.
+
+    Returns:
+        JsonResponse: {
+            'share_url': str (full URL to shared cart),
+            'qr_code': str (base64 encoded PNG QR code),
+            'qr_svg': str (optional SVG QR code)
+        }
+
+    Example Response:
+        {
+            "share_url": "https://example.com/cart/share/abc123",
+            "qr_code": "iVBORw0KGgoAAAANSUhEUgAA..."
+        }
+
+    Frontend Usage:
+        <img src="data:image/png;base64,{{ qr_code }}" alt="QR Code">
+    """
+    from .qr_utils import generate_cart_share_qr
+
     shared_cart, created = SharedCart.objects.get_or_create(user=request.user)
     share_url = request.build_absolute_uri(shared_cart.get_absolute_url())
-    return JsonResponse({'share_url': share_url})
+
+    # Generate QR code
+    try:
+        qr_code_base64 = generate_cart_share_qr(share_url, format='base64')
+    except Exception as e:
+        logger.error(f"Failed to generate QR code: {e}")
+        qr_code_base64 = None
+
+    return JsonResponse({
+        'share_url': share_url,
+        'qr_code': qr_code_base64
+    })
+
 
 @login_required
 def copy_shared_cart(request, token):
+    """
+    Copy items from a shared cart to the current user's cart.
+
+    Handles products with different feature variations correctly.
+    Tracks analytics and provides user feedback.
+
+    Args:
+        request: HTTP request
+        token: Shared cart UUID token
+
+    Returns:
+        Redirect to cart view with success message
+
+    Security:
+        - Requires authentication (@login_required)
+        - Validates shared cart token
+    """
     shared = get_object_or_404(SharedCart, token=token)
-    source_cart = Cart.objects.get(user=shared.user)
+
+    # Get source cart
+    try:
+        source_cart = Cart.objects.get(user=shared.user)
+    except Cart.DoesNotExist:
+        messages.warning(request, "The shared cart is empty.")
+        return redirect('marketplace:cart_view')
+
+    # Get or create target cart
     target_cart, _ = Cart.objects.get_or_create(user=request.user)
 
+    items_added = 0
+    items_updated = 0
+
+    # Copy each item from source to target
     for item in source_cart.items.all():
-        CartItem.objects.update_or_create(
-            cart=target_cart,
-            product=item.product,
-            defaults={
-                'quantity': item.quantity,
-                'selected_features': item.selected_features
-            }
-        )
+        try:
+            # Check if exact same item exists (product + features)
+            existing_item = CartItem.objects.filter(
+                cart=target_cart,
+                product=item.product,
+                selected_features=item.selected_features
+            ).first()
 
-    messages.success(request, "Shared cart copied to your cart.")
+            if existing_item:
+                # Update quantity (add to existing)
+                existing_item.quantity += item.quantity
+                existing_item.save(update_fields=['quantity'])
+                items_updated += 1
+            else:
+                # Create new item
+                CartItem.objects.create(
+                    cart=target_cart,
+                    product=item.product,
+                    quantity=item.quantity,
+                    selected_features=item.selected_features
+                )
+                items_added += 1
+
+        except Exception as e:
+            logger.error(f"Error copying cart item {item.id}: {e}")
+            continue
+
+    # Provide feedback
+    if items_added > 0 or items_updated > 0:
+        message = f"Shared cart copied! {items_added} new items added"
+        if items_updated > 0:
+            message += f", {items_updated} items updated"
+        messages.success(request, message + ".")
+    else:
+        messages.info(request, "No items were copied from the shared cart.")
+
     return redirect('marketplace:cart_view')
-
 
 
 def about(request):
     return render(request, 'marketplace/about.html')
+
 
 def careers_list(request):
     q = (request.GET.get("q") or "").strip()
@@ -2926,9 +3206,11 @@ def careers_list(request):
     # Template expects `jobs`
     return render(request, "careers/careers.html", {"jobs": jobs, "q": q, "dept": dept})
 
+
 def career_detail(request, slug):
     job = get_object_or_404(Career.objects.active(), slug=slug)
     return render(request, "careers/detail.html", {"job": job})
+
 
 MAX_RESUME_SIZE_MB = 5
 ALLOWED_RESUME_TYPES = {
@@ -2936,6 +3218,7 @@ ALLOWED_RESUME_TYPES = {
     "application/msword",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 }
+
 
 def careers_apply(request):
     """
@@ -3091,8 +3374,10 @@ def press_detail(request, slug):
         "older": older,
     })
 
+
 def _is_staff(user):
     return user.is_authenticated and (user.is_staff or user.is_superuser)
+
 
 @login_required
 @user_passes_test(_is_staff)
@@ -3174,6 +3459,7 @@ def press_create(request):
     messages.success(request, "Press release created.")
     return redirect(pr.get_absolute_url())
 
+
 def investors_home(request):
     q = (request.GET.get("q") or "").strip()
     cat = (request.GET.get("category") or "").strip()
@@ -3196,6 +3482,7 @@ def investors_home(request):
         "upcoming": upcoming,
         "past": past,
     })
+
 
 def shipping_info(request):
     return render(request, "info/shipping.html")

@@ -1,0 +1,317 @@
+<!-- QR Code Modal Components for Cart Sharing -->
+<!-- Add these modals to your cart_detail.html template -->
+
+<!-- Regular Cart Share QR Code Modal -->
+<div class="modal fade" id="qrCodeModal" tabindex="-1" aria-labelledby="qrCodeModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="qrCodeModalLabel">
+                    <i class="fas fa-qrcode me-2"></i>
+                    Share Cart - QR Code
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                <p class="text-muted mb-3">Scan this QR code to view the shared cart</p>
+                
+                <!-- QR Code Image -->
+                <div class="qr-code-container p-4 bg-white border rounded-3 d-inline-block">
+                    <img id="qrCodeImage" 
+                         src="" 
+                         alt="Cart Share QR Code" 
+                         class="img-fluid"
+                         style="max-width: 300px; width: 100%;">
+                </div>
+                
+                <!-- Share URL Display -->
+                <div class="mt-4">
+                    <p class="small text-muted mb-2">Share Link:</p>
+                    <div class="input-group">
+                        <input type="text" 
+                               id="qrShareUrl" 
+                               class="form-control form-control-sm" 
+                               readonly 
+                               value="">
+                        <button class="btn btn-sm btn-outline-primary" 
+                                type="button" 
+                                onclick="copyQrShareUrl()">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Download Button -->
+                <div class="mt-3">
+                    <button type="button" 
+                            class="btn btn-sm btn-success" 
+                            onclick="downloadQrCode('qrCodeImage', 'cart-share-qr.png')">
+                        <i class="fas fa-download me-1"></i>
+                        Download QR Code
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Social Cart Invite QR Code Modal -->
+<div class="modal fade" id="socialQrCodeModal" tabindex="-1" aria-labelledby="socialQrCodeModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="socialQrCodeModalLabel">
+                    <i class="fas fa-users me-2"></i>
+                    Social Cart Invitation - QR Code
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                <p class="text-muted mb-3">
+                    <i class="fas fa-mobile-alt me-1"></i>
+                    Scan to join the collaborative cart
+                </p>
+                
+                <!-- QR Code Image -->
+                <div class="qr-code-container p-4 bg-light border rounded-3 shadow-sm d-inline-block">
+                    <img id="socialQrCodeImage" 
+                         src="" 
+                         alt="Social Cart Invite QR Code" 
+                         class="img-fluid"
+                         style="max-width: 300px; width: 100%;">
+                </div>
+                
+                <!-- Instructions -->
+                <div class="alert alert-info mt-4" role="alert">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>How to join:</strong>
+                    <ol class="text-start mb-0 mt-2">
+                        <li>Open your camera app</li>
+                        <li>Point at the QR code</li>
+                        <li>Tap the notification to join</li>
+                    </ol>
+                </div>
+                
+                <!-- Share Link -->
+                <div class="mt-3">
+                    <p class="small text-muted mb-2">Or share this link:</p>
+                    <div class="input-group input-group-sm">
+                        <input type="text" 
+                               id="socialQrShareUrl" 
+                               class="form-control" 
+                               readonly 
+                               value="">
+                        <button class="btn btn-outline-primary" 
+                                type="button" 
+                                onclick="copySocialQrShareUrl()">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Action Buttons -->
+                <div class="mt-4 d-flex gap-2 justify-content-center flex-wrap">
+                    <button type="button" 
+                            class="btn btn-sm btn-success" 
+                            onclick="downloadQrCode('socialQrCodeImage', 'social-cart-invite-qr.png')">
+                        <i class="fas fa-download me-1"></i>
+                        Download
+                    </button>
+                    <button type="button" 
+                            class="btn btn-sm btn-primary" 
+                            onclick="printQrCode('socialQrCodeImage')">
+                        <i class="fas fa-print me-1"></i>
+                        Print
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- QR Code Utility Functions -->
+<script>
+/**
+ * Download QR code as PNG image
+ */
+function downloadQrCode(imageId, filename) {
+    const img = document.getElementById(imageId);
+    if (!img || !img.src) {
+        alert('QR code not available');
+        return;
+    }
+    
+    // Create download link
+    const link = document.createElement('a');
+    link.href = img.src;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    showToast('QR code downloaded!', 'success');
+}
+
+/**
+ * Print QR code
+ */
+function printQrCode(imageId) {
+    const img = document.getElementById(imageId);
+    if (!img || !img.src) {
+        alert('QR code not available');
+        return;
+    }
+    
+    // Create print window
+    const printWindow = window.open('', '', 'width=600,height=600');
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Print QR Code</title>
+            <style>
+                body {
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    height: 100vh;
+                    margin: 0;
+                    font-family: Arial, sans-serif;
+                }
+                .container {
+                    text-align: center;
+                }
+                img {
+                    max-width: 400px;
+                    border: 2px solid #333;
+                    padding: 20px;
+                }
+                h2 {
+                    margin-bottom: 20px;
+                }
+                @media print {
+                    body {
+                        display: block;
+                    }
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h2>Scan to Access Cart</h2>
+                <img src="${img.src}" alt="QR Code">
+            </div>
+        </body>
+        </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    
+    // Small delay to ensure image loads
+    setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+    }, 250);
+}
+
+/**
+ * Copy cart share URL from QR modal
+ */
+function copyQrShareUrl() {
+    const input = document.getElementById('qrShareUrl');
+    if (!input || !input.value) {
+        alert('Share URL not available');
+        return;
+    }
+    
+    input.select();
+    
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(input.value)
+            .then(() => showToast('Link copied!', 'success'))
+            .catch(() => document.execCommand('copy'));
+    } else {
+        document.execCommand('copy');
+        showToast('Link copied!', 'success');
+    }
+}
+
+/**
+ * Copy social cart share URL from QR modal
+ */
+function copySocialQrShareUrl() {
+    const input = document.getElementById('socialQrShareUrl');
+    if (!input || !input.value) {
+        alert('Share URL not available');
+        return;
+    }
+    
+    input.select();
+    
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(input.value)
+            .then(() => showToast('Invite link copied!', 'success'))
+            .catch(() => document.execCommand('copy'));
+    } else {
+        document.execCommand('copy');
+        showToast('Invite link copied!', 'success');
+    }
+}
+
+// Update share URLs when modals are shown
+document.addEventListener('DOMContentLoaded', function() {
+    const qrModal = document.getElementById('qrCodeModal');
+    const socialQrModal = document.getElementById('socialQrCodeModal');
+    
+    if (qrModal) {
+        qrModal.addEventListener('shown.bs.modal', function() {
+            const urlInput = document.getElementById('qrShareUrl');
+            const inviteLink = document.getElementById('socialInviteLink');
+            if (urlInput && inviteLink) {
+                urlInput.value = inviteLink.value || '';
+            }
+        });
+    }
+    
+    if (socialQrModal) {
+        socialQrModal.addEventListener('shown.bs.modal', function() {
+            const urlInput = document.getElementById('socialQrShareUrl');
+            const inviteLink = document.getElementById('socialInviteLink');
+            if (urlInput && inviteLink) {
+                urlInput.value = inviteLink.value || '';
+            }
+        });
+    }
+});
+</script>
+
+<!-- Add these buttons to your cart sharing section -->
+<!-- 
+Example placement in your cart_detail.html:
+
+<div class="cart-share-buttons">
+    <button id="copyCartBtn" class="btn btn-outline-primary">
+        <i class="fas fa-link me-2"></i>Copy Link
+    </button>
+    
+    <button id="whatsappShareBtn" class="btn btn-outline-success">
+        <i class="fab fa-whatsapp me-2"></i>WhatsApp
+    </button>
+    
+    <button id="showQrCodeBtn" class="btn btn-outline-info">
+        <i class="fas fa-qrcode me-2"></i>QR Code
+    </button>
+</div>
+
+<div class="social-cart-buttons mt-3">
+    <button id="showSocialQrBtn" class="btn btn-primary">
+        <i class="fas fa-qrcode me-2"></i>Show Invite QR Code
+    </button>
+</div>
+-->

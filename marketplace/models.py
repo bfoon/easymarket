@@ -1376,10 +1376,40 @@ class SocialCart(models.Model):
             s.amount_due = max(due, Decimal('0'))
             s.save(update_fields=['amount_due'])
 
+class CartActivity(models.Model):
+    EVENT_CHOICES = [
+        ("item_added", "Item Added"),
+        ("item_removed", "Item Removed"),
+        ("qty_changed", "Quantity Changed"),
+        ("member_joined", "Member Joined"),
+        ("member_left", "Member Left"),
+        ("member_removed", "Member Removed"),
+        ("invite_sent", "Invite Sent"),
+        ("invite_accepted", "Invite Accepted"),
+        ("member_approved", "Member Approved"),
+        ("split_changed", "Split Changed"),
+        ("share_changed", "Share Changed"),
+    ]
+
+    social_cart = models.ForeignKey("SocialCart", on_delete=models.CASCADE, related_name="activities")
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    event = models.CharField(max_length=30, choices=EVENT_CHOICES)
+    message = models.CharField(max_length=255, blank=True)
+    payload = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-id"]
 
 class CartMember(models.Model):
     ROLE = (('owner','Owner'), ('editor','Editor'), ('viewer','Viewer'))
-    STATUS = (('invited','Invited'), ('joined','Joined'), ('left','Left'), ('blocked','Blocked'))
+    STATUS = (
+        ('pending', 'Pending'),  # NEW - for approval workflow
+        ('invited', 'Invited'),
+        ('joined', 'Joined'),
+        ('left', 'Left'),
+        ('blocked', 'Blocked')
+    )
 
     social_cart = models.ForeignKey(SocialCart, on_delete=models.CASCADE, related_name='members')
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='social_cart_memberships')

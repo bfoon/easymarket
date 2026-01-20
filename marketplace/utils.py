@@ -4,6 +4,8 @@ from django.urls import reverse
 from decimal import Decimal
 from io import BytesIO
 from django.db.models import Prefetch
+from django.db import models
+
 import uuid
 
 from .models import Cart, CartItem, Product, SearchHistory, PopularSearch, ProductImage
@@ -272,10 +274,11 @@ def build_cart_context(request, limit=None):
             # authoritative owner: social.owner_id
             is_owner = bool(me_member and social.owner_id == request.user.id)
 
+            # Show all members except blocked (owner needs to see pending for approval)
             social_members = list(
                 social.members.select_related("user")
-                .filter(status="joined")
-                .order_by("joined_at")
+                .exclude(status="blocked")
+                .order_by("-joined_at")  # Newest first
             )
             social_shares = list(
                 PaymentShare.objects.filter(social_cart=social, is_active=True)
@@ -485,4 +488,3 @@ def sync_social_items_totals(social):
 
     # Final due math
     social.recalc_members_due()
-

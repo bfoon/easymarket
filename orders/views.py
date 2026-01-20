@@ -11,7 +11,7 @@ from stock.stock_utils_compatibility import reduce_stock
 from stock.models import Stock, StockMovement
 from stores.models import Store
 from .models import Order, OrderItem, PromoCode, ChatMessage
-from marketplace.models import Cart, CartItem, Product
+from marketplace.models import Cart, CartItem, Product, PaymentShare, CartMember, SocialCart
 from analytics.models import CartEvent
 from utils.qr import generate_invoice_qr_code
 from django.core.exceptions import ValidationError
@@ -131,6 +131,22 @@ def checkout_redirect(request):
     return redirect('marketplace:cart_view')
 
 
+
+def _resolve_active_social_for(user):
+    # Mirrors your social resolver approach in social_cart.py :contentReference[oaicite:2]{index=2}
+    return (
+        SocialCart.objects
+        .filter(is_active=True, status__in=["open", "checkout"],
+                members__user=user, members__status="joined")
+        .select_related("cart", "owner")
+        .order_by("-created_at")
+        .first()
+    )
+
+
+def _money(v):
+    return (v or Decimal("0.00")).quantize(Decimal("0.01"))
+
 # ---------------------------------------------------------
 # ✅ STOCK UTILS (put in orders/views.py or import from stock utils)
 # ---------------------------------------------------------
@@ -226,7 +242,7 @@ def get_available_stock(*, product, warehouse):
 
 
 # ---------------------------------------------------------
-# ✅ CHECKOUT CART
+# ✅ CHECKOUT CART (SOCIAL CART + SPLIT-AWARE + DUPLICATE-SAFE)
 # ---------------------------------------------------------
 @require_http_methods(["POST"])
 @csrf_protect
@@ -234,9 +250,25 @@ def checkout_cart(request):
     """
     Complete checkout from cart.
 
-    ✅ Analytics: Tracks checkout and paid events
-    - checkout: When user initiates checkout
-    - paid: When order is successfully created (split by store)
+    Social Cart rules implemented:
+    ✅ If user is in an active SocialCart:
+       - split_mode = by_items / by_percent: user checks out ONLY items they added (CartItem.added_by == request.user)
+       - split_mode = single_payer: ONLY selected payer can checkout, and they checkout ALL items
+
+    ✅ Order total is adjusted to match split method:
+       - by_items: pay own items subtotal (normal)
+       - by_percent: pay share.amount_due (PaymentShare.amount_due) by applying an adjustment:
+            * If target_due > base_total: add to shipping_cost
+            * If target_due < base_total: increase discount_amount (extra discount)
+       - single_payer: payer pays all items (normal total)
+
+    ✅ Fixes "Order item with this Order and Product already exists."
+       - Aggregates cart items by product (because your OrderItem unique constraint is (order, product))
+       - Uses get_or_create + update as extra safety
+
+    IMPORTANT REQUIREMENT:
+    - Your CartItem model MUST have `added_by` (ForeignKey to User) for social “who ordered what”.
+      If you don’t have it yet, add it and set it when adding/copying items.
     """
     if not request.user.is_authenticated:
         request.session["checkout_after_login"] = True
@@ -250,21 +282,137 @@ def checkout_cart(request):
     promo = None
     discount_amount = Decimal("0")
 
+    # -----------------------------
+    # Helpers
+    # -----------------------------
+    def _safe_decimal(x) -> Decimal:
+        try:
+            return Decimal(str(x or "0"))
+        except Exception:
+            return Decimal("0")
+
+    def _q2(x: Decimal) -> Decimal:
+        return (x or Decimal("0")).quantize(Decimal("0.01"))
+
+    def _merge_features(existing, new_val):
+        """
+        Merge selected_features safely when multiple cart lines for same product exist.
+        Since OrderItem is unique(order, product), we can't keep multiple variants.
+        We keep first as base, and store others under a "variants" list.
+        """
+        existing = existing or {}
+        new_val = _safe_selected_features(new_val)
+
+        if not existing:
+            return new_val
+
+        # If exactly same, return existing
+        if existing == new_val:
+            return existing
+
+        # Store variants
+        variants = existing.get("variants")
+        if not isinstance(variants, list):
+            variants = []
+        # put both into variants if not already
+        if "base" not in existing:
+            base_copy = dict(existing)
+            base_copy.pop("variants", None)
+            existing = {"base": base_copy, "variants": variants}
+        # append new variant (dedupe)
+        if new_val not in variants:
+            variants.append(new_val)
+        existing["variants"] = variants
+        return existing
+
+    def _get_active_social_for_cart(cart):
+        """
+        Try to resolve active social cart from cart relation.
+        Adjust as needed based on your actual model relationship.
+        """
+        social = getattr(cart, "social", None)
+        if social and getattr(social, "is_active", False):
+            return social
+        return None
+
+    # -----------------------------
+    # Main
+    # -----------------------------
     try:
         cart = Cart.objects.get(user=request.user)
-        cart_items = (
+
+        # Resolve social cart if exists
+        social = _get_active_social_for_cart(cart)
+
+        # If you also pass social_id in POST, you can prefer it (optional)
+        # social_id = request.POST.get("social_id")
+        # if social_id:
+        #     social = SocialCart.objects.filter(id=social_id, is_active=True).first() or social
+
+        # Pull cart items (we’ll filter down depending on split rules)
+        base_qs = (
             CartItem.objects.filter(cart=cart)
             .select_related("product", "product__store")
         )
 
-        if not cart_items.exists():
+        if not base_qs.exists():
             messages.error(request, "Your cart is empty.")
             return redirect("marketplace:cart_view")
 
-        subtotal = Decimal("0")
-        eligible_discount = Decimal("0")
+        # ---------------------------------------
+        # Determine checkout scope (social rules)
+        # ---------------------------------------
+        member = None
+        share = None
+        target_due = None  # only used for by_percent
+        split_mode = None
 
-        # Promo Code
+        if social:
+            # Ensure user is active member
+            member = (
+                CartMember.objects
+                .filter(social_cart=social, user=request.user, status="joined")
+                .select_related("user")
+                .first()
+            )
+            if not member:
+                messages.error(request, "You are not an active member of this social cart.")
+                return redirect("marketplace:cart_view")
+
+            split_mode = getattr(social, "split_mode", "by_items")
+
+            # single payer: only payer can checkout, payer checks out everything
+            if split_mode == "single_payer":
+                payer_member_id = getattr(social, "single_payer_id", None)
+                if payer_member_id and str(payer_member_id) != str(member.id):
+                    messages.error(request, "Only the selected payer can checkout this social cart.")
+                    return redirect("marketplace:cart_view")
+
+                cart_items_qs = base_qs  # payer checks out all
+            else:
+                # by_items / by_percent: user checks out only their own items
+                # Requires CartItem.added_by tracking
+                cart_items_qs = base_qs.filter(added_by=request.user)
+
+            if not cart_items_qs.exists():
+                messages.error(request, "You have no items to checkout in this social cart.")
+                return redirect("marketplace:cart_view")
+
+            # Share target due (for by_percent; also okay if you precompute for other modes)
+            share = PaymentShare.objects.filter(
+                social_cart=social, member=member, is_active=True
+            ).first()
+
+            if split_mode == "by_percent" and share and hasattr(share, "amount_due"):
+                target_due = _q2(_safe_decimal(share.amount_due))
+
+        else:
+            cart_items_qs = base_qs
+            split_mode = None
+
+        # ---------------------------------------
+        # Promo Code (applies to user's checkout items only)
+        # ---------------------------------------
         if promo_code_str:
             try:
                 promo = PromoCode.objects.get(code__iexact=promo_code_str, is_active=True)
@@ -275,24 +423,60 @@ def checkout_cart(request):
                 messages.error(request, "Promo code not found.")
                 return redirect("marketplace:cart_view")
 
-        # Calculate totals
-        for item in cart_items:
-            line_total = (item.product.price or Decimal("0")) * int(item.quantity or 0)
+        # ---------------------------------------
+        # Aggregate cart items by product (prevents duplicate OrderItem constraint)
+        # ---------------------------------------
+        aggregated = {}  # product_id -> dict(quantity, product, selected_features)
+        for item in cart_items_qs:
+            pid = item.product_id
+            qty = int(item.quantity or 0)
+            if qty <= 0:
+                continue
+
+            if pid not in aggregated:
+                aggregated[pid] = {
+                    "product": item.product,
+                    "quantity": qty,
+                    "selected_features": _safe_selected_features(getattr(item, "selected_features", None)),
+                }
+            else:
+                aggregated[pid]["quantity"] += qty
+                aggregated[pid]["selected_features"] = _merge_features(
+                    aggregated[pid]["selected_features"],
+                    getattr(item, "selected_features", None),
+                )
+
+        if not aggregated:
+            messages.error(request, "Your cart has no valid items to checkout.")
+            return redirect("marketplace:cart_view")
+
+        # ---------------------------------------
+        # Calculate subtotal + eligible promo discount (for checkout subset)
+        # ---------------------------------------
+        subtotal = Decimal("0")
+        eligible_discount = Decimal("0")
+
+        # we need store list for analytics (for checkout subset)
+        stores_in_cart = set()
+
+        for pid, row in aggregated.items():
+            product = row["product"]
+            qty = row["quantity"]
+
+            line_total = (_safe_decimal(product.price) * qty)
             subtotal += line_total
 
-            if promo and promo.applies_to_product(item.product):
+            if product.store:
+                stores_in_cart.add(product.store)
+
+            if promo and promo.applies_to_product(product):
                 eligible_discount += (line_total * Decimal(promo.discount_percentage)) / 100
 
-        discount_amount = eligible_discount
+        subtotal = _q2(subtotal)
+        discount_amount = _q2(eligible_discount)
 
-        # ✅ ANALYTICS: Track checkout initiation (per store)
-        stores_in_cart = set()
-        for item in cart_items:
-            if item.product.store:
-                stores_in_cart.add(item.product.store)
-
+        # ✅ ANALYTICS: Track checkout initiation (per store) for the subset
         session_key = request.session.session_key or request.user.username
-
         for store in stores_in_cart:
             track_event(
                 session_key=session_key,
@@ -302,61 +486,103 @@ def checkout_cart(request):
                 path=request.path,
             )
 
-        # ✅ Create Order + Reduce Stock (atomic)
+        # ---------------------------------------
+        # Create Order + Reduce Stock (atomic)
+        # ---------------------------------------
         with transaction.atomic():
+            # Create a fresh order per checkout
             order = Order.objects.create(
                 buyer=request.user,
                 promo_code=promo,
                 discount_amount=discount_amount,
             )
 
-            # Lock each product row, and lock stock row inside reduce_stock_for_checkout
-            # reduce stock + create order items
-            for item in cart_items:
+            # Compute base_total for split adjustments (no shipping/tax here unless you have them)
+            base_total = _q2(subtotal - discount_amount)
+
+            # Split adjustment (only for by_percent)
+            # Goal: final_total == target_due
+            # We'll implement via shipping_cost (positive adjustment) or extra discount (negative adjustment)
+            social_adjustment = Decimal("0")
+            if social and split_mode == "by_percent" and target_due is not None:
+                social_adjustment = _q2(target_due - base_total)
+
+                if social_adjustment > 0:
+                    # Add to shipping_cost so payable increases
+                    order.shipping_cost = _q2(getattr(order, "shipping_cost", Decimal("0")) + social_adjustment)
+                elif social_adjustment < 0:
+                    # Increase discount_amount to reduce payable
+                    # (cap so it never makes total negative)
+                    extra_discount = abs(social_adjustment)
+                    order.discount_amount = _q2(order.discount_amount + extra_discount)
+
+            # If you have tax/shipping calculation elsewhere, do it after this adjustment.
+            order.save()
+
+            # Create order items + reduce stock (for aggregated subset)
+            # Also track paid events per store/product
+            store_items = {}  # store -> list of products for analytics
+
+            for pid, row in aggregated.items():
+                product = row["product"]
+                qty = row["quantity"]
+
                 # ✅ lock only the product row (no joins)
-                locked_product = Product.objects.select_for_update().get(id=item.product.id)
+                locked_product = Product.objects.select_for_update().get(id=product.id)
 
                 # Warehouse for that store
                 warehouse = getattr(locked_product.store, "warehouse", None)
 
                 reduce_stock_for_checkout(
                     product=locked_product,
-                    quantity=item.quantity,
+                    quantity=qty,
                     warehouse=warehouse,
                     user=request.user,
                     reference_prefix=f"ORDER{order.id}",
                     notes=f"Checkout cart sale (Order #{order.id})",
                 )
 
-                OrderItem.objects.create(
+                # ✅ duplicate-safe create (even if checkout retries or race)
+                order_item, created = OrderItem.objects.get_or_create(
                     order=order,
                     product=locked_product,
-                    quantity=item.quantity,
-                    selected_features=_safe_selected_features(getattr(item, "selected_features", None)),
+                    defaults={
+                        "quantity": qty,
+                        "selected_features": row["selected_features"],
+                    },
                 )
+                if not created:
+                    # If it exists (shouldn't for new order, but safe), set quantity exactly
+                    order_item.quantity = qty
+                    order_item.selected_features = row["selected_features"]
+                    order_item.save(update_fields=["quantity", "selected_features"])
 
-            # ✅ ANALYTICS: Track paid event per store + product
-            store_items = {}
-            for item in cart_items:
-                store = item.product.store
-                store_items.setdefault(store, []).append(item)
+                # Analytics grouping
+                store = locked_product.store
+                store_items.setdefault(store, []).append(locked_product)
 
-            for store, items in store_items.items():
-                for item in items:
+            # ✅ ANALYTICS: Track paid event per store + product (subset)
+            for store, products in store_items.items():
+                for p in products:
                     track_event(
                         session_key=session_key,
                         event_type="paid",
                         user=request.user,
                         store=store,
-                        product=item.product,
+                        product=p,
                         order=order,
                         path=request.path,
                     )
 
-            # Clear cart
-            cart_items.delete()
+            # Clear ONLY the checked out items:
+            if social and split_mode != "single_payer":
+                # remove just this user's items
+                cart_items_qs.delete()
+            else:
+                # normal cart checkout OR single payer pays all
+                cart_items_qs.delete()
 
-            # Increment promo usage
+            # Increment promo usage (only if applied)
             if promo:
                 promo.increment_usage()
 
@@ -371,6 +597,7 @@ def checkout_cart(request):
         return redirect("marketplace:cart_view")
 
     except ValidationError as e:
+        # show the dict if it is a ValidationError message dict
         messages.error(request, f"Failed to checkout: {str(e)}")
         return redirect("marketplace:cart_view")
 
@@ -378,6 +605,7 @@ def checkout_cart(request):
         logger.exception("Checkout error for user %s: %s", getattr(request.user, "id", None), str(e))
         messages.error(request, "An error occurred during checkout. Please try again.")
         return redirect("marketplace:cart_view")
+
 
 
 # ---------------------------------------------------------
@@ -491,7 +719,6 @@ def checkout_social_cart(request, social_cart_id):
 
     ✅ Analytics: Tracks checkout and paid events for all members
     """
-    from socialcart.models import SocialCart, CartMember
 
     social_cart = get_object_or_404(
         SocialCart.objects.select_related('cart', 'owner'),

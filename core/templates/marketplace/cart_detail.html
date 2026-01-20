@@ -27,6 +27,80 @@
       {% endif %}
     </div>
 
+    <!-- Social Cart Alert -->
+    {% if social %}
+    <div class="alert alert-primary border-0 shadow-sm d-flex align-items-start gap-3 mt-3">
+      <div class="flex-shrink-0">
+        <i class="fas fa-users text-primary fs-4"></i>
+      </div>
+      <div class="flex-grow-1">
+        <div class="fw-bold mb-1">
+          You're shopping in a Social Cart
+          {% if request.user.id == social.owner_id %}
+            <span class="badge bg-warning text-dark ms-2"><i class="fas fa-crown me-1"></i>Owner</span>
+          {% endif %}
+        </div>
+
+        {% if social.split_mode == "by_items" %}
+          <div class="small text-muted">
+            ✅ <strong>Split mode:</strong> Each person pays for the items they added.
+            <span class="d-block mt-1">
+              <i class="fas fa-info-circle me-1"></i>
+              Checkout will include <strong>only your items</strong>. Items added by others won't be charged to you.
+            </span>
+          </div>
+
+        {% elif social.split_mode == "by_percent" %}
+          <div class="small text-muted">
+            ✅ <strong>Split mode:</strong> Pay by percentage.
+            <span class="d-block mt-1">
+              <i class="fas fa-calculator me-1"></i>
+              Your checkout total will be calculated from your share.
+              {% if my_share %}
+                {% if my_share.percentage %}<strong>{{ my_share.percentage|floatformat:"0" }}%</strong>{% endif %}
+                {% if my_share.amount_due %}
+                  — <strong>Due:</strong> {% display_money my_share.amount_due %}
+                {% endif %}
+              {% else %}
+                <span class="text-warning fw-semibold">Your share is not set yet.</span>
+              {% endif %}
+            </span>
+          </div>
+
+        {% elif social.split_mode == "single_payer" %}
+          <div class="small text-muted">
+            ✅ <strong>Split mode:</strong> One person pays the full bill.
+            <span class="d-block mt-1">
+              <i class="fas fa-user-check me-1"></i>
+              {% if my_share and social.single_payer_id and social.single_payer_id == my_share.member_id %}
+                <span class="text-success fw-semibold">You are the selected payer.</span>
+                You can checkout for everyone.
+              {% else %}
+                <span class="text-danger fw-semibold">You are not the selected payer.</span>
+                Only the payer can checkout this social cart.
+              {% endif %}
+            </span>
+          </div>
+
+        {% else %}
+          <div class="small text-muted">
+            <i class="fas fa-info-circle me-1"></i>
+            Split settings are not configured yet.
+          </div>
+        {% endif %}
+
+        <div class="small mt-2">
+          <span class="badge bg-light text-dark border">
+            <i class="fas fa-sync-alt me-1"></i> Live updates enabled
+          </span>
+          <span class="text-muted ms-2">
+            You'll see activity as members add/remove items.
+          </span>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
     {% if cart_items %}
     <div class="row g-4">
       <!-- Cart Items -->
@@ -53,22 +127,25 @@
                     <td class="ps-4 py-3">
                       <div class="d-flex align-items-center gap-3">
                         {% get_color_image_url item.product item.selected_features as color_img_url %}
-                      <img src="{{ color_img_url|default:'' }}"
-                           alt="{{ item.product.name }}"
-                           class="rounded-3 shadow-sm cart-item-image"
-                           style="width:90px;height:90px;object-fit:cover;{% if item.selected_features.color or item.selected_features.Color %}border:3px solid {% get_color_hex item.selected_features.color|default:item.selected_features.color %};{% endif %}"
-                           onerror="this.src='{% static 'img/placeholder.png' %}'">
+                        {% if color_img_url %}
+                          <img src="{{ color_img_url }}"
+                               alt="{{ item.product.name }}"
+                               class="rounded-3 shadow-sm cart-item-image"
+                               style="width:90px;height:90px;object-fit:cover;{% if item.selected_features.color or item.selected_features.color %}border:3px solid {{ item.selected_features.color|default:item.selected_features.color }};{% endif %}"
+                               onerror="this.src='{% static 'img/placeholder.png' %}'">
+                        {% else %}
+                          <img src="{% static 'img/placeholder.png' %}"
+                               alt="{{ item.product.name }}"
+                               class="rounded-3 shadow-sm cart-item-image"
+                               style="width:90px;height:90px;object-fit:cover;">
+                        {% endif %}
                         <div class="flex-grow-1 min-w-0">
                           <h6 class="mb-1 fw-semibold text-truncate">{{ item.product.name }}</h6>
                           <p class="text-muted small mb-2"><i class="fas fa-tag me-1"></i>{{ item.product.category }}</p>
-                         {% if item.selected_features %}
+                          {% if item.selected_features %}
                           <div class="mb-2">
                             {% for key, value in item.selected_features.items %}
                               <span class="badge bg-light text-dark border me-1 mb-1">
-                                {% if key|lower == 'color' %}
-                                  <span class="color-indicator"
-                                        style="display:inline-block;width:12px;height:12px;border-radius:50%;background-color:{% get_color_hex value %};border:1px solid #999;margin-right:5px;vertical-align:middle;"></span>
-                                {% endif %}
                                 {{ key|title }}: {{ value }}
                               </span>
                             {% endfor %}
@@ -79,7 +156,7 @@
                             <span class="text-muted mx-2">×</span>
                             <span class="text-muted">{{ item.quantity }}</span>
                             <span class="text-muted mx-2">=</span>
-                            <span class="fw-bold text-success">{% display_cart_money item.subtotal %}</span>
+                            <span class="fw-bold text-success">{% display_money item.subtotal %}</span>
                           </div>
                         </div>
                       </div>
@@ -106,7 +183,7 @@
                       </div>
                     </td>
                     <td class="text-center d-none d-lg-table-cell">
-                      <span class="fw-bold text-success fs-5 subtotal">{% display_cart_money item.subtotal %}</span>
+                      <span class="fw-bold text-success fs-5 subtotal">{% display_money item.subtotal %}</span>
                     </td>
                     <td class="text-center">
                       {% if item.can_remove %}
@@ -149,77 +226,196 @@
           </div>
         </div>
 
-        <!-- Social Shopping Card (server-rendered when available) -->
+        <!-- Social Shopping Card -->
         {% if social %}
         <div class="card shadow-sm border-0 border-start border-primary border-4" id="socialServerCard">
-          <div class="card-header bg-gradient-primary text-white d-flex align-items-center justify-content-between py-3">
+          <div class="card-header bg-white d-flex align-items-center justify-content-between py-3 border-bottom">
             <div>
-              <h5 class="mb-0 fw-bold"><i class="fas fa-users me-2"></i> Social Shopping Cart</h5>
-              <small class="opacity-75">Shop together with friends</small>
+              <h5 class="mb-0 fw-bold text-dark"><i class="fas fa-users me-2 text-primary"></i> Social Shopping Cart</h5>
+              <small class="text-muted">Shop together with friends • Approval required for new members</small>
             </div>
-            <span class="badge bg-white text-primary px-3 py-2 text-uppercase fw-semibold">{{ social.status }}</span>
+            {% if social.status == "open" %}
+              <span class="badge bg-success px-3 py-2 text-uppercase fw-semibold">Open</span>
+            {% elif social.status == "locked" %}
+              <span class="badge bg-secondary px-3 py-2 text-uppercase fw-semibold">Locked</span>
+            {% elif social.status == "closed" %}
+              <span class="badge bg-dark px-3 py-2 text-uppercase fw-semibold">Closed</span>
+            {% else %}
+              <span class="badge bg-primary px-3 py-2 text-uppercase fw-semibold">{{ social.status|title }}</span>
+            {% endif %}
           </div>
-          <div class="card-body">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-              <h6 class="mb-0 fw-semibold text-muted"><i class="fas fa-user-friends me-2"></i>Members</h6>
-              <span class="badge bg-light text-dark">{{ social_members|length }} total</span>
-            </div>
-            <div class="list-group list-group-flush">
-              {% for m in social_members %}
-              <div class="list-group-item px-0 border-0 border-bottom py-3">
-                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-                  <div class="d-flex align-items-center gap-2">
-                    <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center" style="width:40px;height:40px;">
-                      <i class="fas fa-user"></i>
-                    </div>
-                    <div>
-                      <div class="fw-semibold">
-                        {{ m.user.get_full_name|default:m.user.username }}
-                        {% if request.user.id == m.user_id %}<span class="badge bg-info text-dark ms-1">You</span>{% endif %}
-                        {% if m.user_id == social.owner_id %}<span class="badge bg-warning text-dark ms-1"><i class="fas fa-crown me-1"></i> Owner</span>{% endif %}
-                      </div>
-                      <small class="text-muted">
-                        {% if m.role == 'editor' %}<i class="fas fa-edit me-1"></i>Editor{% elif m.role == 'viewer' %}<i class="fas fa-eye me-1"></i>Viewer{% endif %}
-                      </small>
-                    </div>
-                  </div>
-                  <div class="d-flex align-items-center gap-2">
-                    {% with has_share=False %}
-                      {% for sh in social_shares %}
-                        {% if sh.member_id == m.id %}
-                          <small class="text-muted">
-                            {% if sh.fixed_amount %}<i class="fas fa-money-bill-wave me-1"></i>{{ request.user.preferred_currency.symbol|default:"D" }}{{ sh.fixed_amount|floatformat:"2" }}{% endif %}
-                            {% if sh.percentage %}{% if sh.fixed_amount %} • {% endif %}{{ sh.percentage|floatformat:"0" }}%{% endif %}
-                            {% if sh.amount_due %}<span class="text-success fw-semibold"> • Due: {{ request.user.preferred_currency.symbol|default:"D" }}{{ sh.amount_due|floatformat:"2" }}</span>{% endif %}
-                          </small>
-                          {% with has_share=True %}{% endwith %}
-                        {% endif %}
-                      {% endfor %}
-                      {% if not has_share %}<small class="text-muted">No share set</small>{% endif %}
-                    {% endwith %}
 
-                    {% if is_owner and m.user_id != social.owner_id %}
-                      <button type="button" class="btn btn-sm btn-outline-danger js-remove-member"
-                              data-remove-url="{% url 'marketplace:remove_member' member_id=m.id %}" title="Remove member">
-                        <i class="fas fa-user-minus"></i>
-                      </button>
-                    {% endif %}
-                    {% if request.user.id == m.user_id and m.user_id != social.owner_id %}
-                      <button type="button" class="btn btn-sm btn-outline-secondary js-leave-social"
-                              data-social-id="{{ social.id }}" title="Leave cart">
-                        <i class="fas fa-sign-out-alt"></i>
-                      </button>
-                    {% endif %}
-                  </div>
+          <div class="card-body">
+            <!-- Live Activity -->
+            <div class="card border-0 bg-light mb-3">
+              <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                  <strong><i class="fas fa-bolt me-2 text-warning"></i>Live Activity</strong>
+                  <small class="text-muted">Auto-refresh</small>
+                </div>
+                <div id="liveActivityFeed" class="d-flex flex-column gap-2" style="max-height:240px; overflow:auto;">
+                  <small class="text-muted">Loading activity...</small>
                 </div>
               </div>
-              {% empty %}
-                <div class="text-center py-4 text-muted">
-                  <i class="fas fa-user-slash mb-2" style="font-size:2rem;opacity:.3;"></i>
-                  <p class="mb-0">No members yet</p>
-                </div>
-              {% endfor %}
             </div>
+
+            <!-- Pending Approvals (Owner only) -->
+            {% if is_owner %}
+              {% comment %}Get all pending members{% endcomment %}
+              {% regroup social_members by status as members_by_status %}
+              {% for status_group in members_by_status %}
+                {% if status_group.grouper == 'pending' and status_group.list %}
+                  <div class="mb-3">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                      <h6 class="mb-0 fw-semibold text-muted">
+                        <i class="fas fa-user-clock me-2"></i>Pending Requests
+                      </h6>
+                    </div>
+                    <div class="mt-2">
+                      {% for m in status_group.list %}
+                        <div class="d-flex align-items-center justify-content-between border rounded p-2 bg-white mb-2">
+                          <div class="d-flex align-items-center gap-2">
+                            <div class="rounded-circle bg-warning text-dark d-flex align-items-center justify-content-center" style="width:38px;height:38px;">
+                              <i class="fas fa-user"></i>
+                            </div>
+                            <div>
+                              <div class="fw-semibold">{{ m.user.get_full_name|default:m.user.username }}</div>
+                              <small class="text-muted">Waiting for approval</small>
+                            </div>
+                          </div>
+
+                          <div class="d-flex gap-2">
+                            <button type="button"
+                                    class="btn btn-sm btn-success js-approve-member"
+                                    data-url="{% url 'marketplace:approve_social_member' member_id=m.id %}">
+                              <i class="fas fa-check me-1"></i>Approve
+                            </button>
+
+                            <button type="button"
+                                    class="btn btn-sm btn-outline-danger js-reject-member"
+                                    data-url="{% url 'marketplace:reject_social_member' member_id=m.id %}">
+                              <i class="fas fa-times me-1"></i>Reject
+                            </button>
+                          </div>
+                        </div>
+                      {% endfor %}
+                    </div>
+                  </div>
+                {% endif %}
+              {% endfor %}
+            {% endif %}
+
+         <!-- Members -->
+<div class="d-flex justify-content-between align-items-center mb-2">
+  <h6 class="mb-0 fw-semibold text-muted"><i class="fas fa-user-friends me-2"></i>Members</h6>
+  <span class="badge bg-light text-dark">
+    {% with joined_count=social_members|length %}
+      {{ joined_count }} total
+    {% endwith %}
+  </span>
+</div>
+
+<div class="list-group list-group-flush">
+  {% for m in social_members %}
+    {% if m.status == 'joined' %}
+    <div class="list-group-item px-0 border-0 border-bottom py-3">
+      <div class="d-flex align-items-start justify-content-between flex-wrap gap-3">
+        <!-- Member Info -->
+        <div class="d-flex align-items-center gap-2 flex-grow-1">
+          <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center flex-shrink-0" style="width:40px;height:40px;">
+           <i class="fas fa-user"></i>
+          </div>
+          <div class="min-w-0">
+            <div class="fw-semibold d-flex align-items-center flex-wrap gap-1">
+              <span>{{ m.user.get_full_name|default:m.user.username }}</span>
+              {% if request.user.id == m.user_id %}
+                <span class="badge bg-info text-dark">You</span>
+              {% endif %}
+              {% if m.user_id == social.owner_id %}
+                <span class="badge bg-warning text-dark">
+                  <i class="fas fa-crown me-1"></i>Owner
+                </span>
+              {% endif %}
+            </div>
+
+            <small class="text-muted d-block mt-1">
+              {% if m.role == 'editor' %}
+                <i class="fas fa-edit me-1"></i>Editor
+              {% elif m.role == 'owner' %}
+                <i class="fas fa-crown me-1"></i>Owner
+              {% else %}
+                <i class="fas fa-eye me-1"></i>Viewer
+              {% endif %}
+              •
+              <span class="text-success fw-semibold">
+                <i class="fas fa-check-circle me-1"></i>Active
+              </span>
+            </small>
+
+            <!-- Member's Share Information -->
+            <div class="mt-2">
+              {% if social_shares %}
+                {% for sh in social_shares %}
+                  {% if sh.member_id == m.id and sh.is_active %}
+                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                      {% if sh.fixed_amount %}
+                        <span class="badge bg-light text-dark border">
+                          <i class="fas fa-dollar-sign me-1 text-success"></i>
+                          Fixed: {% display_money sh.fixed_amount %}
+                        </span>
+                      {% endif %}
+
+                      {% if sh.percentage %}
+                        <span class="badge bg-light text-dark border">
+                          <i class="fas fa-percent me-1 text-info"></i>
+                          Share: {{ sh.percentage|floatformat:"0" }}%
+                        </span>
+                      {% endif %}
+
+                      {% if sh.amount_due and sh.amount_due > 0 %}
+                        <span class="badge bg-success text-white">
+                          <i class="fas fa-wallet me-1"></i>
+                          Due: {% display_money sh.amount_due %}
+                        </span>
+                      {% elif sh.amount_due == 0 %}
+                        <span class="badge bg-secondary text-white">
+                          <i class="fas fa-check me-1"></i>
+                          Nothing due
+                        </span>
+                      {% endif %}
+                    </div>
+                  {% endif %}
+                {% endfor %}
+              {% else %}
+                <small class="text-muted fst-italic">
+                  <i class="fas fa-info-circle me-1"></i>Share not configured yet
+                </small>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <!-- Owner Actions -->
+        {% if is_owner and m.user_id != social.owner_id %}
+          <div class="d-flex gap-1 flex-shrink-0">
+            <button type="button"
+                    class="btn btn-sm btn-outline-danger js-block-member"
+                    data-url="{% url 'marketplace:block_member' member_id=m.id %}"
+                    title="Block this member">
+              <i class="fas fa-ban"></i>
+            </button>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  {% empty %}
+    <div class="text-center py-4 text-muted">
+      <i class="fas fa-user-slash mb-2" style="font-size:2rem;opacity:.3;"></i>
+      <p class="mb-0">No members yet</p>
+    </div>
+  {% endfor %}
+</div>
 
             {% if my_share %}
               <div class="alert alert-info mt-3 mb-0" role="alert">
@@ -228,17 +424,19 @@
                   <div>
                     <strong class="d-block">Your Share</strong>
                     <span>
-                      {% if my_share.fixed_amount %}Fixed: {{ request.user.preferred_currency.symbol|default:"D" }}{{ my_share.fixed_amount|floatformat:"2" }}{% endif %}
+                      {% if my_share.fixed_amount %}Fixed: { my_share.fixed_amount %}{% endif %}
                       {% if my_share.percentage %}{% if my_share.fixed_amount %} • {% endif %}{{ my_share.percentage|floatformat:"0" }}%{% endif %}
-                      {% if my_share.amount_due %}<span class="text-success"> • <strong>Due: {{ request.user.preferred_currency.symbol|default:"D" }}{{ my_share.amount_due|floatformat:"2" }}</strong></span>{% endif %}
+                      {% if my_share.amount_due %}<span class="text-success"> • <strong>Due: {% display_money my_share.amount_due %}</strong></span>{% endif %}
                     </span>
                   </div>
                 </div>
               </div>
             {% endif %}
+
             <input type="hidden" id="socialId" value="{{ social.id }}">
           </div>
         </div>
+        {% endif %}
 
         <!-- Split Settings (Owner only) -->
         {% if social and is_owner %}
@@ -254,7 +452,7 @@
           <div class="card-body">
             <div class="row g-3">
               <div class="col-12">
-                <div class="btn-group" role="group" aria-label="Split mode">
+                <div class="btn-group w-100" role="group" aria-label="Split mode">
                   <button type="button" class="btn btn-outline-primary" id="btnSplitItems">Each pays their items</button>
                   <button type="button" class="btn btn-outline-primary" id="btnSplitPercent">Pay by percentage</button>
                   <button type="button" class="btn btn-outline-primary" id="btnSplitSingle">One person pays full</button>
@@ -264,13 +462,17 @@
               <!-- Percent allocations -->
               <div class="col-12" id="percentBox" style="display:none;">
                 <div class="alert alert-light border small mb-2">Set percentages for members (must total 100%).</div>
-                {% for m in social_members %}
-                  <div class="input-group mb-2" style="max-width:360px;">
-                    <span class="input-group-text">{{ m.user.get_full_name|default:m.user.username }}</span>
-                    <input type="number" class="form-control split-pct" data-member-id="{{ m.id }}" min="0" max="100" step="0.01" value="0">
-                    <span class="input-group-text">%</span>
-                  </div>
-                {% endfor %}
+                {% if social_members %}
+                  {% for m in social_members %}
+                    {% if m.status != 'pending' %}
+                      <div class="input-group mb-2" style="max-width:360px;">
+                        <span class="input-group-text">{{ m.user.get_full_name|default:m.user.username }}</span>
+                        <input type="number" class="form-control split-pct" data-member-id="{{ m.id }}" min="0" max="100" step="0.01" value="0">
+                        <span class="input-group-text">%</span>
+                      </div>
+                    {% endif %}
+                  {% endfor %}
+                {% endif %}
                 <button class="btn btn-sm btn-primary" id="btnApplyPercent">Apply Percentages</button>
                 <small class="text-muted ms-2" id="pctTotalHint"></small>
               </div>
@@ -280,12 +482,16 @@
                 <div class="alert alert-light border small mb-2">Choose the member who will pay the full bill.</div>
                 <div style="max-width:360px;">
                   <select id="singlePayer" class="form-select">
-                    {% for m in social_members %}
-                      <option value="{{ m.id }}"
-                        {% if social.single_payer_id and social.single_payer_id == m.id %}selected{% endif %}>
-                        {{ m.user.get_full_name|default:m.user.username }}
-                      </option>
-                    {% endfor %}
+                    {% if social_members %}
+                      {% for m in social_members %}
+                        {% if m.status != 'pending' %}
+                          <option value="{{ m.id }}"
+                            {% if social.single_payer_id and social.single_payer_id == m.id %}selected{% endif %}>
+                            {{ m.user.get_full_name|default:m.user.username }}
+                          </option>
+                        {% endif %}
+                      {% endfor %}
+                    {% endif %}
                   </select>
                 </div>
                 <button class="btn btn-sm btn-primary mt-2" id="btnApplySingle">Set Payer</button>
@@ -293,9 +499,9 @@
             </div>
           </div>
         </div>
-        {% endif %}
         {% else %}
         <!-- Create Social Cart CTA when no server-side social -->
+        {% if not social %}
         <div class="card shadow-sm border-0 border-start border-info border-4" id="socialCtaCard">
           <div class="card-body text-center py-3">
             <i class="fas fa-users-cog text-info mb-3" style="font-size:3rem;opacity:.7;"></i>
@@ -307,9 +513,11 @@
           </div>
         </div>
         {% endif %}
+        {% endif %}
 
-        <!-- Social Cart Actions (client-persistent) -->
-        <div id="socialCartActions" class="card shadow-sm border-0 mt-4" style="{% if not social %}display:none;{% endif %}">
+        <!-- Social Cart Actions -->
+        {% if social %}
+        <div id="socialCartActions" class="card shadow-sm border-0 mt-4">
           <div class="card-body">
             <h6 class="fw-semibold mb-3"><i class="fas fa-share-alt me-2 text-primary"></i>Invite Friends</h6>
 
@@ -319,11 +527,12 @@
               <div class="col-md-3"><button class="btn btn-primary w-100" id="sendInviteBtn"><i class="fas fa-paper-plane me-1"></i> Send</button></div>
             </div>
 
-            <div class="border rounded p-3 bg-light">
+            <div class="border rounded p-3 bg-light mb-3">
               <label class="form-label small text-muted mb-2">Share Link</label>
               <div class="input-group">
                 <input type="text" class="form-control form-control-sm bg-white" id="socialInviteLink" value="" readonly>
                 <button class="btn btn-sm btn-outline-secondary" id="copyInviteBtn" title="Copy link"><i class="fas fa-copy"></i></button>
+                <button class="btn btn-sm btn-outline-info" id="showSocialQrBtn" title="Show QR Code"><i class="fas fa-qrcode"></i></button>
               </div>
             </div>
 
@@ -335,6 +544,7 @@
             </div>
           </div>
         </div>
+        {% endif %}
       </div>
 
       <!-- Order Summary -->
@@ -345,53 +555,97 @@
               <h5 class="mb-0 fw-bold"><i class="fas fa-receipt me-2 text-primary"></i> Order Summary</h5>
             </div>
             <div class="card-body">
-            <div class="d-flex justify-content-between mb-3 pb-2">
-              <span class="text-muted">Subtotal (<span id="item-count">{{ cart_count }}</span> items)</span>
-              <span class="fw-semibold order-summary-subtotal" id="order-subtotal">
-                {% display_cart_money total_price %}
-              </span>
-            </div>
+              <div class="d-flex justify-content-between mb-3 pb-2">
+                <span class="text-muted">Subtotal (<span id="item-count">{{ cart_count }}</span> item{{ cart_count|pluralize }})</span>
+                <span class="fw-semibold order-summary-subtotal" id="order-subtotal">
+                  {% display_money total_price %}
+                </span>
+              </div>
 
-            <div class="d-flex justify-content-between mb-3 pb-2">
-              <span class="text-muted">Shipping</span>
-              <span class="text-success fw-semibold"><i class="fas fa-truck me-1"></i> Free</span>
-            </div>
+              <div class="d-flex justify-content-between mb-3 pb-2">
+                <span class="text-muted">Shipping</span>
+                <span class="text-success fw-semibold"><i class="fas fa-truck me-1"></i> Free</span>
+              </div>
 
-            <div class="d-flex justify-content-between mb-3 pb-2">
-              <span class="text-muted">Tax</span>
-              <span id="tax-amount">
-                {% display_cart_money tax_amount|default:0 %}
-              </span>
-            </div>
+              <div class="d-flex justify-content-between mb-3 pb-2">
+                <span class="text-muted">Tax</span>
+                <span id="tax-amount">
+                  {% display_money tax_amount|default:0 %}
+                </span>
+              </div>
 
-            <div class="d-flex justify-content-between mb-3 pb-2 promo-discount d-none">
-              <span class="text-success"><i class="fas fa-tags me-1"></i> Promo Discount</span>
-              <span class="text-success fw-semibold" id="promo-discount-amount">
-                -{% display_cart_money 0 %}
-              </span>
-            </div>
+              <div class="d-flex justify-content-between mb-3 pb-2 promo-discount d-none">
+                <span class="text-success"><i class="fas fa-tags me-1"></i> Promo Discount</span>
+                <span class="text-success fw-semibold" id="promo-discount-amount">
+                  -{% display_money 0 %}
+                </span>
+              </div>
 
-            <hr class="my-3">
+              <hr class="my-3">
 
-            <div class="d-flex justify-content-between mb-4">
-              <strong class="fs-5">Total</strong>
-              <strong class="text-success fs-4" id="total-price">
-                {% display_cart_money final_total|default:total_price %}
-              </strong>
-            </div>
+              <div class="d-flex justify-content-between mb-4">
+                <strong class="fs-5">Total</strong>
+                <strong class="text-success fs-4" id="total-price">
+                  {% display_money final_total|default:total_price %}
+                </strong>
+              </div>
+
+              {% if social %}
+              <div class="alert alert-info border-0 mt-3 mb-3 small">
+                <div class="d-flex align-items-start gap-2">
+                  <i class="fas fa-wallet mt-1"></i>
+                  <div>
+                    <div class="fw-semibold">Your checkout amount</div>
+
+                    {% if social.split_mode == "by_items" %}
+                      <div class="text-muted">
+                        You will pay only for items you added to this social cart.
+                      </div>
+
+                    {% elif social.split_mode == "by_percent" %}
+                      <div class="text-muted">
+                        Your total is calculated using your share.
+                        {% if my_share and my_share.amount_due %}
+                          <span class="d-block mt-1">
+                            <strong>Due:</strong> {% display_money my_share.amount_due %}
+                          </span>
+                        {% else %}
+                          <span class="text-warning fw-semibold d-block mt-1">Your share is not set yet.</span>
+                        {% endif %}
+                      </div>
+
+                    {% elif social.split_mode == "single_payer" %}
+                      <div class="text-muted">
+                        Only the selected payer can checkout.
+                      </div>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+              {% endif %}
 
               <div class="d-grid gap-2">
                 <form action="{% url 'orders:checkout_cart' %}" method="post" id="checkoutForm">
                   {% csrf_token %}
                   <input type="hidden" name="promo_code" id="promoCodeHidden" value="">
+                  {% if social %}
+                    <input type="hidden" name="social_cart_id" value="{{ social.id }}">
+                  {% endif %}
                   <button type="submit" class="btn btn-success btn-lg w-100 py-3 fw-bold shadow">
                     <i class="fas fa-lock me-2"></i> Secure Checkout
                   </button>
                 </form>
 
                 <div class="btn-group" role="group">
-                  <button class="btn btn-outline-secondary" id="copyCartBtn" title="Copy cart link"><i class="fas fa-copy me-1"></i> Copy Link</button>
-                  <button class="btn btn-outline-success" id="whatsappShareBtn" title="Share on WhatsApp"><i class="fab fa-whatsapp me-1"></i> Share</button>
+                  <button class="btn btn-outline-secondary btn-sm" id="copyCartBtn" title="Copy cart link">
+                    <i class="fas fa-copy me-1"></i> Copy
+                  </button>
+                  <button class="btn btn-outline-success btn-sm" id="whatsappShareBtn" title="Share on WhatsApp">
+                    <i class="fab fa-whatsapp me-1"></i> WhatsApp
+                  </button>
+                  <button class="btn btn-outline-info btn-sm" id="showQrCodeBtn" title="Show QR Code">
+                    <i class="fas fa-qrcode me-1"></i> QR Code
+                  </button>
                 </div>
 
                 <a href="{% url 'marketplace:all_products' %}" class="btn btn-outline-primary">
@@ -413,7 +667,7 @@
     </div>
 
     {% else %}
-    <!-- Empty -->
+    <!-- Empty Cart -->
     <div class="card shadow-sm border-0">
       <div class="card-body text-center py-5">
         <div class="mb-4"><i class="fas fa-shopping-cart text-muted" style="font-size:6rem;opacity:.15;"></i></div>
@@ -426,7 +680,7 @@
   </div>
 </section>
 
-<!-- Toast -->
+<!-- Toast Notifications -->
 <div class="position-fixed bottom-0 end-0 p-3" style="z-index:1050;">
   <div id="cartToast" class="toast align-items-center border-0 shadow-lg" role="alert">
     <div class="d-flex">
@@ -436,6 +690,10 @@
   </div>
 </div>
 
+<!-- QR Code Modals -->
+{% include "marketplace/partials/qr-code-modals.html" %}
+
+<!-- Cart-specific styles -->
 <style>
 .cart-item-image {
   transition: transform 0.2s ease, border-color 0.2s ease;
@@ -448,449 +706,71 @@
 .color-indicator {
   box-shadow: 0 1px 3px rgba(0,0,0,0.2);
 }
+
+/* Social cart actions transition */
+#socialCartActions {
+  transition: opacity .3s ease, max-height .3s ease;
+  overflow: hidden;
+}
+
+#socialCartActions.show {
+  opacity: 1;
+  max-height: 1000px;
+}
+
+/* Z-index management */
+.sticky-lg-top {
+  z-index: 100 !important;
+}
+
+.navbar {
+  z-index: 1030 !important;
+}
+
+.toast-container {
+  z-index: 1060 !important;
+}
+
+/* Cart item animations */
+.cart-item {
+  transition: opacity .3s ease, transform .3s ease;
+}
+
+.cart-item.removing {
+  opacity: 0;
+  transform: translateX(-20px);
+}
 </style>
+
+<!-- Load cart-specific CSS -->
 <link rel="stylesheet" type="text/css" href="{% static 'css/cart.css' %}">
+
+<!-- Configuration: Set Django URLs for JavaScript modules -->
+<script>
+  // Cart Sharing URLs
+  window.CART_SHARE_URL = "{% url 'marketplace:share_cart' %}";
+
+  // Social Cart URLs
+  window.CREATE_SOCIAL_CART_URL = "{% url 'marketplace:create_social_cart' %}";
+  window.SEND_INVITE_URL = "{% url 'marketplace:send_cart_invite' %}";
+  window.SOCIAL_STATUS_URL = "{% url 'marketplace:social_cart_status' %}";
+  window.LEAVE_CART_URL = "{% url 'marketplace:leave_social_cart' %}";
+  window.SET_SPLIT_MODE_URL = "{% url 'marketplace:set_split_mode' %}";
+  window.SOCIAL_CART_LIVE_URL = "{% url 'marketplace:social_cart_live' %}";
+  window.SET_CHECKOUT_MEMBERS_URL = "{% url 'marketplace:set_checkout_members' %}";
+  window.SOCIAL_LIVE_POLL_MS = 2500;
+
+  // Promo Code URLs
+  window.VALIDATE_PROMO_URL = "{% url 'orders:validate_promo' %}";
+</script>
+
+<!-- External JavaScript Modules (in order of dependency) -->
 <script src="{% static 'js/main.js' %}"></script>
 <script src="{% static 'js/cart.js' %}"></script>
-
-<!-- Cart Sharing Script -->
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-  const copyCartBtn = document.getElementById('copyCartBtn');
-  const whatsappShareBtn = document.getElementById('whatsappShareBtn');
-  let shareUrl = null;
-
-  fetch("{% url 'marketplace:share_cart' %}")
-    .then(r => r.json())
-    .then(data => { if (data.share_url) shareUrl = data.share_url; })
-    .catch(()=>console.warn('Share URL fetch failed'));
-
-  function fallbackCopyText(text) {
-    const ta = document.createElement('textarea');
-    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
-    document.body.appendChild(ta); ta.select();
-    try { document.execCommand('copy'); showToast("Cart link copied to clipboard!", 'success'); }
-    catch { showToast("Please copy manually: " + text, 'warning'); }
-    document.body.removeChild(ta);
-  }
-
-  copyCartBtn?.addEventListener('click', function () {
-    if (!shareUrl) return showToast("Generating share link, please wait...", 'info');
-    (navigator.clipboard
-      ? navigator.clipboard.writeText(shareUrl).then(() => showToast("Cart link copied!", 'success'))
-      : Promise.reject()).catch(() => fallbackCopyText(shareUrl));
-  });
-
-  whatsappShareBtn?.addEventListener('click', function () {
-    if (!shareUrl) return showToast("Generating share link, please wait...", 'info');
-    const msg = encodeURIComponent(`🛒 Check out my cart on EasyMarket!\n\n${shareUrl}`);
-    window.open(`https://wa.me/?text=${msg}`, '_blank');
-  });
-});
-</script>
-
-<!-- Social Cart Management Script (PERSISTENT, NO AUTO-RELOAD) + Split Mode -->
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-  const csrfToken = (document.querySelector('[name=csrfmiddlewaretoken]')||{}).value || '';
-  const createBtn      = document.getElementById('createSocialCartBtn');
-  const actionsWrap    = document.getElementById('socialCartActions');
-  const inviteEmail    = document.getElementById('inviteEmail');
-  const invitePhone    = document.getElementById('invitePhone');
-  const sendInviteBtn  = document.getElementById('sendInviteBtn');
-  const inviteLinkEl   = document.getElementById('socialInviteLink');
-  const copyInviteBtn  = document.getElementById('copyInviteBtn');
-  const leaveBtn       = document.getElementById('leaveCartBtn');
-
-  // ✅ FIX: Use correct ID from template
-  const serverSocialId = document.getElementById('socialId')?.value || null;
-  const ctaCard        = document.getElementById('socialCtaCard');
-
-  // Split settings controls
-  const btnSplitItems  = document.getElementById('btnSplitItems');
-  const btnSplitPercent= document.getElementById('btnSplitPercent');
-  const btnSplitSingle = document.getElementById('btnSplitSingle');
-  const percentBox     = document.getElementById('percentBox');
-  const payerBox       = document.getElementById('payerBox');
-  const btnApplyPercent= document.getElementById('btnApplyPercent');
-  const btnApplySingle = document.getElementById('btnApplySingle');
-  const singlePayerSel = document.getElementById('singlePayer');
-  const pctInputs      = document.querySelectorAll('.split-pct');
-  const pctTotalHint   = document.getElementById('pctTotalHint');
-  const currentSplitEl = document.getElementById('currentSplitMode');
-
-  // ✅ FIX: Hydrate from server or localStorage
-  let socialId = serverSocialId || localStorage.getItem('em_social_id') || null;
-  let socialInviteLink = localStorage.getItem('em_social_invite') || '';
-
-  // If no server social but we have a stored social, keep actions visible
-  if (!serverSocialId && socialId && actionsWrap) {
-    actionsWrap.style.display = 'block';
-    if (ctaCard) ctaCard.style.display = 'none';
-    fetch("{% url 'marketplace:share_cart' %}")
-      .then(r => r.json())
-      .then(d => {
-        if (d.share_url) {
-          socialInviteLink = d.share_url;
-          inviteLinkEl && (inviteLinkEl.value = socialInviteLink);
-          localStorage.setItem('em_social_invite', socialInviteLink);
-        }
-      })
-      .catch(()=>{});
-  }
-
-  // If server provided a social, sync storage
-  if (serverSocialId) {
-    localStorage.setItem('em_social_id', serverSocialId);
-    fetch("{% url 'marketplace:share_cart' %}")
-      .then(r => r.json())
-      .then(d => {
-        if (d.share_url) {
-          localStorage.setItem('em_social_invite', d.share_url);
-          inviteLinkEl && (inviteLinkEl.value = d.share_url);
-        }
-      }).catch(()=>{});
-  } else if (socialInviteLink && inviteLinkEl) {
-    inviteLinkEl.value = socialInviteLink;
-  }
-
-  // ✅ FIX: Create social cart - now properly handles social_id in response
-  createBtn?.addEventListener('click', () => {
-    createBtn.disabled = true;
-    const original = createBtn.innerHTML;
-    createBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Creating...';
-
-    fetch("{% url 'marketplace:create_social_cart' %}", {
-      method: 'POST',
-      headers: {'X-CSRFToken': csrfToken}
-    })
-    .then(r => r.json())
-    .then(data => {
-      if (!data.success) throw new Error(data.message || 'Failed to create social cart');
-
-      // ✅ FIX: Response now includes social_id
-      socialId = data.social_id;
-      localStorage.setItem('em_social_id', socialId);
-
-      return fetch("{% url 'marketplace:share_cart' %}")
-        .then(r => r.json())
-        .then(d => {
-          if (d.share_url) {
-            socialInviteLink = d.share_url;
-            localStorage.setItem('em_social_invite', socialInviteLink);
-          }
-        })
-        .catch(()=>{});
-    })
-    .then(() => {
-      if (actionsWrap) {
-        actionsWrap.style.display = 'block';
-        actionsWrap.style.opacity = '0';
-        actionsWrap.style.transition = 'opacity 0.3s ease';
-        void actionsWrap.offsetWidth;
-        actionsWrap.style.opacity = '1';
-      }
-      if (ctaCard) ctaCard.style.display = 'none';
-      if (inviteLinkEl && socialInviteLink) inviteLinkEl.value = socialInviteLink;
-      showToast('Social cart created! Share the link with friends.', 'success');
-    })
-    .catch(err => {
-      showToast(err.message || 'Error creating social cart', 'danger');
-    })
-    .finally(() => {
-      createBtn.disabled = false;
-      createBtn.innerHTML = original;
-    });
-  });
-
-  // Send invite
-  sendInviteBtn?.addEventListener('click', () => {
-    if (!socialId) return showToast('No active social cart', 'warning');
-
-    const email = (inviteEmail?.value || '').trim();
-    const phone = (invitePhone?.value || '').trim();
-    if (!email && !phone) return showToast('Enter an email or phone number', 'warning');
-
-    const original = sendInviteBtn.innerHTML;
-    sendInviteBtn.disabled = true;
-    sendInviteBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-
-    fetch("{% url 'marketplace:send_cart_invite' %}", {
-      method: 'POST',
-      headers: {
-        'Content-Type':'application/x-www-form-urlencoded',
-        'X-CSRFToken': csrfToken
-      },
-      body: `email=${encodeURIComponent(email)}&phone=${encodeURIComponent(phone)}&social_id=${encodeURIComponent(socialId)}`
-    })
-    .then(r => r.json())
-    .then(data => {
-      if (!data.success) throw new Error(data.message || 'Failed to send invite');
-      if (data.invite_link) {
-        localStorage.setItem('em_social_invite', data.invite_link);
-        if (inviteLinkEl) inviteLinkEl.value = data.invite_link;
-      }
-      inviteEmail.value = '';
-      invitePhone.value = '';
-      showToast('Invitation sent successfully!', 'success');
-    })
-    .catch(err => showToast(err.message || 'Error sending invite', 'danger'))
-    .finally(() => {
-      sendInviteBtn.disabled = false;
-      sendInviteBtn.innerHTML = original;
-    });
-  });
-
-  // Copy invite link
-  copyInviteBtn?.addEventListener('click', function () {
-    const linkToCopy = inviteLinkEl?.value || localStorage.getItem('em_social_invite');
-    if (!linkToCopy) return showToast('No invite link available', 'warning');
-
-    (navigator.clipboard
-      ? navigator.clipboard.writeText(linkToCopy).then(() => showToast('Invite link copied!', 'success'))
-      : Promise.reject()
-    ).catch(() => {
-      const ta = document.createElement('textarea');
-      ta.value = linkToCopy; ta.style.position='fixed'; ta.style.opacity='0';
-      document.body.appendChild(ta); ta.select();
-      try { document.execCommand('copy'); showToast('Invite link copied!', 'success'); }
-      catch { prompt('Copy this link:', linkToCopy); }
-      document.body.removeChild(ta);
-    });
-  });
-
-  // Leave cart
-  leaveBtn?.addEventListener('click', function () {
-    if (!socialId) return showToast('No active social cart', 'warning');
-    if (!confirm('Leave this collaborative cart?')) return;
-
-    const original = leaveBtn.innerHTML;
-    leaveBtn.disabled = true;
-    leaveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Leaving...';
-
-    fetch("{% url 'marketplace:leave_cart' %}", {
-      method: 'POST',
-      headers: { 'Content-Type':'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken },
-      body: `social_id=${encodeURIComponent(socialId)}`
-    })
-    .then(r => r.json())
-    .then(data => {
-      if (!data.success) throw new Error(data.message || 'Failed to leave cart');
-      localStorage.removeItem('em_social_id');
-      localStorage.removeItem('em_social_invite');
-      if (actionsWrap) actionsWrap.style.display = 'none';
-      const serverCard = document.getElementById('socialServerCard');
-      if (serverCard) serverCard.style.display = 'none';
-      if (ctaCard) ctaCard.style.display = 'block';
-      showToast('You have left the cart', 'info');
-    })
-    .catch(err => {
-      showToast(err.message || 'Error leaving cart', 'danger');
-    })
-    .finally(() => {
-      leaveBtn.disabled = false;
-      leaveBtn.innerHTML = original;
-    });
-  });
-
-  // Owner remove member
-  document.querySelectorAll('.js-remove-member').forEach(btn => {
-    btn.addEventListener('click', function () {
-      const url = this.dataset.removeUrl;
-      if (!url) return showToast('Invalid remove URL', 'danger');
-      if (!confirm('Remove this member from the social cart?')) return;
-
-      const original = this.innerHTML;
-      this.disabled = true;
-      this.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-
-      fetch(url, { method: 'POST', headers: { 'X-CSRFToken': csrfToken } })
-        .then(r => r.json())
-        .then(data => {
-          if (!data.success) throw new Error(data.message || 'Failed to remove member');
-          showToast('Member removed successfully', 'success');
-          setTimeout(() => location.reload(), 600);
-        })
-        .catch(err => {
-          showToast(err.message || 'Error removing member', 'danger');
-          this.disabled = false;
-          this.innerHTML = original;
-        });
-    });
-  });
-
-  // ====== Split Mode logic ======
-  function postSplit(payload) {
-    return fetch("{% url 'marketplace:set_split_mode' %}", {
-      method: 'POST',
-      headers: {'X-CSRFToken': csrfToken, 'Content-Type':'application/x-www-form-urlencoded'},
-      body: new URLSearchParams(payload).toString()
-    }).then(r=>r.json());
-  }
-
-  btnSplitItems?.addEventListener('click', () => {
-    percentBox && (percentBox.style.display = 'none');
-    payerBox && (payerBox.style.display = 'none');
-    postSplit({mode:'by_items'}).then(data=>{
-      if (data.success){
-        currentSplitEl && (currentSplitEl.textContent = 'By Items');
-        showToast('Split set: Each pays their items', 'success');
-      } else showToast(data.message || 'Failed to set split', 'danger');
-    }).catch(()=>showToast('Error setting split', 'danger'));
-  });
-
-  btnSplitPercent?.addEventListener('click', () => {
-    percentBox && (percentBox.style.display = 'block');
-    payerBox && (payerBox.style.display = 'none');
-  });
-
-  btnSplitSingle?.addEventListener('click', () => {
-    payerBox && (payerBox.style.display = 'block');
-    percentBox && (percentBox.style.display = 'none');
-  });
-
-  // Live total hint for percent
-  pctInputs?.forEach(inp=>{
-    inp.addEventListener('input', ()=>{
-      const total = Array.from(pctInputs).reduce((a,i)=>a+(parseFloat(i.value||'0')||0),0);
-      if (pctTotalHint){
-        pctTotalHint.textContent = `Total: ${total.toFixed(2)}%`;
-        pctTotalHint.className = total.toFixed(2) == '100.00' ? 'text-success small' : 'text-danger small';
-      }
-    });
-  });
-
-  btnApplyPercent?.addEventListener('click', ()=>{
-    const map = {};
-    let total = 0;
-    pctInputs?.forEach(i=>{
-      const v = parseFloat(i.value||'0')||0;
-      total += v;
-      map[i.dataset.memberId] = v;
-    });
-    if (total.toFixed(2) !== '100.00'){
-      return showToast('Percentages must total 100%', 'warning');
-    }
-    postSplit({mode:'by_percent', allocations: JSON.stringify(map)}).then(data=>{
-      if (data.success){
-        currentSplitEl && (currentSplitEl.textContent = 'Percent');
-        showToast('Split set: Pay by percentage', 'success');
-      } else showToast(data.message || 'Failed to set split', 'danger');
-    }).catch(()=>showToast('Error setting split', 'danger'));
-  });
-
-  btnApplySingle?.addEventListener('click', ()=>{
-    const payerId = singlePayerSel?.value;
-    if (!payerId) return showToast('Select a payer', 'warning');
-    postSplit({mode:'single_payer', payer_member_id: payerId}).then(data=>{
-      if (data.success){
-        currentSplitEl && (currentSplitEl.textContent = 'Single Payer');
-        showToast('Split set: One person pays full', 'success');
-      } else showToast(data.message || 'Failed to set split', 'danger');
-    }).catch(()=>showToast('Error setting split', 'danger'));
-  });
-});
-</script>
-<!-- Promo Code Script (unchanged logic) -->
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-  const applyBtn = document.getElementById('applyPromo');
-  const promoInput = document.getElementById('promoCodeInput');
-  const promoHidden = document.getElementById('promoCodeHidden');
-  const feedback = document.getElementById('promoFeedback');
-  const appliedPromo = document.getElementById('appliedPromo');
-  const appliedPromoCode = document.getElementById('appliedPromoCode');
-  const removePromoBtn = document.getElementById('removePromo');
-  const promoDiscountDiv = document.querySelector('.promo-discount');
-  const promoDiscountAmount = document.getElementById('promo-discount-amount');
-  const totalPriceSpan = document.getElementById('total-price');
-  const subtotalSpan = document.getElementById('order-subtotal');
-  const csrfToken = (document.querySelector('[name=csrfmiddlewaretoken]')||{}).value || '';
-
-  function parseCurrency(text){ return parseFloat((text||'').replace(/[^\d.]/g,''))||0; }
-  function formatCurrency(n){ return `D${Number(n).toFixed(2)}`; }
-
-  applyBtn?.addEventListener('click', function() {
-    const code = promoInput.value.trim();
-    if (!code) return showToast('Please enter a promo code', 'warning');
-
-    const original = applyBtn.innerHTML;
-    applyBtn.disabled = true;
-    applyBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Applying...';
-
-    fetch("{% url 'orders:validate_promo' %}", {
-      method: 'POST',
-      headers: { 'Content-Type':'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken },
-      body: `promo_code=${encodeURIComponent(code)}`
-    })
-    .then(r => r.json())
-    .then(data => {
-      if (!data.success) {
-        feedback.textContent = data.message;
-        feedback.className = 'small text-danger mt-2';
-        feedback.classList.remove('d-none');
-        showToast(data.message, 'danger');
-        return;
-      }
-      promoHidden.value = code;
-      appliedPromoCode.textContent = code;
-      appliedPromo.classList.remove('d-none');
-      promoInput.value = '';
-      feedback.classList.add('d-none');
-
-      const currentSubtotal = parseCurrency(subtotalSpan.textContent);
-      const discountAmount = (currentSubtotal * (data.discount_percentage || 0)) / 100.0;
-      const newTotal = Math.max(currentSubtotal - discountAmount, 0);
-
-      promoDiscountAmount.textContent = `-${formatCurrency(discountAmount)}`;
-      promoDiscountDiv.classList.remove('d-none');
-      totalPriceSpan.textContent = formatCurrency(newTotal);
-
-      showToast(`Promo code applied! ${data.discount_percentage}% discount`, 'success');
-    })
-    .catch(() => showToast('Error validating promo code', 'danger'))
-    .finally(() => {
-      applyBtn.disabled = false;
-      applyBtn.innerHTML = '<i class="fas fa-check me-1"></i> Apply';
-    });
-  });
-
-  removePromoBtn?.addEventListener('click', function() {
-    promoHidden.value = '';
-    appliedPromo.classList.add('d-none');
-    promoDiscountDiv.classList.add('d-none');
-    const currentSubtotal = parseFloat((subtotalSpan.textContent||'').replace(/[^\d.]/g,''))||0;
-    totalPriceSpan.textContent = `D${currentSubtotal.toFixed(2)}`;
-    showToast('Promo code removed', 'info');
-  });
-
-  promoInput?.addEventListener('keypress', function(e) {
-    if (e.key === 'Enter') { e.preventDefault(); applyBtn.click(); }
-  });
-});
-</script>
-
-<!-- Global Toast Helper (Bootstrap) -->
-<script>
-function showToast(message, type = 'success') {
-  const toast = document.getElementById('cartToast');
-  const toastBody = toast.querySelector('.toast-body');
-  const bgClass = { 'success':'bg-success','danger':'bg-danger','warning':'bg-warning','info':'bg-info' }[type] || 'bg-success';
-  toast.className = `toast align-items-center text-white ${bgClass} border-0 shadow-lg`;
-  toastBody.textContent = message;
-  const bsToast = new bootstrap.Toast(toast, { autohide: true, delay: 4000 });
-  bsToast.show();
-}
-</script>
-
-<style>
-#socialCartActions { transition: opacity .3s ease, max-height .3s ease; overflow: hidden; }
-#socialCartActions.show { opacity: 1; max-height: 1000px; }
-.sticky-lg-top { z-index: 100 !important; }
-.navbar { z-index: 1030 !important; }
-.toast-container { z-index: 1060 !important; }
-.cart-item { transition: opacity .3s ease, transform .3s ease; }
-.cart-item.removing { opacity: 0; transform: translateX(-20px); }
-</style>
+<script src="{% static 'js/toast-notifications.js' %}"></script>
+<script src="{% static 'js/cart-sharing.js' %}"></script>
+<script src="{% static 'js/social-cart.js' %}"></script>
+<script src="{% static 'js/promo-code.js' %}"></script>
+<script src="{% static 'js/social-cart-live.js' %}"></script>
 
 {% endblock %}
