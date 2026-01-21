@@ -244,368 +244,381 @@ def get_available_stock(*, product, warehouse):
 # ---------------------------------------------------------
 # ✅ CHECKOUT CART (SOCIAL CART + SPLIT-AWARE + DUPLICATE-SAFE)
 # ---------------------------------------------------------
-@require_http_methods(["POST"])
-@csrf_protect
+def validate_promo_code(promo_code_str, subtotal, user=None):
+    """
+    Validate and calculate promo code discount.
+    Returns: (promo_object, discount_amount, error_message)
+    """
+    if not promo_code_str:
+        return None, Decimal('0'), None
+
+    try:
+        promo = PromoCode.objects.get(
+            code=promo_code_str.strip(),
+            is_active=True,
+            valid_from__lte=timezone.now(),
+            valid_until__gte=timezone.now()
+        )
+    except PromoCode.DoesNotExist:
+        return None, Decimal('0'), "Invalid promo code"
+
+    # Check max uses
+    if promo.max_uses and promo.uses >= promo.max_uses:
+        return None, Decimal('0'), "Promo code has reached maximum uses"
+
+    # Check minimum purchase
+    if subtotal < promo.min_purchase_amount:
+        return None, Decimal('0'), f"Minimum purchase of ${promo.min_purchase_amount} required"
+
+    # Check user-specific promo
+    if promo.user and user and promo.user != user:
+        return None, Decimal('0'), "This promo code is not valid for your account"
+
+    # Calculate discount
+    discount_amount = Decimal('0')
+    if promo.discount_type == 'percentage':
+        discount_amount = subtotal * (promo.discount_value / Decimal('100'))
+        # Cap at max discount if specified
+        if promo.max_discount_amount:
+            discount_amount = min(discount_amount, promo.max_discount_amount)
+    elif promo.discount_type == 'fixed':
+        discount_amount = min(promo.discount_value, subtotal)
+
+    return promo, discount_amount, None
+
+
+@login_required
 def checkout_cart(request):
     """
-    Complete checkout from cart.
+    Normal cart checkout with promo code support
 
-    Social Cart rules implemented:
-    ✅ If user is in an active SocialCart:
-       - split_mode = by_items / by_percent: user checks out ONLY items they added (CartItem.added_by == request.user)
-       - split_mode = single_payer: ONLY selected payer can checkout, and they checkout ALL items
-
-    ✅ Order total is adjusted to match split method:
-       - by_items: pay own items subtotal (normal)
-       - by_percent: pay share.amount_due (PaymentShare.amount_due) by applying an adjustment:
-            * If target_due > base_total: add to shipping_cost
-            * If target_due < base_total: increase discount_amount (extra discount)
-       - single_payer: payer pays all items (normal total)
-
-    ✅ Fixes "Order item with this Order and Product already exists."
-       - Aggregates cart items by product (because your OrderItem unique constraint is (order, product))
-       - Uses get_or_create + update as extra safety
-
-    IMPORTANT REQUIREMENT:
-    - Your CartItem model MUST have `added_by` (ForeignKey to User) for social “who ordered what”.
-      If you don’t have it yet, add it and set it when adding/copying items.
+    GET: Display checkout page
+    POST: Process checkout
     """
-    if not request.user.is_authenticated:
-        request.session["checkout_after_login"] = True
-        return redirect(f"{reverse('accounts:sign_in')}?next={reverse('orders:checkout_redirect')}")
+    try:
+        cart = Cart.objects.get(user=request.user)
+    except Cart.DoesNotExist:
+        messages.error(request, "Your cart is empty.")
+        return redirect("marketplace:cart")
 
-    # Migrate session cart to user cart
-    from marketplace.utils import migrate_session_cart_to_user
-    migrate_session_cart_to_user(request, request.user)
+    # Get ONLY normal cart items
+    cart_items = (
+        CartItem.objects.filter(cart=cart, cart_type='normal')
+        .select_related('product', 'product__store', 'product__category')
+    )
 
-    promo_code_str = (request.POST.get("promo_code") or "").strip()
-    promo = None
-    discount_amount = Decimal("0")
+    if not cart_items.exists():
+        messages.error(request, "Your normal cart is empty.")
+        return redirect("marketplace:cart")
 
-    # -----------------------------
-    # Helpers
-    # -----------------------------
-    def _safe_decimal(x) -> Decimal:
+    # Calculate totals
+    CART_TAX_RATE = Decimal("0.085")
+    subtotal = sum(item.product.price * item.quantity for item in cart_items)
+
+    # GET request - show checkout page
+    if request.method == 'GET':
+        tax = subtotal * CART_TAX_RATE
+        total = subtotal + tax
+
+        context = {
+            'cart_items': cart_items,
+            'subtotal': subtotal,
+            'tax': tax,
+            'total': total,
+            'cart_type': 'normal',
+            'show_promo': True,
+        }
+        return render(request, 'orders/checkout.html', context)
+
+    # POST request - process checkout
+    elif request.method == 'POST':
+        # Validate promo code
+        promo_code_str = request.POST.get('promo_code', '').strip()
+        promo, discount_amount, error = validate_promo_code(promo_code_str, subtotal, request.user)
+
+        if error:
+            messages.warning(request, error)
+
+        # Calculate final totals
+        tax = subtotal * CART_TAX_RATE
+        total = subtotal + tax - discount_amount
+
         try:
-            return Decimal(str(x or "0"))
-        except Exception:
-            return Decimal("0")
+            with transaction.atomic():
+                # Create order
+                order = Order.objects.create(
+                    user=request.user,
+                    total_amount=total,
+                    subtotal=subtotal,
+                    tax_amount=tax,
+                    discount_amount=discount_amount,
+                    status='pending',
+                    payment_status='pending',
+                    source='normal_cart',
+                    promo_code=promo,
+                    notes=request.POST.get('notes', '')
+                )
 
-    def _q2(x: Decimal) -> Decimal:
-        return (x or Decimal("0")).quantize(Decimal("0.01"))
+                # Create order items
+                for cart_item in cart_items:
+                    OrderItem.objects.create(
+                        order=order,
+                        product=cart_item.product,
+                        quantity=cart_item.quantity,
+                        price=cart_item.product.price,
+                        selected_features=cart_item.selected_features
+                    )
 
-    def _merge_features(existing, new_val):
-        """
-        Merge selected_features safely when multiple cart lines for same product exist.
-        Since OrderItem is unique(order, product), we can't keep multiple variants.
-        We keep first as base, and store others under a "variants" list.
-        """
-        existing = existing or {}
-        new_val = _safe_selected_features(new_val)
+                # Update promo usage
+                if promo:
+                    promo.uses += 1
+                    promo.save(update_fields=['uses'])
 
-        if not existing:
-            return new_val
+                # Clear normal cart items
+                cart_items.delete()
 
-        # If exactly same, return existing
-        if existing == new_val:
-            return existing
+                # Track analytics
+                try:
+                    from analytics.services import track_event
+                    track_event(
+                        session_key=request.session.session_key or request.user.username,
+                        event_type="checkout",
+                        user=request.user,
+                        product=None,
+                        path=request.path,
+                    )
+                except Exception:
+                    pass
 
-        # Store variants
-        variants = existing.get("variants")
-        if not isinstance(variants, list):
-            variants = []
-        # put both into variants if not already
-        if "base" not in existing:
-            base_copy = dict(existing)
-            base_copy.pop("variants", None)
-            existing = {"base": base_copy, "variants": variants}
-        # append new variant (dedupe)
-        if new_val not in variants:
-            variants.append(new_val)
-        existing["variants"] = variants
-        return existing
+                messages.success(request, f"Order #{order.id} created successfully!")
+                if discount_amount > 0:
+                    messages.success(request, f"Promo code applied! You saved ${discount_amount:.2f}")
 
-    def _get_active_social_for_cart(cart):
-        """
-        Try to resolve active social cart from cart relation.
-        Adjust as needed based on your actual model relationship.
-        """
-        social = getattr(cart, "social", None)
-        if social and getattr(social, "is_active", False):
-            return social
-        return None
+                return redirect('orders:order_detail', order_id=order.id)
 
-    # -----------------------------
-    # Main
-    # -----------------------------
+        except Exception as e:
+            logger.error(f"Error processing checkout: {str(e)}", exc_info=True)
+            messages.error(request, "An error occurred during checkout. Please try again.")
+            return redirect("marketplace:cart")
+
+
+@login_required
+def checkout_social_cart(request):
+    """
+    Checkout view for SOCIAL cart - OWNER ONLY with promo code support.
+
+    GET: Display checkout page
+    POST: Process checkout and create individual orders
+    """
+    try:
+        cart = Cart.objects.get(user=request.user)
+        social = cart.social
+    except (Cart.DoesNotExist, SocialCart.DoesNotExist):
+        messages.error(request, "No active social cart found.")
+        return redirect("marketplace:cart")
+
+    if not social.is_active:
+        messages.error(request, "Social cart is not active.")
+        return redirect("marketplace:cart")
+
+    # Verify user is the owner
+    if social.owner != request.user:
+        messages.error(request, "Only the owner can checkout the social cart.")
+        return redirect("marketplace:cart")
+
+    # Get social cart items
+    social_items = (
+        CartItem.objects.filter(cart=cart, cart_type='social')
+        .select_related('product', 'product__store', 'product__category', 'added_by')
+    )
+
+    if not social_items.exists():
+        messages.error(request, "Social cart is empty.")
+        return redirect("marketplace:cart")
+
+    # Calculate totals
+    CART_TAX_RATE = Decimal("0.000")
+    subtotal = sum(item.product.price * item.quantity for item in social_items)
+
+    # GET request - show checkout page
+    if request.method == 'GET':
+        tax = subtotal * CART_TAX_RATE
+        total = subtotal + tax
+
+        # Group items by member
+        items_by_member = {}
+        for item in social_items:
+            user = item.added_by or social.owner
+            if user not in items_by_member:
+                items_by_member[user] = {
+                    'user': user,
+                    'items': [],
+                    'subtotal': Decimal('0'),
+                }
+            items_by_member[user]['items'].append(item)
+            items_by_member[user]['subtotal'] += item.product.price * item.quantity
+
+        context = {
+            'social': social,
+            'social_items': social_items,
+            'items_by_member': items_by_member.values(),
+            'subtotal': subtotal,
+            'tax': tax,
+            'total': total,
+            'cart_type': 'social',
+            'member_count': len(items_by_member),
+            'show_promo': True,  # Owner can apply promo to entire social cart
+        }
+        return render(request, 'orders/checkout_social.html', context)
+
+    # POST request - process checkout
+    elif request.method == 'POST':
+        # Validate promo code (applies to total cart)
+        promo_code_str = request.POST.get('promo_code', '').strip()
+        promo, total_discount, error = validate_promo_code(promo_code_str, subtotal, request.user)
+
+        if error:
+            messages.warning(request, error)
+
+        try:
+            with transaction.atomic():
+                # Group items by who added them
+                items_by_user = {}
+                for item in social_items:
+                    user = item.added_by or social.owner
+                    if user not in items_by_user:
+                        items_by_user[user] = []
+                    items_by_user[user].append(item)
+
+                # Create individual orders for each member
+                created_orders = {}
+                total_user_subtotals = Decimal('0')
+
+                # First pass - calculate each user's subtotal
+                user_subtotals = {}
+                for user, items in items_by_user.items():
+                    user_subtotal = sum(item.product.price * item.quantity for item in items)
+                    user_subtotals[user] = user_subtotal
+                    total_user_subtotals += user_subtotal
+
+                # Create orders with proportional discount
+                for user, items in items_by_user.items():
+                    if not items:
+                        continue
+
+                    # Calculate this user's subtotal
+                    user_subtotal = user_subtotals[user]
+
+                    # Apply proportional discount
+                    if total_discount > 0 and total_user_subtotals > 0:
+                        proportion = user_subtotal / total_user_subtotals
+                        user_discount = total_discount * proportion
+                    else:
+                        user_discount = Decimal('0')
+
+                    # Calculate user's tax and total
+                    user_tax = user_subtotal * CART_TAX_RATE
+                    user_total = user_subtotal + user_tax - user_discount
+
+                    # Create order
+                    order = Order.objects.create(
+                        user=user,
+                        total_amount=user_total,
+                        subtotal=user_subtotal,
+                        tax_amount=user_tax,
+                        discount_amount=user_discount,
+                        status='pending',
+                        payment_status='pending',
+                        source='social_cart',
+                        promo_code=promo if user == request.user else None,  # Only owner gets promo reference
+                        notes=f'Order from Social Cart #{social.id}'
+                    )
+
+                    # Create order items
+                    for cart_item in items:
+                        OrderItem.objects.create(
+                            order=order,
+                            product=cart_item.product,
+                            quantity=cart_item.quantity,
+                            price=cart_item.product.price,
+                            selected_features=cart_item.selected_features
+                        )
+
+                    created_orders[user] = order
+
+                # Update promo usage
+                if promo:
+                    promo.uses += 1
+                    promo.save(update_fields=['uses'])
+
+                # Mark social cart as closed
+                social.is_active = False
+                social.status = 'closed'
+                social.completed_at = timezone.now()
+                social.save(update_fields=['is_active', 'status', 'completed_at', 'updated_at'])
+
+                # Delete all social cart items
+                social_items.delete()
+
+                # Deactivate all members
+                social.members.all().update(status='left')
+
+                # Track analytics
+                try:
+                    from analytics.services import track_event
+                    track_event(
+                        session_key=request.session.session_key or request.user.username,
+                        event_type="social_cart_checkout",
+                        user=request.user,
+                        product=None,
+                        path=request.path,
+                    )
+                except:
+                    pass
+
+                # Success message
+                owner_order = created_orders.get(request.user)
+                success_msg = f"Social cart checked out! {len(created_orders)} orders created."
+                if total_discount > 0:
+                    success_msg += f" Promo code applied! Total savings: ${total_discount:.2f}"
+
+                messages.success(request, success_msg)
+
+                if owner_order:
+                    return redirect('orders:order_detail', order_id=owner_order.id)
+                else:
+                    return redirect('orders:order_history')
+
+        except Exception as e:
+            logger.error(f"Error processing social checkout: {str(e)}", exc_info=True)
+            messages.error(request, "An error occurred during social cart checkout. Please try again.")
+            return redirect("marketplace:cart")
+
+
+@login_required
+def checkout_redirect(request):
+    """
+    Smart redirect after login - determines checkout type
+    """
     try:
         cart = Cart.objects.get(user=request.user)
 
-        # Resolve social cart if exists
-        social = _get_active_social_for_cart(cart)
+        # Check for active social cart where user is owner
+        try:
+            social = cart.social
+            if social and social.is_active and social.owner == request.user:
+                social_items = CartItem.objects.filter(cart=cart, cart_type='social').exists()
+                if social_items:
+                    return redirect('orders:checkout_social_cart')
+        except SocialCart.DoesNotExist:
+            pass
 
-        # If you also pass social_id in POST, you can prefer it (optional)
-        # social_id = request.POST.get("social_id")
-        # if social_id:
-        #     social = SocialCart.objects.filter(id=social_id, is_active=True).first() or social
-
-        # Pull cart items (we’ll filter down depending on split rules)
-        base_qs = (
-            CartItem.objects.filter(cart=cart)
-            .select_related("product", "product__store")
-        )
-
-        if not base_qs.exists():
-            messages.error(request, "Your cart is empty.")
-            return redirect("marketplace:cart_view")
-
-        # ---------------------------------------
-        # Determine checkout scope (social rules)
-        # ---------------------------------------
-        member = None
-        share = None
-        target_due = None  # only used for by_percent
-        split_mode = None
-
-        if social:
-            # Ensure user is active member
-            member = (
-                CartMember.objects
-                .filter(social_cart=social, user=request.user, status="joined")
-                .select_related("user")
-                .first()
-            )
-            if not member:
-                messages.error(request, "You are not an active member of this social cart.")
-                return redirect("marketplace:cart_view")
-
-            split_mode = getattr(social, "split_mode", "by_items")
-
-            # single payer: only payer can checkout, payer checks out everything
-            if split_mode == "single_payer":
-                payer_member_id = getattr(social, "single_payer_id", None)
-                if payer_member_id and str(payer_member_id) != str(member.id):
-                    messages.error(request, "Only the selected payer can checkout this social cart.")
-                    return redirect("marketplace:cart_view")
-
-                cart_items_qs = base_qs  # payer checks out all
-            else:
-                # by_items / by_percent: user checks out only their own items
-                # Requires CartItem.added_by tracking
-                cart_items_qs = base_qs.filter(added_by=request.user)
-
-            if not cart_items_qs.exists():
-                messages.error(request, "You have no items to checkout in this social cart.")
-                return redirect("marketplace:cart_view")
-
-            # Share target due (for by_percent; also okay if you precompute for other modes)
-            share = PaymentShare.objects.filter(
-                social_cart=social, member=member, is_active=True
-            ).first()
-
-            if split_mode == "by_percent" and share and hasattr(share, "amount_due"):
-                target_due = _q2(_safe_decimal(share.amount_due))
-
-        else:
-            cart_items_qs = base_qs
-            split_mode = None
-
-        # ---------------------------------------
-        # Promo Code (applies to user's checkout items only)
-        # ---------------------------------------
-        if promo_code_str:
-            try:
-                promo = PromoCode.objects.get(code__iexact=promo_code_str, is_active=True)
-                if not promo.is_valid():
-                    messages.error(request, "Promo code is invalid or expired.")
-                    return redirect("marketplace:cart_view")
-            except PromoCode.DoesNotExist:
-                messages.error(request, "Promo code not found.")
-                return redirect("marketplace:cart_view")
-
-        # ---------------------------------------
-        # Aggregate cart items by product (prevents duplicate OrderItem constraint)
-        # ---------------------------------------
-        aggregated = {}  # product_id -> dict(quantity, product, selected_features)
-        for item in cart_items_qs:
-            pid = item.product_id
-            qty = int(item.quantity or 0)
-            if qty <= 0:
-                continue
-
-            if pid not in aggregated:
-                aggregated[pid] = {
-                    "product": item.product,
-                    "quantity": qty,
-                    "selected_features": _safe_selected_features(getattr(item, "selected_features", None)),
-                }
-            else:
-                aggregated[pid]["quantity"] += qty
-                aggregated[pid]["selected_features"] = _merge_features(
-                    aggregated[pid]["selected_features"],
-                    getattr(item, "selected_features", None),
-                )
-
-        if not aggregated:
-            messages.error(request, "Your cart has no valid items to checkout.")
-            return redirect("marketplace:cart_view")
-
-        # ---------------------------------------
-        # Calculate subtotal + eligible promo discount (for checkout subset)
-        # ---------------------------------------
-        subtotal = Decimal("0")
-        eligible_discount = Decimal("0")
-
-        # we need store list for analytics (for checkout subset)
-        stores_in_cart = set()
-
-        for pid, row in aggregated.items():
-            product = row["product"]
-            qty = row["quantity"]
-
-            line_total = (_safe_decimal(product.price) * qty)
-            subtotal += line_total
-
-            if product.store:
-                stores_in_cart.add(product.store)
-
-            if promo and promo.applies_to_product(product):
-                eligible_discount += (line_total * Decimal(promo.discount_percentage)) / 100
-
-        subtotal = _q2(subtotal)
-        discount_amount = _q2(eligible_discount)
-
-        # ✅ ANALYTICS: Track checkout initiation (per store) for the subset
-        session_key = request.session.session_key or request.user.username
-        for store in stores_in_cart:
-            track_event(
-                session_key=session_key,
-                event_type="checkout",
-                user=request.user,
-                store=store,
-                path=request.path,
-            )
-
-        # ---------------------------------------
-        # Create Order + Reduce Stock (atomic)
-        # ---------------------------------------
-        with transaction.atomic():
-            # Create a fresh order per checkout
-            order = Order.objects.create(
-                buyer=request.user,
-                promo_code=promo,
-                discount_amount=discount_amount,
-            )
-
-            # Compute base_total for split adjustments (no shipping/tax here unless you have them)
-            base_total = _q2(subtotal - discount_amount)
-
-            # Split adjustment (only for by_percent)
-            # Goal: final_total == target_due
-            # We'll implement via shipping_cost (positive adjustment) or extra discount (negative adjustment)
-            social_adjustment = Decimal("0")
-            if social and split_mode == "by_percent" and target_due is not None:
-                social_adjustment = _q2(target_due - base_total)
-
-                if social_adjustment > 0:
-                    # Add to shipping_cost so payable increases
-                    order.shipping_cost = _q2(getattr(order, "shipping_cost", Decimal("0")) + social_adjustment)
-                elif social_adjustment < 0:
-                    # Increase discount_amount to reduce payable
-                    # (cap so it never makes total negative)
-                    extra_discount = abs(social_adjustment)
-                    order.discount_amount = _q2(order.discount_amount + extra_discount)
-
-            # If you have tax/shipping calculation elsewhere, do it after this adjustment.
-            order.save()
-
-            # Create order items + reduce stock (for aggregated subset)
-            # Also track paid events per store/product
-            store_items = {}  # store -> list of products for analytics
-
-            for pid, row in aggregated.items():
-                product = row["product"]
-                qty = row["quantity"]
-
-                # ✅ lock only the product row (no joins)
-                locked_product = Product.objects.select_for_update().get(id=product.id)
-
-                # Warehouse for that store
-                warehouse = getattr(locked_product.store, "warehouse", None)
-
-                reduce_stock_for_checkout(
-                    product=locked_product,
-                    quantity=qty,
-                    warehouse=warehouse,
-                    user=request.user,
-                    reference_prefix=f"ORDER{order.id}",
-                    notes=f"Checkout cart sale (Order #{order.id})",
-                )
-
-                # ✅ duplicate-safe create (even if checkout retries or race)
-                order_item, created = OrderItem.objects.get_or_create(
-                    order=order,
-                    product=locked_product,
-                    defaults={
-                        "quantity": qty,
-                        "selected_features": row["selected_features"],
-                    },
-                )
-                if not created:
-                    # If it exists (shouldn't for new order, but safe), set quantity exactly
-                    order_item.quantity = qty
-                    order_item.selected_features = row["selected_features"]
-                    order_item.save(update_fields=["quantity", "selected_features"])
-
-                # Analytics grouping
-                store = locked_product.store
-                store_items.setdefault(store, []).append(locked_product)
-
-            # ✅ ANALYTICS: Track paid event per store + product (subset)
-            for store, products in store_items.items():
-                for p in products:
-                    track_event(
-                        session_key=session_key,
-                        event_type="paid",
-                        user=request.user,
-                        store=store,
-                        product=p,
-                        order=order,
-                        path=request.path,
-                    )
-
-            # Clear ONLY the checked out items:
-            if social and split_mode != "single_payer":
-                # remove just this user's items
-                cart_items_qs.delete()
-            else:
-                # normal cart checkout OR single payer pays all
-                cart_items_qs.delete()
-
-            # Increment promo usage (only if applied)
-            if promo:
-                promo.increment_usage()
-
-            # Notifications
-            notify_store_new_order_async(order)
-
-        messages.success(request, "Order placed successfully!")
-        return redirect("orders:order_detail", order_id=order.id)
+        # Default to normal checkout
+        return redirect('orders:checkout_cart')
 
     except Cart.DoesNotExist:
-        messages.error(request, "You don't have any cart to checkout.")
-        return redirect("marketplace:cart_view")
-
-    except ValidationError as e:
-        # show the dict if it is a ValidationError message dict
-        messages.error(request, f"Failed to checkout: {str(e)}")
-        return redirect("marketplace:cart_view")
-
-    except Exception as e:
-        logger.exception("Checkout error for user %s: %s", getattr(request.user, "id", None), str(e))
-        messages.error(request, "An error occurred during checkout. Please try again.")
-        return redirect("marketplace:cart_view")
-
+        messages.error(request, "Your cart is empty.")
+        return redirect("marketplace:cart")
 
 
 # ---------------------------------------------------------
@@ -705,143 +718,6 @@ def quick_checkout(request):
         logger.exception("Quick checkout error for user %s: %s", getattr(request.user, "id", None), str(e))
         messages.error(request, "An error occurred during quick checkout.")
         return redirect("marketplace:product_detail", product_id=product.id)
-
-# ============================================================================
-# SOCIAL CART CHECKOUT (if applicable)
-# ============================================================================
-
-@require_http_methods(["POST"])
-@csrf_protect
-@login_required
-def checkout_social_cart(request, social_cart_id):
-    """
-    Checkout a social cart (group order).
-
-    ✅ Analytics: Tracks checkout and paid events for all members
-    """
-
-    social_cart = get_object_or_404(
-        SocialCart.objects.select_related('cart', 'owner'),
-        id=social_cart_id
-    )
-
-    # Permission check
-    member = CartMember.objects.filter(
-        social_cart=social_cart,
-        user=request.user,
-        status='joined'
-    ).first()
-
-    if not member:
-        messages.error(request, "You are not a member of this cart.")
-        return redirect('socialcart:view', social_cart_id=social_cart_id)
-
-    # Only owner can checkout
-    if social_cart.owner != request.user:
-        messages.error(request, "Only the cart owner can checkout.")
-        return redirect('socialcart:view', social_cart_id=social_cart_id)
-
-    if social_cart.status != 'open':
-        messages.error(request, "This cart is not open for checkout.")
-        return redirect('socialcart:view', social_cart_id=social_cart_id)
-
-    try:
-        cart = social_cart.cart
-        cart_items = CartItem.objects.filter(cart=cart).select_related(
-            'product',
-            'product__store',
-            'added_by'
-        )
-
-        if not cart_items.exists():
-            messages.error(request, "Cart is empty.")
-            return redirect('socialcart:view', social_cart_id=social_cart_id)
-
-        session_key = request.session.session_key or request.user.username
-
-        # ✅ ANALYTICS: Track checkout for social cart
-        stores_in_cart = set()
-        for item in cart_items:
-            if item.product.store:
-                stores_in_cart.add(item.product.store)
-
-        for store in stores_in_cart:
-            track_event(
-                session_key=session_key,
-                event_type="checkout",
-                user=request.user,
-                store=store,
-                path=request.path,
-            )
-
-        with transaction.atomic():
-            # Create orders per member based on their items
-            member_orders = {}
-
-            for item in cart_items:
-                buyer = item.added_by or social_cart.owner
-
-                if buyer not in member_orders:
-                    member_orders[buyer] = Order.objects.create(
-                        buyer=buyer,
-                        promo_code=None,
-                        discount_amount=Decimal('0'),
-                        is_social_order=True,
-                        social_cart_id=social_cart_id,
-                    )
-
-                order = member_orders[buyer]
-
-                # Lock and reduce stock
-                product = Product.objects.select_for_update().get(id=item.product.id)
-                reduce_stock(product, item.quantity)
-
-                OrderItem.objects.create(
-                    order=order,
-                    product=product,
-                    quantity=item.quantity,
-                    selected_features=item.selected_features
-                )
-
-                # ✅ ANALYTICS: Track paid event per item
-                track_event(
-                    session_key=session_key,
-                    event_type="paid",
-                    user=buyer,
-                    store=product.store,
-                    product=product,
-                    order=order,
-                    path=request.path,
-                )
-
-            # Update social cart status
-            social_cart.status = 'completed'
-            social_cart.save(update_fields=['status'])
-
-            # Clear cart
-            cart_items.delete()
-
-            # Notify all members and stores
-            for buyer, order in member_orders.items():
-                notify_store_new_order_async(order)
-
-            messages.success(
-                request,
-                f"Social cart checked out successfully! "
-                f"{len(member_orders)} order(s) created."
-            )
-            return redirect('socialcart:view', social_cart_id=social_cart_id)
-
-    except ValidationError as e:
-        messages.error(request, f"Checkout failed: {str(e)}")
-        return redirect('socialcart:view', social_cart_id=social_cart_id)
-
-    except Exception as e:
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.error(f"Social cart checkout error: {str(e)}")
-        messages.error(request, "An error occurred during checkout.")
-        return redirect('socialcart:view', social_cart_id=social_cart_id)
 
 @login_required
 def order_detail(request, order_id):

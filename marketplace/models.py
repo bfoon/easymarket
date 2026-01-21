@@ -12,6 +12,14 @@ from django.db.models.functions import Lower
 from django.core.validators import FileExtensionValidator
 from django.db.models import UniqueConstraint
 
+# ============================================================
+# HELPER FUNCTIONS (Add at module level, before models)
+# ============================================================
+
+def _generate_invite_code():
+    """Generate unique invite code for social cart"""
+    return secrets.token_urlsafe(10)
+
 
 class Category(models.Model):
     name = models.CharField(max_length=100)
@@ -1109,33 +1117,82 @@ class ProductImage(models.Model):
             # Unset them as primary
             overlapping_images.update(is_primary=False)
 
+
 class Cart(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='cart')
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"{self.user.username}'s Cart"
 
-    def total_items(self):
-        return sum(item.quantity for item in self.items.all())
+    def total_items(self, cart_type=None):
+        """
+        Get total item count
+        cart_type: 'normal', 'social', or None for all items
+        """
+        items = self.items.all()
+        if cart_type:
+            items = items.filter(cart_type=cart_type)
+        return sum(item.quantity for item in items)
 
-    def total_price(self):
-        return sum(item.product.price * item.quantity for item in self.items.all())
+    def total_price(self, cart_type=None):
+        """
+        Get total price
+        cart_type: 'normal', 'social', or None for all items
+        """
+        items = self.items.all()
+        if cart_type:
+            items = items.filter(cart_type=cart_type)
+        return sum(item.product.price * item.quantity for item in items)
+
+    def get_normal_items(self):
+        """Get items in normal cart"""
+        return self.items.filter(cart_type='normal')
+
+    def get_social_items(self):
+        """Get items in social cart"""
+        return self.items.filter(cart_type='social')
+
+    def get_user_social_items(self, user):
+        """Get social cart items added by specific user"""
+        return self.items.filter(cart_type='social', added_by=user)
 
     def social_guard(self):
+        """Check if social cart allows modifications"""
         social = getattr(self, 'social', None)
         if social and social.status in ('locked', 'closed', 'cancelled'):
             raise ValidationError("Cart is locked for checkout.")
         return social
 
 
+# ============================================================
+# UPDATE CartItem MODEL
+# ============================================================
+
 class CartItem(models.Model):
+    """
+    CartItem can belong to either 'normal' or 'social' cart type
+    """
+    CART_TYPE_CHOICES = [
+        ('normal', 'Normal Cart'),
+        ('social', 'Social Cart'),
+    ]
+
     cart = models.ForeignKey('Cart', on_delete=models.CASCADE, related_name='items')
     product = models.ForeignKey('Product', on_delete=models.CASCADE)
     quantity = models.PositiveIntegerField(default=1)
     selected_features = models.JSONField(default=dict, blank=True)
 
-    # NEW: who added this line (enables per-member permissions)
+    # NEW: Specifies if item is in normal cart or social cart
+    cart_type = models.CharField(
+        max_length=10,
+        choices=CART_TYPE_CHOICES,
+        default='normal',
+        help_text='Whether this item belongs to normal cart or social cart'
+    )
+
+    # Who added this item (important for social cart permissions)
     added_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -1143,20 +1200,57 @@ class CartItem(models.Model):
         related_name='cart_items_added'
     )
 
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
     class Meta:
-        # Remove the old tuple unique_together; replace with a proper unique constraint
         constraints = [
-            UniqueConstraint(
-                fields=['cart', 'product', 'selected_features'],
-                name='uniq_cart_product_features'
+            models.UniqueConstraint(
+                fields=['cart', 'product', 'selected_features', 'cart_type'],
+                name='uniq_cart_product_features_type'
             ),
+        ]
+        indexes = [
+            models.Index(fields=['cart', 'cart_type']),
+            models.Index(fields=['added_by']),
         ]
 
     def __str__(self):
-        return f"{self.quantity} x {self.product.name}"
+        cart_label = f"[{self.cart_type.upper()}]"
+        return f"{cart_label} {self.quantity} x {self.product.name}"
 
     def subtotal(self):
         return self.product.price * self.quantity
+
+    def can_user_modify(self, user):
+        """Check if user can modify (update/remove) this cart item"""
+        # For normal cart items, only cart owner can modify
+        if self.cart_type == 'normal':
+            return self.cart.user == user
+
+        # For social cart items
+        if self.cart_type == 'social':
+            social = getattr(self.cart, 'social', None)
+            if not social or not social.is_active:
+                return False
+
+            # Owner can always modify
+            if social.owner == user:
+                return True
+
+            # Check if user is blocked
+            member = social.members.filter(user=user, status='joined').first()
+            if not member:
+                return False
+
+            blocked_member = social.members.filter(user=user, status='blocked').first()
+            if blocked_member:
+                return False  # Blocked users cannot modify
+
+            # Users can modify items they added
+            return self.added_by == user
+
+        return False
 
     @property
     def features_dict(self):
@@ -1170,8 +1264,9 @@ class CartItem(models.Model):
         return sf or {}
 
 
-def _invite_code():
-    return secrets.token_urlsafe(10)
+# ============================================================
+# UPDATE SocialCart MODEL
+# ============================================================
 
 class SocialCart(models.Model):
     SPLIT_BY_ITEMS = 'by_items'
@@ -1185,18 +1280,25 @@ class SocialCart(models.Model):
 
     cart = models.OneToOneField('marketplace.Cart', on_delete=models.CASCADE, related_name='social')
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='owned_social_carts')
-    invite_code = models.CharField(max_length=64, unique=True, default=_invite_code)
+
+    # FIXED: Use function reference instead of lambda
+    invite_code = models.CharField(max_length=64, unique=True, default=_generate_invite_code)
+
     is_active = models.BooleanField(default=True)
     status = models.CharField(max_length=20, default='open', choices=[
-        ('open','Open'),
-        ('checkout','CheckoutInProgress'),
-        ('locked','Locked'),
-        ('closed','Closed'),
-        ('cancelled','Cancelled'),
+        ('open', 'Open'),
+        ('checkout', 'Checkout In Progress'),
+        ('locked', 'Locked'),
+        ('closed', 'Closed'),
+        ('cancelled', 'Cancelled'),
     ])
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
-    # NEW: split settings
+    # NEW: Track when cart was completed/closed
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    # Split settings
     split_mode = models.CharField(max_length=20, choices=SPLIT_CHOICES, default=SPLIT_BY_ITEMS)
     single_payer = models.ForeignKey(
         'marketplace.CartMember',
@@ -1205,10 +1307,119 @@ class SocialCart(models.Model):
         related_name='as_single_payer_for'
     )
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['is_active', 'status']),
+            models.Index(fields=['owner']),
+        ]
+
+    def __str__(self):
+        return f"Social Cart {self.id} - Owner: {self.owner.username}"
+
     def total(self) -> Decimal:
-        subtotal = sum((i.product.price * i.quantity for i in self.cart.items.all()), Decimal('0'))
+        """Calculate total for social cart items only"""
+        subtotal = sum(
+            (i.product.price * i.quantity for i in self.cart.items.filter(cart_type='social')),
+            Decimal('0')
+        )
         tax_rate = getattr(settings, "CART_TAX_RATE", Decimal("0.00"))
         return subtotal + (subtotal * tax_rate)
+
+    def can_user_checkout(self, user):
+        """Check if user can checkout this social cart"""
+        # Only owner can checkout social cart
+        return self.owner == user and self.is_active and self.status in ('open', 'checkout')
+
+    def can_user_modify(self, user):
+        """Check if user can add/modify items in social cart"""
+        if not self.is_active or self.status not in ('open', 'checkout'):
+            return False
+
+        # Check if user is blocked
+        member = self.members.filter(user=user, status='blocked').first()
+        if member:
+            return False
+
+        # Owner and joined members can modify
+        if self.owner == user:
+            return True
+
+        member = self.members.filter(user=user, status='joined').first()
+        return bool(member)
+
+    def can_user_view(self, user):
+        """Check if user can view social cart (even if blocked)"""
+        if self.owner == user:
+            return True
+
+        # Any member (including blocked) can view
+        member = self.members.filter(user=user).first()
+        return bool(member)
+
+    def deactivate_and_create_orders(self):
+        """
+        Deactivate social cart and create individual orders for each member
+        Called when: owner checks out OR owner leaves the cart
+        """
+        from orders.models import Order, OrderItem
+        from django.db import transaction
+
+        with transaction.atomic():
+            # Mark as closed
+            self.is_active = False
+            self.status = 'closed'
+            self.completed_at = timezone.now()
+            self.save(update_fields=['is_active', 'status', 'completed_at', 'updated_at'])
+
+            # Get all social cart items
+            social_items = self.cart.items.filter(cart_type='social')
+
+            # Group items by who added them
+            items_by_user = {}
+            for item in social_items:
+                user = item.added_by or self.owner
+                if user not in items_by_user:
+                    items_by_user[user] = []
+                items_by_user[user].append(item)
+
+            # Create orders for each user
+            created_orders = {}
+            for user, items in items_by_user.items():
+                if not items:
+                    continue
+
+                # Calculate total for this user's items
+                total = sum(item.subtotal() for item in items)
+
+                # Create order
+                order = Order.objects.create(
+                    user=user,
+                    total_amount=total,
+                    status='pending',
+                    payment_status='pending',
+                    source='social_cart',
+                    notes=f'Order from Social Cart #{self.id}'
+                )
+
+                # Create order items
+                for cart_item in items:
+                    OrderItem.objects.create(
+                        order=order,
+                        product=cart_item.product,
+                        quantity=cart_item.quantity,
+                        price=cart_item.product.price,
+                        selected_features=cart_item.selected_features
+                    )
+
+                created_orders[user] = order
+
+            # Delete all social cart items (they're now in orders)
+            social_items.delete()
+
+            # Deactivate all members
+            self.members.all().update(status='left')
+
+            return created_orders
 
     def clear_active_shares(self):
         self.payment_shares.filter(is_active=True).update(is_active=False)
@@ -1223,9 +1434,9 @@ class SocialCart(models.Model):
         from django.db.models import Sum, F
         self.clear_active_shares()
 
-        # Sum by added_by (user)
+        # Sum by added_by (user) for social cart items only
         lines = (
-            self.cart.items
+            self.cart.items.filter(cart_type='social')
             .select_related('added_by', 'product')
             .values('added_by_id')
             .annotate(amount=Sum(F('quantity') * F('product__price')))
@@ -1242,6 +1453,8 @@ class SocialCart(models.Model):
                 member = owner_member
             if not member:
                 continue
+
+            from .models import PaymentShare
             PaymentShare.objects.update_or_create(
                 social_cart=self, member=member,
                 defaults={
@@ -1255,7 +1468,7 @@ class SocialCart(models.Model):
         # Recalc
         self.recalc_members_due()
 
-    def compute_shares_by_percentage(self, allocations: dict[int, Decimal]):
+    def compute_shares_by_percentage(self, allocations: dict):
         """
         allocations: {member_id: percentage (0..100)}, must sum to 100.
         """
@@ -1265,6 +1478,7 @@ class SocialCart(models.Model):
         if total_pct != Decimal('100'):
             raise ValueError("Percentages must sum to 100")
 
+        from .models import PaymentShare
         # Create percentage shares only for members in allocations
         for member_id, pct in allocations.items():
             member = self.members.filter(id=member_id, status='joined').first()
@@ -1295,6 +1509,7 @@ class SocialCart(models.Model):
         if not payer:
             raise ValueError("Invalid single payer")
 
+        from .models import PaymentShare
         # Give payer fixed_amount = total, others None
         for m in self.members.filter(status='joined'):
             if m.id == payer_member_id:
@@ -1309,7 +1524,6 @@ class SocialCart(models.Model):
                     }
                 )
             else:
-                # ensure other members have no active share
                 PaymentShare.objects.update_or_create(
                     social_cart=self, member=m,
                     defaults={
@@ -1322,7 +1536,7 @@ class SocialCart(models.Model):
                 )
         self.recalc_members_due()
 
-    def set_split_mode(self, mode: str, allocations: dict | None = None, payer_member_id: int | None = None):
+    def set_split_mode(self, mode: str, allocations: dict = None, payer_member_id: int = None):
         """
         Public helper to switch modes and recompute shares.
         """
@@ -1356,7 +1570,7 @@ class SocialCart(models.Model):
         if not shares.exists():
             return
 
-        perc_total = sum((s.percentage or Decimal('0')) for s in shares)  # 0..100
+        perc_total = sum((s.percentage or Decimal('0')) for s in shares)
         fixed_total = sum((s.fixed_amount or Decimal('0')) for s in shares)
         items_total = sum((s.items_total_amount or Decimal('0')) for s in shares)
 
@@ -1401,10 +1615,11 @@ class CartActivity(models.Model):
     class Meta:
         ordering = ["-id"]
 
+
 class CartMember(models.Model):
-    ROLE = (('owner','Owner'), ('editor','Editor'), ('viewer','Viewer'))
+    ROLE = (('owner', 'Owner'), ('editor', 'Editor'), ('viewer', 'Viewer'))
     STATUS = (
-        ('pending', 'Pending'),  # NEW - for approval workflow
+        ('pending', 'Pending'),
         ('invited', 'Invited'),
         ('joined', 'Joined'),
         ('left', 'Left'),
@@ -1416,43 +1631,81 @@ class CartMember(models.Model):
     role = models.CharField(max_length=12, choices=ROLE, default='editor')
     status = models.CharField(max_length=12, choices=STATUS, default='joined')
     joined_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ('social_cart','user')
+        unique_together = ('social_cart', 'user')
+        indexes = [
+            models.Index(fields=['social_cart', 'status']),
+            models.Index(fields=['user', 'status']),
+        ]
 
+    def __str__(self):
+        return f"{self.user.username} - {self.social_cart.id} ({self.status})"
+
+    def can_add_items(self):
+        """Check if member can add items to social cart"""
+        return (
+                self.status == 'joined' and
+                self.social_cart.is_active and
+                self.social_cart.status in ('open', 'checkout')
+        )
+
+    def can_modify_items(self):
+        """Check if member can modify items in social cart"""
+        if self.status == 'blocked':
+            return False
+        return self.can_add_items()
+
+# ============================================================
+# UPDATE CartInvite MODEL (if not already fixed)
+# ============================================================
 
 class CartInvite(models.Model):
     social_cart = models.ForeignKey(SocialCart, on_delete=models.CASCADE, related_name='invites')
-    code = models.CharField(max_length=64, unique=True, default=_invite_code)
+
+    # FIXED: Use function reference instead of lambda
+    code = models.CharField(max_length=64, unique=True, default=_generate_invite_code)
+
     invited_email = models.EmailField(blank=True, null=True)
     invited_phone = models.CharField(max_length=50, blank=True, null=True)
     inviter = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='sent_cart_invites')
-    accepted_by = models.ForeignKey(settings.AUTH_USER_MODEL, blank=True, null=True, on_delete=models.SET_NULL, related_name='accepted_cart_invites')
-    status = models.CharField(max_length=12, default='pending', choices=[('pending','Pending'),('accepted','Accepted'),('expired','Expired')])
+    accepted_by = models.ForeignKey(settings.AUTH_USER_MODEL, blank=True, null=True, on_delete=models.SET_NULL,
+                                    related_name='accepted_cart_invites')
+    status = models.CharField(max_length=12, default='pending',
+                              choices=[('pending', 'Pending'), ('accepted', 'Accepted'), ('expired', 'Expired')])
     expires_at = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def is_valid(self):
-        return self.status=='pending' and (self.expires_at is None or self.expires_at > timezone.now())
+        return self.status == 'pending' and (self.expires_at is None or self.expires_at > timezone.now())
 
+# ============================================================
+# PaymentShare MODEL
+# ============================================================
 
 class PaymentShare(models.Model):
     """
-    A member's intended share. Choose one or combine:
-    - percentage (0..100, counts toward the remainder after fixed & items)
-    - fixed_amount
-    - items_total_amount (auto from 'claimed' items)
+    A member's payment share in social cart
     """
     social_cart = models.ForeignKey(SocialCart, on_delete=models.CASCADE, related_name='payment_shares')
     member = models.ForeignKey(CartMember, on_delete=models.CASCADE, related_name='shares')
-    percentage = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)  # 0..100
+    percentage = models.DecimalField(max_digits=5, decimal_places=2, blank=True, null=True)
     fixed_amount = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
     items_total_amount = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
     amount_due = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal('0.00'))
     is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ('social_cart','member')
+        unique_together = ('social_cart', 'member')
+        indexes = [
+            models.Index(fields=['social_cart', 'is_active']),
+        ]
+
+    def __str__(self):
+        return f"Share for {self.member.user.username} in Cart {self.social_cart.id}"
 
 
 class Contribution(models.Model):

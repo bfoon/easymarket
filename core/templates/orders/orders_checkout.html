@@ -1,0 +1,166 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load currency_tags %}
+
+{% block title %}Checkout - EasyMarket{% endblock %}
+
+{% block extra_css %}
+<style>
+.checkout-container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.order-summary {
+  position: sticky;
+  top: 20px;
+}
+.checkout-item {
+  border-bottom: 1px solid #dee2e6;
+  padding: 1rem 0;
+}
+.checkout-item:last-child {
+  border-bottom: none;
+}
+@media (max-width: 768px) {
+  .order-summary {
+    position: static;
+    margin-top: 2rem;
+  }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="py-5 bg-light min-vh-100">
+  <div class="container checkout-container">
+    
+    <div class="row mb-4">
+      <div class="col-12">
+        <h1 class="h2 fw-bold mb-2">
+          <i class="fas fa-lock me-2 text-primary"></i>Secure Checkout
+        </h1>
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'marketplace:cart' %}">Cart</a></li>
+            <li class="breadcrumb-item active">Checkout</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+
+    <form method="post" action="">
+      {% csrf_token %}
+      
+      <div class="row g-4">
+        
+        <div class="col-lg-8">
+          
+          <!-- Cart Items -->
+          <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-primary text-white">
+              <h5 class="mb-0">
+                <i class="fas fa-shopping-cart me-2"></i>Order Items ({{ cart_items.count }})
+              </h5>
+            </div>
+            <div class="card-body p-0">
+              {% for item in cart_items %}
+              <div class="checkout-item px-4">
+                <div class="row align-items-center">
+                  <div class="col-md-6">
+                    <div class="d-flex align-items-center gap-3">
+                      <img src="{% if item.product.image %}{{ item.product.image.url }}{% else %}{% static 'img/placeholder.png' %}{% endif %}" 
+                           alt="{{ item.product.name }}"
+                           class="rounded shadow-sm" 
+                           style="width:80px;height:80px;object-fit:cover;">
+                      <div>
+                        <h6 class="mb-1 fw-semibold">{{ item.product.name }}</h6>
+                        <small class="text-muted">{{ item.product.category }}</small>
+                        {% if item.selected_features %}
+                        <div class="mt-1">
+                          {% for key, value in item.selected_features.items %}
+                            <span class="badge bg-light text-dark border me-1 small">{{ key }}: {{ value }}</span>
+                          {% endfor %}
+                        </div>
+                        {% endif %}
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-md-2 text-center mt-3 mt-md-0">
+                    <strong>{% display_money item.product.price %}</strong>
+                  </div>
+                  <div class="col-md-2 text-center mt-2 mt-md-0">
+                    <span class="badge bg-primary">Qty: {{ item.quantity }}</span>
+                  </div>
+                  <div class="col-md-2 text-end mt-2 mt-md-0">
+                    <strong class="text-success">{% display_money item.subtotal %}</strong>
+                  </div>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+
+          <!-- Promo Code -->
+          <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white">
+              <h5 class="mb-0"><i class="fas fa-tag me-2 text-success"></i>Promo Code</h5>
+            </div>
+            <div class="card-body">
+              <div class="row g-3">
+                <div class="col-md-8">
+                  <input type="text" class="form-control form-control-lg" name="promo_code" placeholder="Enter promo code">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Notes -->
+          <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white">
+              <h5 class="mb-0"><i class="fas fa-sticky-note me-2 text-info"></i>Delivery Instructions</h5>
+            </div>
+            <div class="card-body">
+              <textarea class="form-control" name="notes" rows="4" placeholder="Add delivery instructions..."></textarea>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Summary -->
+        <div class="col-lg-4">
+          <div class="order-summary">
+            <div class="card shadow-sm border-0 mb-3">
+              <div class="card-header bg-gradient text-white" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                <h5 class="mb-0 fw-bold"><i class="fas fa-receipt me-2"></i>Order Summary</h5>
+              </div>
+              <div class="card-body">
+                <div class="d-flex justify-content-between mb-3">
+                  <span class="text-muted">Subtotal:</span>
+                  <strong>{% display_money subtotal %}</strong>
+                </div>
+                <div class="d-flex justify-content-between mb-3">
+                  <span class="text-muted">Tax (0.0%):</span>
+                  <strong>{% display_money tax %}</strong>
+                </div>
+                <hr>
+                <div class="d-flex justify-content-between mb-4">
+                  <span class="fw-bold fs-5">Total:</span>
+                  <strong class="text-primary fs-4">{% display_money total %}</strong>
+                </div>
+                <button type="submit" class="btn btn-primary btn-lg w-100 mb-3">
+                  <i class="fas fa-lock me-2"></i>Place Order
+                </button>
+                <a href="{% url 'marketplace:cart' %}" class="btn btn-outline-secondary w-100">
+                  <i class="fas fa-arrow-left me-2"></i>Back to Cart
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </form>
+
+  </div>
+</section>
+{% endblock %}

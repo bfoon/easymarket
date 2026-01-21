@@ -20,6 +20,10 @@ from django.db.models import Prefetch
 from django.db import models
 from django.contrib.auth import get_user_model
 import re
+import secrets
+import qrcode
+from io import BytesIO
+import base64
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
@@ -53,6 +57,7 @@ from django.views.decorators.http import require_http_methods
 from django.core.mail import EmailMessage
 from django.core.validators import validate_email
 from django.core.exceptions import ValidationError
+from django.db import transaction
 import os
 
 # Get the custom User model
@@ -2026,51 +2031,114 @@ def _collect_selected_features(request):
 # CART VIEWS WITH ANALYTICS
 # ============================================================================
 
+@login_required
 @require_POST
 def add_to_cart(request, product_id):
     """
-    Adds to (1) active SocialCart cart if the authed user has one (joined),
-    else (2) user's personal DB cart, else (3) session cart (guest).
-
-    Body can be form or JSON:
-      quantity: int, default 1
-      selected_features: JSON (e.g. {"color":"Red","size":"M"})
-
-    ✅ Analytics: Tracks add_to_cart event
+    FIXED: Add item to cart (normal or social) with permission checks
     """
-    # Parse incoming
-    if request.content_type and "application/json" in request.content_type:
+    from analytics.services import track_event
+
+    product = get_object_or_404(Product, id=product_id, is_active=True)
+    user_cart, _ = Cart.objects.get_or_create(user=request.user)
+
+    # Get cart type from request
+    cart_type = request.POST.get('cart_type', 'normal')
+
+    if cart_type not in ['normal', 'social']:
+        return JsonResponse({
+            'success': False,
+            'message': 'Invalid cart type'
+        }, status=400)
+
+    # If adding to social cart, find and verify access
+    if cart_type == 'social':
+        social = None
+
+        # Check if user owns a social cart
         try:
-            payload = json.loads(request.body.decode() or "{}")
-        except Exception:
-            payload = {}
-        quantity = _coerce_int(payload.get("quantity", 1))
+            social = user_cart.social
+            if not social or not social.is_active or social.status not in ('open', 'checkout'):
+                social = None
+        except (SocialCart.DoesNotExist, AttributeError):
+            pass
+
+        # If not owner, check if member
+        if not social:
+            try:
+                member = CartMember.objects.filter(
+                    user=request.user,
+                    status='joined'
+                ).select_related('social_cart').first()
+
+                if member and member.social_cart.is_active:
+                    social = member.social_cart
+            except Exception:
+                pass
+
+        # No accessible social cart found
+        if not social:
+            return JsonResponse({
+                'success': False,
+                'message': 'No active social cart available'
+            }, status=403)
+
+        # Check if user can add items
+        member = social.members.filter(user=request.user).first()
+        if not member or member.status != 'joined':
+            return JsonResponse({
+                'success': False,
+                'message': 'You do not have permission to add items'
+            }, status=403)
+
+        # Use the social cart's main cart
+        target_cart = social.cart
     else:
-        quantity = _coerce_int(request.POST.get("quantity", 1))
+        target_cart = user_cart
 
-    selected_features = _collect_selected_features(request)
+    # Get quantity and features
+    try:
+        quantity = int(request.POST.get('quantity', 1))
+        if quantity < 1:
+            quantity = 1
+    except ValueError:
+        quantity = 1
 
-    # Product
-    product = get_object_or_404(Product, pk=product_id, is_active=True)
+    selected_features = {}
+    features_json = request.POST.get('selected_features', '{}')
+    try:
+        import json
+        selected_features = json.loads(features_json)
+    except:
+        pass
 
-    # Authenticated flow: prefer SocialCart
-    if request.user.is_authenticated:
-        cart, social = _resolve_active_cart_for_user(request.user)
-
-        # Create/update DB CartItem
-        item, created = CartItem.objects.get_or_create(
-            cart=cart,
+    # Add or update cart item
+    with transaction.atomic():
+        cart_item, created = CartItem.objects.get_or_create(
+            cart=target_cart,
             product=product,
-            selected_features=selected_features or {},
-            defaults={"quantity": quantity, "added_by": request.user},
+            selected_features=selected_features,
+            cart_type=cart_type,
+            defaults={
+                'quantity': quantity,
+                'added_by': request.user
+            }
         )
-        if not created:
-            item.quantity = _coerce_int(item.quantity + quantity)
-            item.save(update_fields=["quantity"])
-        else:
-            item.save(update_fields=["quantity", "added_by"])
 
-        # ANALYTICS: Track add to cart event
+        if not created:
+            cart_item.quantity += quantity
+            cart_item.save(update_fields=['quantity', 'updated_at'])
+
+        # Recalculate shares if social cart
+        if cart_type == 'social':
+            try:
+                if social.split_mode == 'by_items':
+                    social.compute_shares_by_items()
+            except Exception:
+                pass
+
+    # Track analytics
+    try:
         track_event(
             session_key=request.session.session_key or request.user.username,
             event_type="add_to_cart",
@@ -2079,60 +2147,25 @@ def add_to_cart(request, product_id):
             product=product,
             path=request.path,
         )
+    except Exception:
+        pass
 
-        # Optional: recompute social shares
-        if social:
-            _ensure_owner_membership(social)
-            if hasattr(social, "recalc_members_due"):
-                social.recalc_members_due()
+    # Get counts for response
+    normal_count = target_cart.items.filter(cart_type='normal').aggregate(
+        total=Sum('quantity')
+    )['total'] or 0
 
-        total_qty = cart.items.aggregate(s=models.Sum("quantity"))["s"] or 0
-        return JsonResponse(
-            {
-                "success": True,
-                "product_name": product.name,
-                "cart_item_id": item.id,
-                "cart_count": total_qty,
-                "in_social_cart": bool(social),
-                "social_owner_id": getattr(social, "owner_id", None),
-            }
-        )
+    social_count = target_cart.items.filter(cart_type='social').aggregate(
+        total=Sum('quantity')
+    )['total'] or 0
 
-    # Guest: session cart
-    key = f"{product.id}::{uuid.uuid4().hex[:6]}"
-    session_cart = request.session.get("cart", {})
-    session_cart[key] = {
-        "product_id": product.id,
-        "quantity": quantity,
-        "selected_features": selected_features or {},
-    }
-    request.session["cart"] = session_cart
-    request.session.modified = True
-
-    # ✅ ANALYTICS: Track guest add to cart
-    if not request.session.session_key:
-        request.session.create()
-
-    track_event(
-        session_key=request.session.session_key,
-        event_type="add_to_cart",
-        user=None,
-        store=product.store,
-        product=product,
-        path=request.path,
-    )
-
-    total_qty = sum(int(v.get("quantity", 1) or 1) for v in session_cart.values())
-    return JsonResponse(
-        {
-            "success": True,
-            "product_name": product.name,
-            "cart_count": total_qty,
-            "in_social_cart": False,
-            "line_key": key,
-        }
-    )
-
+    return JsonResponse({
+        'success': True,
+        'message': f'Added to {cart_type} cart',
+        'cart_type': cart_type,
+        'normal_count': normal_count,
+        'social_count': social_count,
+    })
 
 def cart_preview(request):
     """
@@ -2142,10 +2175,425 @@ def cart_preview(request):
     return render(request, "marketplace/partials/cart_preview.html", ctx)
 
 
+@login_required
 def cart_view(request):
-    ctx = build_cart_context(request, limit=None)
-    return render(request, "marketplace/cart_detail.html", ctx)
+    """
+    FIXED: Complete cart view with proper member visibility for social carts
+    """
+    # Get or create user's cart
+    user_cart, _ = Cart.objects.get_or_create(user=request.user)
 
+    # Get normal cart items from user's own cart
+    normal_items = (
+        user_cart.items.filter(cart_type='normal')
+        .select_related('product', 'product__store', 'product__category')
+        .order_by('-created_at')
+    )
+
+    # Initialize social cart variables
+    social = None
+    social_items = []
+    is_social_active = False
+    is_owner = False
+    is_blocked = False
+    can_modify_social = False
+    my_share = None
+    social_members = []
+    cart_to_use = user_cart  # Which cart to use for display
+
+    # CRITICAL FIX: Find social cart in TWO ways
+    # Method 1: User owns a social cart
+    try:
+        social = user_cart.social
+        if social and social.is_active and social.status in ('open', 'checkout'):
+            is_social_active = True
+            is_owner = True
+            cart_to_use = user_cart
+    except (SocialCart.DoesNotExist, AttributeError):
+        pass
+
+    # Method 2: User is a MEMBER of a social cart (not owner)
+    if not is_social_active:
+        try:
+            member = CartMember.objects.filter(
+                user=request.user,
+                status='joined'
+            ).select_related('social_cart', 'social_cart__cart').first()
+
+            if member and member.social_cart.is_active and member.social_cart.status in ('open', 'checkout'):
+                social = member.social_cart
+                is_social_active = True
+                is_owner = False
+                # Use the owner's cart for social items
+                cart_to_use = social.cart
+        except Exception as e:
+            logger.error(f"Error checking social cart membership: {e}")
+
+    # If we found an active social cart (owned or member)
+    if is_social_active and social:
+        try:
+            # ✅ Build invite link (absolute)
+            social_invite_link = request.build_absolute_uri(
+                reverse("marketplace:join_open_social_cart", kwargs={"invite_code": social.invite_code})
+            )
+
+            # ✅ Generate QR (base64 data URL)
+            social_cart_qr = generate_qr_code(social_invite_link)
+
+            # Get social items from the social cart's main cart
+            social_items = (
+                social.cart.items.filter(cart_type='social')
+                .select_related('product', 'product__store', 'product__category', 'added_by')
+                .order_by('-created_at')
+            )
+
+            # Get current user's membership details
+            member = social.members.filter(user=request.user).first()
+            if member:
+                is_blocked = member.status == 'blocked'
+
+                # Check modification permissions
+                if hasattr(member, 'can_modify_items'):
+                    can_modify_social = member.can_modify_items()
+                else:
+                    can_modify_social = member.status == 'joined'
+
+                # Get payment share
+                try:
+                    my_share = social.payment_shares.filter(
+                        member=member,
+                        is_active=True
+                    ).first()
+                except Exception:
+                    pass
+
+            # Get all members
+            social_members = social.members.filter(
+                status__in=['joined', 'blocked']
+            ).select_related('user').order_by('-joined_at')
+
+            # Add permission flags to social items
+            for item in social_items:
+                # Check if item has can_user_modify method
+                if hasattr(item, 'can_user_modify'):
+                    item.can_modify = item.can_user_modify(request.user)
+                    item.can_remove = item.can_user_modify(request.user)
+                else:
+                    # Fallback logic
+                    is_item_owner = item.added_by == request.user
+                    item.can_modify = (is_owner or (is_item_owner and not is_blocked))
+                    item.can_remove = (is_owner or (is_item_owner and not is_blocked))
+
+        except Exception as e:
+            logger.error(f"Error loading social cart items: {e}")
+            social_items = []
+
+    # Add permission flags to normal items
+    for item in normal_items:
+        item.can_modify = True
+        item.can_remove = True
+
+    # Calculate totals
+    CART_TAX_RATE = Decimal("0.000")
+
+    normal_subtotal = sum(item.product.price * item.quantity for item in normal_items)
+    normal_tax = normal_subtotal * CART_TAX_RATE
+    normal_total = normal_subtotal + normal_tax
+    normal_count = sum(item.quantity for item in normal_items)
+
+    social_subtotal = sum(item.product.price * item.quantity for item in social_items)
+    social_tax = social_subtotal * CART_TAX_RATE
+    social_total = social_subtotal + social_tax
+    social_count = sum(item.quantity for item in social_items)
+
+    cart_count = normal_count + social_count
+
+    # # QR + invite link
+    # social_invite_link = None
+    # social_cart_qr = None
+
+    context = {
+        'cart': user_cart,
+        'normal_items': normal_items,
+        'social_items': social_items,
+        'normal_subtotal': normal_subtotal,
+        'normal_tax': normal_tax,
+        'normal_total': normal_total,
+        'social_subtotal': social_subtotal,
+        'social_tax': social_tax,
+        'social_total': social_total,
+        'normal_count': normal_count,
+        'social_count': social_count,
+        'cart_count': cart_count,
+        'social': social,
+        'is_social_active': is_social_active,
+        'is_owner': is_owner,
+        'is_blocked': is_blocked,
+        'can_modify_social': can_modify_social,
+        'my_share': my_share,
+        'social_members': social_members,
+        'social_invite_link': social_invite_link,
+        'social_cart_qr': social_cart_qr,
+
+    }
+
+    return render(request, 'marketplace/cart_detail.html', context)
+
+def generate_qr_code(data):
+    """
+    Generate QR code and return as base64 string.
+    """
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(data)
+    qr.make(fit=True)
+
+    img = qr.make_image(fill_color="black", back_color="white")
+
+    buffer = BytesIO()
+    img.save(buffer, format='PNG')
+    buffer.seek(0)
+
+    img_str = base64.b64encode(buffer.read()).decode()
+    return f"data:image/png;base64,{img_str}"
+
+
+@login_required
+@require_POST
+def move_cart_item(request):
+    """
+    ENHANCED: Move item between normal and social carts with debug logging
+    """
+    item_id = request.POST.get('item_id')
+    target_cart_type = request.POST.get('target_cart_type')
+
+    logger.info(f"move_cart_item called by {request.user.username}: item_id={item_id}, target={target_cart_type}")
+
+    if not item_id or target_cart_type not in ['normal', 'social']:
+        logger.warning(f"Invalid parameters: item_id={item_id}, target={target_cart_type}")
+        return JsonResponse({
+            'success': False,
+            'message': 'Invalid parameters'
+        }, status=400)
+
+    try:
+        # Get user's cart
+        user_cart = Cart.objects.get(user=request.user)
+        logger.info(f"User cart ID: {user_cart.id}")
+
+        # Get the item
+        try:
+            cart_item = CartItem.objects.select_related(
+                'cart', 'cart__user', 'product', 'added_by'
+            ).get(id=item_id)
+            logger.info(f"Found item: ID={cart_item.id}, cart_type={cart_item.cart_type}, cart_id={cart_item.cart.id}")
+        except CartItem.DoesNotExist:
+            logger.error(f"Item not found: {item_id}")
+            return JsonResponse({
+                'success': False,
+                'message': 'Item not found'
+            }, status=404)
+
+        # Check if user can modify this item
+        can_modify = False
+
+        # Case 1: Item is in user's own normal cart
+        if cart_item.cart.user == request.user and cart_item.cart_type == 'normal':
+            can_modify = True
+            logger.info("✓ User can modify - item in own normal cart")
+
+        # Case 2: Item is in social cart
+        elif cart_item.cart_type == 'social':
+            try:
+                social = cart_item.cart.social
+                member = social.members.filter(user=request.user).first()
+
+                if member:
+                    if social.owner == request.user:
+                        can_modify = True
+                        logger.info("✓ User can modify - is social cart owner")
+                    elif cart_item.added_by == request.user and member.status == 'joined':
+                        can_modify = True
+                        logger.info("✓ User can modify - member and added this item")
+                    else:
+                        logger.warning(
+                            f"Cannot modify: added_by={cart_item.added_by}, user={request.user}, status={member.status}")
+                else:
+                    logger.warning(f"User is not a member of this social cart")
+            except (SocialCart.DoesNotExist, AttributeError) as e:
+                logger.error(f"Error checking social cart: {e}")
+
+        if not can_modify:
+            logger.warning("Permission denied to modify item")
+            return JsonResponse({
+                'success': False,
+                'message': 'You do not have permission to move this item'
+            }, status=403)
+
+        # Check if already in target cart type
+        if cart_item.cart_type == target_cart_type:
+            logger.warning(f"Item already in {target_cart_type} cart")
+            return JsonResponse({
+                'success': False,
+                'message': f'Item is already in {target_cart_type} cart'
+            }, status=400)
+
+        # If moving TO social cart, find and verify access
+        if target_cart_type == 'social':
+            social = None
+            target_cart = None
+
+            # Method 1: Check if user owns a social cart
+            logger.info("Checking if user owns a social cart...")
+            try:
+                social = user_cart.social
+                if social and social.is_active and social.status in ('open', 'checkout'):
+                    target_cart = user_cart
+                    logger.info(f"✓ Found owned social cart: ID={social.id}")
+                else:
+                    logger.info(
+                        f"Owned social cart not active or wrong status: active={social.is_active if social else 'N/A'}, status={social.status if social else 'N/A'}")
+                    social = None
+            except (SocialCart.DoesNotExist, AttributeError) as e:
+                logger.info(f"User doesn't own a social cart: {e}")
+
+            # Method 2: Check if user is a MEMBER
+            if not social:
+                logger.info("Checking if user is a member of a social cart...")
+                try:
+                    member = CartMember.objects.filter(
+                        user=request.user,
+                        status='joined'
+                    ).select_related('social_cart', 'social_cart__cart').first()
+
+                    logger.info(f"Member lookup result: {member}")
+
+                    if member:
+                        logger.info(
+                            f"Found membership: social_cart_id={member.social_cart.id}, role={member.role}, status={member.status}")
+                        logger.info(
+                            f"Social cart: active={member.social_cart.is_active}, status={member.social_cart.status}")
+
+                        if member.social_cart.is_active and member.social_cart.status in ('open', 'checkout'):
+                            social = member.social_cart
+                            target_cart = social.cart
+                            logger.info(f"✓ Found member social cart: ID={social.id}, target_cart={target_cart.id}")
+                        else:
+                            logger.warning(
+                                f"Member's social cart not accessible: active={member.social_cart.is_active}, status={member.social_cart.status}")
+                    else:
+                        logger.warning("No active 'joined' membership found")
+
+                except Exception as e:
+                    logger.error(f"Error finding member social cart: {e}", exc_info=True)
+
+            # Check results
+            logger.info(f"Social cart lookup complete: social={social}, target_cart={target_cart}")
+
+            if not social or not target_cart:
+                logger.error("No accessible social cart found - returning 403")
+                return JsonResponse({
+                    'success': False,
+                    'message': 'No active social cart available'
+                }, status=403)
+
+            # Verify user can add items
+            member = social.members.filter(user=request.user).first()
+            logger.info(f"Final member check: member={member}, status={member.status if member else 'N/A'}")
+
+            if not member or member.status != 'joined':
+                logger.error(f"Member cannot add items: member={member}, status={member.status if member else 'N/A'}")
+                return JsonResponse({
+                    'success': False,
+                    'message': 'You cannot add items to this social cart'
+                }, status=403)
+
+            logger.info(f"✓ All checks passed - proceeding with move to social cart {social.id}")
+
+        # If moving TO normal cart
+        else:
+            target_cart = user_cart
+            logger.info(f"Moving to normal cart: {target_cart.id}")
+
+        # Move the item
+        logger.info(f"Moving item {cart_item.id} from cart {cart_item.cart.id} to cart {target_cart.id}")
+
+        with transaction.atomic():
+            old_cart_type = cart_item.cart_type
+            old_cart = cart_item.cart
+
+            cart_item.cart = target_cart
+            cart_item.cart_type = target_cart_type
+            cart_item.save(update_fields=['cart', 'cart_type', 'updated_at'])
+
+            logger.info(f"✓ Item moved successfully")
+
+            # Recalculate shares
+            if target_cart_type == 'social' or old_cart_type == 'social':
+                try:
+                    if target_cart_type == 'social':
+                        social_to_update = target_cart.social
+                    else:
+                        social_to_update = old_cart.social
+
+                    if social_to_update.split_mode == 'by_items':
+                        social_to_update.compute_shares_by_items()
+                        logger.info(f"✓ Recalculated shares for social cart {social_to_update.id}")
+                except Exception as e:
+                    logger.error(f"Error recalculating shares: {e}")
+
+        # Get counts
+        normal_count = user_cart.items.filter(cart_type='normal').aggregate(
+            total=Sum('quantity')
+        )['total'] or 0
+
+        social_count = 0
+        try:
+            social = user_cart.social
+            if social and social.is_active:
+                social_count = social.cart.items.filter(cart_type='social').aggregate(
+                    total=Sum('quantity')
+                )['total'] or 0
+        except (SocialCart.DoesNotExist, AttributeError):
+            try:
+                member = CartMember.objects.filter(
+                    user=request.user,
+                    status='joined'
+                ).select_related('social_cart').first()
+
+                if member and member.social_cart.is_active:
+                    social_count = member.social_cart.cart.items.filter(
+                        cart_type='social'
+                    ).aggregate(total=Sum('quantity'))['total'] or 0
+            except Exception:
+                pass
+
+        logger.info(f"✓ Move complete. Counts: normal={normal_count}, social={social_count}")
+
+        return JsonResponse({
+            'success': True,
+            'message': f'Item moved to {target_cart_type} cart',
+            'item_id': cart_item.id,
+            'normal_count': normal_count,
+            'social_count': social_count,
+        })
+
+    except Cart.DoesNotExist:
+        logger.error("User cart not found")
+        return JsonResponse({
+            'success': False,
+            'message': 'Cart not found'
+        }, status=404)
+    except Exception as e:
+        logger.error(f"Unexpected error in move_cart_item: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'success': False,
+            'message': 'An error occurred while moving the item'
+        }, status=500)
 
 @require_GET
 def get_cart_count(request):
@@ -2247,359 +2695,178 @@ def get_cart_context(request):
     return {"cart_count": cart_count, "cart_total": cart_total}
 
 
+@login_required
 @require_POST
 def update_cart_quantity(request):
     """
-    AJAX endpoint to update cart item quantities.
-
-    Handles both authenticated users (with SocialCart support) and guest sessions.
-    Tracks analytics events for add/remove actions.
-
-    POST Parameters:
-        cart_item_id (str, optional): For authenticated users
-        product_id (str, optional): Alternative identifier
-        session_key (str, required for guests): Session cart key
-        quantity (int, optional): Exact quantity to set
-        action (str, optional): 'increase' or 'decrease'
-
-    Returns:
-        JsonResponse: {
-            'success': bool,
-            'quantity': int,
-            'subtotal': str,
-            'total_price': str,
-            'tax_amount': str,
-            'final_total': str,
-            'item_count': int,
-            'cart_count': int,
-            'message': str
-        }
-
-    Security:
-        - CSRF protection enabled (removed @csrf_exempt)
-        - Requires valid CSRF token from frontend
-        - Input validation: quantity clamped to 1-99
-        - Ownership validation for authenticated users
-        - Session isolation for guest users
-
-    Note:
-        Frontend must include CSRF token in POST requests:
-        headers: {'X-CSRFToken': getCookie('csrftoken')}
+    FIXED: Update cart item quantity with permission checks
     """
-    CART_TAX_RATE = Decimal("0.085")
+    cart_item_id = request.POST.get('cart_item_id')
+    quantity = request.POST.get('quantity')
 
-    # Resolve user cart
-    if request.user.is_authenticated:
-        cart, social = _resolve_active_cart_for_user(request.user)
-        try:
-            if hasattr(cart, "social_guard"):
-                cart.social_guard()
-        except ValidationError as e:
-            return JsonResponse({"success": False, "message": str(e)})
+    if not cart_item_id or not quantity:
+        return JsonResponse({
+            'success': False,
+            'message': 'Missing required parameters'
+        }, status=400)
 
     try:
-        cart_item_id = request.POST.get("cart_item_id")
-        product_id = request.POST.get("product_id")
-        session_key = request.POST.get("session_key")
-        quantity = request.POST.get("quantity")
-        action = request.POST.get("action")
-
-        # ---- Auth users
-        if request.user.is_authenticated:
-            if cart_item_id:
-                cart_item = get_object_or_404(CartItem, id=cart_item_id, cart=cart)
-            else:
-                product = get_object_or_404(Product, id=product_id, is_active=True)
-                cart_item = CartItem.objects.filter(cart=cart, product=product).first()
-                if not cart_item:
-                    return JsonResponse(
-                        {"success": False, "message": "Item not found in cart"}
-                    )
-
-            # Compute new quantity
-            old_quantity = cart_item.quantity
-            if quantity:
-                new_q = max(1, min(99, int(quantity)))
-            elif action == "increase":
-                new_q = min(cart_item.quantity + 1, 99)
-            elif action == "decrease":
-                new_q = max(cart_item.quantity - 1, 1)
-            else:
-                return JsonResponse(
-                    {"success": False, "message": "Either quantity or action is required"}
-                )
-
-            cart_item.quantity = new_q
-            cart_item.save(update_fields=["quantity"])
-
-            # ✅ ANALYTICS: Track based on action
-            if action == "increase" or (quantity and new_q > old_quantity):
-                track_event(
-                    session_key=request.session.session_key or request.user.username,
-                    event_type="add_to_cart",
-                    user=request.user,
-                    store=cart_item.product.store,
-                    product=cart_item.product,
-                    path=request.path,
-                )
-            elif action == "decrease" or (quantity and new_q < old_quantity):
-                track_event(
-                    session_key=request.session.session_key or request.user.username,
-                    event_type="remove_from_cart",
-                    user=request.user,
-                    store=cart_item.product.store,
-                    product=cart_item.product,
-                    path=request.path,
-                )
-
-            # Update social shares if needed
-            if social and social.is_active and social.status in ("open", "checkout"):
-                if hasattr(social, "recalc_members_due"):
-                    social.recalc_members_due()
-
-            subtotal = cart_item.product.price * cart_item.quantity
-            cart_items = CartItem.objects.filter(cart=cart)
-            total_price = sum(i.product.price * i.quantity for i in cart_items)
-            item_count = sum(i.quantity for i in cart_items)
-
-            tax_amount = total_price * CART_TAX_RATE
-            final_total = total_price + tax_amount
-
-            return JsonResponse(
-                {
-                    "success": True,
-                    "quantity": cart_item.quantity,
-                    "subtotal": f"{subtotal:.2f}",
-                    "total_price": f"{total_price:.2f}",
-                    "tax_amount": f"{tax_amount:.2f}",
-                    "final_total": f"{final_total:.2f}",
-                    "item_count": item_count,
-                    "cart_count": item_count,
-                    "message": "Cart updated successfully",
-                }
-            )
-
-        # ---- Guests
-        cart = request.session.get("cart", {})
-        if not session_key:
-            return JsonResponse(
-                {"success": False, "message": "session_key is required for guests"}
-            )
-
-        if session_key not in cart:
-            return JsonResponse({"success": False, "message": "Item not found in cart"})
-
-        # Compute new qty
-        old_quantity = int(cart[session_key]["quantity"])
-        if quantity:
-            new_q = max(1, min(99, int(quantity)))
-        elif action == "increase":
-            new_q = min(int(cart[session_key]["quantity"]) + 1, 99)
-        elif action == "decrease":
-            new_q = max(int(cart[session_key]["quantity"]) - 1, 1)
-        else:
-            return JsonResponse(
-                {"success": False, "message": "Either quantity or action is required"}
-            )
-
-        cart[session_key]["quantity"] = new_q
-        request.session["cart"] = cart
-        request.session.modified = True
-
-        # Get product for analytics
-        pid_str = session_key.split("::", 1)[0]
-        product = get_object_or_404(Product, id=int(pid_str), is_active=True)
-
-        # ANALYTICS: Track guest action
-        if not request.session.session_key:
-            request.session.create()
-
-        if action == "increase" or (quantity and new_q > old_quantity):
-            track_event(
-                session_key=request.session.session_key,
-                event_type="add_to_cart",
-                user=None,
-                store=product.store,
-                product=product,
-                path=request.path,
-            )
-        elif action == "decrease" or (quantity and new_q < old_quantity):
-            track_event(
-                session_key=request.session.session_key,
-                event_type="remove_from_cart",
-                user=None,
-                store=product.store,
-                product=product,
-                path=request.path,
-            )
-
-        # Calculate totals
-        quantity_val = int(cart[session_key]["quantity"])
-        subtotal = product.price * quantity_val
-
-        total_price = Decimal("0")
-        item_count = 0
-        for key, item in cart.items():
-            try:
-                pid = int(key.split("::", 1)[0])
-                prod = Product.objects.get(id=pid, is_active=True)
-                q = int(item.get("quantity", 1) or 1)
-                total_price += prod.price * q
-                item_count += q
-            except Product.DoesNotExist:
-                continue
-
-        tax_amount = total_price * CART_TAX_RATE
-        final_total = total_price + tax_amount
-
-        return JsonResponse(
-            {
-                "success": True,
-                "quantity": quantity_val,
-                "subtotal": f"{subtotal:.2f}",
-                "total_price": f"{total_price:.2f}",
-                "tax_amount": f"{tax_amount:.2f}",
-                "final_total": f"{final_total:.2f}",
-                "item_count": item_count,
-                "cart_count": item_count,
-                "message": "Cart updated successfully",
-            }
-        )
-
+        quantity = int(quantity)
+        if quantity < 1:
+            return JsonResponse({
+                'success': False,
+                'message': 'Quantity must be at least 1'
+            }, status=400)
     except ValueError:
-        return JsonResponse({"success": False, "message": "Invalid quantity value"})
+        return JsonResponse({
+            'success': False,
+            'message': 'Invalid quantity'
+        }, status=400)
+
+    try:
+        item = CartItem.objects.select_related(
+            'cart', 'cart__user', 'product', 'added_by'
+        ).get(id=cart_item_id)
+
+        can_modify = False
+
+        # Permission check for normal cart
+        if item.cart_type == 'normal' and item.cart.user == request.user:
+            can_modify = True
+
+        # Permission check for social cart
+        elif item.cart_type == 'social':
+            try:
+                social = item.cart.social
+                member = social.members.filter(user=request.user).first()
+
+                if member:
+                    # Owner can modify any item
+                    if social.owner == request.user:
+                        can_modify = True
+                    # Non-blocked member can modify their own items
+                    elif item.added_by == request.user and member.status == 'joined':
+                        can_modify = True
+            except (SocialCart.DoesNotExist, AttributeError):
+                pass
+
+        if not can_modify:
+            return JsonResponse({
+                'success': False,
+                'message': 'You do not have permission to modify this item'
+            }, status=403)
+
+        # Update quantity
+        with transaction.atomic():
+            item.quantity = quantity
+            item.save(update_fields=['quantity', 'updated_at'])
+
+            # Recalculate shares for social cart
+            if item.cart_type == 'social':
+                try:
+                    social = item.cart.social
+                    if social.split_mode == 'by_items':
+                        social.compute_shares_by_items()
+                except Exception as e:
+                    logger.error(f"Error recalculating shares: {e}")
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Quantity updated',
+            'new_quantity': quantity,
+            'subtotal': float(item.product.price * quantity)
+        })
+
+    except CartItem.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'message': 'Item not found'
+        }, status=404)
     except Exception as e:
-        logger.error(f"Error in update_cart_quantity: {str(e)}", exc_info=True)
-        return JsonResponse({"success": False, "message": "Unable to update cart. Please try again."})
+        logger.error(f"Error updating quantity: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'success': False,
+            'message': 'An error occurred'
+        }, status=500)
 
 
+@login_required
 @require_POST
 def remove_cart_item(request):
     """
-    Remove one cart line.
-    - Guests: remove session entry by 'remove_id'
-    - Authed: remove CartItem by id (permission-aware for SocialCart)
-
-    ✅ Analytics: Tracks remove_from_cart event
+    FIXED: Remove cart item with proper permission checks for both normal and social carts
     """
+    item_id = request.POST.get('item_id')
+
+    if not item_id:
+        return JsonResponse({
+            'success': False,
+            'message': 'Invalid payload'
+        }, status=400)
+
     try:
-        # Parse data from POST or JSON
-        if request.content_type and "application/json" in request.content_type:
-            data = json.loads(request.body.decode() or "{}")
-        else:
-            data = request.POST
-    except Exception:
-        data = request.POST
+        item = CartItem.objects.select_related(
+            'cart', 'cart__user', 'product', 'added_by'
+        ).get(id=item_id)
 
-    item_type = (data.get("item_type") or "").strip()
-    remove_id = data.get("remove_id")
+        can_remove = False
 
-    if not remove_id:
-        return JsonResponse({"success": False, "message": "Invalid payload"}, status=400)
+        # Permission check for normal cart items
+        if item.cart_type == 'normal' and item.cart.user == request.user:
+            can_remove = True
 
-    # --- GUEST: session cart
-    if (not request.user.is_authenticated) or item_type == "session":
-        session_cart = request.session.get("cart", {})
-        if str(remove_id) in session_cart:
-            # Get product for analytics before deleting
+        # Permission check for social cart items
+        elif item.cart_type == 'social':
             try:
-                pid = int(str(remove_id).split("::", 1)[0])
-                product = Product.objects.get(id=pid, is_active=True)
+                social = item.cart.social
+                member = social.members.filter(user=request.user).first()
 
-                # ANALYTICS: Track removal
-                if not request.session.session_key:
-                    request.session.create()
-
-                track_event(
-                    session_key=request.session.session_key,
-                    event_type="remove_from_cart",
-                    user=None,
-                    store=product.store,
-                    product=product,
-                    path=request.path,
-                )
-            except (ValueError, Product.DoesNotExist):
+                if member:
+                    # Owner can remove any item
+                    if social.owner == request.user:
+                        can_remove = True
+                    # Non-blocked member can remove their own items
+                    elif item.added_by == request.user and member.status == 'joined':
+                        can_remove = True
+            except (SocialCart.DoesNotExist, AttributeError):
                 pass
 
-            del session_cart[str(remove_id)]
-            request.session["cart"] = session_cart
-            request.session.modified = True
+        if not can_remove:
+            return JsonResponse({
+                'success': False,
+                'message': 'You do not have permission to remove this item'
+            }, status=403)
 
-            ctx = build_cart_context(request)
-            return JsonResponse(
-                {
-                    "success": True,
-                    "cart_count": ctx["cart_count"],
-                    "total_price": str(ctx["total_price"]),
-                    "final_total": str(ctx["final_total"]),
-                    "tax_amount": str(ctx.get("tax_amount", 0)),
-                    "item_count": ctx["cart_count"],
-                }
-            )
-        return JsonResponse(
-            {"success": False, "message": "Item not found in session"}, status=404
-        )
+        # Delete the item
+        with transaction.atomic():
+            cart_type = item.cart_type
+            item.delete()
 
-    # --- AUTHED: DB cart
-    user = request.user
-    social = _resolve_active_social_for(user)
-    cart = social.cart if social else Cart.objects.filter(user=user).first()
+            # Recalculate shares for social cart
+            if cart_type == 'social':
+                try:
+                    social = item.cart.social
+                    if social.split_mode == 'by_items':
+                        social.compute_shares_by_items()
+                except Exception as e:
+                    logger.error(f"Error recalculating shares: {e}")
 
-    if not cart:
-        return JsonResponse({"success": False, "message": "No cart found"}, status=404)
+        return JsonResponse({
+            'success': True,
+            'message': 'Item removed successfully'
+        })
 
-    try:
-        item = CartItem.objects.select_related("cart", "product").get(id=remove_id, cart=cart)
     except CartItem.DoesNotExist:
-        return JsonResponse({"success": False, "message": "Item not found"}, status=404)
-
-    # Permission check for social cart
-    if social:
-
-        me_member = CartMember.objects.filter(
-            social_cart=social, user=user, status="joined"
-        ).first()
-
-        is_owner = bool(me_member and social.owner_id == user.id)
-        is_adder = bool(getattr(item, "added_by_id", None) == user.id)
-
-        if not (is_owner or is_adder):
-            return JsonResponse(
-                {"success": False, "message": "Not allowed to remove this item"},
-                status=403,
-            )
-    else:
-        if cart.user_id != user.id:
-            return JsonResponse({"success": False, "message": "Not allowed"}, status=403)
-
-    # ANALYTICS: Track before deletion
-    track_event(
-        session_key=request.session.session_key or request.user.username,
-        event_type="remove_from_cart",
-        user=request.user,
-        store=item.product.store,
-        product=item.product,
-        path=request.path,
-    )
-
-    item.delete()
-
-    # Recalc social shares if needed
-    if social and hasattr(social, "recalc_members_due"):
-        social.recalc_members_due()
-
-    # Return fresh totals
-    ctx = build_cart_context(request)
-    return JsonResponse(
-        {
-            "success": True,
-            "cart_count": ctx["cart_count"],
-            "total_price": str(ctx["total_price"]),
-            "final_total": str(ctx["final_total"]),
-            "tax_amount": str(ctx.get("tax_amount", 0)),
-            "item_count": ctx["cart_count"],
-        }
-    )
+        return JsonResponse({
+            'success': False,
+            'message': 'Item not found'
+        }, status=404)
+    except Exception as e:
+        logger.error(f"Error removing cart item: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'success': False,
+            'message': 'An error occurred while removing the item'
+        }, status=500)
 
 
 # ============================================================================
@@ -3089,14 +3356,13 @@ def share_cart(request):
     Frontend Usage:
         <img src="data:image/png;base64,{{ qr_code }}" alt="QR Code">
     """
-    from .qr_utils import generate_cart_share_qr
 
     shared_cart, created = SharedCart.objects.get_or_create(user=request.user)
     share_url = request.build_absolute_uri(shared_cart.get_absolute_url())
 
     # Generate QR code
     try:
-        qr_code_base64 = generate_cart_share_qr(share_url, format='base64')
+        qr_code_base64 = generate_qr_code(share_url, format='base64')
     except Exception as e:
         logger.error(f"Failed to generate QR code: {e}")
         qr_code_base64 = None
@@ -3107,80 +3373,100 @@ def share_cart(request):
     })
 
 
-@login_required
 def copy_shared_cart(request, token):
     """
-    Copy items from a shared cart to the current user's cart.
-
-    Handles products with different feature variations correctly.
-    Tracks analytics and provides user feedback.
-
-    Args:
-        request: HTTP request
-        token: Shared cart UUID token
-
-    Returns:
-        Redirect to cart view with success message
-
-    Security:
-        - Requires authentication (@login_required)
-        - Validates shared cart token
+    Copy items from a shared normal cart to user's cart.
+    Shows preview page with QR code.
     """
-    shared = get_object_or_404(SharedCart, token=token)
-
-    # Get source cart
+    # Find the cart with this share token
     try:
-        source_cart = Cart.objects.get(user=shared.user)
-    except Cart.DoesNotExist:
-        messages.warning(request, "The shared cart is empty.")
-        return redirect('marketplace:cart_view')
+        from marketplace.models import Cart as MarketplaceCart
+        source_cart = MarketplaceCart.objects.get(share_token=token)
+    except MarketplaceCart.DoesNotExist:
+        messages.error(request, "Invalid or expired share link.")
+        return redirect('marketplace:cart')
 
-    # Get or create target cart
-    target_cart, _ = Cart.objects.get_or_create(user=request.user)
+    # Get items from source cart
+    source_items = source_cart.items.filter(cart_type='normal').select_related(
+        'product', 'product__store'
+    )
 
-    items_added = 0
-    items_updated = 0
+    if not source_items.exists():
+        messages.error(request, "This shared cart is empty.")
+        return redirect('marketplace:cart')
 
-    # Copy each item from source to target
-    for item in source_cart.items.all():
-        try:
-            # Check if exact same item exists (product + features)
-            existing_item = CartItem.objects.filter(
-                cart=target_cart,
-                product=item.product,
-                selected_features=item.selected_features
-            ).first()
+    # GET request - show preview
+    if request.method == 'GET':
+        # Calculate totals
+        CART_TAX_RATE = Decimal("0.085")
+        subtotal = sum(item.product.price * item.quantity for item in source_items)
+        tax = subtotal * CART_TAX_RATE
+        total = subtotal + tax
 
-            if existing_item:
-                # Update quantity (add to existing)
-                existing_item.quantity += item.quantity
-                existing_item.save(update_fields=['quantity'])
-                items_updated += 1
-            else:
-                # Create new item
-                CartItem.objects.create(
-                    cart=target_cart,
-                    product=item.product,
-                    quantity=item.quantity,
-                    selected_features=item.selected_features
-                )
-                items_added += 1
+        # Generate QR code for this share link
+        share_url = request.build_absolute_uri()
+        qr_code = generate_qr_code(share_url)
 
-        except Exception as e:
-            logger.error(f"Error copying cart item {item.id}: {e}")
-            continue
+        context = {
+            'source_cart': source_cart,
+            'source_items': source_items,
+            'owner': source_cart.user,
+            'subtotal': subtotal,
+            'tax': tax,
+            'total': total,
+            'item_count': sum(item.quantity for item in source_items),
+            'qr_code': qr_code,
+            'share_url': share_url,
+        }
 
-    # Provide feedback
-    if items_added > 0 or items_updated > 0:
-        message = f"Shared cart copied! {items_added} new items added"
-        if items_updated > 0:
-            message += f", {items_updated} items updated"
-        messages.success(request, message + ".")
-    else:
-        messages.info(request, "No items were copied from the shared cart.")
+        return render(request, 'marketplace/shared_cart_preview.html', context)
 
-    return redirect('marketplace:cart_view')
+    # POST request - copy items
+    elif request.method == 'POST':
+        if not request.user.is_authenticated:
+            messages.error(request, "Please log in to copy this cart.")
+            return redirect('accounts:sign_in')
 
+        # Don't copy your own cart to yourself
+        if source_cart.user == request.user:
+            messages.warning(request, "This is your own cart.")
+            return redirect('marketplace:cart')
+
+        # Copy items to user's cart
+        user_cart, _ = Cart.objects.get_or_create(user=request.user)
+
+        copied_count = 0
+        with transaction.atomic():
+            for source_item in source_items:
+                # Check if item already exists
+                existing_item = user_cart.items.filter(
+                    product=source_item.product,
+                    selected_features=source_item.selected_features,
+                    cart_type='normal'
+                ).first()
+
+                if existing_item:
+                    # Update quantity
+                    existing_item.quantity += source_item.quantity
+                    existing_item.save()
+                else:
+                    # Create new item
+                    CartItem.objects.create(
+                        cart=user_cart,
+                        product=source_item.product,
+                        quantity=source_item.quantity,
+                        selected_features=source_item.selected_features,
+                        cart_type='normal',
+                        added_by=request.user
+                    )
+
+                copied_count += 1
+
+        messages.success(
+            request,
+            f'Successfully copied {copied_count} item{"s" if copied_count != 1 else ""} to your cart!'
+        )
+        return redirect('marketplace:cart')
 
 def about(request):
     return render(request, 'marketplace/about.html')

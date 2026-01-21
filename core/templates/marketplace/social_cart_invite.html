@@ -1,0 +1,265 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load currency_tags %}
+
+{% block title %}Join Social Cart - EasyMarket{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+<section class="py-5 bg-light min-vh-100">
+  <div class="container">
+    <div class="row justify-content-center">
+      <div class="col-lg-8">
+        
+        <!-- Header -->
+        <div class="text-center mb-5">
+          <div class="mb-4">
+            <i class="fas fa-users fa-4x text-primary"></i>
+          </div>
+          <h1 class="display-5 fw-bold mb-3">You're Invited!</h1>
+          <p class="lead text-muted">
+            <strong>{{ social.owner.get_full_name|default:social.owner.username }}</strong> 
+            has invited you to join their social cart
+          </p>
+        </div>
+
+        <!-- Status Messages -->
+        {% if is_already_joined %}
+        <div class="alert alert-info shadow-sm">
+          <i class="fas fa-check-circle me-2"></i>
+          <strong>Already a member!</strong> You're already part of this social cart.
+          <a href="{% url 'marketplace:cart' %}" class="alert-link">Go to cart →</a>
+        </div>
+        {% elif is_blocked %}
+        <div class="alert alert-danger shadow-sm">
+          <i class="fas fa-ban me-2"></i>
+          <strong>Access Denied</strong> You have been blocked from this social cart.
+        </div>
+        {% else %}
+
+        <!-- Social Cart Details -->
+        <div class="card shadow-sm border-0 mb-4">
+          <div class="card-header bg-gradient text-white py-4" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+            <div class="row align-items-center">
+              <div class="col-md-8">
+                <h4 class="mb-2 fw-bold">
+                  <i class="fas fa-shopping-cart me-2"></i>
+                  Social Cart Preview
+                </h4>
+                <p class="mb-0 opacity-75">
+                  Shop together, split the cost
+                </p>
+              </div>
+              <div class="col-md-4 text-md-end mt-3 mt-md-0">
+                <div class="badge bg-white text-primary px-3 py-2">
+                  <i class="fas fa-tag me-1"></i>
+                  Split: 
+                  {% if social.split_mode == "by_items" %}
+                    Each Pays Their Items
+                  {% elif social.split_mode == "by_percent" %}
+                    By Percentage
+                  {% elif social.split_mode == "single_payer" %}
+                    Single Payer
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="card-body p-4">
+            <!-- Members -->
+            <div class="mb-4">
+              <h6 class="fw-bold mb-3">
+                <i class="fas fa-users me-2 text-primary"></i>
+                Current Members ({{ member_count }})
+              </h6>
+              <div class="d-flex flex-wrap gap-2">
+                {% for member in members %}
+                <div class="badge bg-light text-dark border px-3 py-2">
+                  <i class="fas fa-user me-1"></i>
+                  {{ member.user.username }}
+                  {% if member.user == social.owner %}
+                    <i class="fas fa-crown text-warning ms-1" title="Owner"></i>
+                  {% endif %}
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+
+            <!-- Items Preview -->
+            {% if cart_items %}
+            <div class="mb-4">
+              <h6 class="fw-bold mb-3">
+                <i class="fas fa-shopping-bag me-2 text-primary"></i>
+                Items in Cart ({{ cart_items.count }})
+              </h6>
+              <div class="table-responsive">
+                <table class="table table-sm">
+                  <thead class="table-light">
+                    <tr>
+                      <th>Product</th>
+                      <th class="text-center">Quantity</th>
+                      <th class="text-end">Price</th>
+                      <th class="text-center">Added By</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for item in cart_items|slice:":5" %}
+                    <tr>
+                      <td>
+                        <strong>{{ item.product.name }}</strong>
+                        <br>
+                        <small class="text-muted">{{ item.product.category }}</small>
+                      </td>
+                      <td class="text-center">{{ item.quantity }}</td>
+                      <td class="text-end">{% display_money item.product.price %}</td>
+                      <td class="text-center">
+                        <span class="badge bg-light text-dark">
+                          {{ item.added_by.username|default:"Unknown" }}
+                        </span>
+                      </td>
+                    </tr>
+                    {% endfor %}
+                    {% if cart_items.count > 5 %}
+                    <tr>
+                      <td colspan="4" class="text-center text-muted small">
+                        <i class="fas fa-ellipsis-h me-1"></i>
+                        and {{ cart_items.count|add:"-5" }} more item{{ cart_items.count|add:"-5"|pluralize }}
+                      </td>
+                    </tr>
+                    {% endif %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            {% endif %}
+
+            <!-- Totals -->
+            <div class="bg-light rounded p-3">
+              <div class="d-flex justify-content-between mb-2">
+                <span>Subtotal:</span>
+                <strong>{% display_money subtotal %}</strong>
+              </div>
+              <div class="d-flex justify-content-between mb-2">
+                <span>Tax (8.5%):</span>
+                <strong>{% display_money tax %}</strong>
+              </div>
+              <hr>
+              <div class="d-flex justify-content-between">
+                <span class="fw-bold">Cart Total:</span>
+                <strong class="text-primary fs-5">{% display_money total %}</strong>
+              </div>
+              
+              {% if social.split_mode == "by_items" %}
+              <div class="alert alert-info small mb-0 mt-3">
+                <i class="fas fa-info-circle me-1"></i>
+                <strong>How payment works:</strong> Each member pays only for the items they add to the cart.
+              </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <!-- Benefits -->
+        <div class="card shadow-sm border-0 mb-4">
+          <div class="card-body">
+            <h6 class="fw-bold mb-3">
+              <i class="fas fa-star me-2 text-warning"></i>
+              Why Join This Social Cart?
+            </h6>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <div class="d-flex gap-2">
+                  <i class="fas fa-check-circle text-success mt-1"></i>
+                  <div>
+                    <strong>Shop Together</strong>
+                    <p class="small text-muted mb-0">Add items collaboratively with friends</p>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="d-flex gap-2">
+                  <i class="fas fa-check-circle text-success mt-1"></i>
+                  <div>
+                    <strong>Fair Splitting</strong>
+                    <p class="small text-muted mb-0">Pay only for what you add</p>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="d-flex gap-2">
+                  <i class="fas fa-check-circle text-success mt-1"></i>
+                  <div>
+                    <strong>Real-time Updates</strong>
+                    <p class="small text-muted mb-0">See changes as they happen</p>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="d-flex gap-2">
+                  <i class="fas fa-check-circle text-success mt-1"></i>
+                  <div>
+                    <strong>Easy Checkout</strong>
+                    <p class="small text-muted mb-0">Individual orders for each member</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Join Button -->
+        <div class="card shadow-sm border-0">
+          <div class="card-body text-center py-5">
+            {% if can_rejoin %}
+            <h5 class="mb-3">Welcome back!</h5>
+            <p class="text-muted mb-4">You previously left this cart. Rejoin to continue shopping together.</p>
+            <form method="post" action="">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-success btn-lg px-5">
+                <i class="fas fa-redo me-2"></i>Rejoin Social Cart
+              </button>
+            </form>
+            {% else %}
+            <h5 class="mb-3">Ready to join?</h5>
+            <p class="text-muted mb-4">Click below to join this social cart and start shopping together!</p>
+            <form method="post" action="">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-primary btn-lg px-5">
+                <i class="fas fa-users me-2"></i>Join Social Cart
+              </button>
+            </form>
+            {% endif %}
+            
+            <div class="mt-4">
+              <a href="{% url 'marketplace:cart' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-1"></i>Go to My Cart
+              </a>
+            </div>
+          </div>
+        </div>
+
+        {% endif %}
+
+        <!-- Security Notice -->
+        <div class="text-center mt-4">
+          <small class="text-muted">
+            <i class="fas fa-lock me-1"></i>
+            Secure shopping powered by EasyMarket
+          </small>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+.card {
+  transition: all 0.3s ease;
+}
+.card:hover {
+  transform: translateY(-2px);
+}
+</style>
+{% endblock %}
