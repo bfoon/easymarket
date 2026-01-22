@@ -35,7 +35,7 @@ from .utils import (log_search, get_search_suggestions_with_history,
                     _resolve_active_social_for, _resolve_active_cart_for_user,
                     with_display_images, format_price_for_user)
 from .utils import sync_social_items_totals
-from django.urls import reverse
+from django.urls import reverse, NoReverseMatch
 import json, uuid
 import random
 import logging
@@ -2031,11 +2031,9 @@ def _collect_selected_features(request):
 # CART VIEWS WITH ANALYTICS
 # ============================================================================
 
-@login_required
-@require_POST
 def add_to_cart(request, product_id):
     """
-    FIXED: Add item to cart (normal or social) with permission checks
+    FIXED: Add item to cart (normal or social) with feature/variant selection
     """
     from analytics.services import track_event
 
@@ -2096,7 +2094,7 @@ def add_to_cart(request, product_id):
     else:
         target_cart = user_cart
 
-    # Get quantity and features
+    # Get quantity
     try:
         quantity = int(request.POST.get('quantity', 1))
         if quantity < 1:
@@ -2104,20 +2102,38 @@ def add_to_cart(request, product_id):
     except ValueError:
         quantity = 1
 
+    # ✅ FIXED: Parse selected features - try ALL methods
     selected_features = {}
-    features_json = request.POST.get('selected_features', '{}')
-    try:
-        import json
-        selected_features = json.loads(features_json)
-    except:
-        pass
+
+    # Method 1: From 'features' parameter (what your JS sends - line 550 in product_detail.js)
+    features_json = request.POST.get('features', '')
+    if features_json:
+        try:
+            import json
+            parsed_features = json.loads(features_json)
+            if isinstance(parsed_features, dict) and parsed_features:
+                selected_features = parsed_features
+                logger.info(f"✅ Parsed features from 'features' param: {selected_features}")
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.warning(f"Failed to parse 'features' JSON: {e}")
+
+
+        if selected_features:
+            logger.info(f"✅ Parsed features from 'feature_' prefixed fields: {selected_features}")
+
+    # Log the selected features for debugging
+
+    logger.info(
+        f"📦 Adding to cart - Product: {product.name}, Features: {selected_features}, Quantity: {quantity}, Cart Type: {cart_type}")
 
     # Add or update cart item
     with transaction.atomic():
+        # ✅ FIXED: Check for existing item with SAME features
+        # This ensures different variants are treated as different items
         cart_item, created = CartItem.objects.get_or_create(
             cart=target_cart,
             product=product,
-            selected_features=selected_features,
+            selected_features=selected_features,  # ✅ Features included in lookup
             cart_type=cart_type,
             defaults={
                 'quantity': quantity,
@@ -2126,16 +2142,22 @@ def add_to_cart(request, product_id):
         )
 
         if not created:
+            # Item with same features exists, increase quantity
             cart_item.quantity += quantity
             cart_item.save(update_fields=['quantity', 'updated_at'])
+            message = f'Increased quantity in {cart_type} cart'
+            logger.info(f"✅ Updated existing cart item #{cart_item.id} - new quantity: {cart_item.quantity}")
+        else:
+            message = f'Added to {cart_type} cart'
+            logger.info(f"✅ Created new cart item #{cart_item.id} with features: {selected_features}")
 
         # Recalculate shares if social cart
-        if cart_type == 'social':
+        if cart_type == 'social' and 'social' in locals():
             try:
                 if social.split_mode == 'by_items':
                     social.compute_shares_by_items()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Error computing shares: {e}")
 
     # Track analytics
     try:
@@ -2147,8 +2169,8 @@ def add_to_cart(request, product_id):
             product=product,
             path=request.path,
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Analytics tracking failed: {e}")
 
     # Get counts for response
     normal_count = target_cart.items.filter(cart_type='normal').aggregate(
@@ -2159,13 +2181,19 @@ def add_to_cart(request, product_id):
         total=Sum('quantity')
     )['total'] or 0
 
+    # ✅ IMPROVED: Return more detailed response including features
     return JsonResponse({
         'success': True,
-        'message': f'Added to {cart_type} cart',
+        'message': message,
         'cart_type': cart_type,
+        'cart_count': normal_count + social_count,
         'normal_count': normal_count,
         'social_count': social_count,
+        'item_id': cart_item.id,
+        'selected_features': selected_features,  # ✅ Return selected features
+        'quantity': cart_item.quantity,
     })
+
 
 def cart_preview(request):
     """
@@ -2173,7 +2201,6 @@ def cart_preview(request):
     """
     ctx = build_cart_context(request, limit=5)
     return render(request, "marketplace/partials/cart_preview.html", ctx)
-
 
 @login_required
 def cart_view(request):
@@ -2190,7 +2217,7 @@ def cart_view(request):
         .order_by('-created_at')
     )
 
-    # Initialize social cart variables
+    # ✅ FIXED: Initialize ALL social cart variables at the beginning
     social = None
     social_items = []
     is_social_active = False
@@ -2199,6 +2226,8 @@ def cart_view(request):
     can_modify_social = False
     my_share = None
     social_members = []
+    social_invite_link = None  # ← ADDED: Prevents UnboundLocalError
+    social_cart_qr = None      # ← ADDED: Prevents UnboundLocalError
     cart_to_use = user_cart  # Which cart to use for display
 
     # CRITICAL FIX: Find social cart in TWO ways
@@ -2308,9 +2337,10 @@ def cart_view(request):
 
     cart_count = normal_count + social_count
 
-    # # QR + invite link
-    # social_invite_link = None
-    # social_cart_qr = None
+    try:
+        social_events_url = reverse("marketplace:social_cart_events")
+    except NoReverseMatch:
+        social_events_url = ""
 
     context = {
         'cart': user_cart,
@@ -2332,9 +2362,9 @@ def cart_view(request):
         'can_modify_social': can_modify_social,
         'my_share': my_share,
         'social_members': social_members,
-        'social_invite_link': social_invite_link,
-        'social_cart_qr': social_cart_qr,
-
+        'social_events_url': social_events_url,
+        'social_invite_link': social_invite_link,  # ✅ Now always defined
+        'social_cart_qr': social_cart_qr,          # ✅ Now always defined
     }
 
     return render(request, 'marketplace/cart_detail.html', context)

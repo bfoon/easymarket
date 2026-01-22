@@ -15,7 +15,8 @@ from django.views.decorators.http import require_POST, require_GET
 
 from .models import (
     Cart, CartItem,
-    SocialCart, CartMember, CartInvite, PaymentShare, Contribution
+    SocialCart, CartMember, CartInvite, PaymentShare, Contribution, CartActivity,
+    SocialCartChatMessage
 )
 
 from orders.models import Order, OrderItem
@@ -96,65 +97,98 @@ def _resolve_active_social_for(user):
 def _not_mutable(social: SocialCart) -> bool:
     return social.status in ("locked", "closed", "cancelled")
 
+def get_active_social_cart_for_user(user):
+    """
+    Replace this with YOUR existing logic.
+    Must return:
+      - social_cart (object) or None
+      - membership/permission info as needed
+    """
+    # Example (adjust):
+    # social_cart = SocialCart.objects.filter(is_active=True, members=user).select_related("owner").first()
+    # return social_cart
+
+    # If you already store it in session:
+    # cart_id = request.session.get("social_cart_id")
+    # ...
+
+    from .models import SocialCart  # only if you have it
+    return SocialCart.objects.filter(is_active=True, members=user).first()
 
 # ---------- Core endpoints ----------
-
 @login_required
 @require_POST
 def create_social_cart(request):
     """
-    Create a new social cart for the user.
+    Create (or revive) a social cart for the user.
+    Because SocialCart.cart is UNIQUE, we must never try to create
+    a second SocialCart for the same cart.
     """
-    from marketplace.models import Cart
-
     cart, _ = Cart.objects.get_or_create(user=request.user)
 
-    # Check if already has active social cart
-    existing_social = getattr(cart, 'social', None)
-    if existing_social and existing_social.is_active:
-        return JsonResponse({
-            'success': False,
-            'message': 'You already have an active social cart'
-        }, status=400)
-
-    # Create social cart
     with transaction.atomic():
-        social = SocialCart.objects.create(
-            cart=cart,
-            owner=request.user,
-            is_active=True,
-            status='open',
-            split_mode='by_items'
-        )
+        # Lock the cart row to avoid double-create races from fast clicks
+        cart = Cart.objects.select_for_update().get(pk=cart.pk)
 
-        # Create owner membership
-        member = CartMember.objects.create(
+        existing_social = getattr(cart, "social", None)
+
+        if existing_social:
+            # If already active/open, return it (idempotent)
+            if existing_social.is_active and existing_social.status == "open":
+                social = existing_social
+            else:
+                # Revive / reset the existing record (no new create!)
+                social = existing_social
+                social.is_active = True
+                social.status = "open"
+                social.split_mode = social.split_mode or "by_items"
+                social.save(update_fields=["is_active", "status", "split_mode"])
+        else:
+            # Create only when none exists
+            social = SocialCart.objects.create(
+                cart=cart,
+                owner=request.user,
+                is_active=True,
+                status="open",
+                split_mode="by_items",
+            )
+
+        # Ensure owner membership exists (avoid duplicates)
+        member, created = CartMember.objects.get_or_create(
             social_cart=social,
             user=request.user,
-            role='owner',
-            status='joined'
+            defaults={"role": "owner", "status": "joined"},
         )
+        if not created:
+            # If it existed but was left/invited, normalize it
+            updates = {}
+            if member.role != "owner":
+                updates["role"] = "owner"
+            if member.status != "joined":
+                updates["status"] = "joined"
+            if updates:
+                for k, v in updates.items():
+                    setattr(member, k, v)
+                member.save(update_fields=list(updates.keys()))
 
-        # Create owner's payment share
-        PaymentShare.objects.create(
+        # Ensure payment share exists (avoid duplicates)
+        PaymentShare.objects.get_or_create(
             social_cart=social,
             member=member,
-            percentage=100,
-            is_active=True
+            defaults={"percentage": 100, "is_active": True},
         )
 
-    # Generate invite link
-    from django.urls import reverse
     invite_link = request.build_absolute_uri(
-        reverse('marketplace:join_open_social_cart', kwargs={'invite_code': social.invite_code})
+        reverse("marketplace:join_open_social_cart", kwargs={"invite_code": social.invite_code})
     )
 
     return JsonResponse({
-        'success': True,
-        'message': 'Social cart created successfully!',
-        'social_id': social.id,
-        'invite_code': social.invite_code,
-        'invite_link': invite_link
+        "success": True,
+        "message": "Social cart ready!",
+        "social_id": social.id,
+        "invite_code": social.invite_code,
+        "invite_link": invite_link,
+        "revived": bool(getattr(cart, "social", None) and getattr(cart.social, "id", None) == social.id),
     })
 
 @login_required
@@ -297,7 +331,7 @@ def join_open_social_cart(request, invite_code):
 
         # Calculate totals
         from decimal import Decimal
-        CART_TAX_RATE = Decimal("0.085")
+        CART_TAX_RATE = Decimal("0.00")
         subtotal = sum(item.product.price * item.quantity for item in cart_items)
         tax = subtotal * CART_TAX_RATE
         total = subtotal + tax
@@ -600,6 +634,15 @@ def block_member(request, member_id):
         'member_username': member.user.username
     })
 
+def log_cart_activity(social, actor, event, message="", payload=None):
+    CartActivity.objects.create(
+        social_cart=social,
+        actor=actor if actor and actor.is_authenticated else None,
+        event=event,
+        message=message or "",
+        payload=payload or {},
+    )
+
 
 @login_required
 @require_POST
@@ -609,47 +652,60 @@ def leave_cart(request):
     - If owner leaves: deactivate cart and create orders for all members
     - If member leaves: just update their status
     """
-    cart = get_object_or_404(Cart, user=request.user)
-    social = getattr(cart, 'social', None)
+    try:
+        # Use the helper function to find active social cart for this user
+        # This works for both owners and members
+        social = _resolve_active_social_for(request.user)
 
-    if not social or not social.is_active:
+        if not social:
+            return JsonResponse({
+                'success': False,
+                'message': 'No active social cart found'
+            }, status=404)
+
+        # Check if user is owner
+        is_owner = social.owner == request.user
+
+        # Get user's cart for item operations
+        cart = get_object_or_404(Cart, user=request.user)
+
+        with transaction.atomic():
+            if is_owner:
+                # Owner leaving = close the cart and create orders
+                created_orders = social.deactivate_and_create_orders()
+
+                return JsonResponse({
+                    'success': True,
+                    'message': f'You left the social cart. Orders created for all members.',
+                    'is_owner': True,
+                    'order_count': len(created_orders),
+                    'orders_created': True
+                })
+            else:
+                # Regular member leaving
+                member = social.members.filter(user=request.user).first()
+                if member:
+                    member.status = 'left'
+                    member.save(update_fields=['status', 'updated_at'])
+
+                    # Move their social cart items to their normal cart
+                    social_items = cart.items.filter(cart_type='social', added_by=request.user)
+                    social_items.update(cart_type='normal')
+
+                return JsonResponse({
+                    'success': True,
+                    'message': 'You left the social cart. Your items were moved to your normal cart.',
+                    'is_owner': False
+                })
+
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error in leave_cart: {str(e)}", exc_info=True)
         return JsonResponse({
             'success': False,
-            'message': 'No active social cart found'
-        }, status=404)
-
-    # Check if user is owner
-    is_owner = social.owner == request.user
-
-    with transaction.atomic():
-        if is_owner:
-            # Owner leaving = close the cart and create orders
-            created_orders = social.deactivate_and_create_orders()
-
-            return JsonResponse({
-                'success': True,
-                'message': f'You left the social cart. Orders created for all members.',
-                'is_owner': True,
-                'order_count': len(created_orders),
-                'orders_created': True
-            })
-        else:
-            # Regular member leaving
-            member = social.members.filter(user=request.user).first()
-            if member:
-                member.status = 'left'
-                member.save(update_fields=['status', 'updated_at'])
-
-                # Move their social cart items to their normal cart
-                social_items = cart.items.filter(cart_type='social', added_by=request.user)
-                social_items.update(cart_type='normal')
-
-            return JsonResponse({
-                'success': True,
-                'message': 'You left the social cart. Your items were moved to your normal cart.',
-                'is_owner': False
-            })
-
+            'message': f'An error occurred: {str(e)}'
+        }, status=500)
 
 @login_required
 @require_POST
@@ -701,6 +757,39 @@ def remove_member(request, member_id):
 
 
 # ---------- Live endpoint (fixes your 404 spam) ----------
+
+
+@login_required
+@require_GET
+def social_cart_events(request):
+    cart = get_object_or_404(Cart, user=request.user)
+    social = getattr(cart, "social", None)
+
+    if not social or not social.is_active:
+        return JsonResponse({"success": True, "events": [], "last_id": 0})
+
+    since_id = request.GET.get("since_id")
+    try:
+        since_id = int(since_id or 0)
+    except Exception:
+        since_id = 0
+
+    qs = social.activities.filter(id__gt=since_id).select_related("actor").order_by("id")[:50]
+
+    events = []
+    last_id = since_id
+    for a in qs:
+        last_id = a.id
+        events.append({
+            "id": a.id,
+            "event": a.event,
+            "message": a.message,
+            "actor": getattr(a.actor, "username", None),
+            "payload": a.payload,
+            "created_at": a.created_at.isoformat(),
+        })
+
+    return JsonResponse({"success": True, "events": events, "last_id": last_id})
 
 @login_required
 @require_GET
@@ -777,6 +866,7 @@ def social_cart_live(request):
 # ---------- Split Mode ----------
 
 @login_required
+@require_GET
 @require_POST
 def set_split_mode(request):
     """
@@ -964,3 +1054,134 @@ def set_checkout_members(request):
         members.filter(id__in=member_ids).update(can_checkout=True)
 
     return JsonResponse({"success": True, "message": "Checkout permissions updated."})
+
+@login_required
+@require_GET
+def social_cart_fragment(request):
+    """
+    Returns ONLY the Social Cart HTML block.
+    Safe to poll without reloading the main page.
+    """
+    social = _resolve_active_social_for(request.user)
+    if not social:
+        return render(request, "marketplace/partials/_social_cart_block.html", {
+            "is_social_active": False
+        })
+
+    # Determine my member + blocked
+    me = social.members.filter(user=request.user).first()
+    is_blocked = bool(me and me.status == "blocked")
+    is_owner = (social.owner_id == request.user.id) or bool(me and me.role == "owner")
+
+    # Social items live from the underlying cart
+    cart = social.cart
+    social_items = (
+        cart.items
+        .filter(cart_type="social")
+        .select_related("product", "added_by")
+        .order_by("-id")
+    )
+
+    members = (
+        social.members
+        .filter(status__in=["joined", "blocked"])
+        .select_related("user")
+        .order_by("id")
+    )
+
+    context = {
+        "is_social_active": True,
+        "social": social,
+        "social_items": social_items,
+        "social_item_count": social_items.count(),
+        "members": members,
+        "member_count": members.count(),
+        "is_owner": is_owner,
+        "is_blocked": is_blocked,
+        "can_modify": (not is_blocked) and social.can_user_modify(request.user),
+
+        # Totals (you already have social.total())
+        "social_total": social.total(),
+    }
+    return render(request, "marketplace/partials/_social_cart_block.html", context)
+
+
+@login_required
+@require_GET
+def social_cart_chat_fragment(request):
+    """
+    Returns ONLY chat messages HTML (fast polling).
+    """
+    social = _resolve_active_social_for(request.user)
+    if not social:
+        return render(request, "marketplace/partials/_social_cart_chat_messages.html", {
+            "has_social_cart": False
+        })
+
+    # Must be joined (or owner) to view chat; blocked can still view if you want
+    me = social.members.filter(user=request.user).first()
+    if not me:
+        return render(request, "marketplace/partials/_social_cart_chat_messages.html", {
+            "has_social_cart": False
+        })
+
+    # Last 60 messages (oldest -> newest)
+    qs = (
+        SocialCartChatMessage.objects
+        .filter(social_cart=social)
+        .select_related("sender")
+        .order_by("-created_at")[:60]
+    )
+    messages_list = list(reversed(qs))
+
+    return render(request, "marketplace/partials/_social_cart_chat_messages.html", {
+        "has_social_cart": True,
+        "social": social,
+        "chat_messages": messages_list,
+        "me": request.user,
+    })
+
+
+@login_required
+@require_POST
+def social_cart_chat_send(request):
+    """
+    Send a message to social cart group chat.
+    """
+    social = _resolve_active_social_for(request.user)
+    if not social:
+        return _json_error("No active social cart found.", 404)
+
+    member = social.members.filter(user=request.user).first()
+    if not member:
+        return _json_error("You are not a member of this social cart.", 403)
+
+    if member.status == "blocked":
+        return _json_error("You are blocked and cannot send messages.", 403)
+
+    msg = (request.POST.get("message") or "").strip()
+    if not msg:
+        return _json_error("Message cannot be empty.", 400)
+
+    if len(msg) > 2000:
+        return _json_error("Message too long (max 2000 chars).", 400)
+
+    SocialCartChatMessage.objects.create(
+        social_cart=social,
+        sender=request.user,
+        message=msg
+    )
+
+    # Optional: log activity (if you want chat events in social_cart_events)
+    try:
+        log_cart_activity(
+            social=social,
+            actor=request.user,
+            event="chat_message",
+            message="New chat message",
+            payload={"preview": msg[:120]}
+        )
+    except Exception:
+        pass
+
+    return JsonResponse({"success": True})

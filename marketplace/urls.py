@@ -72,6 +72,13 @@ urlpatterns = [
     path('cart/social/create/', social_cart.create_social_cart, name='create_social_cart'),
     path('cart/social/status/', social_cart.social_cart_status, name='social_cart_status'),
     path('cart/social/live/', social_cart.social_cart_live, name='social_cart_live'),
+    path("social-cart/events/", social_cart.social_cart_events, name="social_cart_events"),
+    # --- Social Cart partial refresh ---
+    path("cart/social/fragment/", social_cart.social_cart_fragment, name="social_cart_fragment"),
+
+    # --- Social Cart live chat ---
+    path("cart/social/chat/fragment/", social_cart.social_cart_chat_fragment, name="social_cart_chat_fragment"),
+    path("cart/social/chat/send/", social_cart.social_cart_chat_send, name="social_cart_chat_send"),
 
     # Invitations
     path('cart/invite/send/', social_cart.send_cart_invite, name='send_cart_invite'),

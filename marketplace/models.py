@@ -2547,3 +2547,15 @@ class WheelSpin(models.Model):
     def code_string(self):
         """Get the promo code string"""
         return self.promo_code.code if self.promo_code else None
+
+class SocialCartChatMessage(models.Model):
+    social_cart = models.ForeignKey("marketplace.SocialCart", on_delete=models.CASCADE, related_name="chat_messages")
+    sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="social_cart_chat_messages")
+    message = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"{self.sender} @ {self.created_at:%Y-%m-%d %H:%M}: {self.message[:30]}"

@@ -1,10 +1,11 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load currency_tags %}
+{% load cart_image_tags %}
 
 {% block title %}Checkout - EasyMarket{% endblock %}
 
-{% block extra_css %}
+{% block content %}
 <style>
 .checkout-container {
   max-width: 1200px;
@@ -21,6 +22,19 @@
 .checkout-item:last-child {
   border-bottom: none;
 }
+.color-indicator {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid #999;
+  margin-right: 5px;
+  vertical-align: middle;
+}
+.variant-badge {
+  font-size: 0.85rem;
+  padding: 0.35rem 0.65rem;
+}
 @media (max-width: 768px) {
   .order-summary {
     position: static;
@@ -28,12 +42,11 @@
   }
 }
 </style>
-{% endblock %}
 
-{% block content %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
 <section class="py-5 bg-light min-vh-100">
   <div class="container checkout-container">
-    
+
     <div class="row mb-4">
       <div class="col-12">
         <h1 class="h2 fw-bold mb-2">
@@ -50,11 +63,11 @@
 
     <form method="post" action="">
       {% csrf_token %}
-      
+
       <div class="row g-4">
-        
+
         <div class="col-lg-8">
-          
+
           <!-- Cart Items -->
           <div class="card shadow-sm border-0 mb-4">
             <div class="card-header bg-primary text-white">
@@ -67,18 +80,27 @@
               <div class="checkout-item px-4">
                 <div class="row align-items-center">
                   <div class="col-md-6">
-                    <div class="d-flex align-items-center gap-3">
-                      <img src="{% if item.product.image %}{{ item.product.image.url }}{% else %}{% static 'img/placeholder.png' %}{% endif %}" 
+                    <div class="d-flex align-items-start gap-3">
+                      {% get_color_image_url item.product item.selected_features as color_img_url %}
+                      <img src="{{ color_img_url|default:'' }}"
                            alt="{{ item.product.name }}"
-                           class="rounded shadow-sm" 
-                           style="width:80px;height:80px;object-fit:cover;">
-                      <div>
+                           class="rounded shadow-sm"
+                           style="width:80px;height:80px;object-fit:cover;{% if item.selected_features.color or item.selected_features.Color %}border:3px solid {% get_color_hex item.selected_features.color|default:item.selected_features.Color %};{% endif %}"
+                           onerror="this.src='{% if item.product.image %}{{ item.product.image.url }}{% else %}{% static 'img/placeholder.png' %}{% endif %}'">
+                      <div class="flex-grow-1">
                         <h6 class="mb-1 fw-semibold">{{ item.product.name }}</h6>
-                        <small class="text-muted">{{ item.product.category }}</small>
+                        <small class="text-muted d-block mb-2">{{ item.product.category }}</small>
+
                         {% if item.selected_features %}
-                        <div class="mt-1">
+                        <div class="mb-0">
                           {% for key, value in item.selected_features.items %}
-                            <span class="badge bg-light text-dark border me-1 small">{{ key }}: {{ value }}</span>
+                            <span class="badge bg-light text-dark border me-1 mb-1 variant-badge">
+                              {% if key|lower == 'color' %}
+                                <span class="color-indicator"
+                                      style="background-color:{% get_color_hex value %};"></span>
+                              {% endif %}
+                              {{ key|title }}: {{ value }}
+                            </span>
                           {% endfor %}
                         </div>
                         {% endif %}

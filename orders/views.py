@@ -345,27 +345,24 @@ def checkout_cart(request):
 
         try:
             with transaction.atomic():
-                # Create order
+                # ✅ FIXED: Create order with correct field names
                 order = Order.objects.create(
-                    user=request.user,
-                    total_amount=total,
-                    subtotal=subtotal,
-                    tax_amount=tax,
-                    discount_amount=discount_amount,
+                    buyer=request.user,
                     status='pending',
-                    payment_status='pending',
-                    source='normal_cart',
+                    discount_amount=discount_amount,
                     promo_code=promo,
-                    notes=request.POST.get('notes', '')
+                    order_notes=request.POST.get('notes', ''),
+                    source_type='marketplace',
+                    tax_rate=CART_TAX_RATE * 100,  # Convert 0.085 to 8.5
+                    shipping_cost=Decimal('0.00'),
                 )
 
-                # Create order items
+                # Create order items (totals will be calculated from these)
                 for cart_item in cart_items:
                     OrderItem.objects.create(
                         order=order,
                         product=cart_item.product,
                         quantity=cart_item.quantity,
-                        price=cart_item.product.price,
                         selected_features=cart_item.selected_features
                     )
 
@@ -403,6 +400,7 @@ def checkout_cart(request):
 
 
 @login_required
+@require_http_methods(['GET', 'POST'])
 def checkout_social_cart(request):
     """
     Checkout view for SOCIAL cart - OWNER ONLY with promo code support.
@@ -473,6 +471,10 @@ def checkout_social_cart(request):
 
     # POST request - process checkout
     elif request.method == 'POST':
+        # Add debug logging
+        logger.info(f"Social cart checkout initiated by user: {request.user.id}")
+        logger.info(f"Social cart ID: {social.id}, Status: {social.status}, Items count: {social_items.count()}")
+
         # Validate promo code (applies to total cart)
         promo_code_str = request.POST.get('promo_code', '').strip()
         promo, total_discount, error = validate_promo_code(promo_code_str, subtotal, request.user)
@@ -489,6 +491,8 @@ def checkout_social_cart(request):
                     if user not in items_by_user:
                         items_by_user[user] = []
                     items_by_user[user].append(item)
+
+                logger.info(f"Creating orders for {len(items_by_user)} members")
 
                 # Create individual orders for each member
                 created_orders = {}
@@ -516,37 +520,36 @@ def checkout_social_cart(request):
                     else:
                         user_discount = Decimal('0')
 
-                    # Calculate user's tax and total
-                    user_tax = user_subtotal * CART_TAX_RATE
-                    user_total = user_subtotal + user_tax - user_discount
+                    logger.info(f"Creating order for user {user.id}: {len(items)} items, subtotal=${user_subtotal}")
 
-                    # Create order
+                    # Create order with correct field names
                     order = Order.objects.create(
-                        user=user,
-                        total_amount=user_total,
-                        subtotal=user_subtotal,
-                        tax_amount=user_tax,
-                        discount_amount=user_discount,
+                        buyer=user,
                         status='pending',
-                        payment_status='pending',
-                        source='social_cart',
-                        promo_code=promo if user == request.user else None,  # Only owner gets promo reference
-                        notes=f'Order from Social Cart #{social.id}'
+                        discount_amount=user_discount,
+                        promo_code=promo if user == request.user else None,
+                        order_notes=f'Order from Social Cart #{social.id}',
+                        source_type='marketplace',
+                        tax_rate=CART_TAX_RATE * 100,
+                        shipping_cost=Decimal('0.00'),
                     )
 
-                    # Create order items
+                    # Create order items with features preserved
                     for cart_item in items:
                         OrderItem.objects.create(
                             order=order,
                             product=cart_item.product,
                             quantity=cart_item.quantity,
-                            price=cart_item.product.price,
+                            price_at_time=cart_item.product.price,
                             selected_features=cart_item.selected_features
                         )
+                        logger.info(
+                            f"  Item: {cart_item.product.name} x{cart_item.quantity}, features={cart_item.selected_features}")
 
                     created_orders[user] = order
+                    logger.info(f"Order {order.id} created for user {user.username}")
 
-                # Update promo usage
+                    # Update promo usage
                 if promo:
                     promo.uses += 1
                     promo.save(update_fields=['uses'])
@@ -556,6 +559,8 @@ def checkout_social_cart(request):
                 social.status = 'closed'
                 social.completed_at = timezone.now()
                 social.save(update_fields=['is_active', 'status', 'completed_at', 'updated_at'])
+
+                logger.info(f"Social cart {social.id} marked as closed")
 
                 # Delete all social cart items
                 social_items.delete()
@@ -573,8 +578,8 @@ def checkout_social_cart(request):
                         product=None,
                         path=request.path,
                     )
-                except:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Analytics tracking failed: {str(e)}")
 
                 # Success message
                 owner_order = created_orders.get(request.user)
@@ -583,6 +588,7 @@ def checkout_social_cart(request):
                     success_msg += f" Promo code applied! Total savings: ${total_discount:.2f}"
 
                 messages.success(request, success_msg)
+                logger.info(f"Social cart checkout completed successfully. {len(created_orders)} orders created.")
 
                 if owner_order:
                     return redirect('orders:order_detail', order_id=owner_order.id)
@@ -590,8 +596,11 @@ def checkout_social_cart(request):
                     return redirect('orders:order_history')
 
         except Exception as e:
-            logger.error(f"Error processing social checkout: {str(e)}", exc_info=True)
-            messages.error(request, "An error occurred during social cart checkout. Please try again.")
+            import traceback
+            error_details = traceback.format_exc()
+            logger.error(f"Error processing social checkout: {str(e)}")
+            logger.error(error_details)
+            messages.error(request, f"An error occurred during social cart checkout: {str(e)}")
             return redirect("marketplace:cart")
 
 
