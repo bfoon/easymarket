@@ -1611,6 +1611,50 @@ class CartActivity(models.Model):
     message = models.CharField(max_length=255, blank=True)
     payload = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    ACCESS_PUBLIC = "public"
+    ACCESS_INVITE_ONLY = "invite_only"
+    ACCESS_CHOICES = (
+        (ACCESS_PUBLIC, "Public"),
+        (ACCESS_INVITE_ONLY, "Invite Only"),
+    )
+
+    access_type = models.CharField(
+        max_length=20,
+        choices=ACCESS_CHOICES,
+        default=ACCESS_PUBLIC,
+        db_index=True,
+        help_text="Public carts can be joined with link/QR. Invite-only carts require a valid invite."
+    )
+
+    scheduled_for = models.DateTimeField(
+        null=True, blank=True,
+        help_text="If set, this cart is scheduled to start at this time."
+    )
+
+    is_live = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Owner has come online for this social cart session."
+    )
+
+    live_started_at = models.DateTimeField(null=True, blank=True)
+
+    def is_scheduled(self):
+        return bool(self.scheduled_for)
+
+    def is_join_allowed_now(self):
+        """
+        For invite-only scheduled carts: joining is allowed only from scheduled time onward (optional rule).
+        Public carts can always join when open/checkout.
+        """
+        if self.status not in ("open", "checkout") or not self.is_active:
+            return False
+        if self.access_type == self.ACCESS_PUBLIC:
+            return True
+        # invite-only:
+        if not self.scheduled_for:
+            return True
+        return timezone.now() >= self.scheduled_for
 
     class Meta:
         ordering = ["-id"]
@@ -2549,13 +2593,75 @@ class WheelSpin(models.Model):
         return self.promo_code.code if self.promo_code else None
 
 class SocialCartChatMessage(models.Model):
-    social_cart = models.ForeignKey("marketplace.SocialCart", on_delete=models.CASCADE, related_name="chat_messages")
-    sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="social_cart_chat_messages")
-    message = models.TextField()
+    SCOPE_CHOICES = (
+        ("group", "Group"),
+        ("item", "Item Thread"),
+        ("seller_item", "Seller Item Thread"),
+    )
+
+    social_cart = models.ForeignKey("SocialCart", on_delete=models.CASCADE, related_name="chat_messages")
+    sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="social_chat_sent")
+
+    # NEW: for private seller chat
+    recipient = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="social_chat_received"
+    )
+
+    # NEW: thread type
+    scope = models.CharField(max_length=20, choices=SCOPE_CHOICES, default="group")
+
+    # NEW: store product id as string/uuid-safe (works with UUID PKs too)
+    product_id = models.CharField(max_length=64, null=True, blank=True, db_index=True)
+
+    # Your message
+    message = models.TextField(blank=True, default="")
+
+    # NEW: for “shared item card”
+    attach_product = models.BooleanField(default=False)
+    product_snapshot = models.JSONField(default=dict, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["created_at"]
 
+
     def __str__(self):
         return f"{self.sender} @ {self.created_at:%Y-%m-%d %H:%M}: {self.message[:30]}"
+
+class SocialCartChatThread(models.Model):
+    SCOPE_GROUP = "group"           # main social cart room
+    SCOPE_ITEM = "item"             # room per product (members only)
+    SCOPE_SELLER_ITEM = "seller_item"  # private members + seller for that product
+
+    SCOPE_CHOICES = (
+        (SCOPE_GROUP, "Group"),
+        (SCOPE_ITEM, "Item"),
+        (SCOPE_SELLER_ITEM, "Seller Item"),
+    )
+
+    social_cart = models.ForeignKey("marketplace.SocialCart", on_delete=models.CASCADE, related_name="chat_threads")
+    scope = models.CharField(max_length=20, choices=SCOPE_CHOICES, default=SCOPE_GROUP, db_index=True)
+
+    # Optional: tie thread to product
+    product = models.ForeignKey("marketplace.Product", null=True, blank=True, on_delete=models.CASCADE, related_name="social_chat_threads")
+
+    # Optional: seller user (if you store seller on Product)
+    seller = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="seller_social_threads")
+
+    # Participants (members + seller for seller_item)
+    participants = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name="social_chat_threads_joined", blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["social_cart", "scope"]),
+            models.Index(fields=["social_cart", "scope", "product"]),
+        ]
+
+    def __str__(self):
+        return f"{self.social_cart_id} {self.scope} {self.product_id or ''}"

@@ -534,15 +534,32 @@ def checkout_social_cart(request):
                         shipping_cost=Decimal('0.00'),
                     )
 
-                    # Create order items with features preserved
+                    # Create order items with duplicate-safe merge
                     for cart_item in items:
-                        OrderItem.objects.create(
-                            order=order,
-                            product=cart_item.product,
-                            quantity=cart_item.quantity,
-                            price_at_time=cart_item.product.price,
-                            selected_features=cart_item.selected_features
-                        )
+                        existing = OrderItem.objects.filter(order=order, product=cart_item.product).first()
+
+                        if existing:
+                            # merge quantities
+                            existing.quantity = int(existing.quantity or 0) + int(cart_item.quantity or 0)
+
+                            # keep price snapshot stable (or update if missing)
+                            if existing.price_at_time is None:
+                                existing.price_at_time = cart_item.product.price
+
+                            # preserve selected_features if empty (optional)
+                            if not existing.selected_features and cart_item.selected_features:
+                                existing.selected_features = cart_item.selected_features
+
+                            existing.save()
+                        else:
+                            OrderItem.objects.create(
+                                order=order,
+                                product=cart_item.product,
+                                quantity=cart_item.quantity,
+                                price_at_time=cart_item.product.price,
+                                selected_features=cart_item.selected_features
+                            )
+
                         logger.info(
                             f"  Item: {cart_item.product.name} x{cart_item.quantity}, features={cart_item.selected_features}")
 

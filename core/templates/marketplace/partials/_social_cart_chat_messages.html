@@ -1,29 +1,345 @@
+{% load static %}
+{% load currency_tags %}
+{% load cart_image_tags %}
+
 {% if not has_social_cart %}
   <div class="text-muted">No active social cart chat.</div>
 {% else %}
+
+  {# ---------------- THREAD HEADER (item/seller threads) ---------------- #}
+  {% if current_scope and current_scope != "group" and thread_product %}
+    {# IMPORTANT: thread_selected_features must be {} (dict) from the view #}
+    {% with features=thread_selected_features %}
+      {% get_color_image_url thread_product features as thread_img_url %}
+
+      <div class="mb-3 p-2 rounded-3 border bg-white">
+        <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap">
+          <div class="d-flex align-items-center gap-2 flex-wrap">
+            <div class="badge bg-dark">
+              {% if current_scope == "item" %}
+                <i class="fas fa-comments me-1"></i> Item Discussion
+              {% else %}
+                <i class="fas fa-store me-1"></i> Shop Owner Chat (Private)
+              {% endif %}
+            </div>
+
+            <button type="button"
+                    class="btn btn-sm btn-outline-secondary"
+                    onclick="window.socialChatGoGroup && window.socialChatGoGroup()">
+              <i class="fas fa-arrow-left me-1"></i>Back to Group
+            </button>
+
+            {% if current_scope == "seller_item" %}
+              <button type="button"
+                      class="btn btn-sm btn-outline-primary open-item-thread"
+                      data-product-id="{{ thread_product.id }}">
+                <i class="fas fa-comments me-1"></i>Back to Item Thread
+              </button>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="mt-2 d-flex align-items-center gap-3">
+          {# Variant-aware product image + SAME border logic as cart #}
+          <img src="{{ thread_img_url }}"
+               alt="{{ thread_product.name }}"
+               class="rounded-3 shadow-sm"
+               style="width:72px;height:72px;object-fit:cover;
+                      {% if features and features.color %}
+                        border:3px solid {% get_color_hex features.color %};
+                      {% endif %}"
+               onerror="this.src='{% if thread_product.image %}{{ thread_product.image.url }}{% else %}{% static 'img/placeholder.png' %}{% endif %}'">
+
+          <div class="flex-grow-1">
+            <div class="fw-semibold d-flex align-items-center gap-2 flex-wrap">
+              {{ thread_product.name }}
+
+              {# Store logo (seller thread) #}
+              {% if current_scope == "seller_item" and thread_store_logo %}
+                <span class="d-inline-flex align-items-center gap-1">
+                  <img src="{{ thread_store_logo }}"
+                       alt="{{ thread_store_name|default:'Store' }}"
+                       style="width:22px;height:22px;border-radius:50%;object-fit:cover;border:1px solid rgba(0,0,0,.1);">
+                  <span class="text-muted small">{{ thread_store_name|default:"Store" }}</span>
+                </span>
+              {% endif %}
+            </div>
+
+            <div class="text-muted small">
+              {% if thread_product.category %}{{ thread_product.category }} · {% endif %}
+              {% display_money thread_product.price %}
+            </div>
+
+            {# SAME selected-features badges like cart #}
+            {% if features %}
+              <div class="mt-1">
+                {% for key, value in features.items %}
+                  <span class="badge bg-light text-dark border me-1 mb-1">
+                    {% if key|lower == "color" %}
+                      <span class="color-indicator"
+                            style="display:inline-block;width:12px;height:12px;border-radius:50%;
+                                   background-color:{% get_color_hex value %};
+                                   border:1px solid #999;margin-right:5px;vertical-align:middle;"></span>
+                    {% endif %}
+                    {{ key|title }}: {{ value }}
+                  </span>
+                {% endfor %}
+              </div>
+            {% endif %}
+
+            <div class="mt-2 d-flex gap-2 flex-wrap">
+              <a href="{% url 'marketplace:product_detail' thread_product.id %}"
+                 class="btn btn-sm btn-outline-dark">
+                <i class="fas fa-eye me-1"></i>View Product
+              </a>
+
+              {% if current_scope != "seller_item" %}
+                <button type="button"
+                        class="btn btn-sm btn-outline-success ask-seller"
+                        data-product-id="{{ thread_product.id }}">
+                  <i class="fas fa-store me-1"></i>Ask Shop Owner
+                </button>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+    {% endwith %}
+  {% endif %}
+  {# --------------------------------------------------------------------- #}
+
+
   {% if chat_messages %}
     <div class="d-flex flex-column gap-2">
       {% for m in chat_messages %}
-        {% if m.sender_id == me.id %}
-          <div class="d-flex justify-content-end">
-            <div class="px-3 py-2 rounded-4 text-white" style="max-width:85%; background:#0d6efd;">
-              <div class="small opacity-75 mb-1">You</div>
-              <div style="white-space: pre-wrap;">{{ m.message }}</div>
-              <div class="small opacity-75 mt-1">{{ m.created_at|date:"M d, H:i" }}</div>
+
+        {# IMPORTANT: m.selected_features must be {} from the view #}
+        {% with snap=m.product_snapshot product=m.product_obj features=m.selected_features %}
+
+          {# Build variant-aware URL ONLY if product exists #}
+          {% if product %}
+            {% get_color_image_url product features as msg_img_url %}
+          {% else %}
+            {% with msg_img_url=snap.image %}
+            {% endwith %}
+          {% endif %}
+
+          {% if m.sender_id == me.id %}
+            <!-- MY MESSAGE -->
+            <div class="d-flex justify-content-end">
+              <div class="px-3 py-2 rounded-4 text-white" style="max-width:85%; background:#0d6efd;">
+                <div class="small opacity-75 mb-1">You</div>
+
+                {% if m.message %}
+                  <div style="white-space: pre-wrap;">{{ m.message }}</div>
+                {% endif %}
+
+                {# -------- Product card when shared/attached -------- #}
+                {% if m.attach_product or snap.name %}
+                  <div class="mt-2 p-2 rounded-3 bg-white text-dark border">
+                    <div class="d-flex align-items-center gap-2">
+                      <img src="{% if product %}{{ msg_img_url }}{% else %}{{ snap.image }}{% endif %}"
+                           alt="{{ snap.name|default:product.name|default:'Product' }}"
+                           class="rounded-3 shadow-sm"
+                           style="width:52px;height:52px;object-fit:cover;border-radius:12px;
+                                  {% if features and features.color %}
+                                    border:3px solid {% get_color_hex features.color %};
+                                  {% endif %}"
+                           onerror="this.src='{% if product and product.image %}{{ product.image.url }}{% else %}{% static 'img/placeholder.png' %}{% endif %}'">
+
+                      <div class="flex-grow-1">
+                        <div class="fw-semibold small mb-0">
+                          {{ snap.name|default:product.name }}
+                        </div>
+
+                        <div class="text-muted small">
+                          {% if product %}{% display_money product.price %}{% else %}{% display_money snap.price %}{% endif %}
+                        </div>
+
+                        {# SAME selected-features badges like cart #}
+                        {% if features %}
+                          <div class="mt-1">
+                            {% for key, value in features.items %}
+                              <span class="badge bg-light text-dark border me-1 mb-1">
+                                {% if key|lower == "color" %}
+                                  <span class="color-indicator"
+                                        style="display:inline-block;width:12px;height:12px;border-radius:50%;
+                                               background-color:{% get_color_hex value %};
+                                               border:1px solid #999;margin-right:5px;vertical-align:middle;"></span>
+                                {% endif %}
+                                {{ key|title }}: {{ value }}
+                              </span>
+                            {% endfor %}
+                          </div>
+                        {% endif %}
+
+                        {# Store logo in the card (pass m.store_logo/m.store_name from view) #}
+                        {% if m.store_logo %}
+                          <div class="mt-1 d-flex align-items-center gap-1">
+                            <img src="{{ m.store_logo }}"
+                                 alt="{{ m.store_name|default:'Store' }}"
+                                 style="width:18px;height:18px;border-radius:50%;object-fit:cover;border:1px solid rgba(0,0,0,.1);">
+                            <span class="text-muted small">{{ m.store_name|default:"Store" }}</span>
+                          </div>
+                        {% endif %}
+                      </div>
+
+                      {% if product %}
+                        <a class="btn btn-sm btn-outline-primary"
+                           href="{% url 'marketplace:product_detail' product.id %}">View</a>
+                      {% elif snap.id %}
+                        <a class="btn btn-sm btn-outline-primary"
+                           href="{% url 'marketplace:product_detail' snap.id %}">View</a>
+                      {% endif %}
+                    </div>
+
+                    <div class="mt-2 d-flex gap-2 flex-wrap">
+                      {% if product %}
+                        <button type="button"
+                                class="btn btn-sm btn-outline-secondary open-item-thread"
+                                data-product-id="{{ product.id }}">
+                          <i class="fas fa-comments me-1"></i>Discuss
+                        </button>
+                        <button type="button"
+                                class="btn btn-sm btn-outline-success ask-seller"
+                                data-product-id="{{ product.id }}">
+                          <i class="fas fa-store me-1"></i>Ask Shop Owner
+                        </button>
+                      {% elif snap.id %}
+                        <button type="button"
+                                class="btn btn-sm btn-outline-secondary open-item-thread"
+                                data-product-id="{{ snap.id }}">
+                          <i class="fas fa-comments me-1"></i>Discuss
+                        </button>
+                        <button type="button"
+                                class="btn btn-sm btn-outline-success ask-seller"
+                                data-product-id="{{ snap.id }}">
+                          <i class="fas fa-store me-1"></i>Ask Shop Owner
+                        </button>
+                      {% endif %}
+                    </div>
+                  </div>
+                {% endif %}
+
+                <div class="small opacity-75 mt-1">{{ m.created_at|date:"M d, H:i" }}</div>
+              </div>
             </div>
-          </div>
-        {% else %}
-          <div class="d-flex justify-content-start">
-            <div class="px-3 py-2 rounded-4 bg-light border" style="max-width:85%;">
-              <div class="small text-muted mb-1">{{ m.sender.get_full_name|default:m.sender.username }}</div>
-              <div style="white-space: pre-wrap;">{{ m.message }}</div>
-              <div class="small text-muted mt-1">{{ m.created_at|date:"M d, H:i" }}</div>
+
+          {% else %}
+            <!-- OTHER MESSAGE -->
+            <div class="d-flex justify-content-start">
+              <div class="px-3 py-2 rounded-4 bg-light border" style="max-width:85%;">
+                <div class="small text-muted mb-1">
+                  {{ m.sender.get_full_name|default:m.sender.username }}
+                </div>
+
+                {% if m.message %}
+                  <div style="white-space: pre-wrap;">{{ m.message }}</div>
+                {% endif %}
+
+                {% if m.attach_product or snap.name %}
+                  <div class="mt-2 p-2 rounded-3 bg-white border">
+                    <div class="d-flex align-items-center gap-2">
+                      <img src="{% if product %}{{ msg_img_url }}{% else %}{{ snap.image }}{% endif %}"
+                           alt="{{ snap.name|default:product.name|default:'Product' }}"
+                           class="rounded-3 shadow-sm"
+                           style="width:52px;height:52px;object-fit:cover;border-radius:12px;
+                                  {% if features and features.color %}
+                                    border:3px solid {% get_color_hex features.color %};
+                                  {% endif %}"
+                           onerror="this.src='{% if product and product.image %}{{ product.image.url }}{% else %}{% static 'img/placeholder.png' %}{% endif %}'">
+
+                      <div class="flex-grow-1">
+                        <div class="fw-semibold small mb-0">
+                          {{ snap.name|default:product.name }}
+                        </div>
+
+                        <div class="text-muted small">
+                          {% if product %}{% display_money product.price %}{% else %}{% display_money snap.price %}{% endif %}
+                        </div>
+
+                        {% if features %}
+                          <div class="mt-1">
+                            {% for key, value in features.items %}
+                              <span class="badge bg-light text-dark border me-1 mb-1">
+                                {% if key|lower == "color" %}
+                                  <span class="color-indicator"
+                                        style="display:inline-block;width:12px;height:12px;border-radius:50%;
+                                               background-color:{% get_color_hex value %};
+                                               border:1px solid #999;margin-right:5px;vertical-align:middle;"></span>
+                                {% endif %}
+                                {{ key|title }}: {{ value }}
+                              </span>
+                            {% endfor %}
+                          </div>
+                        {% endif %}
+
+                        {% if m.store_logo %}
+                          <div class="mt-1 d-flex align-items-center gap-1">
+                            <img src="{{ m.store_logo }}"
+                                 alt="{{ m.store_name|default:'Store' }}"
+                                 style="width:18px;height:18px;border-radius:50%;object-fit:cover;border:1px solid rgba(0,0,0,.1);">
+                            <span class="text-muted small">{{ m.store_name|default:"Store" }}</span>
+                          </div>
+                        {% endif %}
+                      </div>
+
+                      {% if product %}
+                        <a class="btn btn-sm btn-outline-primary"
+                           href="{% url 'marketplace:product_detail' product.id %}">View</a>
+                      {% elif snap.id %}
+                        <a class="btn btn-sm btn-outline-primary"
+                           href="{% url 'marketplace:product_detail' snap.id %}">View</a>
+                      {% endif %}
+                    </div>
+
+                    <div class="mt-2 d-flex gap-2 flex-wrap">
+                      {% if product %}
+                        <button type="button"
+                                class="btn btn-sm btn-outline-secondary open-item-thread"
+                                data-product-id="{{ product.id }}">
+                          <i class="fas fa-comments me-1"></i>Discuss
+                        </button>
+                        <button type="button"
+                                class="btn btn-sm btn-outline-success ask-seller"
+                                data-product-id="{{ product.id }}">
+                          <i class="fas fa-store me-1"></i>Ask Shop Owner
+                        </button>
+                      {% elif snap.id %}
+                        <button type="button"
+                                class="btn btn-sm btn-outline-secondary open-item-thread"
+                                data-product-id="{{ snap.id }}">
+                          <i class="fas fa-comments me-1"></i>Discuss
+                        </button>
+                        <button type="button"
+                                class="btn btn-sm btn-outline-success ask-seller"
+                                data-product-id="{{ snap.id }}">
+                          <i class="fas fa-store me-1"></i>Ask Shop Owner
+                        </button>
+                      {% endif %}
+                    </div>
+                  </div>
+                {% endif %}
+
+                <div class="small text-muted mt-1">{{ m.created_at|date:"M d, H:i" }}</div>
+              </div>
             </div>
-          </div>
-        {% endif %}
+          {% endif %}
+
+        {% endwith %}
       {% endfor %}
     </div>
+
   {% else %}
-    <div class="text-muted">No messages yet. Say hi 👋</div>
+    <div class="text-muted">
+      {% if current_scope == "seller_item" %}
+        No messages yet. Ask the shop owner anything 👇
+      {% elif current_scope == "item" %}
+        No messages yet. Start the item discussion 👇
+      {% else %}
+        No messages yet. Say hi 👋
+      {% endif %}
+    </div>
   {% endif %}
+
 {% endif %}

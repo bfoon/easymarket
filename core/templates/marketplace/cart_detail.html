@@ -175,6 +175,50 @@
 .member-avatar.has-image .avatar-initials {
   display: none;
 }
+/* Emoji bar – SAME DIV, no extra space */
+.emoji-bar{
+  flex-wrap: nowrap !important;
+  overflow-x: auto;
+  overflow-y: hidden;
+
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+
+  /* 5 buttons visible */
+  width: 100%;
+}
+
+/* Each emoji button = exactly 1/5 width */
+.emoji-bar .emoji-btn{
+  flex: 0 0 calc((100% - 4 * 4px) / 5); /* 5 visible, 4 gaps */
+  height: 34px;
+  font-size: 18px;
+  border-radius: 10px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  scroll-snap-align: start;
+  white-space: nowrap;
+}
+
+/* Optional: subtle scrollbar */
+.emoji-bar::-webkit-scrollbar{
+  height: 5px;
+}
+.emoji-bar::-webkit-scrollbar-thumb{
+  background: rgba(0,0,0,.2);
+  border-radius: 10px;
+}
+
+/* Mobile tuning */
+@media (max-width: 420px){
+  .emoji-bar .emoji-btn{
+    height: 32px;
+    font-size: 17px;
+  }
+}
 
 /* Small avatar for items list */
 .item-avatar {
@@ -226,6 +270,9 @@
 <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
 <section class="py-4 bg-light min-vh-100">
   <div class="container">
+<audio id="socialChatBell" preload="auto">
+  <source src="{% static 'sounds/chat-bell.mp3' %}" type="audio/mpeg">
+</audio>
 
     <!-- Header -->
     <div class="row mb-4">
@@ -649,23 +696,56 @@
                       <strong class="text-success fs-5">{% display_money item.subtotal %}</strong>
                     </td>
                     <td class="text-center">
-                      {% if item.can_modify %}
-                      <div class="btn-group-vertical btn-group-sm">
-                        <button class="btn btn-outline-danger btn-touch remove-item mb-1"
-                                data-item-id="{{ item.id }}" title="Remove">
-                          <i class="fas fa-trash"></i>
+                    <div class="d-flex justify-content-center gap-2 flex-wrap">
+
+                      <!-- Chat tools (everyone can use if not blocked) -->
+                      {% if not is_blocked %}
+                        <!-- Share item card into the CURRENT chat -->
+                        <button type="button"
+                                class="btn btn-outline-primary btn-sm btn-touch share-to-chat"
+                                data-product-id="{{ item.product.id }}"
+                                data-selected-features='{{ item.selected_features|default:"{}"|escapejs }}'
+                                title="Share this item to chat">
+                          <i class="fas fa-share-alt"></i>
                         </button>
-                        <button class="btn btn-outline-secondary btn-touch move-to-normal"
-                                data-item-id="{{ item.id }}" title="Move to Personal">
-                          <i class="fas fa-arrow-left"></i>
+
+                        <!-- Open item discussion thread -->
+                        <button type="button"
+                                class="btn btn-outline-secondary btn-sm btn-touch open-item-thread"
+                                data-product-id="{{ item.product.id }}"
+                                title="Discuss this item with members">
+                          <i class="fas fa-comments"></i>
                         </button>
-                      </div>
-                      {% else %}
-                      <span class="text-muted small">
-                        <i class="fas fa-lock"></i>
-                      </span>
+
+                        <!-- Open private thread with shop owner for this item -->
+                        <button type="button"
+                                class="btn btn-outline-success btn-sm btn-touch ask-seller"
+                                data-product-id="{{ item.product.id }}"
+                                title="Ask the shop owner about this item">
+                          <i class="fas fa-store"></i>
+                        </button>
                       {% endif %}
-                    </td>
+
+                      <!-- Modify tools (only if user can modify) -->
+                      {% if item.can_modify %}
+                        <div class="btn-group-vertical btn-group-sm">
+                          <button class="btn btn-outline-danger btn-touch remove-item mb-1"
+                                  data-item-id="{{ item.id }}" title="Remove">
+                            <i class="fas fa-trash"></i>
+                          </button>
+                          <button class="btn btn-outline-secondary btn-touch move-to-normal"
+                                  data-item-id="{{ item.id }}" title="Move to Personal">
+                            <i class="fas fa-arrow-left"></i>
+                          </button>
+                        </div>
+                      {% else %}
+                        <span class="text-muted small">
+                          <i class="fas fa-lock"></i>
+                        </span>
+                      {% endif %}
+                    </div>
+                  </td>
+
                   </tr>
                   {% endfor %}
                 </tbody>
@@ -689,37 +769,105 @@
         {% endif %}
 
         {# ------------------------ LIVE CHAT (inside same card) ------------------------ #}
-    <div class="border-top bg-white p-3">
-      <div class="d-flex align-items-center justify-content-between mb-2">
-        <div class="fw-bold">
-          <i class="fas fa-comments me-2 text-primary"></i>Social Chat
-        </div>
-        <span class="small text-muted">Live</span>
-      </div>
+    <div class="social-chat card border-0 shadow-sm">
+  <div class="card-header bg-white d-flex justify-content-between align-items-center">
+    <div class="fw-bold">
+      <i class="fas fa-comments me-2 text-success"></i>Social Cart Chat
+    </div>
 
-      <div id="socialChatMessagesWrap"
-           class="p-3 rounded-3 border bg-light"
-           style="max-height:260px; overflow:auto;">
+    {% if social and is_owner %}
+      <button class="btn btn-sm btn-outline-success" id="ownerLiveToggleBtn" type="button">
+        <i class="fas fa-broadcast-tower me-1"></i>
+        <span id="ownerLiveLabel">{% if social.is_live %}Live{% else %}Go Live{% endif %}</span>
+      </button>
+    {% endif %}
+  </div>
+
+  <div class="card-body p-0">
+    <div id="socialChatMessages"
+         style="height: 320px; overflow:auto;"
+         class="p-3">
+      <div id="socialChatMessagesInner">
         {% include "marketplace/partials/_social_cart_chat_messages.html" %}
       </div>
-
-      <div class="mt-2">
-        <form id="socialChatForm" class="d-flex gap-2">
-          {% csrf_token %}
-          <input type="text"
-                 id="socialChatInput"
-                 class="form-control"
-                 name="message"
-                 placeholder="{% if is_blocked %}You are blocked (cannot send){% else %}Message cart members...{% endif %}"
-                 {% if is_blocked %}disabled{% endif %}
-                 autocomplete="off">
-          <button class="btn btn-primary" type="submit" {% if is_blocked %}disabled{% endif %}>
-            <i class="fas fa-paper-plane"></i>
-          </button>
-        </form>
-        <div id="socialChatError" class="small text-danger mt-1 d-none"></div>
-      </div>
     </div>
+
+    <div class="border-top p-2 bg-light">
+      <!-- Emoji row -->
+      <div class="d-flex gap-1 mb-2 emoji-bar" id="emojiBar">
+  <!-- Faces -->
+  <button type="button" class="btn btn-sm btn-light emoji-btn">😀</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">😁</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">😂</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">🤣</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">😊</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">😉</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">😍</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">😎</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">🤔</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">🥳</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">😭</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">😤</button>
+
+  <!-- Hands -->
+  <button type="button" class="btn btn-sm btn-light emoji-btn">👍🏽</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">👎🏽</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">👏🏽</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">🙌🏽</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">🙏🏽</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">👌🏽</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">✌🏽</button>
+
+  <!-- Hearts -->
+  <button type="button" class="btn btn-sm btn-light emoji-btn">❤️</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">🧡</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">💛</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">💚</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">💙</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">💜</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">🖤</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">🤍</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">💯</button>
+
+  <!-- Energy / Actions -->
+  <button type="button" class="btn btn-sm btn-light emoji-btn">🔥</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">✨</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">⚡</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">🚀</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">🎉</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">🏆</button>
+
+  <!-- Shopping / Status -->
+  <button type="button" class="btn btn-sm btn-light emoji-btn">🛒</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">🛍️</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">🎁</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">📦</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">💸</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">💳</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">✅</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">❌</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">⚠️</button>
+
+  <!-- Fun extras -->
+  <button type="button" class="btn btn-sm btn-light emoji-btn">👀</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">😈</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">🐐</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">🧠</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">📈</button>
+  <button type="button" class="btn btn-sm btn-light emoji-btn">📉</button>
+</div>
+
+
+      <form id="socialChatForm" class="d-flex gap-2">
+        <input type="text" id="socialChatInput" class="form-control" placeholder="Type a message...">
+        <button class="btn btn-success" type="submit">
+          <i class="fas fa-paper-plane"></i>
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+
     {# ----------------------------------------------------------------------------- #}
 
       </div>
@@ -1048,103 +1196,214 @@
   </div>
 </div>
 <script>
-  window.SOCIAL_CART_FRAGMENT_URL = "{% url 'marketplace:social_cart_fragment' %}";
   window.SOCIAL_CHAT_FRAGMENT_URL = "{% url 'marketplace:social_cart_chat_fragment' %}";
-  window.SOCIAL_CHAT_SEND_URL     = "{% url 'marketplace:social_cart_chat_send' %}";
+  window.SOCIAL_CHAT_SEND_URL = "{% url 'marketplace:social_cart_chat_send' %}";
+  window.SOCIAL_CART_SET_LIVE_URL = "{% url 'marketplace:social_cart_set_live' %}";
+  window.SOCIAL_CART_EVENTS_URL = "{% url 'marketplace:social_cart_events' %}";
 </script>
 <script>
+  window.IS_BLOCKED = {{ is_blocked|yesno:"true,false" }};
+  window.IS_SOCIAL_ACTIVE = {{ is_social_active|yesno:"true,false" }};
+</script>
+<script>
+  window.CURRENT_USER_ID = "{{ request.user.id }}";
+</script>
+
+
+<script>
+// social-cart-live.js (corrected + merged cleanly)
+// - Thread switching (group / item / seller_item)
+// - Share-to-chat from cart table (posts item card to group chat)
+// - Preserves scroll position on refresh
+// - Rebinds buttons after refresh
+// - Emoji bar inserts at cursor
+//
+// Required globals:
+//   window.SOCIAL_CHAT_FRAGMENT_URL
+//   window.SOCIAL_CHAT_SEND_URL
+// Optional:
+//   window.SOCIAL_CART_SET_LIVE_URL
+//   window.showToast(msg, type)
+
 (function () {
-  const $ = (id) => document.getElementById(id);
+  let chatTimer = null;
+  let inChatRefresh = false;
+
+  // Current chat context (default group)
+  window.currentChatScope = window.currentChatScope || "group";      // "group" | "item" | "seller_item"
+  window.currentChatProductId = window.currentChatProductId || null; // product id for item/seller_item
 
   function getCSRFToken() {
-    const tokenEl =
-      document.querySelector('#socialCartPartial input[name="csrfmiddlewaretoken"]') ||
-      document.querySelector('input[name="csrfmiddlewaretoken"]');
-    return tokenEl ? tokenEl.value : "";
+    const name = "csrftoken";
+    const cookies = document.cookie ? document.cookie.split(";") : [];
+    for (let c of cookies) {
+      c = c.trim();
+      if (c.startsWith(name + "=")) return decodeURIComponent(c.substring(name.length + 1));
+    }
+    return "";
   }
 
-  async function fetchHTML(url) {
-    const res = await fetch(url, { headers: { "X-Requested-With": "XMLHttpRequest" } });
-    if (!res.ok) throw new Error("Fetch failed");
-    return await res.text();
+  function isNearBottom(el, thresholdPx = 80) {
+    const distance = el.scrollHeight - (el.scrollTop + el.clientHeight);
+    return distance <= thresholdPx;
   }
 
-  // IMPORTANT: after swapping HTML, rebind your existing listeners
-  function rebindSocialCartUI() {
-    // If you already have a function that binds buttons / drag-drop, call it here.
-    // Examples (use your real ones):
-    if (typeof window.bindCartButtons === "function") window.bindCartButtons();
-    if (typeof window.initDragDrop === "function") window.initDragDrop();
-
-    // At minimum, ensure chat form is bound:
-    bindChatForm();
+  function insertAtCursor(input, text) {
+    const start = input.selectionStart ?? input.value.length;
+    const end = input.selectionEnd ?? input.value.length;
+    const before = input.value.slice(0, start);
+    const after = input.value.slice(end);
+    input.value = before + text + after;
+    const newPos = start + text.length;
+    input.setSelectionRange(newPos, newPos);
+    input.focus();
   }
 
-  let cartRefreshing = false;
-  async function refreshSocialCartPartial() {
-    const target = $("socialCartPartial");
-    if (!target || !window.SOCIAL_CART_FRAGMENT_URL) return;
-    if (document.hidden || cartRefreshing) return;
+  function setChatContext(scope, productId = null) {
+    window.currentChatScope = scope || "group";
+    window.currentChatProductId = productId ? String(productId) : null;
 
-    // don’t refresh while user is typing in qty/chat input
-    const active = document.activeElement;
-    if (active && (active.classList.contains("quantity-input") || active.id === "socialChatInput")) return;
-
-    cartRefreshing = true;
-    try {
-      const html = await fetchHTML(window.SOCIAL_CART_FRAGMENT_URL);
-      target.innerHTML = html;
-      rebindSocialCartUI();
-    } catch (e) {
-      // silent
-    } finally {
-      cartRefreshing = false;
+    const input = document.getElementById("socialChatInput");
+    if (input) {
+      if (window.currentChatScope === "group") input.placeholder = "Message cart members...";
+      if (window.currentChatScope === "item") input.placeholder = "Discuss this item with members...";
+      if (window.currentChatScope === "seller_item") input.placeholder = "Ask the shop owner about this item...";
     }
   }
 
-  let chatRefreshing = false;
-  async function refreshChatMessages() {
-    const wrap = $("socialChatMessagesWrap");
-    if (!wrap || !window.SOCIAL_CHAT_FRAGMENT_URL) return;
-    if (document.hidden || chatRefreshing) return;
+  function buildChatFragmentURL() {
+    const base = window.SOCIAL_CHAT_FRAGMENT_URL;
+    if (!base) return null;
 
-    chatRefreshing = true;
+    const url = new URL(base, window.location.origin);
+    url.searchParams.set("scope", window.currentChatScope || "group");
+
+    if ((window.currentChatScope === "item" || window.currentChatScope === "seller_item") && window.currentChatProductId) {
+      url.searchParams.set("product_id", String(window.currentChatProductId));
+    } else {
+      url.searchParams.delete("product_id");
+    }
+    return url.toString();
+  }
+
+  async function refreshChatMessages({ silent = true } = {}) {
+    const wrap = document.getElementById("socialChatMessages");
+    const inner = document.getElementById("socialChatMessagesInner");
+    if (!wrap || !inner) return;
+
+    const url = buildChatFragmentURL();
+    if (!url) return;
+    if (inChatRefresh) return;
+
+    inChatRefresh = true;
+
+    // Save scroll state BEFORE update
+    const wasNearBottom = isNearBottom(wrap);
+    const oldScrollTop = wrap.scrollTop;
+    const oldScrollHeight = wrap.scrollHeight;
+
     try {
-      const html = await fetchHTML(window.SOCIAL_CHAT_FRAGMENT_URL);
-      wrap.innerHTML = html;
-      wrap.scrollTop = wrap.scrollHeight;
+      const res = await fetch(url, {
+        headers: { "X-Requested-With": "XMLHttpRequest" },
+        credentials: "same-origin",
+      });
+
+      const html = await res.text();
+      inner.innerHTML = html;
+
+      // Rebind buttons inside refreshed HTML
+      bindThreadButtons();
+
+      // Restore scroll position
+      const newScrollHeight = wrap.scrollHeight;
+      if (wasNearBottom) {
+        wrap.scrollTop = wrap.scrollHeight;
+      } else {
+        const delta = newScrollHeight - oldScrollHeight;
+        wrap.scrollTop = oldScrollTop + delta;
+      }
     } catch (e) {
-      // silent
+      if (!silent) console.warn("Chat refresh failed", e);
     } finally {
-      chatRefreshing = false;
+      inChatRefresh = false;
     }
   }
 
-  async function sendChatMessage(message) {
-    const fd = new FormData();
-    fd.append("message", message);
+  async function sendChatMessage(text) {
+    if (!window.SOCIAL_CHAT_SEND_URL) return;
+
+    const csrftoken = getCSRFToken();
+    const body = new URLSearchParams();
+
+    body.append("message", text);
+    body.append("scope", window.currentChatScope || "group");
+
+    if ((window.currentChatScope === "item" || window.currentChatScope === "seller_item") && window.currentChatProductId) {
+      body.append("product_id", String(window.currentChatProductId));
+    }
 
     const res = await fetch(window.SOCIAL_CHAT_SEND_URL, {
       method: "POST",
-      body: fd,
       headers: {
+        "X-CSRFToken": csrftoken,
+        "Content-Type": "application/x-www-form-urlencoded",
         "X-Requested-With": "XMLHttpRequest",
-        "X-CSRFToken": getCSRFToken()
       },
-      credentials: "same-origin"
+      body: body.toString(),
+      credentials: "same-origin",
     });
 
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.success) {
-      throw new Error(data.message || data.error || "Failed to send");
+    const data = await res.json().catch(() => null);
+    if (!data || !data.success) {
+      throw new Error((data && data.message) || "Failed to send message");
     }
-    return data;
+  }
+
+  async function shareProductToGroupChat(productId) {
+    if (!window.SOCIAL_CHAT_SEND_URL) return;
+    const csrftoken = getCSRFToken();
+
+    const body = new URLSearchParams();
+    body.append("scope", "group");
+    body.append("attach_product", "1");
+    body.append("product_id", String(productId));
+    body.append("message", ""); // optional
+
+    const res = await fetch(window.SOCIAL_CHAT_SEND_URL, {
+      method: "POST",
+      headers: {
+        "X-CSRFToken": csrftoken,
+        "Content-Type": "application/x-www-form-urlencoded",
+        "X-Requested-With": "XMLHttpRequest",
+      },
+      body: body.toString(),
+      credentials: "same-origin",
+    });
+
+    const data = await res.json().catch(() => null);
+    if (!data || !data.success) {
+      throw new Error((data && data.message) || "Failed to share item");
+    }
+  }
+
+  function bindEmojiBar() {
+    const input = document.getElementById("socialChatInput");
+    const bar = document.getElementById("emojiBar");
+    if (!input || !bar) return;
+
+    if (bar.dataset.bound === "1") return;
+    bar.dataset.bound = "1";
+
+    bar.querySelectorAll(".emoji-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        insertAtCursor(input, btn.textContent || "");
+      });
+    });
   }
 
   function bindChatForm() {
-    const form = $("socialChatForm");
-    const input = $("socialChatInput");
-    const err = $("socialChatError");
+    const form = document.getElementById("socialChatForm");
+    const input = document.getElementById("socialChatInput");
     if (!form || !input) return;
 
     if (form.dataset.bound === "1") return;
@@ -1155,37 +1414,161 @@
       const msg = (input.value || "").trim();
       if (!msg) return;
 
-      if (err) { err.classList.add("d-none"); err.textContent = ""; }
-
-      input.disabled = true;
+      input.value = "";
       try {
         await sendChatMessage(msg);
-        input.value = "";
-        await refreshChatMessages();
-      } catch (ex) {
-        if (err) { err.textContent = ex.message || "Failed"; err.classList.remove("d-none"); }
-      } finally {
-        input.disabled = false;
-        input.focus();
+
+        await refreshChatMessages({ silent: true });
+        const wrap = document.getElementById("socialChatMessages");
+        if (wrap) wrap.scrollTop = wrap.scrollHeight;
+      } catch (err) {
+        if (window.showToast) window.showToast(err.message || "Chat error", "error");
       }
     });
   }
 
-  document.addEventListener("DOMContentLoaded", () => {
-    bindChatForm();
+  function bindOwnerLiveToggle() {
+    const btn = document.getElementById("ownerLiveToggleBtn");
+    if (!btn) return;
+    if (!window.SOCIAL_CART_SET_LIVE_URL) return;
 
-    setInterval(refreshSocialCartPartial, 4000);
-    setInterval(refreshChatMessages, 1500);
+    if (btn.dataset.bound === "1") return;
+    btn.dataset.bound = "1";
 
-    document.addEventListener("visibilitychange", () => {
-      if (!document.hidden) {
-        refreshSocialCartPartial();
-        refreshChatMessages();
+    btn.addEventListener("click", async () => {
+      const csrftoken = getCSRFToken();
+      const label = document.getElementById("ownerLiveLabel");
+      const currentlyLive = label && label.textContent.trim().toLowerCase() === "live";
+      const newVal = !currentlyLive;
+
+      const body = new URLSearchParams();
+      body.append("is_live", newVal ? "true" : "false");
+
+      try {
+        const res = await fetch(window.SOCIAL_CART_SET_LIVE_URL, {
+          method: "POST",
+          headers: {
+            "X-CSRFToken": csrftoken,
+            "Content-Type": "application/x-www-form-urlencoded",
+            "X-Requested-With": "XMLHttpRequest",
+          },
+          body: body.toString(),
+          credentials: "same-origin",
+        });
+
+        const data = await res.json().catch(() => null);
+        if (!data || !data.success) {
+          throw new Error((data && data.message) || "Failed to update live status");
+        }
+
+        if (label) label.textContent = data.is_live ? "Live" : "Go Live";
+        if (window.showToast) window.showToast(data.is_live ? "You are LIVE ✅" : "You are offline", "success");
+      } catch (e) {
+        if (window.showToast) window.showToast(e.message || "Error", "error");
       }
     });
+  }
 
-    refreshChatMessages();
+  function bindThreadButtons() {
+    const root = document.getElementById("socialChatMessagesInner");
+    if (!root) return;
+
+    // Ask seller buttons (inside chat messages)
+    root.querySelectorAll(".ask-seller").forEach(btn => {
+      if (btn.dataset.bound === "1") return;
+      btn.dataset.bound = "1";
+
+      btn.addEventListener("click", async () => {
+        const productId = btn.getAttribute("data-product-id");
+        if (!productId) return;
+
+        setChatContext("seller_item", productId);
+        await refreshChatMessages({ silent: true });
+
+        const wrap = document.getElementById("socialChatMessages");
+        if (wrap) wrap.scrollTop = wrap.scrollHeight;
+      });
+    });
+
+    // Discuss item buttons (inside chat messages)
+    root.querySelectorAll(".open-item-thread").forEach(btn => {
+      if (btn.dataset.bound === "1") return;
+      btn.dataset.bound = "1";
+
+      btn.addEventListener("click", async () => {
+        const productId = btn.getAttribute("data-product-id");
+        if (!productId) return;
+
+        setChatContext("item", productId);
+        await refreshChatMessages({ silent: true });
+
+        const wrap = document.getElementById("socialChatMessages");
+        if (wrap) wrap.scrollTop = wrap.scrollHeight;
+      });
+    });
+  }
+
+  function bindShareToChatButtons() {
+    // Buttons exist in the main page table
+    document.querySelectorAll(".share-to-chat").forEach(btn => {
+      if (btn.dataset.bound === "1") return;
+      btn.dataset.bound = "1";
+
+      btn.addEventListener("click", async () => {
+        const productId = btn.getAttribute("data-product-id");
+        if (!productId) return;
+
+        try {
+          await shareProductToGroupChat(productId);
+
+          // Switch to group chat to show what you shared
+          setChatContext("group", null);
+          await refreshChatMessages({ silent: true });
+
+          const wrap = document.getElementById("socialChatMessages");
+          if (wrap) wrap.scrollTop = wrap.scrollHeight;
+
+          if (window.showToast) window.showToast("Item shared to chat ✅", "success");
+        } catch (e) {
+          if (window.showToast) window.showToast(e.message || "Error", "error");
+        }
+      });
+    });
+  }
+
+  // Optional: Provide a way to return to group chat
+  window.socialChatGoGroup = async function () {
+    setChatContext("group", null);
+    await refreshChatMessages({ silent: true });
+    const wrap = document.getElementById("socialChatMessages");
+    if (wrap) wrap.scrollTop = wrap.scrollHeight;
+  };
+
+  function startChatPolling() {
+    if (chatTimer) clearInterval(chatTimer);
+
+    refreshChatMessages({ silent: true }).then(() => {
+      const wrap = document.getElementById("socialChatMessages");
+      if (wrap) wrap.scrollTop = wrap.scrollHeight;
+    });
+
+    chatTimer = setInterval(() => {
+      refreshChatMessages({ silent: true });
+    }, 2000);
+
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) refreshChatMessages({ silent: true });
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    bindEmojiBar();
+    bindChatForm();
+    bindOwnerLiveToggle();
+    bindShareToChatButtons();  // ✅ important
+    startChatPolling();
   });
+
 })();
 </script>
 

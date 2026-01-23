@@ -85,6 +85,10 @@ urlpatterns = [
     path('cart/invite/join/<str:invite_code>/', social_cart.join_open_social_cart, name='join_open_social_cart'),
     path('cart/invite/accept/<str:code>/', social_cart.accept_cart_invite, name='accept_cart_invite'),
 
+    path("cart/social/schedule/", social_cart.schedule_social_cart, name="schedule_social_cart"),
+    path("cart/social/live-status/", social_cart.social_cart_set_live, name="social_cart_set_live"),
+
+
     # Member management
     path('cart/member/leave/', social_cart.leave_cart, name='leave_social_cart'),
     path('cart/member/remove/<int:member_id>/', social_cart.remove_member, name='remove_member'),
