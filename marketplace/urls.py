@@ -56,7 +56,7 @@ urlpatterns = [
     path('careers/apply/success/<str:code>/', views.careers_apply_success, name='career_apply_success'),
     path('careers/<slug:slug>/', views.career_detail, name='career_detail'),
 
-    # PRESS — order matters!
+    # PRESS – order matters!
     path("press/", views.press_list, name="press_list"),
     path("press/new/", views.press_create, name="press_create"),
     path("press/<slug:slug>/", views.press_detail, name="press_detail"),
@@ -68,15 +68,20 @@ urlpatterns = [
     # NEW: Move items between carts
     path('cart/move-item/', views.move_cart_item, name='move_cart_item'),
 
-    # SOCIAL CART URLS (Updated)
+    # SOCIAL CART URLS
     path('cart/social/create/', social_cart.create_social_cart, name='create_social_cart'),
     path('cart/social/status/', social_cart.social_cart_status, name='social_cart_status'),
     path('cart/social/live/', social_cart.social_cart_live, name='social_cart_live'),
     path("social-cart/events/", social_cart.social_cart_events, name="social_cart_events"),
-    # --- Social Cart partial refresh ---
+    # Delete invitation
+    path('cart/invite/<int:invite_id>/delete/',
+     social_cart.delete_cart_invite,
+     name='delete_cart_invite'),
+
+    # Social Cart partial refresh
     path("cart/social/fragment/", social_cart.social_cart_fragment, name="social_cart_fragment"),
 
-    # --- Social Cart live chat ---
+    # Social Cart live chat
     path("cart/social/chat/fragment/", social_cart.social_cart_chat_fragment, name="social_cart_chat_fragment"),
     path("cart/social/chat/send/", social_cart.social_cart_chat_send, name="social_cart_chat_send"),
 
@@ -85,12 +90,13 @@ urlpatterns = [
     path('cart/invite/join/<str:invite_code>/', social_cart.join_open_social_cart, name='join_open_social_cart'),
     path('cart/invite/accept/<str:code>/', social_cart.accept_cart_invite, name='accept_cart_invite'),
 
+    # Scheduling
     path("cart/social/schedule/", social_cart.schedule_social_cart, name="schedule_social_cart"),
     path("cart/social/live-status/", social_cart.social_cart_set_live, name="social_cart_set_live"),
 
-
     # Member management
     path('cart/member/leave/', social_cart.leave_cart, name='leave_social_cart'),
+    path('cart/member/leave-checkout/', social_cart.leave_and_checkout_all, name='leave_and_checkout_all'),  # NEW
     path('cart/member/remove/<int:member_id>/', social_cart.remove_member, name='remove_member'),
     path('cart/member/block/<int:member_id>/', social_cart.block_member, name='block_member'),
     path('cart/member/approve/<int:member_id>/', social_cart.approve_member, name='approve_social_member'),

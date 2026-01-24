@@ -1292,6 +1292,43 @@ class SocialCart(models.Model):
         ('closed', 'Closed'),
         ('cancelled', 'Cancelled'),
     ])
+
+    # ✅ LIVE SESSION FIELDS (MOVE HERE)
+    is_live = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Owner has come online for this social cart session."
+    )
+    live_started_at = models.DateTimeField(null=True, blank=True)
+    ACCESS_PUBLIC = "public"
+    ACCESS_INVITE_ONLY = "invite_only"
+    ACCESS_CHOICES = (
+        (ACCESS_PUBLIC, "Public"),
+        (ACCESS_INVITE_ONLY, "Invite Only"),
+    )
+    access_type = models.CharField(
+        max_length=20,
+        choices=ACCESS_CHOICES,
+        default=ACCESS_PUBLIC,
+        db_index=True,
+        help_text="Public carts can be joined with link/QR. Invite-only carts require a valid invite."
+    )
+    scheduled_for = models.DateTimeField(
+        null=True, blank=True,
+        help_text="If set, this cart is scheduled to start at this time."
+    )
+
+    def is_scheduled(self):
+        return bool(self.scheduled_for)
+
+    def is_join_allowed_now(self):
+        if self.status not in ("open", "checkout") or not self.is_active:
+            return False
+        if self.access_type == self.ACCESS_PUBLIC:
+            return True
+        if not self.scheduled_for:
+            return True
+        return timezone.now() >= self.scheduled_for
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -1315,6 +1352,18 @@ class SocialCart(models.Model):
 
     def __str__(self):
         return f"Social Cart {self.id} - Owner: {self.owner.username}"
+
+    def is_scheduled(self):
+        return bool(self.scheduled_for)
+
+    def is_join_allowed_now(self):
+        if self.status not in ("open", "checkout") or not self.is_active:
+            return False
+        if self.access_type == self.ACCESS_PUBLIC:
+            return True
+        if not self.scheduled_for:
+            return True
+        return timezone.now() >= self.scheduled_for
 
     def total(self) -> Decimal:
         """Calculate total for social cart items only"""
@@ -1360,12 +1409,20 @@ class SocialCart(models.Model):
         """
         Deactivate social cart and create individual orders for each member
         Called when: owner checks out OR owner leaves the cart
+
+        FIXED to match your actual Order and OrderItem model fields:
+        - Order uses 'buyer' not 'user'
+        - Order uses 'source_type' not 'source'
+        - Order uses 'order_notes' not 'notes'
+        - Order doesn't have 'total_amount' or 'payment_status' fields
+        - OrderItem uses 'price_at_time' not 'price' or 'price_at_purchase'
         """
         from orders.models import Order, OrderItem
         from django.db import transaction
+        from django.utils import timezone
 
         with transaction.atomic():
-            # Mark as closed
+            # Mark social cart as closed
             self.is_active = False
             self.status = 'closed'
             self.completed_at = timezone.now()
@@ -1388,17 +1445,12 @@ class SocialCart(models.Model):
                 if not items:
                     continue
 
-                # Calculate total for this user's items
-                total = sum(item.subtotal() for item in items)
-
-                # Create order
+                # Create order (total is calculated via Order.total() method, not stored)
                 order = Order.objects.create(
-                    user=user,
-                    total_amount=total,
-                    status='pending',
-                    payment_status='pending',
-                    source='social_cart',
-                    notes=f'Order from Social Cart #{self.id}'
+                    buyer=user,  # ✅ Correct field name
+                    status='pending',  # ✅ Correct field name
+                    source_type='marketplace',  # ✅ Correct field name
+                    order_notes=f'Order from Social Cart #{self.id}'  # ✅ Correct field name
                 )
 
                 # Create order items
@@ -1407,8 +1459,8 @@ class SocialCart(models.Model):
                         order=order,
                         product=cart_item.product,
                         quantity=cart_item.quantity,
-                        price=cart_item.product.price,
-                        selected_features=cart_item.selected_features
+                        price_at_time=cart_item.product.price,  # ✅ Correct field name
+                        selected_features=cart_item.selected_features or {}
                     )
 
                 created_orders[user] = order
@@ -1416,7 +1468,7 @@ class SocialCart(models.Model):
             # Delete all social cart items (they're now in orders)
             social_items.delete()
 
-            # Deactivate all members
+            # Mark all members as 'left'
             self.members.all().update(status='left')
 
             return created_orders
@@ -1611,50 +1663,6 @@ class CartActivity(models.Model):
     message = models.CharField(max_length=255, blank=True)
     payload = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    ACCESS_PUBLIC = "public"
-    ACCESS_INVITE_ONLY = "invite_only"
-    ACCESS_CHOICES = (
-        (ACCESS_PUBLIC, "Public"),
-        (ACCESS_INVITE_ONLY, "Invite Only"),
-    )
-
-    access_type = models.CharField(
-        max_length=20,
-        choices=ACCESS_CHOICES,
-        default=ACCESS_PUBLIC,
-        db_index=True,
-        help_text="Public carts can be joined with link/QR. Invite-only carts require a valid invite."
-    )
-
-    scheduled_for = models.DateTimeField(
-        null=True, blank=True,
-        help_text="If set, this cart is scheduled to start at this time."
-    )
-
-    is_live = models.BooleanField(
-        default=False,
-        db_index=True,
-        help_text="Owner has come online for this social cart session."
-    )
-
-    live_started_at = models.DateTimeField(null=True, blank=True)
-
-    def is_scheduled(self):
-        return bool(self.scheduled_for)
-
-    def is_join_allowed_now(self):
-        """
-        For invite-only scheduled carts: joining is allowed only from scheduled time onward (optional rule).
-        Public carts can always join when open/checkout.
-        """
-        if self.status not in ("open", "checkout") or not self.is_active:
-            return False
-        if self.access_type == self.ACCESS_PUBLIC:
-            return True
-        # invite-only:
-        if not self.scheduled_for:
-            return True
-        return timezone.now() >= self.scheduled_for
 
     class Meta:
         ordering = ["-id"]
@@ -1674,6 +1682,9 @@ class CartMember(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='social_cart_memberships')
     role = models.CharField(max_length=12, choices=ROLE, default='editor')
     status = models.CharField(max_length=12, choices=STATUS, default='joined')
+    # ADD THIS (so set_checkout_members works)
+    can_checkout = models.BooleanField(default=True, db_index=True)
+
     joined_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
