@@ -1,6 +1,7 @@
 from decimal import Decimal, InvalidOperation
 import uuid
 import json
+from django.http import HttpResponse
 
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
@@ -182,110 +183,170 @@ def _get_product_seller_user(product):
         return product.seller
     return None
 
+def _wants_json(request) -> bool:
+    # JS calls send X-Requested-With, browsers usually don't.
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return True
+    accept = (request.headers.get("Accept") or "").lower()
+    return "application/json" in accept
+
+def _respond(request, ok: bool, message: str, status_code: int = 200, **extra):
+    """
+    Return JSON for AJAX, redirect+flash for normal browser.
+    """
+    if _wants_json(request):
+        payload = {"success": ok, "message": message}
+        payload.update(extra)
+        return JsonResponse(payload, status=status_code)
+
+    # Browser experience
+    if ok:
+        messages.success(request, message)
+    else:
+        # use warning for "already a member" type
+        if status_code in (400, 409):
+            messages.warning(request, message)
+        else:
+            messages.error(request, message)
+    return redirect("marketplace:cart")
+
 # ---------- Core endpoints ----------
 @login_required
 @require_POST
 def create_social_cart(request):
     """
-    Create (or revive) a social cart for the user.
-    Because SocialCart.cart is UNIQUE, we must never try to create
-    a second SocialCart for the same cart.
+    Create or reactivate a social cart for the user.
 
-    NEW:
-    - access_type: public | invite_only
-      If invite_only, members require approval (handled in join/accept invite)
+    BEHAVIOR:
+    - If active social cart exists → Return it
+    - If inactive/archived social cart exists → Archive it, create fresh one
+    - If no social cart exists → Create new one
+
+    This prevents the duplicate key error while ensuring fresh carts.
     """
+    from marketplace.models import Cart
+    from django.db import transaction
+
     cart, _ = Cart.objects.get_or_create(user=request.user)
 
-    # NEW: read access_type from POST
+    # Read access_type from POST
     access_type = (request.POST.get("access_type") or "public").strip()
     if access_type not in ("public", "invite_only"):
         access_type = "public"
 
-    revived = False
-
     with transaction.atomic():
-        # Lock the cart row to avoid double-create races from fast clicks
+        # Lock the cart row to avoid race conditions
         cart = Cart.objects.select_for_update().get(pk=cart.pk)
 
+        # Get existing social cart if any
         existing_social = getattr(cart, "social", None)
 
-        if existing_social:
-            social = existing_social
+        # CASE 1: Active social cart already exists
+        if existing_social and existing_social.is_active and existing_social.status in ('open', 'checkout'):
+            # Just update access type if needed
+            if existing_social.access_type != access_type:
+                existing_social.access_type = access_type
+                existing_social.save(update_fields=["access_type", "updated_at"])
 
-            # Revive if inactive/closed
-            if not (social.is_active and social.status == "open"):
-                revived = True
-                social.is_active = True
-                social.status = "open"
-
-            # Always keep a valid split_mode
-            if not social.split_mode:
-                social.split_mode = "by_items"
-
-            # NEW: set/override access type based on user choice
-            if social.access_type != access_type:
-                social.access_type = access_type
-
-            social.save(update_fields=["is_active", "status", "split_mode", "access_type", "updated_at"])
-
-        else:
-            # Create only when none exists
-            social = SocialCart.objects.create(
-                cart=cart,
-                owner=request.user,
-                is_active=True,
-                status="open",
-                split_mode="by_items",
-                access_type=access_type  # NEW
+            # Ensure owner membership
+            owner_member, created = CartMember.objects.get_or_create(
+                social_cart=existing_social,
+                user=request.user,
+                defaults={"role": "owner", "status": "joined", "is_original_owner": True}
             )
 
-        # Ensure owner membership
-        owner_member, created = CartMember.objects.get_or_create(
+            if not created and owner_member.status != "joined":
+                owner_member.status = "joined"
+                owner_member.role = "owner"
+                owner_member.save(update_fields=["status", "role", "updated_at"])
+
+            return JsonResponse({
+                'success': True,
+                'message': 'Social cart already active',
+                'invite_code': existing_social.invite_code,
+                'social_id': str(existing_social.id),
+            })
+
+        # CASE 2: Inactive/archived social cart exists
+        if existing_social:
+            # Archive the old one completely
+            existing_social.is_active = False
+            existing_social.status = 'archived'
+            existing_social.save(update_fields=['is_active', 'status', 'updated_at'])
+
+            # Archive all old members
+            existing_social.members.all().update(status='archived')
+
+            # Log archival
+            log_cart_activity(
+                social=existing_social,
+                actor=request.user,
+                event="cart_archived",
+                message="Old social cart archived when creating new one"
+            )
+
+            # ✅ CRITICAL: Delete the old social cart to free up the cart foreign key
+            # This allows us to create a fresh one
+            old_invite_code = existing_social.invite_code
+            existing_social.delete()
+
+            print(f"✅ Archived and deleted old social cart with invite code: {old_invite_code}")
+
+        # CASE 3: Create fresh social cart
+        social = SocialCart.objects.create(
+            cart=cart,
+            owner=request.user,
+            is_active=True,
+            status="open",
+            split_mode="by_items",
+            access_type=access_type,
+            # original_owner will be set automatically if field exists
+        )
+
+        # Set original owner if field exists
+        if hasattr(social, 'original_owner'):
+            social.original_owner = request.user
+            social.save(update_fields=['original_owner'])
+
+        # Create owner membership
+        owner_member = CartMember.objects.create(
             social_cart=social,
             user=request.user,
-            defaults={"role": "owner", "status": "joined"}
+            role="owner",
+            status="joined",
+            is_original_owner=True  # Mark as original owner
         )
 
-        # If owner membership existed but was set to 'left', restore it
-        if not created and owner_member.status != "joined":
-            owner_member.status = "joined"
-            owner_member.save(update_fields=["status", "updated_at"])
-
-        # Ensure owner has a PaymentShare
-        PaymentShare.objects.get_or_create(
+        # Create payment share for owner
+        PaymentShare.objects.create(
             social_cart=social,
             member=owner_member,
-            defaults={"percentage": Decimal("100"), "is_active": True}
+            percentage=Decimal("100"),
+            is_active=True
         )
 
-        # Move normal cart items to social
+        # Move normal cart items to NEW social cart
         normal_items = cart.items.filter(cart_type="normal")
         if normal_items.exists():
             normal_items.update(cart_type="social", added_by=request.user)
 
         social.recalc_members_due()
 
-        # Log activity
-        try:
-            log_cart_activity(
-                social=social,
-                actor=request.user,
-                event="cart_created" if not revived else "cart_revived",
-                message="Social cart created" if not revived else "Social cart revived",
-                payload={"access_type": access_type}
-            )
-        except Exception:
-            pass
+        # Log activity for NEW cart
+        log_cart_activity(
+            social=social,
+            actor=request.user,
+            event="cart_created",
+            message="Fresh social cart created",
+            payload={"access_type": access_type}
+        )
 
-    return JsonResponse({
-        "success": True,
-        "message": "Social cart created ✅" if not revived else "Social cart revived ✅",
-        "social_id": social.id,
-        "invite_code": social.invite_code,
-        "access_type": social.access_type
-    })
-
+        return JsonResponse({
+            'success': True,
+            'message': 'Social cart created successfully!',
+            'invite_code': social.invite_code,
+            'social_id': str(social.id),
+        })
 
 @login_required
 @require_POST
@@ -445,7 +506,7 @@ def social_cart_status(request):
         # Get pending member requests
         pending_qs = (
             social.members
-            .filter(status="pending")
+            .filter(status__in=["pending", "blocked"])
             .select_related("user")
             .order_by("-updated_at")[:50]
         )
@@ -613,7 +674,7 @@ def send_cart_invite(request):
 
     # Generate invite link
     invite_link = request.build_absolute_uri(
-        reverse('marketplace:join_open_social_cart', kwargs={'invite_code': social.invite_code})
+        reverse('marketplace:accept_cart_invite', kwargs={'code': invite.code})
     )
 
     # Send email if provided
@@ -757,83 +818,114 @@ def delete_cart_invite(request, invite_id):
 @require_http_methods(["GET", "POST"])
 def join_open_social_cart(request, invite_code):
     """
-    Join a social cart using invite code
-    - For PUBLIC carts: join immediately
-    - For INVITE_ONLY carts: create pending request that owner must approve
+    Join a social cart using invite_code (public/share link).
+    - PUBLIC carts: join immediately (joined)
+    - INVITE_ONLY carts: create pending request (owner must approve)
+    - Browser clicks: redirect to cart with a message (no raw JSON)
+    - AJAX: returns JSON (keeps your JS happy)
     """
     social = get_object_or_404(SocialCart, invite_code=invite_code, is_active=True)
 
     if not social.is_join_allowed_now():
-        return JsonResponse({
-            'success': False,
-            'message': 'This social cart is not available for joining right now.'
-        }, status=403)
+        return _respond(
+            request,
+            ok=False,
+            message="This social cart is not available for joining right now.",
+            status_code=403
+        )
 
-    # Check if already a member
+    # Check if already exists
     existing = social.members.filter(user=request.user).first()
     if existing:
-        if existing.status == 'joined':
-            return JsonResponse({
-                'success': False,
-                'message': 'You are already a member of this cart.'
-            }, status=400)
-        elif existing.status == 'pending':
-            return JsonResponse({
-                'success': False,
-                'message': 'Your request to join is pending approval.'
-            }, status=400)
-        elif existing.status == 'blocked':
-            return JsonResponse({
-                'success': False,
-                'message': 'You have been blocked from this cart.'
-            }, status=403)
-        elif existing.status in ('left', 'rejected'):
-            # Rejoin
-            if social.access_type == SocialCart.ACCESS_INVITE_ONLY:
-                existing.status = 'pending'
-                existing.save(update_fields=['status', 'updated_at'])
+        if existing.status == "joined":
+            return _respond(request, ok=False, message="You are already a member of this cart.", status_code=400)
 
-                # Notify owner
-                try:
-                    send_email_async(
-                        subject="New Join Request for Your Social Cart",
-                        to_email=social.owner.email,
-                        html_template="emails/social_cart/join_request.html",
-                        context={
-                            "owner_name": social.owner.get_full_name() or social.owner.username,
-                            "requester_name": request.user.get_full_name() or request.user.username,
-                            "cart_url": request.build_absolute_uri(reverse("marketplace:cart"))
-                        }
+        if existing.status == "pending":
+            return _respond(request, ok=False, message="Your request to join is pending approval.", status_code=400)
+
+        if existing.status == "blocked":
+            return _respond(request, ok=False, message="You have been blocked from this cart.", status_code=403)
+
+        if existing.status in ("left", "rejected"):
+            # Rejoin logic
+            with transaction.atomic():
+                if social.access_type == SocialCart.ACCESS_INVITE_ONLY:
+                    existing.status = "pending"
+                    existing.save(update_fields=["status", "updated_at"])
+
+                    # (Optional) mark a pending invite as accepted if it matches this user
+                    _mark_matching_invite_accepted(social, request.user)
+
+                    # Notify owner (best-effort)
+                    try:
+                        send_email_async(
+                            subject="New Join Request for Your Social Cart",
+                            to_email=social.owner.email,
+                            html_template="emails/social_cart/join_request.html",
+                            context={
+                                "owner_name": social.owner.get_full_name() or social.owner.username,
+                                "requester_name": request.user.get_full_name() or request.user.username,
+                                "cart_url": request.build_absolute_uri(reverse("marketplace:cart")),
+                            }
+                        )
+                    except Exception:
+                        pass
+
+                    try:
+                        log_cart_activity(
+                            social=social,
+                            actor=request.user,
+                            event="join_requested",
+                            message=f"{request.user.username} requested to rejoin"
+                        )
+                    except Exception:
+                        pass
+
+                    return _respond(
+                        request,
+                        ok=True,
+                        message="Your request to rejoin has been sent to the owner for approval.",
+                        status="pending"
                     )
-                except Exception:
-                    pass
+                else:
+                    existing.status = "joined"
+                    existing.save(update_fields=["status", "updated_at"])
 
-                return JsonResponse({
-                    'success': True,
-                    'message': 'Your request to rejoin has been sent to the owner for approval.',
-                    'status': 'pending'
-                })
-            else:
-                existing.status = 'joined'
-                existing.save(update_fields=['status', 'updated_at'])
-                return JsonResponse({
-                    'success': True,
-                    'message': 'You rejoined the social cart!',
-                    'status': 'joined'
-                })
+                    PaymentShare.objects.get_or_create(
+                        social_cart=social,
+                        member=existing,
+                        defaults={"percentage": Decimal("0"), "is_active": True}
+                    )
+
+                    _mark_matching_invite_accepted(social, request.user)
+
+                    try:
+                        log_cart_activity(
+                            social=social,
+                            actor=request.user,
+                            event="member_rejoined",
+                            message=f"{request.user.username} rejoined the cart"
+                        )
+                    except Exception:
+                        pass
+
+                    return _respond(request, ok=True, message="You rejoined the social cart!", status="joined")
 
     # New member
     with transaction.atomic():
         if social.access_type == SocialCart.ACCESS_INVITE_ONLY:
-            # Create pending membership
-            CartMember.objects.create(
+            member, created = CartMember.objects.get_or_create(
                 social_cart=social,
                 user=request.user,
-                role='member',
-                status='pending'
+                defaults={"role": "member", "status": "pending"}
             )
+            if not created and member.status != "pending":
+                member.status = "pending"
+                member.save(update_fields=["status", "updated_at"])
 
-            # Notify owner
+            _mark_matching_invite_accepted(social, request.user)
+
+            # Notify owner (best-effort)
             try:
                 send_email_async(
                     subject="New Join Request for Your Social Cart",
@@ -842,13 +934,12 @@ def join_open_social_cart(request, invite_code):
                     context={
                         "owner_name": social.owner.get_full_name() or social.owner.username,
                         "requester_name": request.user.get_full_name() or request.user.username,
-                        "cart_url": request.build_absolute_uri(reverse("marketplace:cart"))
+                        "cart_url": request.build_absolute_uri(reverse("marketplace:cart")),
                     }
                 )
             except Exception:
                 pass
 
-            # Log activity
             try:
                 log_cart_activity(
                     social=social,
@@ -859,43 +950,208 @@ def join_open_social_cart(request, invite_code):
             except Exception:
                 pass
 
-            return JsonResponse({
-                'success': True,
-                'message': 'Your request to join has been sent to the owner for approval.',
-                'status': 'pending'
-            })
-        else:
-            # PUBLIC cart - join immediately
-            member = CartMember.objects.create(
-                social_cart=social,
-                user=request.user,
-                role='member',
-                status='joined'
+            return _respond(
+                request,
+                ok=True,
+                message="Your request to join has been sent to the owner for approval.",
+                status="pending"
             )
 
-            PaymentShare.objects.create(
+        # PUBLIC cart - join immediately
+        member, created = CartMember.objects.get_or_create(
+            social_cart=social,
+            user=request.user,
+            defaults={"role": "member", "status": "joined"}
+        )
+        if not created and member.status != "joined":
+            member.status = "joined"
+            member.save(update_fields=["status", "updated_at"])
+
+        PaymentShare.objects.get_or_create(
+            social_cart=social,
+            member=member,
+            defaults={"percentage": Decimal("0"), "is_active": True}
+        )
+
+        _mark_matching_invite_accepted(social, request.user)
+
+        try:
+            log_cart_activity(
+                social=social,
+                actor=request.user,
+                event="member_joined",
+                message=f"{request.user.username} joined the cart"
+            )
+        except Exception:
+            pass
+
+        return _respond(request, ok=True, message="You joined the social cart!", status="joined")
+
+
+def _mark_matching_invite_accepted(social, user):
+    """
+    Best-effort: if owner sent an invite to this user's email/phone, mark it accepted,
+    so 'Invites Sent' doesn't stay pending.
+    """
+    try:
+        email = (getattr(user, "email", "") or "").strip()
+        phone = (getattr(user, "phone", "") or "").strip()  # adjust if your phone field is elsewhere
+
+        qs = CartInvite.objects.filter(social_cart=social, status="pending")
+        if email:
+            qs = qs.filter(invited_email__iexact=email)
+        elif phone:
+            qs = qs.filter(invited_phone__iexact=phone)
+        else:
+            return
+
+        inv = qs.order_by("-created_at").first()
+        if inv:
+            inv.status = "accepted"
+            inv.accepted_by = user
+            inv.save(update_fields=["status", "accepted_by"])
+    except Exception:
+        pass
+
+@login_required
+@require_POST
+def rejoin_social_cart(request):
+    """
+    Rejoin a social cart after leaving.
+
+    FIXED:
+    - Works even when user is NOT joined (find cart where user is left/temporarily_left)
+    - Browser POST redirects to cart with messages (no raw JSON)
+    - AJAX calls still get JSON
+    """
+    try:
+        # ✅ DO NOT use _resolve_active_social_for here (it filters joined members only)
+        social = (
+            SocialCart.objects
+            .filter(
+                is_active=True,
+                status__in=["open", "checkout"],
+                members__user=request.user,
+                members__status__in=["left", "temporarily_left"]
+            )
+            .select_related("cart", "owner")
+            .order_by("-created_at")
+            .first()
+        )
+
+        if not social:
+            return _respond(request, False, "No social cart available to rejoin.", 404)
+
+        with transaction.atomic():
+            member = social.members.select_for_update().filter(user=request.user).first()
+            if not member:
+                return _respond(request, False, "You were never a member of this cart.", 404)
+
+            if member.status == "joined":
+                return _respond(request, False, "You are already a member of this cart.", 400)
+
+            can_rejoin = (
+                member.status in ("temporarily_left", "left") or
+                getattr(member, "is_original_owner", False)
+            )
+            if not can_rejoin:
+                return _respond(
+                    request,
+                    False,
+                    "You cannot rejoin this cart. Please request a new invitation.",
+                    403
+                )
+
+            is_original_owner = bool(getattr(member, "is_original_owner", False))
+
+            # ✅ restore ownership only for invite_only carts
+            if is_original_owner and social.access_type == "invite_only":
+                current_owner = social.owner
+                current_owner_member = social.members.filter(user=current_owner).first()
+
+                social.owner = request.user
+                social.save(update_fields=["owner", "updated_at"])
+
+                member.role = "owner"
+                member.status = "joined"
+                member.save(update_fields=["role", "status", "updated_at"])
+
+                if current_owner_member and current_owner_member.id != member.id:
+                    current_owner_member.role = "member"
+                    current_owner_member.save(update_fields=["role", "updated_at"])
+
+                # Ensure payment share exists
+                PaymentShare.objects.get_or_create(
+                    social_cart=social,
+                    member=member,
+                    defaults={"percentage": Decimal("0"), "is_active": True}
+                )
+
+                try:
+                    log_cart_activity(
+                        social=social,
+                        actor=request.user,
+                        event="ownership_restored",
+                        message=f"Original owner {request.user.username} rejoined - ownership restored",
+                        payload={
+                            "previous_temp_owner_id": getattr(current_owner, "id", None),
+                            "restored_owner_id": request.user.id
+                        }
+                    )
+                except Exception:
+                    pass
+
+                try:
+                    send_email_async(
+                        subject="Cart Ownership Restored to Original Owner",
+                        to_email=current_owner.email,
+                        html_template="emails/social_cart/ownership_restored.html",
+                        context={
+                            "recipient_name": current_owner.get_full_name() or current_owner.username,
+                            "original_owner": request.user.get_full_name() or request.user.username,
+                            "cart_url": request.build_absolute_uri(reverse("marketplace:cart"))
+                        }
+                    )
+                except Exception:
+                    pass
+
+                return _respond(
+                    request,
+                    True,
+                    "Welcome back! Your ownership has been restored.",
+                    ownership_restored=True,
+                    role="owner"
+                )
+
+            # ✅ Regular rejoin
+            member.status = "joined"
+            if not member.role or member.role == "owner":
+                member.role = "member"
+            member.save(update_fields=["status", "role", "updated_at"])
+
+            PaymentShare.objects.get_or_create(
                 social_cart=social,
                 member=member,
-                percentage=Decimal('0'),
-                is_active=True
+                defaults={"percentage": Decimal("0"), "is_active": True}
             )
 
-            # Log activity
             try:
                 log_cart_activity(
                     social=social,
                     actor=request.user,
-                    event="member_joined",
-                    message=f"{request.user.username} joined the cart"
+                    event="member_rejoined",
+                    message=f"{request.user.username} rejoined the cart"
                 )
             except Exception:
                 pass
 
-            return JsonResponse({
-                'success': True,
-                'message': 'You joined the social cart!',
-                'status': 'joined'
-            })
+            return _respond(request, True, "You have rejoined the social cart!", role=member.role)
+
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error in rejoin_social_cart: {str(e)}", exc_info=True)
+        return _respond(request, False, f"An error occurred: {str(e)}", 500)
 
 
 @login_required
@@ -1024,10 +1280,10 @@ def approve_member(request, member_id):
 
     member = get_object_or_404(CartMember, id=member_id, social_cart=social)
 
-    if member.status != 'pending':
+    if member.status not in ('pending', 'blocked'):
         return JsonResponse({
             'success': False,
-            'message': 'This member is not pending approval'
+            'message': f'This member cannot be admitted from status: {member.status}'
         }, status=400)
 
     with transaction.atomic():
@@ -1166,24 +1422,14 @@ def block_member(request, member_id):
         'member_username': member.user.username
     })
 
-def log_cart_activity(social, actor, event, message="", payload=None):
-    CartActivity.objects.create(
-        social_cart=social,
-        actor=actor if actor and actor.is_authenticated else None,
-        event=event,
-        message=message or "",
-        payload=payload or {},
-    )
-
-
 @login_required
 @require_POST
 def leave_cart(request):
     """
     Leave a social cart
 
-    ENHANCED with ownership transfer logic:
-    - If OWNER leaves PRIVATE cart: Transfer ownership to next member
+    ENHANCED with ownership transfer logic and restoration support:
+    - If OWNER leaves PRIVATE cart: Transfer ownership to next member (can restore later)
     - If OWNER leaves PUBLIC cart: Close cart and kick everyone out
     - If MEMBER leaves: Just remove them
     """
@@ -1206,13 +1452,14 @@ def leave_cart(request):
                 }, status=404)
 
             is_owner = (social.owner == request.user or member.role == 'owner')
+            is_original_owner = getattr(member, 'is_original_owner', False)
 
             # ========================================
             # CASE 1: OWNER LEAVING
             # ========================================
             if is_owner:
 
-                # PRIVATE CART: Transfer ownership to next member
+                # PRIVATE CART: Transfer ownership to next member (with restoration support)
                 if social.access_type == 'invite_only':
                     # Find next member to become owner (oldest joined member)
                     next_owner_member = (
@@ -1228,17 +1475,21 @@ def leave_cart(request):
                         old_owner_name = request.user.get_full_name() or request.user.username
                         new_owner_name = next_owner_member.user.get_full_name() or next_owner_member.user.username
 
+                        # ✅ Store original owner if not already stored (for restoration)
+                        if not hasattr(social, 'original_owner') or not social.original_owner:
+                            social.original_owner = request.user
+
                         # Update social cart owner
                         social.owner = next_owner_member.user
-                        social.save(update_fields=['owner', 'updated_at'])
+                        social.save(update_fields=['owner', 'original_owner', 'updated_at'])
 
                         # Update member role
                         next_owner_member.role = 'owner'
                         next_owner_member.save(update_fields=['role', 'updated_at'])
 
-                        # Update old owner to regular member (or mark as left)
+                        # ✅ Mark old owner as temporarily_left (not fully left) so they can rejoin
                         member.role = 'member'
-                        member.status = 'left'
+                        member.status = 'temporarily_left'  # ✅ CHANGED from 'left'
                         member.save(update_fields=['role', 'status', 'updated_at'])
 
                         # Log activity
@@ -1246,10 +1497,12 @@ def leave_cart(request):
                             social=social,
                             actor=request.user,
                             event="ownership_transferred",
-                            message=f"Ownership transferred from {old_owner_name} to {new_owner_name}",
+                            message=f"Ownership temporarily transferred from {old_owner_name} to {new_owner_name}",  # ✅ Added "temporarily"
                             payload={
                                 "old_owner_id": request.user.id,
-                                "new_owner_id": next_owner_member.user.id
+                                "new_owner_id": next_owner_member.user.id,
+                                "is_original_owner": is_original_owner,  # ✅ Track if original owner
+                                "can_restore": True  # ✅ Indicates restoration possible
                             }
                         )
 
@@ -1263,6 +1516,8 @@ def leave_cart(request):
                                     "recipient_name": new_owner_name,
                                     "previous_owner": old_owner_name,
                                     "social_cart": social,
+                                    "is_temporary": True,  # ✅ NEW: Indicates temporary ownership
+                                    "cart_url": request.build_absolute_uri(reverse('marketplace:cart'))
                                 }
                             )
                         except Exception:
@@ -1281,6 +1536,8 @@ As the new owner, you can now:
 - Send invitations
 - Change cart settings
 - Close the cart when ready
+
+Note: If {old_owner_name} returns, ownership will be restored to them.
 
 View your cart: {request.build_absolute_uri(reverse('marketplace:cart'))}
 
@@ -1308,7 +1565,8 @@ EasyMarket Team
                             'success': True,
                             'message': f'You left the cart. Ownership transferred to {new_owner_name}.',
                             'ownership_transferred': True,
-                            'new_owner': new_owner_name
+                            'new_owner': new_owner_name,
+                            'can_rejoin': True  # ✅ NEW: Frontend can show "Rejoin" button
                         })
 
                     else:
@@ -1371,20 +1629,21 @@ EasyMarket Team
                     # Notify all members
                     owner_name = request.user.get_full_name() or request.user.username
 
-                    for member in all_members:
-                        if member.user == request.user:
+                    for member_obj in all_members:
+                        if member_obj.user == request.user:
                             continue  # Skip owner
 
                         try:
-                            member_name = member.user.get_full_name() or member.user.username
+                            member_name = member_obj.user.get_full_name() or member_obj.user.username
 
                             send_email_async(
                                 subject="Social Cart Has Been Closed",
-                                to_email=member.user.email,
+                                to_email=member_obj.user.email,
                                 html_template="emails/social_cart/cart_closed.html",
                                 context={
                                     "recipient_name": member_name,
                                     "owner_name": owner_name,
+                                    "cart_url": request.build_absolute_uri(reverse('marketplace:cart'))
                                 }
                             )
                         except Exception:
@@ -1409,7 +1668,7 @@ EasyMarket Team
                                     subject="Social Cart Has Been Closed",
                                     message=message.strip(),
                                     from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@easymarket.com'),
-                                    recipient_list=[member.user.email],
+                                    recipient_list=[member_obj.user.email],
                                     fail_silently=True
                                 )
                             except Exception:
@@ -1456,7 +1715,7 @@ EasyMarket Team
     except Exception as e:
         import logging
         logger = logging.getLogger(__name__)
-        logger.error(f"Error in leave_social_cart: {str(e)}", exc_info=True)
+        logger.error(f"Error in leave_cart: {str(e)}", exc_info=True)
         return JsonResponse({
             'success': False,
             'message': f'An error occurred: {str(e)}'
@@ -1803,21 +2062,51 @@ def set_checkout_members(request):
 @require_GET
 def social_cart_fragment(request):
     """
-    Returns ONLY the Social Cart HTML block.
+    Returns partial HTML fragments for the Social Cart.
+
+    Modes:
+      - ?partial=members  -> marketplace/partials/_social_members_strip.html
+      - default / ?partial=cart -> marketplace/partials/_social_cart_block.html
+
     Safe to poll without reloading the main page.
     """
+    partial = (request.GET.get("partial") or "").strip().lower()
+
     social = _resolve_active_social_for(request.user)
+
+    # -------------------------
+    # PARTIAL: MEMBERS STRIP ONLY
+    # -------------------------
+    if partial == "members":
+        if not social:
+            # Return empty content (JS can replace safely)
+            return render(request, "marketplace/partials/_social_members_strip.html", {
+                "social_members": []
+            })
+
+        social_members = (
+            social.members
+            .filter(status__in=["joined", "blocked"])
+            .select_related("user")
+            .order_by("id")
+        )
+
+        return render(request, "marketplace/partials/_social_members_strip.html", {
+            "social_members": social_members
+        })
+
+    # -------------------------
+    # DEFAULT: FULL SOCIAL CART BLOCK
+    # -------------------------
     if not social:
         return render(request, "marketplace/partials/_social_cart_block.html", {
             "is_social_active": False
         })
 
-    # Determine my member + blocked
     me = social.members.filter(user=request.user).first()
     is_blocked = bool(me and me.status == "blocked")
     is_owner = (social.owner_id == request.user.id) or bool(me and me.role == "owner")
 
-    # Social items live from the underlying cart
     cart = social.cart
     social_items = (
         cart.items
@@ -1843,10 +2132,12 @@ def social_cart_fragment(request):
         "is_owner": is_owner,
         "is_blocked": is_blocked,
         "can_modify": (not is_blocked) and social.can_user_modify(request.user),
-
-        # Totals (you already have social.total())
         "social_total": social.total(),
+
+        # ✅ If your main template uses social_members, include it too:
+        "social_members": members,
     }
+
     return render(request, "marketplace/partials/_social_cart_block.html", context)
 
 @login_required
@@ -2106,6 +2397,27 @@ def social_cart_chat_send(request):
 
     return JsonResponse({"success": True})
 
+@login_required
+@require_GET
+def social_cart_items_fragment(request):
+    social = _resolve_active_social_for(request.user)
+    if not social:
+        return HttpResponse("")
+
+    cart = social.cart
+    social_items = (
+        cart.items
+        .filter(cart_type="social")
+        .select_related("product", "added_by")
+        .order_by("-id")
+    )
+
+    return render(
+        request,
+        "marketplace/partials/_social_cart_items.html",
+        {"social_items": social_items, "social": social}
+    )
+
 # ---------------------------------------
 # SCHEDULE SOCIAL CART (Invite-only best)
 # ---------------------------------------
@@ -2173,7 +2485,7 @@ def schedule_social_cart(request):
 
         if to_emails:
             invite_link = request.build_absolute_uri(
-                reverse("marketplace:join_open_social_cart", kwargs={"invite_code": social.invite_code})
+                reverse('marketplace:accept_cart_invite', kwargs={'code': social.invite_code})
             )
 
             html = f"""

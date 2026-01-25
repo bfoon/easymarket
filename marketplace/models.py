@@ -1285,12 +1285,22 @@ class SocialCart(models.Model):
     invite_code = models.CharField(max_length=64, unique=True, default=_generate_invite_code)
 
     is_active = models.BooleanField(default=True)
+    # NEW: Track original owner for ownership restoration
+    original_owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='original_social_carts',
+        help_text="Original owner who created the cart (for ownership restoration)"
+    )
     status = models.CharField(max_length=20, default='open', choices=[
         ('open', 'Open'),
         ('checkout', 'Checkout In Progress'),
         ('locked', 'Locked'),
         ('closed', 'Closed'),
         ('cancelled', 'Cancelled'),
+        ('archived', 'Archived'),
     ])
 
     # ✅ LIVE SESSION FIELDS (MOVE HERE)
@@ -1675,15 +1685,22 @@ class CartMember(models.Model):
         ('invited', 'Invited'),
         ('joined', 'Joined'),
         ('left', 'Left'),
-        ('blocked', 'Blocked')
+        ('blocked', 'Blocked'),
+        ('archived', 'Archived'),  # NEW
+        ('temporarily_left', 'Temporarily Left'),  # NEW
     )
 
     social_cart = models.ForeignKey(SocialCart, on_delete=models.CASCADE, related_name='members')
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='social_cart_memberships')
     role = models.CharField(max_length=12, choices=ROLE, default='editor')
-    status = models.CharField(max_length=12, choices=STATUS, default='joined')
+    status = models.CharField(max_length=50, choices=STATUS, default='pending')
     # ADD THIS (so set_checkout_members works)
     can_checkout = models.BooleanField(default=True, db_index=True)
+    # NEW: Track if this member is the original owner
+    is_original_owner = models.BooleanField(
+        default=False,
+        help_text="True if this member is the original cart creator"
+    )
 
     joined_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

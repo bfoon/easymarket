@@ -1,0 +1,43 @@
+{% if social_members %}
+<div class="mt-3 pt-3 border-top border-white border-opacity-25">
+  <div class="d-flex flex-wrap align-items-center gap-3">
+    <small class="text-dark fw-semibold">
+      Members ({{ social_members|length }}):
+    </small>
+
+    <div class="d-flex">
+      {% for member in social_members|slice:":6" %}
+      <div
+        class="member-avatar avatar-color-{{ forloop.counter|add:'0'|slice:'-1' }}
+               {% if member.user.profile_pic %}has-image{% endif %}"
+        data-bs-toggle="tooltip"
+        data-bs-placement="top"
+        title="{% if member.user.get_full_name %}{{ member.user.get_full_name }}{% else %}{{ member.user.username }}{% endif %}"
+      >
+        {% if member.user.profile_pic %}
+          <img
+            src="{{ member.user.profile_pic.url }}"
+            alt="{{ member.user.get_full_name }}"
+            onerror="this.style.display='none'; this.parentElement.classList.remove('has-image');"
+          >
+        {% endif %}
+
+        <span class="avatar-initials">
+          {% if member.user.first_name %}
+            {{ member.user.first_name|slice:":1" }}{{ member.user.last_name|slice:":1"|default:"" }}
+          {% else %}
+            {{ member.user.username|slice:":2" }}
+          {% endif %}
+        </span>
+      </div>
+      {% endfor %}
+
+      {% if social_members|length > 6 %}
+      <div class="member-avatar bg-secondary text-white">
+        +{{ social_members|length|add:"-6" }}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}

@@ -1325,51 +1325,6 @@
   }
 
   // =========================
-  // Manual refresh social cart
-  // =========================
-  function bindSocialCartRefresh() {
-  const btn = document.getElementById("refreshSocialCartBtn");
-  const container = document.getElementById("social-cart-body");
-
-  if (!btn || !container) return;
-
-  if (btn.dataset.bound === "1") return;
-  btn.dataset.bound = "1";
-
-  btn.addEventListener("click", async () => {
-    try {
-      btn.disabled = true;
-      btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-
-      const res = await fetch(
-        window.SOCIAL_CART_ITEMS_FRAGMENT_URL,
-        {
-          headers: { "X-Requested-With": "XMLHttpRequest" },
-          credentials: "same-origin",
-        }
-      );
-
-      if (!res.ok) throw new Error("Failed to refresh");
-
-      const html = await res.text();
-      container.innerHTML = html;
-
-      // rebind buttons & tooltips
-      bindCartItemControls();
-      bindDropZones();
-      initTooltips();
-
-    } catch (e) {
-      window.showToast("Failed to refresh cart", "error");
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = '<i class="fas fa-rotate"></i>';
-    }
-  });
-}
-
-
-  // =========================
   // INITIALIZATION
   // =========================
   
@@ -1383,7 +1338,6 @@
     bindDropZones();
     bindSplitMode();
     bindShareButtons();
-    bindSocialCartRefresh();
     
     // Chat functionality (only if social cart is active)
     if (window.IS_SOCIAL_ACTIVE) {
@@ -1414,73 +1368,3 @@
   }
 
 })();
-// =============================================================
-// SOCIAL MEMBERS STRIP AUTO-REFRESH (NON-DESTRUCTIVE) - FIXED
-// =============================================================
-(function () {
-  const REFRESH_INTERVAL = 5000; // 5 seconds
-  const containerId = "social-members-strip";
-
-  function getMembersStripURL() {
-    // Prefer explicit global
-    if (window.SOCIAL_CART_FRAGMENT_URL) {
-      return `${window.SOCIAL_CART_FRAGMENT_URL}?partial=members`;
-    }
-    // Fallback (only if you really must)
-    return null;
-  }
-
-  function wantsRefresh() {
-    return Boolean(window.IS_SOCIAL_ACTIVE && document.getElementById(containerId));
-  }
-
-  function reInitTooltips(scopeEl) {
-    if (!window.bootstrap || !scopeEl) return;
-    scopeEl.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
-      // Prevent stacking duplicates
-      try {
-        bootstrap.Tooltip.getInstance(el)?.dispose();
-      } catch (e) {}
-      new bootstrap.Tooltip(el);
-    });
-  }
-
-  async function refreshMembersStrip() {
-    if (!wantsRefresh()) return;
-
-    const url = getMembersStripURL();
-    if (!url) return;
-
-    try {
-      const res = await fetch(url, {
-        headers: { "X-Requested-With": "XMLHttpRequest" },
-        credentials: "same-origin",
-      });
-      if (!res.ok) return;
-
-      const html = await res.text();
-      const container = document.getElementById(containerId);
-      if (!container) return;
-
-      // Only update if changed (reduces tooltip churn)
-      if (container.dataset.lastHtml !== html) {
-        container.innerHTML = html;
-        container.dataset.lastHtml = html;
-        reInitTooltips(container);
-      }
-    } catch (err) {
-      console.warn("Social members refresh failed", err);
-    }
-  }
-
-  // Initial delay (page settle)
-  setTimeout(refreshMembersStrip, 1200);
-
-  // Poll
-  setInterval(refreshMembersStrip, REFRESH_INTERVAL);
-
-  // Expose manual trigger if needed
-  window.refreshSocialMembersStrip = refreshMembersStrip;
-})();
-
-

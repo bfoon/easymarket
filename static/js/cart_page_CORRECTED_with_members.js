@@ -209,53 +209,31 @@
       return;
     }
 
-    listEl.innerHTML = pending.map(member => {
-      const isBlocked = !!member._blocked || String(member.status || "").toLowerCase() === "blocked";
-
-      return `
-        <div class="list-group-item d-flex justify-content-between align-items-center">
-          <div>
-            <div class="d-flex align-items-center gap-2">
-              <div class="fw-semibold">${escapeHtml(member.name || member.username || "Member")}</div>
-              ${isBlocked ? `<span class="badge bg-danger"><i class="fas fa-ban me-1"></i>Blocked</span>` : ``}
-            </div>
-            <div class="small text-muted">${escapeHtml(member.email || "")}</div>
-          </div>
-
-          <div class="d-flex gap-2">
-            <button class="btn btn-sm btn-success mm-approve-member"
-                    data-member-id="${member.id}"
-                    data-is-blocked="${isBlocked ? "1" : "0"}">
-              <i class="fas fa-check me-1"></i>${isBlocked ? "Re-admit" : "Admit"}
-            </button>
-
-            ${
-              isBlocked
-              ? `<button class="btn btn-sm btn-outline-danger mm-remove-member"
-                          data-member-id="${member.id}">
-                    <i class="fas fa-user-times me-1"></i>Remove
-                 </button>`
-              : `<button class="btn btn-sm btn-outline-danger mm-reject-member"
-                          data-member-id="${member.id}">
-                    <i class="fas fa-times me-1"></i>Reject
-                 </button>`
-            }
-          </div>
+    listEl.innerHTML = pending.map(m => `
+      <div class="list-group-item d-flex justify-content-between align-items-center">
+        <div>
+          <div class="fw-semibold">${escapeHtml(m.name || m.username || "Member")}</div>
+          <div class="small text-muted">${escapeHtml(m.email || "")}</div>
         </div>
-      `;
-    }).join("");
+        <div class="d-flex gap-2">
+          <button class="btn btn-sm btn-success mm-admit" data-id="${m.id}">
+            <i class="fas fa-check me-1"></i>Admit
+          </button>
+          <button class="btn btn-sm btn-outline-danger mm-reject" data-id="${m.id}">
+            <i class="fas fa-times me-1"></i>Reject
+          </button>
+        </div>
+      </div>
+    `).join("");
 
-    // Admit / Re-admit
-    listEl.querySelectorAll(".mm-approve-member").forEach(btn => {
+    listEl.querySelectorAll(".mm-admit").forEach(btn => {
       btn.addEventListener("click", async () => {
         try {
-          const id = btn.dataset.memberId;
-          const wasBlocked = btn.dataset.isBlocked === "1";
+          const id = btn.dataset.id;
           const url = urlFromTpl(window.APPROVE_MEMBER_URL_TPL, id);
           const r = await postForm(url, {});
           if (!r.success) throw new Error(r.message || "Failed to admit");
-
-          window.showToast(wasBlocked ? "Member re-admitted ✅" : "Member admitted ✅", "success");
+          window.showToast("Member admitted ✅", "success");
           await refreshMembersPanel();
         } catch (e) {
           window.showToast(e.message || "Error", "error");
@@ -263,35 +241,16 @@
       });
     });
 
-    // Reject (pending requests only)
-    listEl.querySelectorAll(".mm-reject-member").forEach(btn => {
+    listEl.querySelectorAll(".mm-reject").forEach(btn => {
       btn.addEventListener("click", async () => {
         if (!confirm("Reject this request?")) return;
         try {
-          const id = btn.dataset.memberId;
+          const id = btn.dataset.id;
           const url = urlFromTpl(window.REJECT_MEMBER_URL_TPL, id);
           const r = await postForm(url, {});
           if (!r.success) throw new Error(r.message || "Failed to reject");
           window.showToast("Request rejected ✅", "success");
           await refreshMembersPanel();
-        } catch (e) {
-          window.showToast(e.message || "Error", "error");
-        }
-      });
-    });
-
-    // Remove (blocked users shown in Pending)
-    listEl.querySelectorAll(".mm-remove-member").forEach(btn => {
-      btn.addEventListener("click", async () => {
-        if (!confirm("Remove this blocked member from the cart?")) return;
-        try {
-          const id = btn.dataset.memberId;
-          const url = urlFromTpl(window.REMOVE_MEMBER_URL_TPL, id);
-          const r = await postForm(url, {});
-          if (!r.success) throw new Error(r.message || "Failed to remove member");
-          window.showToast("Member removed ✅", "success");
-          await refreshMembersPanel();
-          setTimeout(() => window.location.reload(), 800);
         } catch (e) {
           window.showToast(e.message || "Error", "error");
         }
@@ -318,7 +277,7 @@
         <div class="d-flex gap-2 align-items-center">
           <span class="badge bg-info text-dark">Pending</span>
           <button class="btn btn-sm btn-outline-danger mm-delete-invite"
-                  data-invite-id="${inv.id}"
+                  data-id="${inv.id}"
                   title="Delete invitation">
             <i class="fas fa-trash"></i>
           </button>
@@ -332,7 +291,7 @@
         if (!window.DELETE_INVITE_URL_TPL) return window.showToast("DELETE_INVITE_URL_TPL not set", "error");
 
         try {
-          const inviteId = btn.dataset.inviteId;
+          const inviteId = btn.dataset.id;
           const url = urlFromTpl(window.DELETE_INVITE_URL_TPL, inviteId);
           const r = await postForm(url, {});
           if (!r.success) throw new Error(r.message || "Failed to delete invite");
@@ -384,14 +343,14 @@
               <div class="btn-group btn-group-sm">
                 ${!isBlocked ? `
                   <button class="btn btn-outline-warning mm-block-member"
-                          data-member-id="${memberId}"
-                          data-member-name="${escapeHtml(m.name || m.username || "member")}">
+                          data-id="${memberId}"
+                          data-name="${escapeHtml(m.name || m.username || "member")}">
                     <i class="fas fa-ban me-1"></i>Block
                   </button>
                 ` : ``}
                 <button class="btn btn-outline-danger mm-remove-member"
-                        data-member-id="${memberId}"
-                        data-member-name="${escapeHtml(m.name || m.username || "member")}">
+                        data-id="${memberId}"
+                        data-name="${escapeHtml(m.name || m.username || "member")}">
                   <i class="fas fa-user-times me-1"></i>Remove
                 </button>
               </div>
@@ -406,8 +365,8 @@
     // Bind remove
     listEl.querySelectorAll(".mm-remove-member").forEach(btn => {
       btn.addEventListener("click", async () => {
-        const memberId = btn.dataset.memberId;
-        const name = btn.dataset.memberName;
+        const memberId = btn.dataset.id;
+        const name = btn.dataset.name;
 
         const msg =
           `Remove ${name || "this member"} from the social cart?
@@ -437,8 +396,8 @@
     // Bind block
     listEl.querySelectorAll(".mm-block-member").forEach(btn => {
       btn.addEventListener("click", async () => {
-        const memberId = btn.dataset.memberId;
-        const name = btn.dataset.memberName;
+        const memberId = btn.dataset.id;
+        const name = btn.dataset.name;
 
         const msg =
           `Block ${name || "this member"}?
@@ -482,15 +441,9 @@
     try {
       const data = await getJSON(window.SOCIAL_STATUS_URL);
 
-      const p0 = data.pending_members || [];
+      const p = data.pending_members || [];
       const i = data.pending_invites || [];
-      const m0 = data.members || [];
-
-      // Show blocked users under Pending so owner can re-admit them
-      const blocked = (m0 || []).filter(x => String(x.status || "").toLowerCase() === "blocked")
-        .map(x => ({ ...x, _blocked: true }));
-      const m = (m0 || []).filter(x => String(x.status || "").toLowerCase() !== "blocked");
-      const p = [...p0, ...blocked];
+      const m = data.members || [];
 
       setCount("mmPendingCount", p.length);
       setCount("mmInviteCount", i.length);
@@ -499,7 +452,6 @@
       renderPending(pendingList, p);
       renderInvites(invitesList, i);
       renderMembers(membersList, m);
-
     } catch (e) {
       if (pendingList) pendingList.innerHTML = `<div class="text-danger small">Failed to load members.</div>`;
     }
@@ -509,7 +461,6 @@
     const emailEl = document.getElementById("mmInviteEmail");
     const phoneEl = document.getElementById("mmInvitePhone");
     const sendBtn = document.getElementById("mmSendInviteBtn");
-    const clearBtn = document.getElementById("mmClearInviteBtn");
     const refreshBtn = document.getElementById("mmRefreshBtn");
     const modalEl = document.getElementById("manageMembersModal");
 
@@ -541,13 +492,6 @@
           sendBtn.disabled = false;
           sendBtn.innerHTML = `<i class="fas fa-paper-plane me-1"></i>Send Invite`;
         }
-      });
-    }
-
-    if (clearBtn) {
-      safeBind(clearBtn, "boundClearInvite", () => {
-        if (emailEl) emailEl.value = "";
-        if (phoneEl) phoneEl.value = "";
       });
     }
 
@@ -1325,51 +1269,6 @@
   }
 
   // =========================
-  // Manual refresh social cart
-  // =========================
-  function bindSocialCartRefresh() {
-  const btn = document.getElementById("refreshSocialCartBtn");
-  const container = document.getElementById("social-cart-body");
-
-  if (!btn || !container) return;
-
-  if (btn.dataset.bound === "1") return;
-  btn.dataset.bound = "1";
-
-  btn.addEventListener("click", async () => {
-    try {
-      btn.disabled = true;
-      btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-
-      const res = await fetch(
-        window.SOCIAL_CART_ITEMS_FRAGMENT_URL,
-        {
-          headers: { "X-Requested-With": "XMLHttpRequest" },
-          credentials: "same-origin",
-        }
-      );
-
-      if (!res.ok) throw new Error("Failed to refresh");
-
-      const html = await res.text();
-      container.innerHTML = html;
-
-      // rebind buttons & tooltips
-      bindCartItemControls();
-      bindDropZones();
-      initTooltips();
-
-    } catch (e) {
-      window.showToast("Failed to refresh cart", "error");
-    } finally {
-      btn.disabled = false;
-      btn.innerHTML = '<i class="fas fa-rotate"></i>';
-    }
-  });
-}
-
-
-  // =========================
   // INITIALIZATION
   // =========================
   
@@ -1383,7 +1282,6 @@
     bindDropZones();
     bindSplitMode();
     bindShareButtons();
-    bindSocialCartRefresh();
     
     // Chat functionality (only if social cart is active)
     if (window.IS_SOCIAL_ACTIVE) {
@@ -1414,73 +1312,3 @@
   }
 
 })();
-// =============================================================
-// SOCIAL MEMBERS STRIP AUTO-REFRESH (NON-DESTRUCTIVE) - FIXED
-// =============================================================
-(function () {
-  const REFRESH_INTERVAL = 5000; // 5 seconds
-  const containerId = "social-members-strip";
-
-  function getMembersStripURL() {
-    // Prefer explicit global
-    if (window.SOCIAL_CART_FRAGMENT_URL) {
-      return `${window.SOCIAL_CART_FRAGMENT_URL}?partial=members`;
-    }
-    // Fallback (only if you really must)
-    return null;
-  }
-
-  function wantsRefresh() {
-    return Boolean(window.IS_SOCIAL_ACTIVE && document.getElementById(containerId));
-  }
-
-  function reInitTooltips(scopeEl) {
-    if (!window.bootstrap || !scopeEl) return;
-    scopeEl.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
-      // Prevent stacking duplicates
-      try {
-        bootstrap.Tooltip.getInstance(el)?.dispose();
-      } catch (e) {}
-      new bootstrap.Tooltip(el);
-    });
-  }
-
-  async function refreshMembersStrip() {
-    if (!wantsRefresh()) return;
-
-    const url = getMembersStripURL();
-    if (!url) return;
-
-    try {
-      const res = await fetch(url, {
-        headers: { "X-Requested-With": "XMLHttpRequest" },
-        credentials: "same-origin",
-      });
-      if (!res.ok) return;
-
-      const html = await res.text();
-      const container = document.getElementById(containerId);
-      if (!container) return;
-
-      // Only update if changed (reduces tooltip churn)
-      if (container.dataset.lastHtml !== html) {
-        container.innerHTML = html;
-        container.dataset.lastHtml = html;
-        reInitTooltips(container);
-      }
-    } catch (err) {
-      console.warn("Social members refresh failed", err);
-    }
-  }
-
-  // Initial delay (page settle)
-  setTimeout(refreshMembersStrip, 1200);
-
-  // Poll
-  setInterval(refreshMembersStrip, REFRESH_INTERVAL);
-
-  // Expose manual trigger if needed
-  window.refreshSocialMembersStrip = refreshMembersStrip;
-})();
-
-

@@ -327,13 +327,17 @@
                         </button>
                       {% endif %}
                       {% if product or snap.id %}
-                      <button type="button"
-                              class="btn btn-sm btn-primary add-chat-product"
-                              data-product-id="{% if product %}{{ product.id }}{% else %}{{ snap.id }}{% endif %}"
-                              data-features='{{ features }}'
-                              data-qty="1">
-                        <i class="fas fa-cart-plus me-1"></i>Add to Cart
-                      </button>
+                            <button
+                      type="button"
+                      class="btn btn-sm btn-primary js-add-to-cart"
+                      data-product-id="{% if product %}{{ product.id }}{% else %}{{ snap.id }}{% endif %}"
+                      data-quantity="1"
+                      data-selected-features='{{ features|default:"{}"|escapejs }}'
+                    >
+                      <i class="fas fa-cart-plus me-1"></i>Add to Cart
+                    </button>
+
+
                     {% endif %}
 
                     </div>
@@ -362,3 +366,55 @@
   {% endif %}
 
 {% endif %}
+<script>
+  document.addEventListener("click", function (e) {
+  const btn = e.target.closest(".js-add-to-cart");
+  if (!btn) return;
+
+  e.preventDefault();
+
+  const productId = btn.dataset.productId;
+  const qty = parseInt(btn.dataset.quantity || "1", 10);
+
+  let features = {};
+  try {
+    features = JSON.parse(btn.dataset.selectedFeatures || "{}");
+  } catch (e) {
+    features = {};
+  }
+
+  // 🔥 SINGLE source of truth
+  window.addToCart({
+    product_id: productId,
+    quantity: qty,
+    selected_features: features
+  });
+});
+
+  window.addToCart = function (payload) {
+  fetch(window.ADD_TO_CART_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-CSRFToken": getCSRFToken()
+    },
+    body: JSON.stringify(payload)
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      showToast("Added to cart", "success");
+
+      // 🔄 optional partial refresh
+      if (window.refreshSocialCartItems) {
+        window.refreshSocialCartItems();
+      }
+    } else {
+      showToast(data.message || "Failed", "danger");
+    }
+  })
+  .catch(() => showToast("Network error", "danger"));
+};
+
+</script>
+<script src="{% static 'js/main.js' %}"></script>

@@ -80,6 +80,12 @@ urlpatterns = [
 
     # Social Cart partial refresh
     path("cart/social/fragment/", social_cart.social_cart_fragment, name="social_cart_fragment"),
+    path(
+      "cart/social/items/fragment/",
+      social_cart.social_cart_items_fragment,
+      name="social_cart_items_fragment"
+    ),
+
 
     # Social Cart live chat
     path("cart/social/chat/fragment/", social_cart.social_cart_chat_fragment, name="social_cart_chat_fragment"),
@@ -96,6 +102,7 @@ urlpatterns = [
 
     # Member management
     path('cart/member/leave/', social_cart.leave_cart, name='leave_social_cart'),
+    path('cart/member/rejoin/', social_cart.rejoin_social_cart, name='rejoin_social_cart'),
     path('cart/member/leave-checkout/', social_cart.leave_and_checkout_all, name='leave_and_checkout_all'),  # NEW
     path('cart/member/remove/<int:member_id>/', social_cart.remove_member, name='remove_member'),
     path('cart/member/block/<int:member_id>/', social_cart.block_member, name='block_member'),

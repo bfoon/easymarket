@@ -312,7 +312,7 @@ def checkout_cart(request):
         return redirect("marketplace:cart")
 
     # Calculate totals
-    CART_TAX_RATE = Decimal("0.085")
+    CART_TAX_RATE = Decimal("0.000")
     subtotal = sum(item.product.price * item.quantity for item in cart_items)
 
     # GET request - show checkout page
