@@ -2202,10 +2202,11 @@ def cart_preview(request):
     ctx = build_cart_context(request, limit=5)
     return render(request, "marketplace/partials/cart_preview.html", ctx)
 
-@login_required
+
 def cart_view(request):
     """
     FIXED: Complete cart view with proper member visibility for social carts
+    AND normal cart sharing functionality
     """
     # Get or create user's cart
     user_cart, _ = Cart.objects.get_or_create(user=request.user)
@@ -2226,9 +2227,34 @@ def cart_view(request):
     can_modify_social = False
     my_share = None
     social_members = []
-    social_invite_link = None  # ← ADDED: Prevents UnboundLocalError
-    social_cart_qr = None      # ← ADDED: Prevents UnboundLocalError
+    social_invite_link = None
+    social_cart_qr = None
     cart_to_use = user_cart  # Which cart to use for display
+
+    # ✅ NEW: Initialize normal cart sharing variables
+    normal_cart_qr = None
+    share_token = None
+
+    # Generate normal cart share link and QR code if there are items
+    if normal_items.exists():
+        try:
+            # Get or create SharedCart for the user
+            shared_cart, created = SharedCart.objects.get_or_create(user=request.user)
+            share_token = shared_cart.token
+
+            # Build the absolute URL for sharing
+            share_url = request.build_absolute_uri(
+                reverse('marketplace:copy_shared_cart', kwargs={'token': share_token})
+            )
+
+            # Generate QR code for the share URL
+            normal_cart_qr = generate_qr_code(share_url)
+
+            logger.info(f"Generated normal cart share link for user {request.user.username}: {share_url}")
+        except Exception as e:
+            logger.error(f"Error generating normal cart share link: {e}")
+            normal_cart_qr = None
+            share_token = None
 
     # CRITICAL FIX: Find social cart in TWO ways
     # Method 1: User owns a social cart
@@ -2363,8 +2389,11 @@ def cart_view(request):
         'my_share': my_share,
         'social_members': social_members,
         'social_events_url': social_events_url,
-        'social_invite_link': social_invite_link,  # ✅ Now always defined
-        'social_cart_qr': social_cart_qr,          # ✅ Now always defined
+        'social_invite_link': social_invite_link,
+        'social_cart_qr': social_cart_qr,
+        # ✅ NEW: Add normal cart sharing variables
+        'normal_cart_qr': normal_cart_qr,
+        'share_token': share_token,
     }
 
     return render(request, 'marketplace/cart_detail.html', context)
@@ -2623,6 +2652,150 @@ def move_cart_item(request):
         return JsonResponse({
             'success': False,
             'message': 'An error occurred while moving the item'
+        }, status=500)
+
+
+@login_required
+@require_POST
+def clear_cart(request):
+    """
+    Clear all items from a specific cart type (normal or social)
+
+    POST Parameters:
+        cart_type: 'normal' or 'social'
+
+    Returns:
+        JsonResponse with success status
+    """
+    import traceback
+
+    cart_type = request.POST.get('cart_type', 'normal')
+
+    if cart_type not in ['normal', 'social']:
+        return JsonResponse({
+            'success': False,
+            'message': 'Invalid cart type'
+        }, status=400)
+
+    try:
+        # Get user's cart
+        user_cart = Cart.objects.get(user=request.user)
+        deleted_count = 0
+
+        if cart_type == 'normal':
+            # Clear normal cart items
+            try:
+                result = user_cart.items.filter(cart_type='normal').delete()
+                deleted_count = result[0] if result and len(result) > 0 else 0
+                message = f'Cleared {deleted_count} item(s) from your cart'
+                logger.info(f"User {request.user.username} cleared normal cart ({deleted_count} items)")
+            except Exception as e:
+                logger.error(f"Error clearing normal cart items: {e}\n{traceback.format_exc()}")
+                return JsonResponse({
+                    'success': False,
+                    'message': f'Error clearing cart items: {str(e)}'
+                }, status=500)
+
+        else:  # social
+            # For social cart, need to verify permissions
+            try:
+                social = user_cart.social
+            except (SocialCart.DoesNotExist, AttributeError):
+                social = None
+
+            if not social or not social.is_active:
+                # Check if user is a member of someone else's social cart
+                try:
+                    member = CartMember.objects.filter(
+                        user=request.user,
+                        status='joined'
+                    ).select_related('social_cart').first()
+
+                    if member and member.social_cart and member.social_cart.is_active:
+                        social = member.social_cart
+                    else:
+                        return JsonResponse({
+                            'success': False,
+                            'message': 'No active social cart found'
+                        }, status=403)
+                except Exception as e:
+                    logger.error(f"Error finding social cart: {e}\n{traceback.format_exc()}")
+                    return JsonResponse({
+                        'success': False,
+                        'message': 'No active social cart found'
+                    }, status=403)
+
+            # Check if user is owner
+            try:
+                is_owner = social.cart.user == request.user
+            except Exception as e:
+                logger.error(f"Error checking ownership: {e}\n{traceback.format_exc()}")
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Error verifying permissions'
+                }, status=500)
+
+            if not is_owner:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Only the cart owner can clear the entire social cart'
+                }, status=403)
+
+            # Clear social cart items
+            try:
+                result = social.cart.items.filter(cart_type='social').delete()
+                deleted_count = result[0] if result and len(result) > 0 else 0
+                message = f'Cleared {deleted_count} item(s) from social cart'
+                logger.info(f"User {request.user.username} cleared social cart ({deleted_count} items)")
+            except Exception as e:
+                logger.error(f"Error clearing social cart items: {e}\n{traceback.format_exc()}")
+                return JsonResponse({
+                    'success': False,
+                    'message': f'Error clearing cart items: {str(e)}'
+                }, status=500)
+
+        # Calculate new cart count
+        try:
+            new_cart_count = user_cart.total_items()
+        except Exception as e:
+            logger.warning(f"Could not calculate cart count: {e}")
+            new_cart_count = 0
+
+        # Track analytics if available (wrapped in try-catch)
+        try:
+            from analytics.services import track_event
+            track_event(
+                request.user,
+                'cart_cleared',
+                properties={
+                    'cart_type': cart_type,
+                    'items_cleared': deleted_count
+                }
+            )
+        except Exception as e:
+            # Don't fail the request if analytics fails
+            logger.warning(f"Analytics tracking failed: {e}")
+
+        return JsonResponse({
+            'success': True,
+            'message': message,
+            'cart_type': cart_type,
+            'items_cleared': deleted_count,
+            'cart_count': new_cart_count
+        })
+
+    except Cart.DoesNotExist:
+        logger.error(f"Cart not found for user {request.user.username}")
+        return JsonResponse({
+            'success': False,
+            'message': 'Cart not found'
+        }, status=404)
+
+    except Exception as e:
+        logger.error(f"Unexpected error clearing cart: {e}\n{traceback.format_exc()}")
+        return JsonResponse({
+            'success': False,
+            'message': 'An error occurred while clearing the cart'
         }, status=500)
 
 @require_GET

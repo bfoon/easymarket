@@ -218,29 +218,27 @@
                         </button>
                       {% endif %}
                       {% if product or snap.id %}
-                      <button type="button"
-                              class="btn btn-sm btn-primary add-chat-product"
-                              data-product-id="{% if product %}{{ product.id }}{% else %}{{ snap.id }}{% endif %}"
-                              data-features='{{ features }}'
-                              data-qty="1">
-                        <i class="fas fa-cart-plus me-1"></i>Add to Cart
-                      </button>
-                    {% endif %}
+                        <button type="button"
+                                class="btn btn-sm btn-primary js-social-chat-add-to-cart"
+                                data-product-id="{% if product %}{{ product.id }}{% else %}{{ snap.id }}{% endif %}"
+                                data-quantity="1"
+                                data-selected-features='{{ features|default_if_none:"{}" }}'>
+                          <i class="fas fa-cart-plus me-1"></i>Add to Cart
+                        </button>
+                      {% endif %}
                     </div>
                   </div>
                 {% endif %}
 
-                <div class="small opacity-75 mt-1">{{ m.created_at|date:"M d, H:i" }}</div>
+                <div class="small text-muted mt-1">{{ m.created_at|date:"M d, H:i" }}</div>
               </div>
             </div>
 
           {% else %}
-            <!-- OTHER MESSAGE -->
+            <!-- THEIR MESSAGE -->
             <div class="d-flex justify-content-start">
-              <div class="px-3 py-2 rounded-4 bg-light border" style="max-width:85%;">
-                <div class="small text-muted mb-1">
-                  {{ m.sender.get_full_name|default:m.sender.username }}
-                </div>
+              <div class="px-3 py-2 rounded-4" style="max-width:85%; background:#e0e0e0; color:#232f3e;">
+                <div class="small text-muted mb-1">{{ m.sender.username|default:"Member" }}</div>
 
                 {% if m.message %}
                   <div style="white-space: pre-wrap;">{{ m.message }}</div>
@@ -327,19 +325,14 @@
                         </button>
                       {% endif %}
                       {% if product or snap.id %}
-                            <button
-                      type="button"
-                      class="btn btn-sm btn-primary js-add-to-cart"
-                      data-product-id="{% if product %}{{ product.id }}{% else %}{{ snap.id }}{% endif %}"
-                      data-quantity="1"
-                      data-selected-features='{{ features|default:"{}"|escapejs }}'
-                    >
-                      <i class="fas fa-cart-plus me-1"></i>Add to Cart
-                    </button>
-
-
-                    {% endif %}
-
+                        <button type="button"
+                                class="btn btn-sm btn-primary js-social-chat-add-to-cart"
+                                data-product-id="{% if product %}{{ product.id }}{% else %}{{ snap.id }}{% endif %}"
+                                data-quantity="1"
+                                data-selected-features='{{ features|default_if_none:"{}" }}'>
+                          <i class="fas fa-cart-plus me-1"></i>Add to Cart
+                        </button>
+                      {% endif %}
                     </div>
                   </div>
                 {% endif %}
@@ -366,55 +359,181 @@
   {% endif %}
 
 {% endif %}
+
 <script>
-  document.addEventListener("click", function (e) {
-  const btn = e.target.closest(".js-add-to-cart");
-  if (!btn) return;
+(function() {
+  'use strict';
 
-  e.preventDefault();
+  /**
+   * Handle add to cart from social chat product shares
+   */
+  function handleSocialChatAddToCart(e) {
+    const btn = e.target.closest('.js-social-chat-add-to-cart');
+    if (!btn) return;
 
-  const productId = btn.dataset.productId;
-  const qty = parseInt(btn.dataset.quantity || "1", 10);
+    e.preventDefault();
+    e.stopPropagation();
 
-  let features = {};
-  try {
-    features = JSON.parse(btn.dataset.selectedFeatures || "{}");
-  } catch (e) {
-    features = {};
+    // Get data attributes
+    const productId = btn.dataset.productId;
+    const quantity = parseInt(btn.dataset.quantity || '1', 10);
+    let selectedFeatures = {};
+
+    // Parse selected features
+    try {
+      const featuresStr = btn.dataset.selectedFeatures || '{}';
+      selectedFeatures = JSON.parse(featuresStr);
+    } catch (err) {
+      console.warn('Failed to parse selected features:', err);
+      selectedFeatures = {};
+    }
+
+    if (!productId) {
+      console.error('No product ID found');
+      if (window.showToast) {
+        window.showToast('Error: Product ID not found', 'error');
+      }
+      return;
+    }
+
+    // Disable button and show loading state
+    const originalHTML = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Adding...';
+
+    // Build request body
+    const formData = new URLSearchParams();
+    formData.append('quantity', quantity);
+    formData.append('cart_type', 'social');
+    formData.append('features', JSON.stringify(selectedFeatures));
+
+    // Get CSRF token
+    const csrfToken = getCSRFToken();
+    if (!csrfToken) {
+      console.error('CSRF token not found');
+      resetButton(btn, originalHTML);
+      if (window.showToast) {
+        window.showToast('Error: Security token not found', 'error');
+      }
+      return;
+    }
+
+    // Make request to add to cart
+    fetch(`/add-to-cart/${productId}/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-CSRFToken': csrfToken,
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      body: formData.toString()
+    })
+    .then(response => {
+      if (!response.ok) {
+        return response.json().then(data => {
+          throw new Error(data.message || data.error || `HTTP ${response.status}`);
+        });
+      }
+      return response.json();
+    })
+    .then(data => {
+      if (data.success) {
+        // Show success state
+        btn.innerHTML = '<i class="fas fa-check me-1"></i>Added!';
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-success');
+
+        // Show success toast
+        if (window.showToast) {
+          window.showToast(
+            `${data.product_name || 'Product'} added to social cart`,
+            'success'
+          );
+        }
+
+        // Update cart count if available
+        if (typeof data.cart_count !== 'undefined' && window.updateCartCount) {
+          window.updateCartCount(data.cart_count);
+        }
+
+        // Refresh social cart items display if function is available
+        if (window.refreshSocialCartItems) {
+          window.refreshSocialCartItems();
+        }
+
+        // Reset button after delay
+        setTimeout(() => {
+          resetButton(btn, originalHTML);
+        }, 2000);
+      } else {
+        throw new Error(data.message || data.error || 'Failed to add to cart');
+      }
+    })
+    .catch(err => {
+      console.error('Add to cart error:', err);
+      resetButton(btn, originalHTML);
+
+      if (window.showToast) {
+        window.showToast(err.message || 'Failed to add to cart', 'error');
+      }
+    });
   }
 
-  // 🔥 SINGLE source of truth
-  window.addToCart({
-    product_id: productId,
-    quantity: qty,
-    selected_features: features
-  });
-});
+  /**
+   * Reset button to original state
+   */
+  function resetButton(btn, originalHTML) {
+    btn.disabled = false;
+    btn.innerHTML = originalHTML;
+    btn.classList.remove('btn-success');
+    btn.classList.add('btn-primary');
+  }
 
-  window.addToCart = function (payload) {
-  fetch(window.ADD_TO_CART_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-CSRFToken": getCSRFToken()
-    },
-    body: JSON.stringify(payload)
-  })
-  .then(r => r.json())
-  .then(data => {
-    if (data.success) {
-      showToast("Added to cart", "success");
-
-      // 🔄 optional partial refresh
-      if (window.refreshSocialCartItems) {
-        window.refreshSocialCartItems();
-      }
-    } else {
-      showToast(data.message || "Failed", "danger");
+  /**
+   * Get CSRF token from various sources
+   */
+  function getCSRFToken() {
+    // Try getting from global function first
+    if (window.getCSRFToken) {
+      return window.getCSRFToken();
     }
-  })
-  .catch(() => showToast("Network error", "danger"));
-};
 
+    // Try getting from form
+    const tokenInput = document.querySelector('[name=csrfmiddlewaretoken]');
+    if (tokenInput) {
+      return tokenInput.value;
+    }
+
+    // Try getting from meta tag
+    const tokenMeta = document.querySelector('meta[name="csrf-token"]');
+    if (tokenMeta) {
+      return tokenMeta.getAttribute('content');
+    }
+
+    // Try getting from cookie
+    return getCookie('csrftoken');
+  }
+
+  /**
+   * Get cookie value by name
+   */
+  function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+      const cookies = document.cookie.split(';');
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+          break;
+        }
+      }
+    }
+    return cookieValue;
+  }
+
+  // Attach event listener using event delegation
+  document.addEventListener('click', handleSocialChatAddToCart);
+
+})();
 </script>
-<script src="{% static 'js/main.js' %}"></script>

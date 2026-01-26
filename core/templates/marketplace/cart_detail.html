@@ -802,7 +802,7 @@ code:hover {
   </div>
 
 </div>
-{% endif %}
+
 
 
 
@@ -889,6 +889,7 @@ code:hover {
         </div>
         {% endif %}
       </div>
+      {% endif %}
 
       <!-- Sidebar -->
       <div class="col-lg-4">
@@ -1264,6 +1265,174 @@ function copyInviteCode() {
     prompt('Copy invite code:', code);
   }
 }
+
+</script>
+<script>
+function clearCart(cartType) {
+  console.log('clearCart called with type:', cartType);
+
+  if (!['normal', 'social'].includes(cartType)) {
+    console.error('Invalid cart type:', cartType);
+    if (window.showToast) window.showToast('Invalid cart type', 'error');
+    return;
+  }
+
+  const cartName = cartType === 'normal' ? 'personal cart' : 'social cart';
+  if (!confirm(`Clear entire ${cartName}? This cannot be undone.`)) {
+    console.log('User cancelled clear cart');
+    return;
+  }
+
+  // Get CSRF token
+  const csrfToken = (function() {
+    const tokenInput = document.querySelector('[name=csrfmiddlewaretoken]');
+    if (tokenInput && tokenInput.value) {
+      console.log('CSRF token found in form input');
+      return tokenInput.value;
+    }
+
+    const tokenMeta = document.querySelector('meta[name="csrf-token"]');
+    if (tokenMeta) {
+      const content = tokenMeta.getAttribute('content');
+      if (content) {
+        console.log('CSRF token found in meta tag');
+        return content;
+      }
+    }
+
+    if (document.cookie && document.cookie !== '') {
+      const cookies = document.cookie.split(';');
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, 10) === 'csrftoken=') {
+          console.log('CSRF token found in cookie');
+          return decodeURIComponent(cookie.substring(10));
+        }
+      }
+    }
+
+    console.error('CSRF token not found');
+    return null;
+  })();
+
+  if (!csrfToken) {
+    const msg = 'Security token not found. Please refresh the page.';
+    if (window.showToast) {
+      window.showToast(msg, 'error');
+    } else {
+      alert(msg);
+    }
+    return;
+  }
+
+  // Show loading state
+  const clearButtons = document.querySelectorAll(`button[onclick*="clearCart('${cartType}')"]`);
+  const originalHTML = [];
+  clearButtons.forEach((btn, index) => {
+    originalHTML[index] = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Clearing...';
+  });
+
+  console.log('Sending clear cart request to /cart/clear/');
+
+  fetch('/cart/clear/', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'X-CSRFToken': csrfToken,
+      'X-Requested-With': 'XMLHttpRequest'
+    },
+    body: new URLSearchParams({cart_type: cartType})
+  })
+  .then(response => {
+    console.log('Response status:', response.status);
+    console.log('Response ok:', response.ok);
+
+    // Clone the response so we can read it twice if needed
+    return response.clone().text().then(text => {
+      console.log('Raw response:', text);
+
+      // Try to parse as JSON
+      try {
+        const data = JSON.parse(text);
+        return { response, data };
+      } catch (e) {
+        console.error('Failed to parse JSON response:', e);
+        throw new Error('Server returned invalid JSON');
+      }
+    });
+  })
+  .then(({ response, data }) => {
+    console.log('Parsed data:', data);
+
+    if (!response.ok) {
+      throw new Error(data.message || `HTTP ${response.status}`);
+    }
+
+    if (data.success) {
+      console.log('Cart cleared successfully:', data);
+
+      // Show success message
+      const successMsg = data.message || `${cartName} cleared successfully!`;
+      if (window.showToast) {
+        window.showToast(successMsg, 'success');
+      } else {
+        alert(successMsg);
+      }
+
+      // Update cart count badge
+      if (typeof data.cart_count !== 'undefined') {
+        console.log('Updating cart count to:', data.cart_count);
+        if (window.updateCartCount) {
+          window.updateCartCount(data.cart_count);
+        }
+        // Also update any cart count badges directly
+        document.querySelectorAll('.cart-badge, #cartCountBadge, [data-cart-count]').forEach(badge => {
+          if (data.cart_count > 0) {
+            badge.textContent = data.cart_count;
+            badge.style.display = 'inline-block';
+          } else {
+            badge.style.display = 'none';
+          }
+        });
+      }
+
+      // Reload page after a short delay
+      console.log('Reloading page in 1 second...');
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+
+    } else {
+      throw new Error(data.message || 'Failed to clear cart');
+    }
+  })
+  .catch(err => {
+    console.error('Clear cart error:', err);
+    console.error('Error stack:', err.stack);
+
+    // Reset buttons
+    clearButtons.forEach((btn, index) => {
+      btn.disabled = false;
+      btn.innerHTML = originalHTML[index] || '<i class="fas fa-trash-alt"></i> Clear';
+    });
+
+    // Show error message
+    const errorMsg = err.message || 'Failed to clear cart. Please try again.';
+    if (window.showToast) {
+      window.showToast(errorMsg, 'error');
+    } else {
+      alert('Error: ' + errorMsg);
+    }
+  });
+}
+
+// Expose globally
+window.clearCart = clearCart;
+
+// Add debug info
+console.log('clearCart function loaded and available');
 </script>
 <!-- JavaScript Configuration (SINGLE INSTANCE) -->
 <script>

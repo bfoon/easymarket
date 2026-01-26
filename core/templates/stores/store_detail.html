@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 {% load humanize %}
+{% load product_image_tags %}
 
 {% block title %}{{ store.name }} - Premium Store{% endblock %}
 
@@ -35,10 +36,7 @@
       --sf-text: {{ theme_colors.text|default:'#1e293b' }};
       --sf-bg: {{ theme_colors.background|default:'#ffffff' }};
     }
-  </style>
 
-  <!-- STOREFRONT V1 — fully scoped to avoid collisions with base.css -->
-  <style>
     /* ============================================
       STOREFRONT v1 (SCOPED)
       Wrapper: .storefront-v1
@@ -780,114 +778,140 @@
             <p class="sf-section-subtitle">Browse our collection of quality products</p>
           </div>
 
-          {% if products %}
-            <div class="sf-products-grid">
-              {% for product in products %}
-                <article class="sf-product-card">
-                  <div class="sf-product-img">
-                    <a href="{% url 'stores:product_detail' product.id %}">
-                      {% if product.images.first %}
-                        <img src="{{ product.images.first.image.url }}" alt="{{ product.name }}" loading="lazy">
+        {% if products %}
+        <div class="sf-products-grid">
+          {% for product in products %}
+            <article class="sf-product-card">
+              <div class="sf-product-img">
+                <a href="{% url 'stores:product_detail' product.id %}">
+                  {# ✅ FIXED: Try multiple image sources with fallbacks #}
+                  {% if product.images.first %}
+                    {# Product uses related images collection #}
+                    <img src="{{ product.images.first.image.url }}"
+                         alt="{{ product.name }}"
+                         loading="lazy"
+                         onerror="this.onerror=null; this.src='{% static 'images/placeholder.jpg' %}';">
+                  {% elif product.image %}
+                    {# Product has direct image field #}
+                    <img src="{{ product.image.url }}"
+                         alt="{{ product.name }}"
+                         loading="lazy"
+                         onerror="this.onerror=null; this.src='{% static 'images/placeholder.jpg' %}';">
+                  {% elif product.primary_image %}
+                    {# Product has primary_image field #}
+                    <img src="{{ product.primary_image.url }}"
+                         alt="{{ product.name }}"
+                         loading="lazy"
+                         onerror="this.onerror=null; this.src='{% static 'images/placeholder.jpg' %}';">
+                  {% elif product.thumbnail %}
+                    {# Product has thumbnail field #}
+                    <img src="{{ product.thumbnail.url }}"
+                         alt="{{ product.name }}"
+                         loading="lazy"
+                         onerror="this.onerror=null; this.src='{% static 'images/placeholder.jpg' %}';">
+                  {% else %}
+                    {# No image found - use placeholder #}
+                    <img src="{% static 'images/placeholder.jpg' %}"
+                         alt="{{ product.name }}"
+                         loading="lazy">
+                  {% endif %}
+                </a>
+
+                <div class="sf-product-badges">
+                  {% if product.is_featured %}
+                    <span class="sf-product-badge sf-badge-featured">★ Featured</span>
+                  {% endif %}
+                  {% if product.is_new %}
+                    <span class="sf-product-badge sf-badge-new">New</span>
+                  {% endif %}
+                  {% if product.original_price and product.original_price > product.price %}
+                    {% widthratio product.original_price|add:0|floatformat:0 1 1 as orig %}
+                    {% widthratio product.price|add:0|floatformat:0 1 1 as curr %}
+                    {% widthratio orig|add:"-"|add:curr orig 100 as discount %}
+                    <span class="sf-product-badge sf-badge-sale">-{{ discount }}% OFF</span>
+                  {% endif %}
+                </div>
+
+                {% if store.enable_wishlist %}
+                  <div class="sf-product-actions">
+                    <button class="sf-action-btn" onclick="addToWishlist({{ product.id }})" title="Add to Wishlist" type="button">
+                      <i class="far fa-heart"></i>
+                    </button>
+                  </div>
+                {% endif %}
+              </div>
+
+              <div class="sf-product-info">
+                {% if product.category %}
+                  <div class="sf-product-cat">{{ product.category.name }}</div>
+                {% endif %}
+
+                <h3 class="sf-product-name">
+                  <a href="{% url 'stores:product_detail' product.id %}">{{ product.name }}</a>
+                </h3>
+
+                {% if product.description %}
+                  <p class="sf-product-desc">{{ product.description|striptags|truncatewords:18 }}</p>
+                {% else %}
+                  <p class="sf-product-desc">Quality product from {{ store.name }}.</p>
+                {% endif %}
+
+                {% if show_product_ratings %}
+                  <div class="sf-product-meta">
+                    <div class="sf-product-rating">
+                      {% for i in "12345" %}
+                        <i class="{% if forloop.counter <= product.average_rating|default:5 %}fas{% else %}far{% endif %} fa-star"></i>
+                      {% endfor %}
+                      <span class="sf-rating-text">({{ product.review_count|default:0 }})</span>
+                    </div>
+
+                    {% if product.warehouse_qty is not None %}
+                      {% if product.warehouse_qty > 10 %}
+                        <span class="sf-stock-badge sf-stock-in">In Stock</span>
+                      {% elif product.warehouse_qty > 0 %}
+                        <span class="sf-stock-badge sf-stock-low">Low Stock</span>
                       {% else %}
-                        <img src="{% static 'images/placeholder.jpg' %}" alt="{{ product.name }}" loading="lazy">
+                        <span class="sf-stock-badge sf-stock-out">Out of Stock</span>
                       {% endif %}
-                    </a>
-
-                    <div class="sf-product-badges">
-                      {% if product.is_featured %}
-                        <span class="sf-product-badge sf-badge-featured">★ Featured</span>
-                      {% endif %}
-                      {% if product.is_new %}
-                        <span class="sf-product-badge sf-badge-new">New</span>
-                      {% endif %}
-                      {% if product.original_price and product.original_price > product.price %}
-                        {% widthratio product.original_price|add:0|floatformat:0 1 1 as orig %}
-                        {% widthratio product.price|add:0|floatformat:0 1 1 as curr %}
-                        {% widthratio orig|add:"-"|add:curr orig 100 as discount %}
-                        <span class="sf-product-badge sf-badge-sale">-{{ discount }}% OFF</span>
-                      {% endif %}
-                    </div>
-
-                    {% if store.enable_wishlist %}
-                      <div class="sf-product-actions">
-                        <button class="sf-action-btn" onclick="addToWishlist({{ product.id }})" title="Add to Wishlist" type="button">
-                          <i class="far fa-heart"></i>
-                        </button>
-                      </div>
-                    {% endif %}
-                  </div>
-
-                  <div class="sf-product-info">
-                    {% if product.category %}
-                      <div class="sf-product-cat">{{ product.category.name }}</div>
-                    {% endif %}
-
-                    <h3 class="sf-product-name">
-                      <a href="{% url 'stores:product_detail' product.id %}">{{ product.name }}</a>
-                    </h3>
-
-                    {% if product.description %}
-                      <p class="sf-product-desc">{{ product.description|striptags|truncatewords:18 }}</p>
                     {% else %}
-                      <p class="sf-product-desc">Quality product from {{ store.name }}.</p>
-                    {% endif %}
-
-                    {% if show_product_ratings %}
-                      <div class="sf-product-meta">
-                        <div class="sf-product-rating">
-                          {% for i in "12345" %}
-                            <i class="{% if forloop.counter <= product.average_rating|default:5 %}fas{% else %}far{% endif %} fa-star"></i>
-                          {% endfor %}
-                          <span class="sf-rating-text">({{ product.review_count|default:0 }})</span>
-                        </div>
-
-                        {% if product.warehouse_qty is not None %}
-                          {% if product.warehouse_qty > 10 %}
-                            <span class="sf-stock-badge sf-stock-in">In Stock</span>
-                          {% elif product.warehouse_qty > 0 %}
-                            <span class="sf-stock-badge sf-stock-low">Low Stock</span>
-                          {% else %}
-                            <span class="sf-stock-badge sf-stock-out">Out of Stock</span>
-                          {% endif %}
-                        {% else %}
-                          {% if product.stock_quantity > 10 %}
-                            <span class="sf-stock-badge sf-stock-in">In Stock</span>
-                          {% elif product.stock_quantity > 0 %}
-                            <span class="sf-stock-badge sf-stock-low">Low Stock</span>
-                          {% else %}
-                            <span class="sf-stock-badge sf-stock-out">Out of Stock</span>
-                          {% endif %}
-                        {% endif %}
-                      </div>
-                    {% endif %}
-
-                    <div class="sf-price">
-                      <span class="sf-price-current">D{{ product.price }}</span>
-                      {% if product.original_price and product.original_price > product.price %}
-                        <span class="sf-price-original">D{{ product.original_price }}</span>
-                        {% widthratio product.original_price|add:0|floatformat:0 1 1 as orig %}
-                        {% widthratio product.price|add:0|floatformat:0 1 1 as curr %}
-                        {% widthratio orig|add:"-"|add:curr orig 100 as save %}
-                        <span class="sf-price-save">Save {{ save }}%</span>
+                      {% if product.stock_quantity > 10 %}
+                        <span class="sf-stock-badge sf-stock-in">In Stock</span>
+                      {% elif product.stock_quantity > 0 %}
+                        <span class="sf-stock-badge sf-stock-low">Low Stock</span>
+                      {% else %}
+                        <span class="sf-stock-badge sf-stock-out">Out of Stock</span>
                       {% endif %}
-                    </div>
-
-                    <a href="{% url 'stores:product_detail' product.id %}" class="sf-cta">
-                      <i class="fas fa-shopping-cart"></i>
-                      View Details
-                    </a>
+                    {% endif %}
                   </div>
-                </article>
-              {% endfor %}
-            </div>
-          {% else %}
-            <div class="sf-empty">
-              <i class="fas fa-box-open"></i>
-              <h3>No Products Yet</h3>
-              <p>This store hasn't added any products yet. Check back soon!</p>
-            </div>
-          {% endif %}
+                {% endif %}
+
+                <div class="sf-price">
+                  <span class="sf-price-current">D{{ product.price }}</span>
+                  {% if product.original_price and product.original_price > product.price %}
+                    <span class="sf-price-original">D{{ product.original_price }}</span>
+                    {% widthratio product.original_price|add:0|floatformat:0 1 1 as orig %}
+                    {% widthratio product.price|add:0|floatformat:0 1 1 as curr %}
+                    {% widthratio orig|add:"-"|add:curr orig 100 as save %}
+                    <span class="sf-price-save">Save {{ save }}%</span>
+                  {% endif %}
+                </div>
+
+                <a href="{% url 'stores:product_detail' product.id %}" class="sf-cta">
+                  <i class="fas fa-shopping-cart"></i>
+                  View Details
+                </a>
+              </div>
+            </article>
+          {% endfor %}
         </div>
+      {% else %}
+        <div class="sf-empty">
+          <i class="fas fa-box-open"></i>
+          <h3>No Products Yet</h3>
+          <p>This store hasn't added any products yet. Check back soon!</p>
+        </div>
+      {% endif %}
+       </div>
 
         <!-- Sidebar -->
         <aside class="sf-sidebar">
