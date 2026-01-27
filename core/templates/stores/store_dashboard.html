@@ -2462,6 +2462,39 @@
 <!-- Toast Container -->
 <div id="toastContainer" class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1055;"></div>
 
+<!-- Floating Seller Chats Button -->
+<a href="{% url 'stores:store_seller_chats' store.id %}"
+   class="b2b-fab"
+   id="sellerChatsBtn"
+   title="Social Cart Questions">
+    <div class="b2b-fab-inner">
+        <div class="b2b-fab-orb">
+            <i class="fas fa-comments"></i>
+            <span class="b2b-fab-count" id="sellerChatsBadge" style="display:none;">0</span>
+        </div>
+        <span class="b2b-fab-label">Cart Questions</span>
+    </div>
+</a>
+<script>
+// Poll for unread seller chats
+setInterval(async () => {
+    try {
+        const response = await fetch('/stores/api/store/{{ store.id }}/seller-chats/unread-count/');
+        const data = await response.json();
+        if (data.success && data.unread_count > 0) {
+            const badge = document.getElementById('sellerChatsBadge');
+            badge.textContent = data.unread_count > 99 ? '99+' : data.unread_count;
+            badge.style.display = 'flex';
+            document.getElementById('sellerChatsBtn').classList.add('has-unread');
+        } else {
+            document.getElementById('sellerChatsBadge').style.display = 'none';
+            document.getElementById('sellerChatsBtn').classList.remove('has-unread');
+        }
+    } catch (e) {
+        console.error('Error fetching seller chats count:', e);
+    }
+}, 10000); // Check every 10 seconds
+</script>
 <script>
     // Chart data - keeping it simple and stable
     window.chartData = {

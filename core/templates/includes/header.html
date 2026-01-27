@@ -1331,50 +1331,50 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   function wireRemoveButtons(scopeEl) {
-    scopeEl.addEventListener('click', function (e) {
-      const btn = e.target.closest('.cart-remove-btn');
-      if (!btn) return;
-      e.preventDefault();
+  scopeEl.addEventListener('click', function (e) {
+    const btn = e.target.closest('.cart-remove-btn');
+    if (!btn) return;
+    e.preventDefault();
 
-      const removeId = btn.dataset.removeId;
-      const itemType = btn.dataset.itemType;
-      const oldHTML = btn.innerHTML;
-      btn.disabled = true;
-      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    const removeId = btn.dataset.removeId;
+    const itemType = btn.dataset.itemType;
+    const oldHTML = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
-      fetch("{% url 'marketplace:remove_cart_item' %}", {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
-        body: JSON.stringify({ remove_id: removeId, item_type: itemType })
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          if (scopeEl.id === 'cart-preview-body' || scopeEl.id === 'cart-offcanvas-body') {
-            scopeEl.innerHTML = data.html;
-            applyCartItemTruncation(scopeEl);
-          }
-          const badge = document.getElementById('easymarket-cart-badge');
-          const numberSpan = badge?.querySelector('.easymarket-cart-number');
-          if (badge && numberSpan) {
-            const count = parseInt(data.badge_count || 0);
-            numberSpan.textContent = count;
-            numberSpan.setAttribute('data-count', count);
-            badge.style.display = count > 0 ? 'inline-block' : 'none';
-          }
-        } else {
-          alert(data.error || 'Failed to remove item.');
-          btn.disabled = false;
-          btn.innerHTML = oldHTML;
+    fetch("{% url 'marketplace:remove_cart_item' %}", {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrftoken },
+      body: JSON.stringify({ item_id: removeId, item_type: itemType })  // ✅ FIXED: changed from remove_id to item_id
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        if (scopeEl.id === 'cart-preview-body' || scopeEl.id === 'cart-offcanvas-body') {
+          scopeEl.innerHTML = data.html;
+          applyCartItemTruncation(scopeEl);
         }
-      })
-      .catch(() => {
-        alert('Network error.');
+        const badge = document.getElementById('easymarket-cart-badge');
+        const numberSpan = badge?.querySelector('.easymarket-cart-number');
+        if (badge && numberSpan) {
+          const count = parseInt(data.badge_count || 0);
+          numberSpan.textContent = count;
+          numberSpan.setAttribute('data-count', count);
+          badge.style.display = count > 0 ? 'inline-block' : 'none';
+        }
+      } else {
+        alert(data.error || 'Failed to remove item.');
         btn.disabled = false;
         btn.innerHTML = oldHTML;
-      });
+      }
+    })
+    .catch(() => {
+      alert('Network error.');
+      btn.disabled = false;
+      btn.innerHTML = oldHTML;
     });
-  }
+  });
+}
 
   function loadCartInto(el) {
     setLoading(el);

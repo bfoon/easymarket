@@ -11,6 +11,14 @@ from django.db import transaction
 from django.db.models.functions import Lower
 from django.core.validators import FileExtensionValidator
 from django.db.models import UniqueConstraint
+import threading
+import logging
+from django.core.mail import send_mail
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from django.conf import settings
+
+logger = logging.getLogger(__name__)
 
 # ============================================================
 # HELPER FUNCTIONS (Add at module level, before models)
@@ -2693,3 +2701,133 @@ class SocialCartChatThread(models.Model):
 
     def __str__(self):
         return f"{self.social_cart_id} {self.scope} {self.product_id or ''}"
+
+
+@receiver(post_save, sender='marketplace.SocialCartChatMessage')
+def notify_store_owner_on_seller_question(sender, instance, created, **kwargs):
+    """
+    When a social cart member sends a message with scope='seller_item',
+    notify the store owner via email.
+
+    This works with your actual model structure:
+    - SocialCartChatMessage has: social_cart, scope, sender, recipient, product_id
+    - No separate Thread model - scope field determines the conversation type
+    """
+    if not created:
+        return
+
+    # Only handle seller_item scope (customer asking store owner)
+    if instance.scope != 'seller_item':
+        return
+
+    # Don't notify if the sender is the recipient (store owner replying to themselves)
+    if instance.recipient and instance.sender == instance.recipient:
+        return
+
+    # Get the product
+    if not instance.product_id:
+        return
+
+    try:
+        from marketplace.models import Product
+        product = Product.objects.select_related('store', 'seller').get(id=instance.product_id)
+    except Product.DoesNotExist:
+        logger.warning(f"Product {instance.product_id} not found for chat message {instance.id}")
+        return
+
+    # Get store (handle both store-based and seller-based products)
+    from stores.models import Store
+    store = None
+
+    if hasattr(product, 'store') and product.store:
+        store = product.store
+    elif hasattr(product, 'seller') and product.seller:
+        # Try to get store from seller's stores
+        store = Store.objects.filter(owner=product.seller).first()
+
+    if not store:
+        logger.warning(f"No store found for product {product.id}")
+        return
+
+    # Check if this is the first message in this seller_item conversation
+    # Look for previous messages with same social_cart, scope, and product
+    social_cart = instance.social_cart
+    previous_messages = instance.__class__.objects.filter(
+        social_cart=social_cart,
+        scope='seller_item',
+        product_id=instance.product_id,
+        created_at__lt=instance.created_at
+    ).exists()
+
+    if not previous_messages:
+        # This is the first message - send notification!
+        _send_store_notification_email(store, social_cart, instance, product)
+
+
+def _send_store_notification_email(store, social_cart, message, product):
+    """
+    Send email notification to store owner about new question.
+    """
+    try:
+        cart_id = str(social_cart.id)[:8]
+        sender_name = message.sender.get_full_name() or message.sender.username
+
+        # Count total members in cart
+        try:
+            member_count = social_cart.members.filter(status='joined').count()
+        except:
+            member_count = 1
+
+        subject = f"🛍️ New Question from Social Cart - {store.name}"
+
+        message_parts = [
+            f"Hi {store.owner.get_full_name() or store.owner.username},",
+            "",
+            "Great news! A social shopping group is interested in your product!",
+            "",
+            f"📦 Product: {product.name}",
+            f"🛒 Cart ID: {cart_id} ({member_count} shopper{'s' if member_count != 1 else ''})",
+            f"👤 Asked by: {sender_name}",
+            f"💬 Question: \"{message.message[:200]}{'...' if len(message.message) > 200 else ''}\"",
+            "",
+        ]
+
+        # Add response link
+        if hasattr(settings, 'SITE_URL'):
+            chat_url = f"{settings.SITE_URL}/stores/manage/{store.id}/seller-chats/"
+            message_parts.extend([
+                f"👉 Click here to respond: {chat_url}",
+                "",
+                "💡 Tip: Social carts often lead to larger orders!",
+                "   Responding quickly can help close the sale.",
+            ])
+        else:
+            message_parts.append("💡 Check your store dashboard to respond!")
+
+        message_parts.extend([
+            "",
+            "Best regards,",
+            "Your Marketplace Team"
+        ])
+
+        email_body = "\n".join(message_parts)
+
+        # Send email in background thread
+        def send_async():
+            try:
+                send_mail(
+                    subject,
+                    email_body,
+                    settings.DEFAULT_FROM_EMAIL,
+                    [store.owner.email],
+                    fail_silently=True
+                )
+                logger.info(f"Sent seller chat notification to {store.owner.email} for product {product.id}")
+            except Exception as e:
+                logger.error(f"Failed to send seller chat notification: {e}")
+
+        email_thread = threading.Thread(target=send_async)
+        email_thread.start()
+
+    except Exception as e:
+        logger.error(f"Error in seller chat notification: {e}", exc_info=True)

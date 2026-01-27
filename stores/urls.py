@@ -120,6 +120,27 @@ urlpatterns = [
         name="store_notification_preferences"
     ),
 
+    # Social cart seller chat integration
+    path('manage/<uuid:store_id>/seller-chats/',
+         views.store_seller_chats_panel,
+         name='store_seller_chats'),
+
+    path('api/store/<uuid:store_id>/seller-chats/',
+         views.get_store_seller_chats,
+         name='get_store_seller_chats'),
+
+    path('api/store/seller-chat/<uuid:social_cart_id>/<int:product_id>/messages/',
+         views.get_seller_chat_messages,
+         name='get_seller_chat_messages'),
+
+    path('api/store/seller-chat/reply/',
+         views.send_seller_chat_reply,
+         name='send_seller_chat_reply'),
+
+    path('api/store/<uuid:store_id>/seller-chats/unread-count/',
+         views.get_store_seller_unread_count,
+         name='get_store_seller_unread_count'),
+
     path("<slug:slug>/promote/", views.store_promote, name="store_promote"),
     path("<slug:slug>/promote/subscribe/", views.create_subscription, name="promo_subscribe"),
     path("<slug:slug>/promote/campaign/new/", views.create_campaign, name="promo_campaign_create"),

@@ -15,11 +15,11 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 from django.http import HttpResponseRedirect
 from django.utils.text import slugify
-from django.db.models import  Q, Avg, F, FloatField, DecimalField, ExpressionWrapper, Case, When
+from django.db.models import  Q, Avg, F, FloatField, DecimalField, ExpressionWrapper, Case, When, Max, Q
 from django.db.models.functions import TruncDate, TruncMonth, Coalesce
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.http import JsonResponse, HttpResponseBadRequest
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_POST, require_GET
 from django.forms import modelformset_factory
 from chat.models import ChatThread, ChatMessage
 from django.contrib.auth import get_user_model
@@ -6204,3 +6204,356 @@ def duplicate_theme(request, source_store_id, target_store_id):
         'message': 'Theme duplicated successfully!',
         'redirect_url': reverse('stores:store_theme_settings', kwargs={'store_id': target_store_id})
     })
+
+
+@login_required
+@require_GET
+def get_store_seller_chats(request, store_id):
+    """
+    Get all seller_item conversations for a store from active social carts.
+
+    Groups messages by: social_cart + product_id to create "conversation threads"
+    """
+    from marketplace.models import SocialCartChatMessage, Product, SocialCart
+    from stores.models import Store
+
+    store = get_object_or_404(Store, id=store_id, owner=request.user)
+
+    # Get all products from this store
+    store_products = Product.objects.filter(
+        Q(store=store) | Q(seller=store.owner)
+    ).values_list('id', flat=True)
+
+    # Get seller_item messages for these products from active social carts
+    seller_messages = SocialCartChatMessage.objects.filter(
+        scope='seller_item',
+        product_id__in=[str(pid) for pid in store_products],
+        social_cart__is_active=True,
+        social_cart__status__in=['open', 'checkout']
+    ).select_related(
+        'social_cart',
+        'sender'
+    ).order_by('-created_at')
+
+    # Group messages by social_cart + product_id to create conversation threads
+    conversations = {}
+    for msg in seller_messages:
+        key = f"{msg.social_cart.id}_{msg.product_id}"
+
+        if key not in conversations:
+            # Get product
+            try:
+                product = Product.objects.get(id=msg.product_id)
+            except Product.DoesNotExist:
+                continue
+
+            # Get cart members
+            try:
+                members = msg.social_cart.members.filter(status='joined')
+                member_names = [m.user.get_full_name() or m.user.username for m in members[:3]]
+                member_count = members.count()
+            except:
+                member_names = []
+                member_count = 0
+
+            conversations[key] = {
+                'id': key,
+                'social_cart_id': str(msg.social_cart.id)[:8],
+                'full_cart_id': str(msg.social_cart.id),
+                'product_id': msg.product_id,
+                'product': {
+                    'id': product.id,
+                    'name': product.name,
+                    'image': product.image.url if product.image else None,
+                },
+                'members': member_names,
+                'member_count': member_count,
+                'messages': [],
+                'unread_count': 0,
+                'last_message': None,
+                'created_at': msg.created_at.isoformat(),
+            }
+
+        # Add message to conversation
+        conversations[key]['messages'].append(msg)
+
+        # Update last message
+        if not conversations[key]['last_message'] or msg.created_at > conversations[key]['last_message'][
+            'created_at_obj']:
+            conversations[key]['last_message'] = {
+                'content': msg.message,
+                'sender': msg.sender.get_full_name() or msg.sender.username,
+                'is_from_me': msg.sender == store.owner,
+                'created_at': msg.created_at.isoformat(),
+                'created_at_obj': msg.created_at,
+            }
+
+        # Count unread (messages not from store owner)
+        if msg.sender != store.owner:
+            conversations[key]['unread_count'] += 1
+
+    # Convert to list and add message counts
+    threads_data = []
+    for conv in conversations.values():
+        conv['message_count'] = len(conv['messages'])
+        # Remove messages list (we'll fetch them separately when needed)
+        del conv['messages']
+        # Remove helper object
+        if conv['last_message']:
+            del conv['last_message']['created_at_obj']
+        threads_data.append(conv)
+
+    # Sort by last message time
+    threads_data.sort(key=lambda x: x['last_message']['created_at'] if x['last_message'] else x['created_at'],
+                      reverse=True)
+
+    return JsonResponse({
+        'success': True,
+        'threads': threads_data,
+        'total': len(threads_data)
+    })
+
+
+@login_required
+@require_GET
+def get_seller_chat_messages(request, social_cart_id, product_id):
+    """
+    Get all messages for a specific seller_item conversation.
+    Identified by: social_cart_id + product_id
+    """
+    from marketplace.models import SocialCartChatMessage, Product, SocialCart
+    from stores.models import Store
+
+    # Get social cart
+    try:
+        social_cart = SocialCart.objects.get(id=social_cart_id)
+    except SocialCart.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'message': 'Social cart not found'
+        }, status=404)
+
+    # Get product and verify ownership
+    try:
+        product = Product.objects.get(id=product_id)
+    except Product.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'message': 'Product not found'
+        }, status=404)
+
+    # Check if user owns the store
+    has_permission = False
+    if hasattr(product, 'store') and product.store:
+        has_permission = product.store.owner == request.user
+    elif hasattr(product, 'seller'):
+        has_permission = product.seller == request.user
+
+    if not has_permission:
+        return JsonResponse({
+            'success': False,
+            'message': 'Permission denied'
+        }, status=403)
+
+    # Get all seller_item messages for this conversation
+    messages = SocialCartChatMessage.objects.filter(
+        social_cart=social_cart,
+        scope='seller_item',
+        product_id=str(product.id)
+    ).select_related('sender').order_by('created_at')
+
+    messages_data = []
+    for msg in messages:
+        messages_data.append({
+            'id': msg.id,
+            'content': msg.message,
+            'sender': {
+                'id': msg.sender.id,
+                'name': msg.sender.get_full_name() or msg.sender.username,
+            },
+            'is_from_store': msg.sender == request.user,
+            'created_at': msg.created_at.isoformat(),
+            'has_product': bool(msg.attach_product or msg.product_snapshot),
+            'product_snapshot': msg.product_snapshot if hasattr(msg, 'product_snapshot') else None,
+        })
+
+    # Get cart info
+    try:
+        cart_members = social_cart.members.filter(status='joined')
+        members_data = [
+            {
+                'id': m.user.id,
+                'name': m.user.get_full_name() or m.user.username
+            }
+            for m in cart_members
+        ]
+    except:
+        members_data = []
+
+    return JsonResponse({
+        'success': True,
+        'messages': messages_data,
+        'conversation': {
+            'social_cart_id': str(social_cart.id)[:8],
+            'full_cart_id': str(social_cart.id),
+            'product': {
+                'id': product.id,
+                'name': product.name,
+                'image': product.image.url if product.image else None,
+                'price': str(product.price),
+            },
+            'members': members_data
+        }
+    })
+
+
+@login_required
+@require_POST
+def send_seller_chat_reply(request):
+    """
+    Store owner sends a reply to social cart in a seller_item conversation.
+    """
+    from marketplace.models import SocialCartChatMessage, Product, SocialCart
+    from stores.models import Store
+
+    try:
+        data = json.loads(request.body)
+        social_cart_id = data.get('social_cart_id')
+        product_id = data.get('product_id')
+        message_content = data.get('message', '').strip()
+
+        if not message_content:
+            return JsonResponse({
+                'success': False,
+                'message': 'Message cannot be empty'
+            }, status=400)
+
+        if len(message_content) > 2000:
+            return JsonResponse({
+                'success': False,
+                'message': 'Message too long (max 2000 characters)'
+            }, status=400)
+
+        # Get social cart
+        try:
+            social_cart = SocialCart.objects.get(id=social_cart_id)
+        except SocialCart.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'message': 'Social cart not found'
+            }, status=404)
+
+        # Get product and verify ownership
+        try:
+            product = Product.objects.get(id=product_id)
+        except Product.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'message': 'Product not found'
+            }, status=404)
+
+        # Check permission
+        has_permission = False
+        recipient = None
+        if hasattr(product, 'store') and product.store:
+            has_permission = product.store.owner == request.user
+            # Recipient should be one of the cart members (optional)
+            try:
+                first_member = social_cart.members.filter(status='joined').first()
+                recipient = first_member.user if first_member else None
+            except:
+                recipient = None
+        elif hasattr(product, 'seller'):
+            has_permission = product.seller == request.user
+
+        if not has_permission:
+            return JsonResponse({
+                'success': False,
+                'message': 'Permission denied'
+            }, status=403)
+
+        # Create message
+        message = SocialCartChatMessage.objects.create(
+            social_cart=social_cart,
+            sender=request.user,
+            recipient=recipient,
+            scope='seller_item',
+            product_id=str(product.id),
+            message=message_content,
+            attach_product=False,
+            product_snapshot={}
+        )
+
+        logger.info(f"Store owner {request.user.id} replied to cart {social_cart_id} about product {product_id}")
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Reply sent successfully',
+            'data': {
+                'id': message.id,
+                'content': message.message,
+                'sender_name': request.user.get_full_name() or request.user.username,
+                'created_at': message.created_at.isoformat(),
+                'is_from_store': True,
+            }
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'message': 'Invalid JSON data'
+        }, status=400)
+    except Exception as e:
+        logger.error(f"Error sending seller reply: {e}", exc_info=True)
+        return JsonResponse({
+            'success': False,
+            'message': 'An error occurred while sending your message'
+        }, status=500)
+
+
+@login_required
+@require_GET
+def get_store_seller_unread_count(request, store_id):
+    """
+    Get total unread message count for store's seller chats.
+    """
+    from marketplace.models import SocialCartChatMessage, Product
+    from stores.models import Store
+
+    store = get_object_or_404(Store, id=store_id, owner=request.user)
+
+    # Get store products
+    store_products = Product.objects.filter(
+        Q(store=store) | Q(seller=store.owner)
+    ).values_list('id', flat=True)
+
+    # Count unread seller_item messages (not from store owner)
+    total_unread = SocialCartChatMessage.objects.filter(
+        scope='seller_item',
+        product_id__in=[str(pid) for pid in store_products],
+        social_cart__is_active=True
+    ).exclude(
+        sender=store.owner
+    ).count()
+
+    return JsonResponse({
+        'success': True,
+        'unread_count': total_unread
+    })
+
+
+@login_required
+def store_seller_chats_panel(request, store_id):
+    """
+    Main panel for store owners to manage seller_item chats.
+    """
+    from stores.models import Store
+
+    store = get_object_or_404(Store, id=store_id, owner=request.user)
+
+    context = {
+        'store': store,
+        'page_title': 'Social Cart Questions'
+    }
+
+    return render(request, 'stores/store_seller_chats_panel.html', context)
