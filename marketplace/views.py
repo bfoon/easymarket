@@ -7,7 +7,7 @@ from .models import (Category, Product, ProductView,
                      SearchHistory, PopularSearch, ProductFeature, ProductImage,
                      ProductFeatureOption, ProductVariant, SharedCart, SocialCart, CartMember, PaymentShare,
                      Career, CareerApplication, PressRelease, InvestorDocument, InvestorEvent,
-                     Campaign, CampaignProduct, WheelSpin)
+                     Campaign, CampaignProduct, WheelSpin, ProductLiveViewer)
 from chat.models import ChatThread, ChatMessage
 from analytics.models import CartEvent
 from analytics.services import track_event
@@ -177,13 +177,30 @@ def product_list(request):
     # Trending products - only show if there's an active trending campaign
     trending_products = Product.objects.none()
     if trending_campaign:
-        trending_product_ids = trending_campaign.campaign_products.values_list('product_id', flat=True)
+        # Get campaign products ordered by position
+        campaign_products = list(
+            trending_campaign.campaign_products
+            .select_related('product')
+            .order_by('position')
+        )
+
+        if campaign_products:
+            # Extract product IDs in order
+            product_ids = [cp.product_id for cp in campaign_products]
+
+            # Create ordering
+            from django.db.models import Case, When, IntegerField
+
+            preserved_order = Case(
+                *[When(pk=pk, then=pos) for pos, pk in enumerate(product_ids)],
+                output_field=IntegerField()
+            )
         trending_products = with_display_images(
             Product.objects.filter(
-                id__in=trending_product_ids,
+                id__in=product_ids,
                 is_active=True,
-                show_in_trending=True
-            )
+                is_trending=True,
+            ).order_by(preserved_order)
         )
 
     # Explore section (paginated)
@@ -465,8 +482,8 @@ def spin_wheel(request, slug):
             'prize': {
                 'label': selected_prize['label'],
                 'type': selected_prize['type'],
-                'value': selected_prize['value'],  # ✅ FIX: Include value
-                'promo_code': promo_code,  # ✅ FIX: This now contains the code
+                'value': selected_prize['value'],  # FIX: Include value
+                'promo_code': promo_code,  # FIX: This now contains the code
             },
             'spins_left': spins_left,
             'message': f"🎉 Congratulations! You won {selected_prize['label']}!"
@@ -1495,8 +1512,26 @@ def product_detail(request, product_id):
             Wishlist.objects.filter(user=request.user).values_list('product_id', flat=True)
         )
 
+   # Track live viewer
+    user = request.user if request.user.is_authenticated else None
+    session_key = request.session.session_key
+    if not session_key:
+         request.session.create()
+         session_key = request.session.session_key
+
+    ProductLiveViewer.update_viewer(
+        product=product,
+        user=user,
+        session_key=session_key,
+        request=request
+        )
+
+    # Get live viewer count for context
+    live_viewers = ProductLiveViewer.get_live_count(product_id)
+
     return render(request, 'marketplace/product_detail.html', {
         'product': product,
+        'live_viewers': live_viewers,
         'product_images': product_images,
         'recommended_items': recommended_items,
         'specifications': cleaned_specs,
@@ -1936,6 +1971,132 @@ def category_products_ajax(request, pk):
         }
     })
 
+
+@require_http_methods(["POST"])
+def track_product_view(request, product_id):
+    """
+    Track when a user views a product (for live viewer count)
+    Called via AJAX from product pages
+    """
+    try:
+        product = get_object_or_404(Product, id=product_id, is_active=True)
+
+        # Get user or session
+        user = request.user if request.user.is_authenticated else None
+        session_key = request.session.session_key
+
+        # Create session if needed for anonymous users
+        if not user and not session_key:
+            request.session.create()
+            session_key = request.session.session_key
+
+        # Update viewer record
+        ProductLiveViewer.update_viewer(
+            product=product,
+            user=user,
+            session_key=session_key,
+            request=request
+        )
+
+        # Get current live count
+        live_count = ProductLiveViewer.get_live_count(product_id)
+
+        return JsonResponse({
+            'success': True,
+            'live_count': live_count,
+            'product_id': product_id
+        })
+
+    except Product.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'error': 'Product not found'
+        }, status=404)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@require_http_methods(["GET"])
+def get_live_viewer_counts(request):
+    """
+    Get live viewer counts for multiple products
+    Used for product listing pages
+
+    Query params:
+        product_ids: Comma-separated list of product IDs
+
+    Example: /api/live-viewers/?product_ids=1,2,3,4,5
+    """
+    try:
+        product_ids_str = request.GET.get('product_ids', '')
+
+        if not product_ids_str:
+            return JsonResponse({
+                'success': False,
+                'error': 'No product IDs provided'
+            }, status=400)
+
+        # Parse product IDs
+        try:
+            product_ids = [int(pid.strip()) for pid in product_ids_str.split(',') if pid.strip()]
+        except ValueError:
+            return JsonResponse({
+                'success': False,
+                'error': 'Invalid product IDs'
+            }, status=400)
+
+        # Limit to prevent abuse
+        if len(product_ids) > 100:
+            product_ids = product_ids[:100]
+
+        # Get counts for each product
+        counts = {}
+        for product_id in product_ids:
+            counts[str(product_id)] = ProductLiveViewer.get_live_count(product_id)
+
+        return JsonResponse({
+            'success': True,
+            'counts': counts
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@require_http_methods(["POST"])
+def cleanup_live_viewers(request):
+    """
+    Cleanup old viewer records
+    Should be called periodically (e.g., via cron or Celery)
+
+    Staff/admin only for security
+    """
+    if not request.user.is_staff:
+        return JsonResponse({
+            'success': False,
+            'error': 'Unauthorized'
+        }, status=403)
+
+    try:
+        deleted_count = ProductLiveViewer.cleanup_old_viewers(minutes=10)
+
+        return JsonResponse({
+            'success': True,
+            'deleted_count': deleted_count,
+            'message': f'Cleaned up {deleted_count} old viewer records'
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
 
 CART_TAX_RATE = getattr(settings, "CART_TAX_RATE", Decimal("0.00"))
 
@@ -2997,79 +3158,69 @@ def update_cart_quantity(request):
 @require_POST
 def remove_cart_item(request):
     """
-    FIXED: Remove cart item with proper permission checks for both normal and social carts
+    Remove cart item (accepts either FormData POST or JSON body).
     """
-    item_id = request.POST.get('item_id')
+    item_id = request.POST.get("item_id") or request.POST.get("cart_item_id")
+
+    # If JSON was sent, request.POST will be empty
+    if not item_id and request.content_type and "application/json" in request.content_type:
+        try:
+            payload = json.loads(request.body.decode() or "{}")
+        except Exception:
+            payload = {}
+        item_id = payload.get("item_id") or payload.get("cart_item_id")
 
     if not item_id:
-        return JsonResponse({
-            'success': False,
-            'message': 'Invalid payload'
-        }, status=400)
+        return JsonResponse({"success": False, "message": "Invalid payload"}, status=400)
 
     try:
-        item = CartItem.objects.select_related(
-            'cart', 'cart__user', 'product', 'added_by'
-        ).get(id=item_id)
+        item_id = int(item_id)
+    except Exception:
+        return JsonResponse({"success": False, "message": "Invalid item id"}, status=400)
+
+    try:
+        item = CartItem.objects.select_related("cart", "cart__user", "product", "added_by").get(id=item_id)
 
         can_remove = False
 
-        # Permission check for normal cart items
-        if item.cart_type == 'normal' and item.cart.user == request.user:
+        if item.cart_type == "normal" and item.cart.user == request.user:
             can_remove = True
 
-        # Permission check for social cart items
-        elif item.cart_type == 'social':
+        elif item.cart_type == "social":
             try:
                 social = item.cart.social
                 member = social.members.filter(user=request.user).first()
-
                 if member:
-                    # Owner can remove any item
                     if social.owner == request.user:
                         can_remove = True
-                    # Non-blocked member can remove their own items
-                    elif item.added_by == request.user and member.status == 'joined':
+                    elif item.added_by == request.user and member.status == "joined":
                         can_remove = True
             except (SocialCart.DoesNotExist, AttributeError):
                 pass
 
         if not can_remove:
-            return JsonResponse({
-                'success': False,
-                'message': 'You do not have permission to remove this item'
-            }, status=403)
+            return JsonResponse({"success": False, "message": "You do not have permission to remove this item"}, status=403)
 
-        # Delete the item
         with transaction.atomic():
             cart_type = item.cart_type
+            cart_ref = item.cart  # keep ref before delete
             item.delete()
 
-            # Recalculate shares for social cart
-            if cart_type == 'social':
+            if cart_type == "social":
                 try:
-                    social = item.cart.social
-                    if social.split_mode == 'by_items':
+                    social = cart_ref.social
+                    if social.split_mode == "by_items":
                         social.compute_shares_by_items()
                 except Exception as e:
                     logger.error(f"Error recalculating shares: {e}")
 
-        return JsonResponse({
-            'success': True,
-            'message': 'Item removed successfully'
-        })
+        return JsonResponse({"success": True, "message": "Item removed successfully"})
 
     except CartItem.DoesNotExist:
-        return JsonResponse({
-            'success': False,
-            'message': 'Item not found'
-        }, status=404)
+        return JsonResponse({"success": False, "message": "Item not found"}, status=404)
     except Exception as e:
         logger.error(f"Error removing cart item: {str(e)}", exc_info=True)
-        return JsonResponse({
-            'success': False,
-            'message': 'An error occurred while removing the item'
-        }, status=500)
+        return JsonResponse({"success": False, "message": "An error occurred while removing the item"}, status=500)
 
 
 # ============================================================================

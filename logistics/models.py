@@ -1713,3 +1713,120 @@ class B2BBoxItem(models.Model):
         super().clean()
         if self.quantity and self.quantity < 1:
             raise ValidationError({"quantity": "Quantity must be at least 1."})
+
+
+class OrderLogisticsAgent(models.Model):
+    """
+    Tracks logistics agents/staff assigned to handle specific orders
+    """
+    STATUS_CHOICES = [
+        ('assigned', 'Assigned'),
+        ('working', 'Working on Order'),
+        ('paused', 'Paused'),
+        ('completed', 'Completed'),
+    ]
+
+    order = models.OneToOneField(
+        'orders.Order',
+        on_delete=models.CASCADE,
+        related_name='logistics_agent_assignment'
+    )
+    agent = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='assigned_orders',
+        help_text="Logistics staff/agent assigned to this order"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='assigned'
+    )
+    assigned_at = models.DateTimeField(auto_now_add=True)
+    started_working_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+
+    # Agent availability status
+    is_available = models.BooleanField(default=True)
+    last_activity = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-assigned_at']
+        verbose_name = 'Order Logistics Agent'
+        verbose_name_plural = 'Order Logistics Agents'
+
+    def __str__(self):
+        agent_name = self.agent.get_full_name() if self.agent else "Unassigned"
+        return f"Order #{self.order.id} - {agent_name}"
+
+    def start_working(self):
+        """Mark agent as actively working on the order"""
+        self.status = 'working'
+        self.started_working_at = timezone.now()
+        self.save(update_fields=['status', 'started_working_at', 'last_activity'])
+
+    def mark_completed(self):
+        """Mark the logistics work as completed"""
+        self.status = 'completed'
+        self.completed_at = timezone.now()
+        self.save(update_fields=['status', 'completed_at', 'last_activity'])
+
+    def pause_work(self):
+        """Pause work on this order"""
+        self.status = 'paused'
+        self.save(update_fields=['status', 'last_activity'])
+
+    @property
+    def is_working(self):
+        """Check if agent is currently working on this order"""
+        return self.status == 'working'
+
+    @property
+    def agent_display_name(self):
+        """Get display name for the agent"""
+        if not self.agent:
+            return "No agent assigned"
+        return self.agent.get_full_name() or self.agent.username
+
+    @property
+    def working_duration(self):
+        """Calculate how long the agent has been working"""
+        if not self.started_working_at:
+            return None
+
+        end_time = self.completed_at or timezone.now()
+        return end_time - self.started_working_at
+
+
+class LogisticsAgentMessage(models.Model):
+    """
+    Chat messages between store owners and logistics agents
+    """
+    order = models.ForeignKey(
+        'orders.Order',
+        on_delete=models.CASCADE,
+        related_name='logistics_messages'
+    )
+    sender = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='sent_logistics_messages'
+    )
+    message = models.TextField()
+    image = models.ImageField(
+        upload_to='logistics_chat/%Y/%m/%d/',
+        null=True,
+        blank=True
+    )
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+        verbose_name = 'Logistics Agent Message'
+        verbose_name_plural = 'Logistics Agent Messages'
+
+    def __str__(self):
+        return f"Message on Order #{self.order.id} from {self.sender.username}"

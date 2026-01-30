@@ -97,6 +97,120 @@
     border: 1px solid rgba(15,23,42,.08);
     border-radius: 16px;
   }
+  /* Geolocation UI Styles */
+.gps-container {
+    background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+    border: 2px solid #0ea5e9;
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 20px;
+}
+
+.accuracy-meter {
+    margin: 20px 0;
+}
+
+.accuracy-meter .progress {
+    height: 8px;
+    border-radius: 10px;
+    background-color: #e2e8f0;
+}
+
+.accuracy-meter .progress-bar {
+    transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+.gps-status-box {
+    background: white;
+    border-radius: 12px;
+    padding: 16px;
+    margin: 16px 0;
+    border: 1px solid #cbd5e1;
+}
+
+.location-method-toggle {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+}
+
+.location-method-btn {
+    flex: 1;
+    padding: 16px;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: center;
+}
+
+.location-method-btn:hover {
+    border-color: #0ea5e9;
+    background: #f0f9ff;
+    transform: translateY(-2px);
+}
+
+.location-method-btn.active {
+    border-color: #0ea5e9;
+    background: #0ea5e9;
+    color: white;
+}
+
+.location-method-btn i {
+    font-size: 24px;
+    display: block;
+    margin-bottom: 8px;
+}
+
+.gambia-indicator {
+    padding: 12px;
+    border-radius: 8px;
+    margin-top: 12px;
+    border: 1px solid;
+    animation: fadeIn 0.3s ease;
+}
+
+.gambia-indicator.in-gambia {
+    background: #d1fae5;
+    border-color: #10b981;
+    color: #065f46;
+}
+
+.gambia-indicator.outside-gambia {
+    background: #fef3c7;
+    border-color: #f59e0b;
+    color: #92400e;
+}
+
+.spinner-pulse {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid #0ea5e9;
+    border-radius: 50%;
+    border-top-color: transparent;
+    animation: spinner 0.8s linear infinite;
+}
+
+@keyframes spinner {
+    to { transform: rotate(360deg); }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.pulse {
+    animation: pulse 1s ease;
+}
+
+@keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(14, 165, 233, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(14, 165, 233, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(14, 165, 233, 0); }
+}
 </style>
 
 <div class="container py-4">
@@ -803,44 +917,215 @@
                         <div class="invalid-feedback">Please select a delivery address.</div>
                     </div>
 
-                    <!-- New Address Form -->
-                    <div id="newAddressForm" class="border rounded-3 p-4 bg-light d-none">
-                        <h6 class="mb-3 fw-semibold">
-                            <i class="fas fa-plus-circle me-2"></i>New Delivery Address
-                        </h6>
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <label class="form-label">Full Name <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" name="new_full_name" required>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">Phone Number <span class="text-danger">*</span></label>
-                                <input type="tel" class="form-control" name="new_phone_number" required>
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label">Street Address <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" name="new_street"
-                                       placeholder="House number and street name" required>
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label">City <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" name="new_city" required>
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label">Region <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" name="new_region" required>
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label">Postal Code</label>
-                                <input type="text" class="form-control" name="new_geo_code">
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label">Country</label>
-                                <input type="text" class="form-control" name="new_country" value="Gambia" readonly>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                 <!-- New Address Form with Geolocation -->
+                  <div id="newAddressForm" class="border rounded-3 p-4 bg-light d-none">
+                      <h6 class="mb-3 fw-semibold">
+                          <i class="fas fa-plus-circle me-2"></i>New Delivery Address
+                      </h6>
+
+                      <!-- HTTPS Warning (will auto-hide if on HTTPS) -->
+                      <div id="httpsWarning" class="alert alert-warning d-none">
+                          <i class="fas fa-exclamation-triangle me-2"></i>
+                          <strong>GPS requires HTTPS!</strong><br>
+                          <small>
+                              You're accessing the site via HTTP. GPS location will not work.<br>
+                              Please use: <a href="https://easymarket.vip" class="alert-link">https://easymarket.vip</a>
+                          </small>
+                      </div>
+
+                      <!-- Location Method Toggle -->
+                      <div class="location-method-toggle">
+                          <button type="button" class="location-method-btn" id="gpsLocationBtn">
+                              <i class="fas fa-map-marker-alt"></i>
+                              <strong>Use GPS Location</strong>
+                              <small class="d-block text-muted mt-1">Get precise coordinates</small>
+                          </button>
+                          <button type="button" class="location-method-btn active" id="manualLocationBtn">
+                              <i class="fas fa-keyboard"></i>
+                              <strong>Enter Manually</strong>
+                              <small class="d-block text-muted mt-1">Type your address</small>
+                          </button>
+                      </div>
+
+                      <!-- GPS Location Capture Container -->
+                      <div id="gpsLocationContainer" class="gps-container d-none">
+                          <div class="text-center mb-3">
+                              <div class="d-inline-flex align-items-center gap-2 mb-2">
+                                  <i class="fas fa-satellite-dish text-primary" style="font-size: 32px;"></i>
+                                  <h5 class="mb-0 fw-bold">GPS Location Capture</h5>
+                              </div>
+                              <p class="text-muted mb-0">Hold still while we get your precise location</p>
+                          </div>
+
+                          <!-- Accuracy Meter -->
+                          <div class="accuracy-meter">
+                              <div class="d-flex justify-content-between mb-2">
+                                  <span class="fw-semibold">Location Accuracy</span>
+                                  <span id="accuracyValue" class="fw-bold text-primary">Waiting...</span>
+                              </div>
+                              <div id="accuracyIndicator" class="progress">
+                                  <div class="progress-bar bg-info" role="progressbar" style="width: 0%"></div>
+                              </div>
+                              <div class="text-center mt-2">
+                                  <span id="accuracyStatus" class="text-muted">Initializing GPS...</span>
+                              </div>
+                          </div>
+
+                          <!-- Status Box -->
+                          <div class="gps-status-box">
+                              <div class="d-flex align-items-center gap-3">
+                                  <div id="gpsSpinner" class="d-none">
+                                      <div class="spinner-pulse"></div>
+                                  </div>
+                                  <div class="flex-grow-1">
+                                      <div id="gpsStatus" class="text-info">
+                                          <i class="fas fa-info-circle me-2"></i>Ready to capture location
+                                      </div>
+                                  </div>
+                              </div>
+                          </div>
+
+                          <!-- GPS Action Buttons -->
+                          <div class="d-flex gap-2 mt-3">
+                              <button type="button" class="btn btn-success flex-grow-1" id="confirmGpsLocation" disabled>
+                                  <i class="fas fa-check-circle me-2"></i>Confirm Location
+                              </button>
+                              <button type="button" class="btn btn-outline-secondary" id="cancelGpsLocation">
+                                  <i class="fas fa-times me-2"></i>Cancel
+                              </button>
+                          </div>
+
+                          <!-- Debug Panel (shows what's happening) -->
+                  <!--        <div class="mt-3">-->
+                  <!--            <button type="button" class="btn btn-sm btn-outline-info" onclick="toggleDebugPanel()">-->
+                  <!--                <i class="fas fa-bug me-1"></i>Show Debug Info-->
+                  <!--            </button>-->
+                  <!--        </div>-->
+                          <div id="debugPanel" class="debug-panel mt-2 d-none">
+                              <div id="debugInfo" style="border: none; color: #10b981;">
+                                  <strong>Debug Log - Watch what's happening:</strong>
+                              </div>
+                          </div>
+
+                          <!-- Help Text -->
+                          <div class="alert alert-info mt-3 mb-0">
+                              <i class="fas fa-lightbulb me-2"></i>
+                              <small>
+                                  <strong>Tips for best accuracy:</strong>
+                                  <ul class="mb-0 mt-2 ps-3">
+                                      <li>Make sure you're using HTTPS (https://easymarket.vip)</li>
+                                      <li>Enable location permissions in your browser (not just device settings)</li>
+                                      <li>Move to an open area or near a window if indoors</li>
+                                      <li>Wait 10-20 seconds for accuracy to improve below 50m</li>
+                                      <li>If it times out, try manual entry (always works!)</li>
+                                  </ul>
+                              </small>
+                          </div>
+                      </div>
+
+                      <!-- Manual Address Form -->
+                      <div id="manualAddressForm">
+                          <!-- Gambia Location Indicator -->
+                          <div id="gambiaIndicator" class="gambia-indicator d-none"></div>
+
+                          <div class="row g-3">
+                              <div class="col-md-6">
+                                  <label class="form-label">Full Name <span class="text-danger">*</span></label>
+                                  <input type="text" class="form-control" name="new_full_name"
+                                         placeholder="Enter recipient's full name" required>
+                              </div>
+                              <div class="col-md-6">
+                                  <label class="form-label">Phone Number <span class="text-danger">*</span></label>
+                                  <input type="tel" class="form-control" name="new_phone_number"
+                                         placeholder="+220 XXX XXXX" required>
+                                  <small class="form-text text-muted">
+                                      <i class="fas fa-phone me-1"></i>We'll call for delivery coordination
+                                  </small>
+                              </div>
+                              <div class="col-12">
+                                  <label class="form-label">Street Address <span class="text-danger">*</span></label>
+                                  <input type="text" class="form-control" name="new_street"
+                                         placeholder="House number and street name" required>
+                                  <small class="form-text text-muted">
+                                      <i class="fas fa-info-circle me-1"></i>
+                                      Include landmarks if area has no street names (e.g., "Near Westfield Junction, blue gate")
+                                  </small>
+                              </div>
+                              <div class="col-md-4">
+                                  <label class="form-label">City <span class="text-danger">*</span></label>
+                                  <input type="text" class="form-control" name="new_city"
+                                         placeholder="e.g., Serekunda" required>
+                              </div>
+                              <div class="col-md-4">
+                                  <label class="form-label">Region <span class="text-danger">*</span></label>
+                                  <select class="form-select" name="new_region" required>
+                                      <option value="">Select region</option>
+                                      <option value="Banjul">Banjul</option>
+                                      <option value="Kanifing">Kanifing</option>
+                                      <option value="Brikama">Brikama (West Coast Region)</option>
+                                      <option value="Mansakonko">Mansakonko (Lower River Region)</option>
+                                      <option value="Kerewan">Kerewan (North Bank Region)</option>
+                                      <option value="Kuntaur">Kuntaur (Central River Region)</option>
+                                      <option value="Janjanbureh">Janjanbureh (Central River Region)</option>
+                                      <option value="Basse">Basse (Upper River Region)</option>
+                                  </select>
+                              </div>
+                              <div class="col-md-4">
+                                  <label class="form-label">
+                                      Postal Code / Area Code
+                                      <i class="fas fa-question-circle text-muted"
+                                         data-bs-toggle="tooltip"
+                                         title="Enter postal code or area identifier to help us verify your location"></i>
+                                  </label>
+                                  <input type="text" class="form-control" name="new_geo_code"
+                                         onblur="geocodePostalCode()"
+                                         placeholder="Optional">
+                                  <small class="form-text text-muted">Helps verify location in Gambia</small>
+                              </div>
+                              <div class="col-12">
+                                  <label class="form-label">Country</label>
+                                  <input type="text" class="form-control" name="new_country"
+                                         value="The Gambia" readonly>
+                              </div>
+
+                              <!-- Additional Notes -->
+                              <div class="col-12">
+                                  <label class="form-label">
+                                      Delivery Instructions (Optional)
+                                      <i class="fas fa-info-circle text-muted"
+                                         data-bs-toggle="tooltip"
+                                         title="Add notes to help delivery driver find you"></i>
+                                  </label>
+                                  <textarea class="form-control" name="delivery_instructions" rows="2"
+                                            placeholder="e.g., Blue gate, near mosque, call when arriving, best time after 2pm"></textarea>
+                                  <small class="form-text text-muted">
+                                      <i class="fas fa-truck me-1"></i>
+                                      Help our driver find you: gate color, nearby landmarks, best delivery time
+                                  </small>
+                              </div>
+                          </div>
+
+                          <!-- Hidden Fields for Geolocation Data -->
+                          <input type="hidden" id="latitude" name="latitude">
+                          <input type="hidden" id="longitude" name="longitude">
+                          <input type="hidden" id="location_accuracy" name="location_accuracy">
+                          <input type="hidden" id="location_method" name="location_method" value="manual">
+                          <input type="hidden" id="geocoded_address" name="geocoded_address">
+                          <input type="hidden" id="is_gambia" name="is_gambia">
+                          <input type="hidden" id="location_timestamp" name="location_timestamp">
+
+                          <!-- Save as Default -->
+                          <div class="col-12 mt-3">
+                              <div class="form-check">
+                                  <input class="form-check-input" type="checkbox" name="set_default" id="setDefaultAddress">
+                                  <label class="form-check-label" for="setDefaultAddress">
+                                      <i class="fas fa-star me-1"></i>Set as default delivery address
+                                  </label>
+                              </div>
+                          </div>
+                      </div>
+                  </div>
+
 
                 <div class="modal-footer border-0 pt-0">
                     <button type="button" class="btn btn-lg btn-outline-secondary" data-bs-dismiss="modal">
@@ -908,7 +1193,7 @@
         </div>
     </div>
 </div>
-
+<script src="{% static 'js/geolocation_capture.js' %}"></script>
 <script src="{% static 'js/main.js' %}"></script>
 <script src="{% static 'js/order_detail.js' %}"></script>
 <script src="{% static 'js/order2_chat.js' %}"></script>
@@ -916,6 +1201,85 @@
   window.codAllowed = {{ cod_allowed|yesno:"true,false" }};
 </script>
 
+<script>
+/ Check HTTPS and show warning if needed
+document.addEventListener('DOMContentLoaded', function() {
+    const isSecure = window.location.protocol === 'https:' ||
+                    window.location.hostname === 'localhost' ||
+                    window.location.hostname === '127.0.0.1';
+
+    const httpsWarning = document.getElementById('httpsWarning');
+    if (!isSecure && httpsWarning) {
+        httpsWarning.classList.remove('d-none');
+    }
+});
+
+// Toggle debug panel
+function toggleDebugPanel() {
+    const panel = document.getElementById('debugPanel');
+    if (panel) {
+        panel.classList.toggle('d-none');
+    }
+}
+
+// Toggle between new address form and address selection
+function toggleNewAddressForm() {
+    const select = document.getElementById('shippingSelect');
+    const newForm = document.getElementById('newAddressForm');
+
+    if (select && select.value === 'new') {
+        newForm.classList.remove('d-none');
+    } else if (newForm) {
+        newForm.classList.add('d-none');
+    }
+}
+
+// Initialize tooltips
+document.addEventListener('DOMContentLoaded', function() {
+    // Bootstrap tooltips
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+
+    // Phone number formatting for Gambia
+    const phoneInput = document.querySelector('[name="new_phone_number"]');
+    if (phoneInput) {
+        phoneInput.addEventListener('input', function() {
+            // Auto-format Gambian phone numbers
+            let value = this.value.replace(/\D/g, '');
+            if (value.length > 0 && !value.startsWith('220')) {
+                if (value.length >= 7) {
+                    value = '220' + value.slice(-7);
+                }
+            }
+            if (value.length > 3) {
+                this.value = '+' + value;
+            }
+        });
+
+        // Validate on blur
+        phoneInput.addEventListener('blur', function() {
+            const phone = this.value.trim();
+            const gambiaPattern = /^(\+220)?[0-9]{7,8}$/;
+
+            if (phone && !gambiaPattern.test(phone.replace(/\s/g, ''))) {
+                this.classList.add('is-invalid');
+                if (!this.nextElementSibling || !this.nextElementSibling.classList.contains('invalid-feedback')) {
+                    const feedback = document.createElement('div');
+                    feedback.className = 'invalid-feedback';
+                    feedback.textContent = 'Please enter a valid Gambian phone number (+220 XXX XXXX)';
+                    this.parentNode.appendChild(feedback);
+                }
+            } else {
+                this.classList.remove('is-invalid');
+                const feedback = this.parentNode.querySelector('.invalid-feedback');
+                if (feedback) feedback.remove();
+            }
+        });
+    }
+});
+</script>
 <script>
 /* your enhanced UI script can remain; tiny improvement: Enter-to-send uses your wrapper */
 document.addEventListener('DOMContentLoaded', function(){

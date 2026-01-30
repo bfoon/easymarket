@@ -337,3 +337,21 @@ PAYMENT_INTEGRATION = {
         "FEATURED_LISTING_FEE": 10.00,
     },
 }
+
+# ============================================
+# Geolocation Settings
+# ============================================
+
+# GPS accuracy threshold (in meters) for automatic lock-in
+GPS_ACCURACY_THRESHOLD = 50  # Lock when accuracy is better than 50m
+
+# Maximum wait time for GPS signal (in seconds)
+GPS_MAX_WAIT_TIME = 30
+
+# Gambia geographic boundaries (for location verification)
+GAMBIA_BOUNDS = {
+    'min_lat': 13.0,
+    'max_lat': 13.9,
+    'min_lng': -17.0,
+    'max_lng': -13.8
+}

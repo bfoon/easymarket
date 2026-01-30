@@ -2,6 +2,7 @@
 {% load static %}
 {% block content %}
 <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+
 <style>
 /* ============================================================================
    SOCIAL CART CHAT PANEL - CREATIVE FLOATING UI
@@ -411,11 +412,11 @@
         bottom: 0;
         border-radius: 0;
     }
-    
+
     .floating-chatbox.open {
         transform: translateX(0);
     }
-    
+
     .thread-panel {
         width: 100px;
     }
@@ -488,14 +489,14 @@
             <i class="fas fa-times"></i>
         </button>
     </div>
-    
+
     <!-- Content -->
     <div class="chatbox-content">
         <!-- Thread List Panel -->
         <div class="thread-panel" id="threadPanel">
             <!-- Threads will be loaded here -->
         </div>
-        
+
         <!-- Main Chat Area -->
         <div class="chat-main">
             <div class="messages-container" id="messagesContainer">
@@ -504,13 +505,13 @@
                     <p>Select a conversation to start chatting</p>
                 </div>
             </div>
-            
+
             <div class="chat-input-area" id="chatInputArea" style="display: none;">
                 <form class="chat-input-form" onsubmit="sendMessage(event)">
-                    <input 
-                        type="text" 
-                        class="chat-input" 
-                        id="messageInput" 
+                    <input
+                        type="text"
+                        class="chat-input"
+                        id="messageInput"
                         placeholder="Type your message..."
                         autocomplete="off"
                     >
@@ -536,7 +537,7 @@
 
 <script>
 // ============================================================================
-// SOCIAL CART SELLER CHATS - FIXED VERSION
+// SOCIAL CART SELLER CHATS - FIXED VERSION (UUID OR INT IDS SUPPORTED)
 // ============================================================================
 
 const STORE_ID = "{{ store.id }}";
@@ -598,7 +599,9 @@ function renderConversations() {
 
     const threadItems = conversations.map((conv, index) => {
         // Ensure we have valid data
-        if (!conv.product || !conv.full_cart_id) {
+        // NOTE: backend might return full_cart_id OR social_cart_id (int/uuid). We accept either.
+        const rawCartId = conv.full_cart_id || conv.social_cart_id;
+        if (!conv.product || !rawCartId) {
             console.warn('Invalid conversation data:', conv);
             return '';
         }
@@ -606,8 +609,8 @@ function renderConversations() {
         // Create conversation data object
         const convData = {
             id: conv.id || `conv_${index}`,
-            social_cart_id: conv.full_cart_id,  // ✅ Use full UUID
-            product_id: String(conv.product_id || conv.product.id)  // Ensure it's a string
+            social_cart_id: String(rawCartId), // ✅ works for int or uuid
+            product_id: String(conv.product_id || conv.product.id)
         };
 
         console.log('Thread data:', convData);
@@ -619,10 +622,9 @@ function renderConversations() {
             ? productName.substring(0, 12) + '...'
             : productName;
 
-        // Create the HTML (note: no extra closing parenthesis!)
         return `
             <div class="thread-item ${currentConversation && currentConversation.id === conv.id ? 'active' : ''}"
-                 data-conv-id="${convData.id}"
+                 data-conv-id="${escapeForAttr(convData.id)}"
                  onclick="selectConversationByData('${escapeForAttr(convData.social_cart_id)}', '${escapeForAttr(convData.product_id)}', '${escapeForAttr(convData.id)}')">
                 <div class="thread-avatar">
                     ${productInitials}
@@ -644,8 +646,8 @@ function renderConversations() {
 function selectConversationByData(socialCartId, productId, convId) {
     const conversation = {
         id: convId,
-        social_cart_id: socialCartId,
-        product_id: productId
+        social_cart_id: String(socialCartId),
+        product_id: String(productId)
     };
     selectConversation(conversation);
 }
@@ -657,17 +659,10 @@ async function selectConversation(conversation) {
     console.log('Cart ID:', conversation.social_cart_id);
     console.log('Product ID:', conversation.product_id);
 
-    // Validate IDs
+    // Validate IDs (NO UUID-ONLY CHECK)
     if (!conversation.social_cart_id || !conversation.product_id) {
         console.error('Invalid conversation data:', conversation);
         alert('Error: Invalid conversation data. Please refresh the page.');
-        return;
-    }
-
-    // Check if social_cart_id looks like a UUID
-    if (conversation.social_cart_id.length < 30) {
-        console.error('social_cart_id too short - probably not a UUID:', conversation.social_cart_id);
-        alert('Error: Invalid cart ID format. Please refresh the page.');
         return;
     }
 
@@ -706,7 +701,7 @@ async function loadMessages(socialCartId, productId) {
     `;
 
     try {
-        const url = `/stores/api/store/seller-chat/${socialCartId}/${productId}/messages/`;
+        const url = `/stores/api/store/seller-chat/${encodeURIComponent(String(socialCartId))}/${encodeURIComponent(String(productId))}/messages/`;
         console.log('Fetching messages from:', url);
 
         const response = await fetch(url);
@@ -735,7 +730,7 @@ async function loadMessages(socialCartId, productId) {
             <div class="empty-state">
                 <i class="fas fa-exclamation-circle"></i>
                 <p>Error loading messages</p>
-                <p style="font-size: 0.9rem; color: #ef4444; margin-top: 0.5rem;">${error.message}</p>
+                <p style="font-size: 0.9rem; color: #ef4444; margin-top: 0.5rem;">${escapeHtml(error.message)}</p>
                 <button onclick="loadMessages('${escapeForAttr(socialCartId)}', '${escapeForAttr(productId)}')"
                         style="margin-top: 1rem; padding: 0.5rem 1rem; background: var(--chat-primary); color: white; border: none; border-radius: 8px; cursor: pointer;">
                     Retry
@@ -760,6 +755,8 @@ function renderMessages(messages, conversation) {
     }
 
     // Add conversation header
+    const cartDisplay = conversation.display_cart_id || conversation.social_cart_id || 'N/A';
+
     let html = `
         <div style="background: #f8fafc; padding: 1rem; margin-bottom: 1rem; border-radius: 12px; border: 1px solid #e2e8f0;">
             <div style="display: flex; align-items: center; gap: 1rem;">
@@ -773,7 +770,7 @@ function renderMessages(messages, conversation) {
                         ${conversation.product ? escapeHtml(conversation.product.name) : 'Product'}
                     </div>
                     <div style="font-size: 0.9rem; color: #64748b;">
-                        Cart: ${conversation.social_cart_id || 'N/A'} • ${(conversation.members || []).length} member(s)
+                        Cart: ${escapeHtml(cartDisplay)} • ${(conversation.members || []).length} member(s)
                     </div>
                 </div>
             </div>
@@ -784,7 +781,7 @@ function renderMessages(messages, conversation) {
     html += messages.map(msg => `
         <div class="message ${msg.is_from_store ? 'from-store' : 'from-cart'}">
             <div class="message-bubble">
-                <div class="message-sender">${escapeHtml(msg.sender.name)}</div>
+                <div class="message-sender">${escapeHtml((msg.sender && msg.sender.name) ? msg.sender.name : 'User')}</div>
                 <div class="message-text">${escapeHtml(msg.content)}</div>
                 <div class="message-time">${formatTime(msg.created_at)}</div>
             </div>
@@ -821,8 +818,8 @@ async function sendMessage(event) {
                 'X-CSRFToken': getCookie('csrftoken')
             },
             body: JSON.stringify({
-                social_cart_id: currentConversation.social_cart_id,
-                product_id: currentConversation.product_id,
+                social_cart_id: String(currentConversation.social_cart_id),
+                product_id: String(currentConversation.product_id),
                 message: message
             })
         });
@@ -833,7 +830,7 @@ async function sendMessage(event) {
             input.value = '';
             loadMessages(currentConversation.social_cart_id, currentConversation.product_id);
         } else {
-            alert('Error sending message: ' + data.message);
+            alert('Error sending message: ' + (data.message || 'Unknown error'));
         }
     } catch (error) {
         console.error('Error sending message:', error);
@@ -847,7 +844,7 @@ async function sendMessage(event) {
 
 // Update unread badge
 function updateUnreadBadge() {
-    const totalUnread = conversations.reduce((sum, c) => sum + (c.unread_count || 0), 0);
+    const totalUnread = (conversations || []).reduce((sum, c) => sum + (c.unread_count || 0), 0);
     const badge = document.getElementById('chatBadge');
     const btn = document.getElementById('chatToggleBtn');
 
@@ -903,14 +900,14 @@ function formatTime(isoString) {
 }
 
 function escapeHtml(text) {
-    if (!text) return '';
+    if (text === null || text === undefined) return '';
     const div = document.createElement('div');
-    div.textContent = text;
+    div.textContent = String(text);
     return div.innerHTML;
 }
 
 function escapeForAttr(text) {
-    if (!text) return '';
+    if (text === null || text === undefined) return '';
     return String(text).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 

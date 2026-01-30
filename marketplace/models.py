@@ -5,6 +5,7 @@ from django.urls import reverse
 from django.db.models import Avg, F
 from decimal import Decimal
 from django.utils import timezone
+from datetime import timedelta
 import os, uuid, secrets, string, random
 from django.utils.text import slugify
 from django.db import transaction
@@ -366,10 +367,6 @@ class Product(models.Model):
         blank=True,
         related_name='products',
         help_text='Current active campaign for this product'
-    )
-    show_in_trending = models.BooleanField(
-        default=False,
-        help_text='Show in trending section (requires active trending campaign)'
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -816,6 +813,11 @@ class Product(models.Model):
         '''Check if product has an active campaign'''
         return self.active_campaign and self.active_campaign.is_running()
 
+    def get_live_viewer_count(self):
+        """Get count of users currently viewing this product"""
+        from .models import ProductLiveViewer
+        return ProductLiveViewer.get_live_count(self.id)
+
     # ========== MODIFIED SAVE METHOD WITH CURRENCY CONVERSION ==========
 
     def save(self, *args, **kwargs):
@@ -1125,6 +1127,154 @@ class ProductImage(models.Model):
             # Unset them as primary
             overlapping_images.update(is_primary=False)
 
+
+class ProductLiveViewer(models.Model):
+    """
+    Track users currently viewing a product (for live viewer counts)
+    Records are auto-cleaned after 5 minutes of inactivity
+    """
+    product = models.ForeignKey(
+        'Product',
+        on_delete=models.CASCADE,
+        related_name='live_viewers'
+    )
+
+    # User or session tracking
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='viewing_products'
+    )
+    session_key = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,  # CHANGED: Allow NULL
+        help_text="Session key for anonymous users"
+    )
+
+    # Tracking info
+    last_seen = models.DateTimeField(auto_now=True, db_index=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=500, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Live Product Viewer"
+        verbose_name_plural = "Live Product Viewers"
+        indexes = [
+            models.Index(fields=['product', 'last_seen']),
+            models.Index(fields=['user']),
+            models.Index(fields=['session_key']),
+        ]
+        # REMOVED: unique_together (causing the issue)
+        # We'll handle uniqueness in the update_viewer method
+
+    def __str__(self):
+        identifier = self.user.username if self.user else f"Session {self.session_key[:8]}" if self.session_key else "Unknown"
+        return f"{identifier} viewing {self.product.name}"
+
+    @classmethod
+    def get_live_count(cls, product_id):
+        """
+        Get count of active viewers for a product
+        Active = viewed in last 5 minutes
+        """
+        cutoff_time = timezone.now() - timedelta(minutes=5)
+        return cls.objects.filter(
+            product_id=product_id,
+            last_seen__gte=cutoff_time
+        ).count()
+
+    @classmethod
+    def cleanup_old_viewers(cls, minutes=10):
+        """
+        Remove viewer records older than specified minutes
+        Should be run periodically (e.g., via cron job or Celery)
+        """
+        cutoff_time = timezone.now() - timedelta(minutes=minutes)
+        deleted_count = cls.objects.filter(last_seen__lt=cutoff_time).delete()[0]
+        return deleted_count
+
+    @classmethod
+    def update_viewer(cls, product, user=None, session_key=None, request=None):
+        """
+        Update or create viewer record for a product
+
+        FIXED: Better handling of unique constraints
+
+        Args:
+            product: Product instance
+            user: User instance (if authenticated)
+            session_key: Session key (for anonymous)
+            request: HttpRequest object (optional, for IP/user agent)
+
+        Returns:
+            ProductLiveViewer instance
+        """
+        # Get IP and user agent from request
+        ip_address = None
+        user_agent = ''
+        if request:
+            ip_address = request.META.get('REMOTE_ADDR')
+            user_agent = request.META.get('HTTP_USER_AGENT', '')[:500]
+
+        # FIXED: Use filter + update or create approach
+        if user and user.is_authenticated:
+            # For authenticated users: find by product + user
+            existing = cls.objects.filter(
+                product=product,
+                user=user
+            ).first()
+
+            if existing:
+                # Update existing record
+                existing.last_seen = timezone.now()
+                existing.ip_address = ip_address
+                existing.user_agent = user_agent
+                existing.session_key = None  # Clear session_key for authenticated users
+                existing.save(update_fields=['last_seen', 'ip_address', 'user_agent', 'session_key'])
+                return existing
+            else:
+                # Create new record
+                return cls.objects.create(
+                    product=product,
+                    user=user,
+                    session_key=None,
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                    last_seen=timezone.now()
+                )
+        else:
+            # For anonymous users: find by product + session_key
+            if not session_key:
+                session_key = ''
+
+            existing = cls.objects.filter(
+                product=product,
+                session_key=session_key,
+                user__isnull=True  # Make sure it's an anonymous record
+            ).first()
+
+            if existing:
+                # Update existing record
+                existing.last_seen = timezone.now()
+                existing.ip_address = ip_address
+                existing.user_agent = user_agent
+                existing.save(update_fields=['last_seen', 'ip_address', 'user_agent'])
+                return existing
+            else:
+                # Create new record
+                return cls.objects.create(
+                    product=product,
+                    user=None,
+                    session_key=session_key,
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                    last_seen=timezone.now()
+                )
 
 class Cart(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='cart')

@@ -65,7 +65,7 @@ from openpyxl.styles import Font, PatternFill, Alignment
 from .models import (
     Shipment, ShipmentBox, BoxItem, Driver, Vehicle, ShipmentItem,
     Warehouse, LogisticOffice, DriverLocation, WarehouseShipmentNotification,
-    B2BShipment, B2BShipmentItem, B2BShipmentBox, B2BBoxItem
+    B2BShipment, B2BShipmentItem, B2BShipmentBox, B2BBoxItem, OrderLogisticsAgent, LogisticsAgentMessage
 )
 
 from stores.b2b.models import B2BOrder, B2BOrderItem, B2BShippingAddress
@@ -5114,3 +5114,185 @@ def handle_shipment_delay(shipment, reason):
         f'Shipment delayed due to: {reason}',
         User
     )
+
+
+@login_required
+@require_POST
+def assign_logistics_agent(request, order_id):
+    """
+    Assign or reassign a logistics agent to an order
+    """
+    try:
+        order = get_object_or_404(Order, id=order_id)
+
+        # Check if user is store owner or has permission
+        # Adjust permission check based on your system
+        if not request.user.is_staff:
+            return JsonResponse({
+                'success': False,
+                'message': 'Permission denied'
+            }, status=403)
+
+        data = json.loads(request.body)
+        agent_id = data.get('agent_id')
+
+        if not agent_id:
+            return JsonResponse({
+                'success': False,
+                'message': 'Agent ID is required'
+            }, status=400)
+
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        agent = get_object_or_404(User, id=agent_id)
+
+        # Create or update assignment
+        assignment, created = OrderLogisticsAgent.objects.update_or_create(
+            order=order,
+            defaults={
+                'agent': agent,
+                'status': 'assigned',
+                'is_available': True
+            }
+        )
+
+        action = 'assigned' if created else 'reassigned'
+
+        return JsonResponse({
+            'success': True,
+            'message': f'Agent {action} successfully',
+            'agent': {
+                'id': agent.id,
+                'name': agent.get_full_name() or agent.username,
+                'status': assignment.status
+            }
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': str(e)
+        }, status=500)
+
+
+@login_required
+@require_POST
+def update_agent_status(request, order_id):
+    """
+    Update the status of logistics agent working on an order
+    """
+    try:
+        order = get_object_or_404(Order, id=order_id)
+        assignment = get_object_or_404(OrderLogisticsAgent, order=order)
+
+        # Check if user is the assigned agent or has permission
+        if request.user != assignment.agent and not request.user.is_staff:
+            return JsonResponse({
+                'success': False,
+                'message': 'Permission denied'
+            }, status=403)
+
+        data = json.loads(request.body)
+        new_status = data.get('status')
+
+        if new_status not in dict(OrderLogisticsAgent.STATUS_CHOICES):
+            return JsonResponse({
+                'success': False,
+                'message': 'Invalid status'
+            }, status=400)
+
+        # Update status based on action
+        if new_status == 'working':
+            assignment.start_working()
+        elif new_status == 'completed':
+            assignment.mark_completed()
+        elif new_status == 'paused':
+            assignment.pause_work()
+        else:
+            assignment.status = new_status
+            assignment.save()
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Status updated successfully',
+            'status': assignment.status,
+            'is_working': assignment.is_working
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': str(e)
+        }, status=500)
+
+
+@login_required
+@require_http_methods(['GET'])
+def get_agent_status(request, order_id):
+    """
+    Get the current logistics agent status for an order
+    """
+    try:
+        order = get_object_or_404(Order, id=order_id)
+
+        try:
+            assignment = OrderLogisticsAgent.objects.get(order=order)
+
+            return JsonResponse({
+                'success': True,
+                'has_agent': True,
+                'agent': {
+                    'id': assignment.agent.id if assignment.agent else None,
+                    'name': assignment.agent_display_name,
+                    'status': assignment.status,
+                    'is_working': assignment.is_working,
+                    'assigned_at': assignment.assigned_at.isoformat(),
+                    'started_working_at': assignment.started_working_at.isoformat() if assignment.started_working_at else None,
+                }
+            })
+        except OrderLogisticsAgent.DoesNotExist:
+            return JsonResponse({
+                'success': True,
+                'has_agent': False,
+                'message': 'No agent assigned to this order'
+            })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': str(e)
+        }, status=500)
+
+@login_required
+@require_http_methods(['GET'])
+def list_available_agents(request):
+    """
+    Get list of available logistics agents/staff
+    """
+    try:
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+
+        # Get users who are logistics staff (adjust filter based on your user model)
+        # This example assumes you have a group or permission for logistics staff
+        agents = User.objects.filter(
+            is_staff=True,
+            is_active=True
+        ).values('id', 'first_name', 'last_name', 'username', 'email')
+
+        agents_list = [{
+            'id': agent['id'],
+            'name': f"{agent['first_name']} {agent['last_name']}".strip() or agent['username'],
+            'email': agent['email']
+        } for agent in agents]
+
+        return JsonResponse({
+            'success': True,
+            'agents': agents_list
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': str(e)
+        }, status=500)

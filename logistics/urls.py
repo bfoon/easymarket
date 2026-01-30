@@ -352,4 +352,26 @@ urlpatterns = [
     path("b2b/shipments/<uuid:order_id>/revert-to-in-transit/",
          views.b2b_revert_to_in_transit,
          name="b2b_revert_to_in_transit"),
+    # Logistics Agent Management URLs
+    path(
+        'manage/<uuid:store_id>/orders/<int:order_id>/assign-agent/',
+        views.assign_logistics_agent,
+        name='assign_logistics_agent'
+    ),
+    path(
+        'manage/<uuid:store_id>/orders/<int:order_id>/agent-status/',
+        views.update_agent_status,
+        name='update_agent_status'
+    ),
+    path(
+        'manage/<uuid:store_id>/orders/<int:order_id>/get-agent-status/',
+        views.get_agent_status,
+        name='get_agent_status'
+    ),
+# Get available agents list
+    path(
+        'api/logistics-agents/available/',
+        views.list_available_agents,
+        name='list_available_agents'
+    ),
 ]

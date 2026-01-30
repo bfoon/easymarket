@@ -12,6 +12,7 @@ from stock.models import Stock, StockMovement
 from stores.models import Store
 from .models import Order, OrderItem, PromoCode, ChatMessage
 from marketplace.models import Cart, CartItem, Product, PaymentShare, CartMember, SocialCart
+from logistics.models import OrderLogisticsAgent, LogisticsAgentMessage
 from analytics.models import CartEvent
 from utils.qr import generate_invoice_qr_code
 from django.core.exceptions import ValidationError
@@ -21,6 +22,7 @@ from django.db import transaction
 from django.views.decorators.http import require_POST
 from django.views.decorators.http import require_GET
 import json
+import requests
 from django.views.decorators.http import require_http_methods
 from django.template.loader import get_template
 from django.http import HttpResponse
@@ -29,10 +31,23 @@ from weasyprint import HTML
 import tempfile
 from django.contrib.auth import get_user_model
 import threading
+from django.conf import settings
 from marketplace.notifications import send_whatsapp, send_email
 from analytics.services import track_event
 import logging
 logger = logging.getLogger(__name__)
+
+# Get configuration from settings
+GOOGLE_MAPS_API_KEY = getattr(settings, 'GOOGLE_MAPS_API_KEY', '')
+GEOCODING_API_URL = 'https://maps.googleapis.com/maps/api/geocode/json'
+GAMBIA_BOUNDS = getattr(settings, 'GAMBIA_BOUNDS', {
+    'min_lat': 13.0,
+    'max_lat': 13.9,
+    'min_lng': -17.0,
+    'max_lng': -13.8
+})
+GPS_ACCURACY_THRESHOLD = getattr(settings, 'GPS_ACCURACY_THRESHOLD', 90)
+GEOCODING_TIMEOUT = getattr(settings, 'PLUS_CODE_SETTINGS', {}).get('GEOCODING_TIMEOUT', 10)
 
 def _ensure_session(request):
     """Make sure guests also have a session_key for tracking."""
@@ -239,6 +254,509 @@ def get_available_stock(*, product, warehouse):
         .values_list("quantity", flat=True)
         .first() or 0
     )
+
+
+def is_in_gambia(lat, lng):
+    """
+    Check if coordinates are within The Gambia's approximate boundaries.
+    Uses bounds from settings.GAMBIA_BOUNDS
+    """
+    try:
+        lat = float(lat)
+        lng = float(lng)
+
+        return (GAMBIA_BOUNDS['min_lat'] <= lat <= GAMBIA_BOUNDS['max_lat'] and
+                GAMBIA_BOUNDS['min_lng'] <= lng <= GAMBIA_BOUNDS['max_lng'])
+    except (ValueError, TypeError):
+        return False
+
+
+def check_api_key_configured():
+    """
+    Check if Google Maps API key is configured and provide helpful error message.
+    Returns: (is_configured: bool, error_message: str or None)
+    """
+    if not GOOGLE_MAPS_API_KEY or GOOGLE_MAPS_API_KEY == '':
+        error_msg = (
+            "Google Maps API key is not configured. "
+            "Please add GOOGLE_MAPS_API_KEY to your .env file. "
+            "Get your free API key at: https://console.cloud.google.com/google/maps-apis"
+        )
+        return False, error_msg
+
+    return True, None
+
+
+@require_POST
+@login_required
+def geocode_address(request):
+    """
+    Geocode a postal code or address to get coordinates.
+    Falls back gracefully if API key is not configured.
+    """
+    # Check API key
+    is_configured, error_msg = check_api_key_configured()
+    if not is_configured:
+        logger.warning(error_msg)
+        return JsonResponse({
+            'success': False,
+            'error': error_msg,
+            'fallback': True  # Indicates this is a configuration issue, not a user error
+        }, status=503)  # Service Unavailable
+
+    try:
+        data = json.loads(request.body)
+        postal_code = data.get('postal_code', '').strip()
+        address = data.get('address', '').strip()
+        country = data.get('country', 'Gambia')
+
+        # Build the search query
+        if postal_code:
+            query = f"{postal_code}, {country}"
+        elif address:
+            query = f"{address}, {country}"
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': 'Postal code or address is required'
+            }, status=400)
+
+        # Call Google Geocoding API
+        params = {
+            'address': query,
+            'key': GOOGLE_MAPS_API_KEY,
+            'region': 'gm'  # Bias towards Gambia
+        }
+
+        response = requests.get(GEOCODING_API_URL, params=params, timeout=GEOCODING_TIMEOUT)
+        response.raise_for_status()
+        result = response.json()
+
+        # Handle API errors
+        if result['status'] == 'REQUEST_DENIED':
+            error_message = result.get('error_message', 'API key invalid or not enabled')
+            logger.error(f"Google Geocoding API REQUEST_DENIED: {error_message}")
+            return JsonResponse({
+                'success': False,
+                'error': (
+                    'Geocoding service configuration error. '
+                    'Please contact administrator. '
+                    'The API key may need to be enabled for Geocoding API in Google Cloud Console.'
+                ),
+                'fallback': True
+            }, status=503)
+
+        elif result['status'] == 'OK' and result['results']:
+            location_data = result['results'][0]
+            location = location_data['geometry']['location']
+
+            lat = location['lat']
+            lng = location['lng']
+
+            # Check if in Gambia
+            in_gambia = is_in_gambia(lat, lng)
+
+            # Extract address components
+            address_components = {}
+            for component in location_data.get('address_components', []):
+                types = component['types']
+                if 'locality' in types:
+                    address_components['city'] = component['long_name']
+                elif 'administrative_area_level_1' in types:
+                    address_components['region'] = component['long_name']
+                elif 'country' in types:
+                    address_components['country'] = component['long_name']
+                elif 'postal_code' in types:
+                    address_components['postal_code'] = component['long_name']
+                elif 'route' in types:
+                    address_components['street'] = component['long_name']
+
+            return JsonResponse({
+                'success': True,
+                'location': {
+                    'lat': lat,
+                    'lng': lng
+                },
+                'is_gambia': in_gambia,
+                'formatted_address': location_data['formatted_address'],
+                'address_components': address_components
+            })
+
+        elif result['status'] == 'ZERO_RESULTS':
+            return JsonResponse({
+                'success': False,
+                'error': 'No location found for this postal code/address'
+            }, status=404)
+
+        else:
+            logger.error(f"Geocoding API error: {result['status']}")
+            return JsonResponse({
+                'success': False,
+                'error': f"Geocoding service error: {result.get('error_message', result['status'])}"
+            }, status=500)
+
+    except requests.RequestException as e:
+        logger.error(f"Geocoding request error: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': 'Failed to connect to geocoding service. Please check your internet connection.'
+        }, status=500)
+
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid request data'
+        }, status=400)
+
+    except Exception as e:
+        logger.error(f"Geocoding error: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': 'An error occurred while geocoding'
+        }, status=500)
+
+
+@require_POST
+@login_required
+def reverse_geocode(request):
+    """
+    Reverse geocode GPS coordinates to get address.
+    Falls back to coordinate-only address if API is not configured.
+    """
+    try:
+        data = json.loads(request.body)
+        latitude = data.get('latitude')
+        longitude = data.get('longitude')
+
+        if not latitude or not longitude:
+            return JsonResponse({
+                'success': False,
+                'error': 'Latitude and longitude are required'
+            }, status=400)
+
+        # Validate coordinates
+        try:
+            lat = float(latitude)
+            lng = float(longitude)
+
+            if not (-90 <= lat <= 90 and -180 <= lng <= 180):
+                raise ValueError("Invalid coordinate range")
+
+        except (ValueError, TypeError):
+            return JsonResponse({
+                'success': False,
+                'error': 'Invalid coordinates'
+            }, status=400)
+
+        # Check if in Gambia
+        in_gambia = is_in_gambia(lat, lng)
+
+        # Check API key configuration
+        is_configured, error_msg = check_api_key_configured()
+
+        # If API key is not configured, return coordinates as address
+        if not is_configured:
+            logger.warning(f"Reverse geocoding without API key: {error_msg}")
+            return JsonResponse({
+                'success': True,
+                'address': {
+                    'street': f'GPS Coordinates: {lat:.6f}, {lng:.6f}',
+                    'city': '',
+                    'region': '',
+                    'postal_code': '',
+                    'country': 'The Gambia' if in_gambia else '',
+                    'formatted_address': f'Location: {lat:.6f}, {lng:.6f}'
+                },
+                'is_gambia': in_gambia,
+                'fallback_mode': True,  # Indicates using coordinates instead of address
+                'note': 'Address lookup unavailable. Coordinates saved for delivery.'
+            })
+
+        # Call Google Reverse Geocoding API
+        params = {
+            'latlng': f"{lat},{lng}",
+            'key': GOOGLE_MAPS_API_KEY,
+            'result_type': 'street_address|route|locality'
+        }
+
+        response = requests.get(GEOCODING_API_URL, params=params, timeout=GEOCODING_TIMEOUT)
+        response.raise_for_status()
+        result = response.json()
+
+        # Handle API errors
+        if result['status'] == 'REQUEST_DENIED':
+            error_message = result.get('error_message', 'API key invalid or not enabled')
+            logger.error(f"Reverse geocoding API REQUEST_DENIED: {error_message}")
+
+            # Fallback to coordinates
+            return JsonResponse({
+                'success': True,
+                'address': {
+                    'street': f'GPS Location: {lat:.6f}, {lng:.6f}',
+                    'city': '',
+                    'region': '',
+                    'postal_code': '',
+                    'country': 'The Gambia' if in_gambia else '',
+                    'formatted_address': f'{lat:.6f}, {lng:.6f}'
+                },
+                'is_gambia': in_gambia,
+                'fallback_mode': True,
+                'note': 'Address lookup unavailable. GPS coordinates saved for delivery navigation.'
+            })
+
+        elif result['status'] == 'OK' and result['results']:
+            location_data = result['results'][0]
+
+            # Extract address components
+            address = {
+                'street': '',
+                'city': '',
+                'region': '',
+                'postal_code': '',
+                'country': '',
+                'formatted_address': location_data.get('formatted_address', '')
+            }
+
+            for component in location_data.get('address_components', []):
+                types = component['types']
+
+                if 'street_number' in types:
+                    address['street'] = component['long_name'] + ' '
+                elif 'route' in types:
+                    address['street'] += component['long_name']
+                elif 'locality' in types or 'sublocality' in types:
+                    address['city'] = component['long_name']
+                elif 'administrative_area_level_1' in types:
+                    address['region'] = component['long_name']
+                elif 'country' in types:
+                    address['country'] = component['long_name']
+                elif 'postal_code' in types:
+                    address['postal_code'] = component['long_name']
+
+            # Clean up street address
+            address['street'] = address['street'].strip()
+
+            # Default to Gambia if in Gambia bounds but no country found
+            if in_gambia and not address['country']:
+                address['country'] = 'The Gambia'
+
+            return JsonResponse({
+                'success': True,
+                'address': address,
+                'is_gambia': in_gambia
+            })
+
+        elif result['status'] == 'ZERO_RESULTS':
+            # No address found, use coordinates
+            return JsonResponse({
+                'success': True,
+                'address': {
+                    'street': f'GPS Location: {lat:.6f}, {lng:.6f}',
+                    'city': '',
+                    'region': '',
+                    'postal_code': '',
+                    'country': 'The Gambia' if in_gambia else '',
+                    'formatted_address': f'{lat:.6f}, {lng:.6f}'
+                },
+                'is_gambia': in_gambia,
+                'fallback_mode': True
+            })
+
+        else:
+            logger.error(f"Reverse geocoding API error: {result['status']}")
+            # Fallback to coordinates
+            return JsonResponse({
+                'success': True,
+                'address': {
+                    'street': f'GPS Location: {lat:.6f}, {lng:.6f}',
+                    'city': '',
+                    'region': '',
+                    'postal_code': '',
+                    'country': 'The Gambia' if in_gambia else '',
+                    'formatted_address': f'{lat:.6f}, {lng:.6f}'
+                },
+                'is_gambia': in_gambia,
+                'fallback_mode': True,
+                'note': 'Address lookup unavailable. GPS coordinates saved.'
+            })
+
+    except requests.RequestException as e:
+        logger.error(f"Reverse geocoding request error: {str(e)}")
+        # Fallback to coordinates
+        return JsonResponse({
+            'success': True,
+            'address': {
+                'street': f'GPS Location: {lat:.6f}, {lng:.6f}',
+                'city': '',
+                'region': '',
+                'postal_code': '',
+                'country': 'The Gambia' if in_gambia else '',
+                'formatted_address': f'{lat:.6f}, {lng:.6f}'
+            },
+            'is_gambia': in_gambia,
+            'fallback_mode': True,
+            'note': 'Network error. GPS coordinates saved for delivery.'
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid request data'
+        }, status=400)
+
+    except Exception as e:
+        logger.error(f"Reverse geocoding error: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': 'An error occurred while reverse geocoding'
+        }, status=500)
+
+
+@require_POST
+@login_required
+def save_shipping_address_with_location(request):
+    """
+    Save shipping address with geolocation data.
+    Works with or without geocoding service.
+    """
+    from orders.models import ShippingAddress
+    from django.utils import timezone
+
+    try:
+        # Extract standard address fields
+        address_data = {
+            'user': request.user,
+            'full_name': request.POST.get('full_name', '').strip(),
+            'phone_number': request.POST.get('phone_number', '').strip(),
+            'street': request.POST.get('street', '').strip(),
+            'city': request.POST.get('city', '').strip(),
+            'region': request.POST.get('region', '').strip(),
+            'postal_code': request.POST.get('postal_code', '').strip() or request.POST.get('geo_code', '').strip(),
+            'country': request.POST.get('country', 'The Gambia').strip(),
+        }
+
+        # Extract geolocation fields
+        latitude = request.POST.get('latitude', '').strip()
+        longitude = request.POST.get('longitude', '').strip()
+        location_accuracy = request.POST.get('location_accuracy', '').strip()
+        location_method = request.POST.get('location_method', 'manual').strip()
+        geocoded_address = request.POST.get('geocoded_address', '').strip()
+        delivery_instructions = request.POST.get('delivery_instructions', '').strip()
+        set_default = request.POST.get('set_default') == 'on' or request.POST.get('set_default') == 'true'
+
+        # Validate required fields
+        required_fields = ['full_name', 'phone_number', 'street', 'city']
+        missing_fields = [field for field in required_fields if not address_data.get(field)]
+
+        if missing_fields:
+            return JsonResponse({
+                'success': False,
+                'error': f'Missing required fields: {", ".join(missing_fields)}'
+            }, status=400)
+
+        # Add geolocation data if available
+        if latitude and longitude:
+            try:
+                address_data['latitude'] = Decimal(latitude)
+                address_data['longitude'] = Decimal(longitude)
+                address_data['location_timestamp'] = timezone.now()
+
+                # Check if in Gambia
+                address_data['is_gambia'] = is_in_gambia(latitude, longitude)
+
+            except (ValueError, TypeError, decimal.InvalidOperation):
+                logger.warning(f"Invalid coordinates: {latitude}, {longitude}")
+
+        if location_accuracy:
+            try:
+                address_data['location_accuracy'] = Decimal(location_accuracy)
+            except (ValueError, TypeError, decimal.InvalidOperation):
+                pass
+
+        if location_method in ['manual', 'gps', 'geocoded']:
+            address_data['location_method'] = location_method
+
+        if geocoded_address:
+            address_data['geocoded_address'] = geocoded_address
+
+        if delivery_instructions:
+            address_data['delivery_instructions'] = delivery_instructions
+
+        address_data['is_default'] = set_default
+
+        # Create the shipping address
+        shipping_address = ShippingAddress.objects.create(**address_data)
+
+        return JsonResponse({
+            'success': True,
+            'address_id': shipping_address.id,
+            'message': 'Shipping address saved successfully',
+            'is_default': shipping_address.is_default,
+            'has_coordinates': shipping_address.has_coordinates
+        })
+
+    except Exception as e:
+        logger.error(f"Error saving shipping address: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': 'Failed to save shipping address. Please try again.'
+        }, status=500)
+
+
+# Optional: API key validation endpoint for admin
+@require_POST
+@login_required
+def test_api_key(request):
+    """
+    Test if Google Maps API key is configured and working.
+    Admin only.
+    """
+    if not request.user.is_staff:
+        return JsonResponse({'error': 'Permission denied'}, status=403)
+
+    is_configured, error_msg = check_api_key_configured()
+
+    if not is_configured:
+        return JsonResponse({
+            'configured': False,
+            'error': error_msg
+        })
+
+    # Test with a simple geocode request
+    try:
+        params = {
+            'address': 'Banjul, Gambia',
+            'key': GOOGLE_MAPS_API_KEY
+        }
+
+        response = requests.get(GEOCODING_API_URL, params=params, timeout=5)
+        result = response.json()
+
+        if result['status'] == 'OK':
+            return JsonResponse({
+                'configured': True,
+                'working': True,
+                'message': 'API key is configured and working correctly'
+            })
+        elif result['status'] == 'REQUEST_DENIED':
+            return JsonResponse({
+                'configured': True,
+                'working': False,
+                'error': f"API key is set but REQUEST_DENIED. {result.get('error_message', 'Check Google Cloud Console settings.')}"
+            })
+        else:
+            return JsonResponse({
+                'configured': True,
+                'working': False,
+                'error': f"API returned status: {result['status']}"
+            })
+
+    except Exception as e:
+        return JsonResponse({
+            'configured': True,
+            'working': False,
+            'error': f"Error testing API: {str(e)}"
+        })
 
 
 # ---------------------------------------------------------
@@ -1952,4 +2470,152 @@ def my_wheel_prizes(request):
         'prizes': prizes,
         'total_prizes': len(prizes),
         'active_prizes': len([p for p in prizes if p['can_use']]),
+    })
+
+
+# ==============================================================================
+# Logistic Agent comms + Status
+# ==============================================================================
+
+@login_required
+@require_http_methods(['GET'])
+def fetch_agent_messages(request, store_id, order_id):
+    """
+    Fetch all messages between store and logistics agent
+    """
+    order = get_object_or_404(Order, id=order_id)
+
+    # ✅ basic store ownership check for seller/store manager context
+    # If your Order model has store, use that. If not, validate via items->product->store.
+    store = get_object_or_404(Store, id=store_id)
+    is_store_owner = getattr(store, "owner_id", None) == request.user.id
+
+    # agent assignment (optional, but useful for permission)
+    assignment = OrderLogisticsAgent.objects.filter(order=order).first()
+    is_assigned_agent = assignment and assignment.agent_id == request.user.id
+
+    if not (is_store_owner or is_assigned_agent or request.user.is_superuser):
+        raise PermissionDenied
+
+    messages = (
+        LogisticsAgentMessage.objects
+        .filter(order=order)
+        .select_related('sender')
+        .order_by('created_at')
+    )
+
+    # mark read: anything not sent by me
+    messages.exclude(sender=request.user).filter(is_read=False).update(is_read=True)
+
+    messages_data = [{
+        'id': msg.id,
+        'sender': msg.sender.get_full_name() or msg.sender.username,
+        'sender_id': msg.sender.id,
+        'content': msg.message,
+        'image_url': msg.image.url if msg.image else None,
+        'created_at': msg.created_at.isoformat(),
+        'is_read': msg.is_read,
+        'is_self': msg.sender_id == request.user.id
+    } for msg in messages]
+
+    return JsonResponse({'success': True, 'messages': messages_data})
+
+
+@login_required
+@require_http_methods(['GET'])
+def get_unread_agent_messages_count(request, store_id, order_id):
+    order = get_object_or_404(Order, id=order_id)
+    store = get_object_or_404(Store, id=store_id)
+    is_store_owner = getattr(store, "owner_id", None) == request.user.id
+
+    assignment = OrderLogisticsAgent.objects.filter(order=order).first()
+    is_assigned_agent = assignment and assignment.agent_id == request.user.id
+
+    if not (is_store_owner or is_assigned_agent or request.user.is_superuser):
+        raise PermissionDenied
+
+    unread_count = (
+        LogisticsAgentMessage.objects
+        .filter(order=order, is_read=False)
+        .exclude(sender=request.user)
+        .count()
+    )
+
+    return JsonResponse({'success': True, 'unread_count': unread_count})
+
+
+@login_required
+@require_http_methods(['GET'])
+def get_agent_status(request, store_id, order_id):
+    order = get_object_or_404(Order, id=order_id)
+    store = get_object_or_404(Store, id=store_id)
+    is_store_owner = getattr(store, "owner_id", None) == request.user.id
+
+    assignment = OrderLogisticsAgent.objects.filter(order=order).select_related("agent").first()
+    is_assigned_agent = assignment and assignment.agent_id == request.user.id
+
+    if not (is_store_owner or is_assigned_agent or request.user.is_superuser):
+        raise PermissionDenied
+
+    if not assignment:
+        return JsonResponse({'success': True, 'has_agent': False, 'message': 'No agent assigned to this order'})
+
+    return JsonResponse({
+        'success': True,
+        'has_agent': True,
+        'agent': {
+            'id': assignment.agent_id,
+            'name': assignment.agent_display_name,
+            'status': assignment.status,
+            'is_working': assignment.is_working,
+            'assigned_at': assignment.assigned_at.isoformat() if assignment.assigned_at else None,
+            'started_working_at': assignment.started_working_at.isoformat() if assignment.started_working_at else None,
+        }
+    })
+
+
+@login_required
+@require_POST
+def send_agent_message(request, store_id, order_id):
+    order = get_object_or_404(Order, id=order_id)
+    store = get_object_or_404(Store, id=store_id)
+    is_store_owner = getattr(store, "owner_id", None) == request.user.id
+
+    assignment = OrderLogisticsAgent.objects.filter(order=order).first()
+    is_assigned_agent = assignment and assignment.agent_id == request.user.id
+
+    if not (is_store_owner or is_assigned_agent or request.user.is_superuser):
+        raise PermissionDenied
+
+    if not assignment:
+        return JsonResponse({'success': False, 'message': 'No logistics agent assigned to this order'}, status=400)
+
+    message_text = (request.POST.get('message') or '').strip()
+    message_image = request.FILES.get('image')
+
+    if not message_text and not message_image:
+        return JsonResponse({'success': False, 'message': 'Message or image is required'}, status=400)
+
+    msg = LogisticsAgentMessage.objects.create(
+        order=order,
+        sender=request.user,
+        message=message_text,
+        image=message_image
+    )
+
+    assignment.last_activity = timezone.now()
+    assignment.save(update_fields=['last_activity'])
+
+    return JsonResponse({
+        'success': True,
+        'message_id': msg.id,
+        'message': {
+            'id': msg.id,
+            'sender': request.user.get_full_name() or request.user.username,
+            'sender_id': request.user.id,
+            'content': msg.message,
+            'image_url': msg.image.url if msg.image else None,
+            'created_at': msg.created_at.isoformat(),
+            'is_read': msg.is_read
+        }
     })

@@ -7,6 +7,404 @@
 {% block title %}Order #{{ order.id }} - {{ store.name }}{% endblock %}
 
 {% block content %}
+<style>
+  /* Agent Chat Modal Enhancements */
+  #agentChatModal .modal-content {
+    border: none;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+  }
+
+  #agentChatModal .modal-header {
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    color: white;
+    border: none;
+    padding: 24px 28px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  #agentChatModal .modal-header::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg,
+      rgba(255,255,255,0) 0%,
+      rgba(255,255,255,0.5) 50%,
+      rgba(255,255,255,0) 100%);
+  }
+
+  .agent-chat-header-info {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .agent-avatar {
+    width: 48px;
+    height: 48px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    backdrop-filter: blur(10px);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+  }
+
+  .agent-details h6 {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .agent-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    padding: 4px 10px;
+    background: rgba(34, 197, 94, 0.2);
+    border-radius: 12px;
+    border: 1px solid rgba(34, 197, 94, 0.3);
+  }
+
+  .agent-status-dot {
+    width: 6px;
+    height: 6px;
+    background: #22c55e;
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  .agent-subtitle {
+    font-size: 13px;
+    opacity: 0.9;
+    margin-top: 4px;
+  }
+
+  #agentChatModal .btn-close {
+    background: rgba(255, 255, 255, 0.2);
+    opacity: 1;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+  }
+
+  #agentChatModal .btn-close:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: rotate(90deg);
+  }
+
+  /* Chat Messages Area */
+  .occ-chatbox-m {
+    background: linear-gradient(to bottom, #f8f9fa 0%, #ffffff 100%);
+    overflow-y: auto;
+    padding: 24px;
+    position: relative;
+  }
+
+  .occ-chatbox-m::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .occ-chatbox-m::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 10px;
+  }
+
+  .occ-chatbox-m::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 10px;
+    transition: background 0.3s ease;
+  }
+
+  .occ-chatbox-m::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
+
+  /* Empty State */
+  .agent-chat-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #94a3b8;
+    text-align: center;
+    padding: 40px;
+  }
+
+  .agent-chat-empty i {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.5;
+  }
+
+  .agent-chat-empty h6 {
+    color: #64748b;
+    margin-bottom: 8px;
+  }
+
+  .agent-chat-empty p {
+    color: #94a3b8;
+    font-size: 14px;
+    margin: 0;
+  }
+
+  /* Message Bubbles */
+  .agent-message {
+    margin-bottom: 16px;
+    animation: slideInMessage 0.3s ease;
+  }
+
+  @keyframes slideInMessage {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .agent-message-content {
+    max-width: 75%;
+    padding: 12px 16px;
+    border-radius: 16px;
+    word-wrap: break-word;
+    position: relative;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
+
+  .agent-message.from-agent .agent-message-content {
+    background: white;
+    color: #1e293b;
+    border: 1px solid #e2e8f0;
+    border-bottom-left-radius: 4px;
+  }
+
+  .agent-message.from-store .agent-message-content {
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    color: white;
+    margin-left: auto;
+    border-bottom-right-radius: 4px;
+  }
+
+  .agent-message-image {
+    margin-top: 8px;
+    border-radius: 12px;
+    max-width: 250px;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+
+  .agent-message-image:hover {
+    transform: scale(1.02);
+  }
+
+  .agent-message-time {
+    font-size: 11px;
+    opacity: 0.6;
+    margin-top: 6px;
+    display: block;
+  }
+
+  .agent-message.from-agent .agent-message-time {
+    color: #64748b;
+  }
+
+  .agent-message.from-store .agent-message-time {
+    color: rgba(255, 255, 255, 0.8);
+  }
+
+  /* Modal Footer */
+  #agentChatModal .modal-footer {
+    background: #f8fafc;
+    border: none;
+    padding: 20px 24px;
+  }
+
+  #agentChatForm {
+    gap: 12px;
+  }
+
+  #agentChatMessage {
+    border: 2px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 12px 16px;
+    resize: none;
+    transition: all 0.3s ease;
+    font-size: 14px;
+  }
+
+  #agentChatMessage:focus {
+    border-color: #4f46e5;
+    box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.1);
+    outline: none;
+  }
+
+  #agentChatMessage::placeholder {
+    color: #94a3b8;
+  }
+
+  /* Image Preview */
+  #agentImagePreview {
+    padding: 12px;
+    background: white;
+    border-radius: 12px;
+    border: 2px dashed #e2e8f0;
+  }
+
+  #agentImagePreview img {
+    max-height: 80px;
+    border-radius: 8px;
+    border: 2px solid #e2e8f0;
+  }
+
+  .preview-remove-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+  }
+
+  .preview-remove-btn:hover {
+    transform: scale(1.1);
+  }
+
+  /* Action Buttons */
+  .agent-chat-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .agent-chat-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    border: 2px solid #e2e8f0;
+    background: white;
+    color: #64748b;
+  }
+
+  .agent-chat-btn:hover {
+    border-color: #4f46e5;
+    color: #4f46e5;
+    background: #f8f9ff;
+    transform: translateY(-2px);
+  }
+
+  .agent-chat-btn.btn-primary {
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    border-color: transparent;
+    color: white;
+  }
+
+  .agent-chat-btn.btn-primary:hover {
+    background: linear-gradient(135deg, #4338ca 0%, #6d28d9 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px rgba(79, 70, 229, 0.3);
+  }
+
+  .agent-chat-btn:active {
+    transform: translateY(0);
+  }
+
+  /* Typing Indicator */
+  .typing-indicator {
+    display: flex;
+    gap: 4px;
+    padding: 12px 16px;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    width: fit-content;
+    margin-bottom: 16px;
+  }
+
+  .typing-dot {
+    width: 8px;
+    height: 8px;
+    background: #cbd5e1;
+    border-radius: 50%;
+    animation: typing 1.4s infinite;
+  }
+
+  .typing-dot:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+
+  .typing-dot:nth-child(3) {
+    animation-delay: 0.4s;
+  }
+
+  @keyframes typing {
+    0%, 60%, 100% {
+      transform: translateY(0);
+      opacity: 0.7;
+    }
+    30% {
+      transform: translateY(-10px);
+      opacity: 1;
+    }
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    #agentChatModal .modal-lg {
+      max-width: 95%;
+      margin: 0.5rem auto;
+    }
+
+    .agent-chat-header-info {
+      gap: 12px;
+    }
+
+    .agent-avatar {
+      width: 40px;
+      height: 40px;
+      font-size: 18px;
+    }
+
+    .occ-chatbox-m {
+      height: 350px !important;
+    }
+
+    #agentChatForm {
+      flex-wrap: wrap;
+    }
+
+    .agent-chat-actions {
+      flex-direction: row;
+      width: 100%;
+      justify-content: flex-end;
+    }
+  }
+</style>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5/dist/js/bootstrap.bundle.min.js"></script>
 <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
 <link rel="stylesheet" type="text/css" href="{% static 'css/store_order_detail.css' %}">
@@ -112,7 +510,7 @@
 
   <!-- TOP GRID: Customer + Timeline + Shipping -->
   <div class="row g-3 mb-4">
-    <div class="col-lg-6">
+    <div class="col-lg-12">
       <div class="occ-card">
         <div class="occ-card-h">
           <h5><i class="fas fa-user me-2 text-primary"></i>Customer</h5>
@@ -161,6 +559,119 @@
         </div>
       </div>
     </div>
+    <div class="col-lg-6">
+  <div class="occ-card">
+    <div class="occ-card-h">
+      <h5><i class="fas fa-user-tie me-2 text-primary"></i>Logistics Agent</h5>
+      <span class="occ-mini">Handling your order</span>
+    </div>
+    <div class="occ-card-b">
+      <div id="agentStatusContainer">
+        {% if order.logistics_agent_assignment %}
+        <div class="occ-grid">
+          <!-- Agent Info -->
+          <div class="occ-info">
+            <div class="occ-ico" style="background: rgba(59, 130, 246, 0.12); color: #2563eb;">
+              <i class="fas fa-user-tie"></i>
+            </div>
+            <div>
+              <strong id="agentName">{{ order.logistics_agent_assignment.agent_display_name }}</strong>
+              <div class="occ-mini">Assigned Agent</div>
+            </div>
+          </div>
+
+          <!-- Status Badge -->
+          <div class="occ-info">
+            <div class="occ-ico" id="statusIcon" style="background: rgba(34, 197, 94, 0.12); color: #16a34a;">
+              <i class="fas fa-circle-dot"></i>
+            </div>
+            <div>
+              <span id="agentStatus" class="badge bg-success">
+                {% if order.logistics_agent_assignment.status == 'working' %}
+                  <i class="fas fa-spinner fa-pulse me-1"></i>Working on Order
+                {% elif order.logistics_agent_assignment.status == 'assigned' %}
+                  <i class="fas fa-check-circle me-1"></i>Assigned
+                {% elif order.logistics_agent_assignment.status == 'paused' %}
+                  <i class="fas fa-pause-circle me-1"></i>Paused
+                {% elif order.logistics_agent_assignment.status == 'completed' %}
+                  <i class="fas fa-check-double me-1"></i>Completed
+                {% endif %}
+              </span>
+              <div class="occ-mini">Current Status</div>
+            </div>
+          </div>
+
+          <!-- Working Duration (if applicable) -->
+          {% if order.logistics_agent_assignment.started_working_at %}
+          <div class="occ-info">
+            <div class="occ-ico" style="background: rgba(245, 158, 11, 0.12); color: #d97706;">
+              <i class="fas fa-clock"></i>
+            </div>
+            <div>
+              <strong>{{ order.logistics_agent_assignment.assigned_at|timesince }}</strong>
+              <div class="occ-mini">Time Since Assigned</div>
+            </div>
+          </div>
+          {% endif %}
+
+          <!-- Chat with Agent Button -->
+          <div class="occ-info">
+            <div class="occ-ico" style="background: rgba(168, 85, 247, 0.12); color: #9333ea;">
+              <i class="fas fa-comments"></i>
+            </div>
+            <div>
+             <button
+  type="button"
+  class="btn btn-sm btn-primary"
+  id="agentChatBtn"
+  data-bs-toggle="modal"
+  data-bs-target="#agentChatModal"
+>
+  <i class="fas fa-comment-dots me-1"></i>Chat with Agent
+  <span id="unreadAgentBadge" class="badge bg-danger ms-1 d-none">0</span>
+</button>
+
+              <div class="occ-mini">Direct communication</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Live Status Indicator -->
+        <div class="mt-3 p-3 rounded-4 border" style="background: linear-gradient(135deg, rgba(34,197,94,.08), rgba(59,130,246,.06));">
+          <div class="d-flex align-items-center gap-2">
+            <div class="status-pulse-dot {% if order.logistics_agent_assignment.is_working %}active{% endif %}" id="statusPulseDot"></div>
+            <div>
+              <div class="fw-bold">
+                <i class="fas fa-info-circle me-1 text-info"></i>
+                <span id="statusMessage">
+                  {% if order.logistics_agent_assignment.is_working %}
+                    Agent is actively working on your order
+                  {% else %}
+                    Agent will begin processing soon
+                  {% endif %}
+                </span>
+              </div>
+              <div class="occ-mini" id="lastActivity">
+                Last activity: {{ order.logistics_agent_assignment.last_activity|timesince }} ago
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {% else %}
+        <!-- No Agent Assigned -->
+        <div class="text-center py-4">
+          <i class="fas fa-user-slash fa-3x text-muted mb-3" style="opacity: 0.3;"></i>
+          <p class="text-muted mb-3">No logistics agent assigned yet</p>
+          <p class="occ-mini">An agent will be assigned to your order soon</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+
 
     <div class="col-lg-6">
       <div class="occ-card">
@@ -623,6 +1134,393 @@
     </div>
   </div>
 </div>
+
+<!-- ============================================================================
+     PROFESSIONAL AGENT CHAT MODAL
+     ============================================================================ -->
+<div class="modal fade" id="agentChatModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content" style="border-radius: 20px; overflow: hidden;">
+
+      <!-- Enhanced Header -->
+      <div class="modal-header">
+        <div class="agent-chat-header-info">
+          <div class="agent-avatar">
+            <i class="fas fa-user-tie"></i>
+          </div>
+          <div class="agent-details">
+            <h6>
+              Logistics Agent Chat
+              {% if order.logistics_agent_assignment %}
+              <span class="agent-status-badge">
+                <span class="agent-status-dot"></span>
+                Active
+              </span>
+              {% endif %}
+            </h6>
+            <div class="agent-subtitle" id="agentChatTitle">
+              {% if order.logistics_agent_assignment %}
+                {{ order.logistics_agent_assignment.agent_display_name }}
+              {% else %}
+                Waiting for agent assignment
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <!-- Chat Messages Area -->
+      <div class="modal-body p-0">
+        <div id="agentChatMessages" class="occ-chatbox-m" style="height: 450px;">
+          <!-- Empty State (shown when no messages) -->
+          <div class="agent-chat-empty" style="display: none;">
+            <i class="fas fa-comments"></i>
+            <h6>No messages yet</h6>
+            <p>Start the conversation with your logistics agent</p>
+          </div>
+
+          <!-- Messages will be loaded here -->
+        </div>
+      </div>
+
+      <!-- Enhanced Footer with Input -->
+      <div class="modal-footer d-block">
+        <form id="agentChatForm" class="d-flex gap-3 align-items-end" enctype="multipart/form-data">
+          {% csrf_token %}
+
+          <!-- Message Input Container -->
+          <div class="flex-grow-1">
+            <textarea
+              name="message"
+              id="agentChatMessage"
+              class="form-control"
+              placeholder="Type your message to the logistics agent..."
+              rows="2"
+              maxlength="1000"
+            ></textarea>
+
+            <!-- Image Preview -->
+            <div id="agentImagePreview" class="mt-2 d-none">
+              <div class="d-flex align-items-center justify-content-between">
+                <div class="d-flex align-items-center gap-3">
+                  <img src="" alt="Preview" id="agentImagePreviewImg">
+                  <div>
+                    <div class="small fw-semibold text-dark" id="agentImageName">image.jpg</div>
+                    <div class="small text-muted" id="agentImageSize">125 KB</div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  class="btn btn-sm btn-outline-danger preview-remove-btn"
+                  onclick="clearAgentImagePreview()"
+                  title="Remove image">
+                  <i class="fas fa-times"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="agent-chat-actions">
+            <input type="file" name="image" id="agentChatImage" accept="image/*" class="d-none">
+
+            <button
+              type="button"
+              class="agent-chat-btn"
+              onclick="document.getElementById('agentChatImage').click()"
+              title="Attach image">
+              <i class="fas fa-image"></i>
+            </button>
+
+            <button
+              type="submit"
+              class="agent-chat-btn btn-primary"
+              id="sendAgentMessageBtn"
+              title="Send message">
+              <i class="fas fa-paper-plane"></i>
+            </button>
+          </div>
+        </form>
+
+        <!-- Character Counter (optional) -->
+        <div class="text-end mt-2">
+          <small class="text-muted">
+            <span id="charCount">0</span> / 1000 characters
+          </small>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================================
+     AGENT CHAT JAVASCRIPT
+     ============================================================================ -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const agentChatMessage = document.getElementById('agentChatMessage');
+  const agentChatImage = document.getElementById('agentChatImage');
+  const agentImagePreview = document.getElementById('agentImagePreview');
+  const agentImagePreviewImg = document.getElementById('agentImagePreviewImg');
+  const agentImageName = document.getElementById('agentImageName');
+  const agentImageSize = document.getElementById('agentImageSize');
+  const charCount = document.getElementById('charCount');
+
+  // Character counter
+  if (agentChatMessage && charCount) {
+    agentChatMessage.addEventListener('input', function() {
+      charCount.textContent = this.value.length;
+    });
+  }
+
+  // Image preview handler
+  if (agentChatImage) {
+    agentChatImage.addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        alert('Please select a valid image file.');
+        this.value = '';
+        return;
+      }
+
+      // Validate file size (5MB max)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Image size must be less than 5MB.');
+        this.value = '';
+        return;
+      }
+
+      // Show preview
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        if (agentImagePreviewImg) agentImagePreviewImg.src = e.target.result;
+        if (agentImageName) agentImageName.textContent = file.name;
+        if (agentImageSize) agentImageSize.textContent = formatFileSize(file.size);
+        if (agentImagePreview) agentImagePreview.classList.remove('d-none');
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Auto-resize textarea
+  if (agentChatMessage) {
+    agentChatMessage.addEventListener('input', function() {
+      this.style.height = 'auto';
+      this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+    });
+  }
+});
+
+// Clear image preview
+function clearAgentImagePreview() {
+  const agentChatImage = document.getElementById('agentChatImage');
+  const agentImagePreview = document.getElementById('agentImagePreview');
+
+  if (agentChatImage) agentChatImage.value = '';
+  if (agentImagePreview) agentImagePreview.classList.add('d-none');
+}
+
+// Format file size helper
+function formatFileSize(bytes) {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+}
+
+// Scroll to bottom of chat
+function scrollAgentChatToBottom() {
+  const chatMessages = document.getElementById('agentChatMessages');
+  if (chatMessages) {
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+}
+
+// Show empty state
+function showAgentChatEmptyState() {
+  const emptyState = document.querySelector('.agent-chat-empty');
+  const chatMessages = document.getElementById('agentChatMessages');
+
+  if (chatMessages && chatMessages.children.length === 1) {
+    if (emptyState) emptyState.style.display = 'flex';
+  } else {
+    if (emptyState) emptyState.style.display = 'none';
+  }
+}
+
+// Example: Add message to chat (you'll integrate with your backend)
+function addAgentMessage(message, isFromAgent = false) {
+  const chatMessages = document.getElementById('agentChatMessages');
+  if (!chatMessages) return;
+
+  const messageDiv = document.createElement('div');
+  messageDiv.className = `agent-message ${isFromAgent ? 'from-agent' : 'from-store'}`;
+
+  let messageHTML = `
+    <div class="agent-message-content">
+      ${message.content ? `<div>${escapeHtml(message.content)}</div>` : ''}
+      ${message.image_url ? `<img src="${message.image_url}" alt="Image" class="agent-message-image" onclick="window.open('${message.image_url}', '_blank')">` : ''}
+      <span class="agent-message-time">${message.timestamp || 'Just now'}</span>
+    </div>
+  `;
+
+  messageDiv.innerHTML = messageHTML;
+  chatMessages.appendChild(messageDiv);
+
+  showAgentChatEmptyState();
+  scrollAgentChatToBottom();
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+</script>
+
+<script>
+const agentChatMessages = document.getElementById('agentChatMessages');
+const agentChatForm = document.getElementById('agentChatForm');
+const agentChatMessage = document.getElementById('agentChatMessage');
+const agentChatImage = document.getElementById('agentChatImage');
+const agentImagePreview = document.getElementById('agentImagePreview');
+const sendAgentMessageBtn = document.getElementById('sendAgentMessageBtn');
+const unreadAgentBadge = document.getElementById('unreadAgentBadge');
+
+let agentSeenIds = new Set();
+
+const AGENT_FETCH_URL  = "{% url 'orders:fetch_agent_messages' store.id order.id %}";
+const AGENT_SEND_URL   = "{% url 'orders:send_agent_message' store.id order.id %}";
+const AGENT_UNREAD_URL = "{% url 'orders:get_unread_agent_messages_count' store.id order.id %}";
+const AGENT_STATUS_URL = "{% url 'orders:get_agent_status' store.id order.id %}";
+
+function scrollAgentChatToBottom() {
+  agentChatMessages.scrollTop = agentChatMessages.scrollHeight;
+}
+
+function buildAgentMessageBubble(data) {
+  const div = document.createElement('div');
+  div.className = `agent-message ${data.is_self ? 'self' : ''}`;
+
+  div.innerHTML = `
+    <div class="agent-message-bubble">
+      ${data.content ? `<div>${data.content}</div>` : ''}
+      ${data.image_url ? `<img src="${data.image_url}" class="agent-message-image mt-2" style="max-width:220px;border-radius:12px;">` : ''}
+      <div class="agent-message-time small text-muted mt-1">${new Date(data.created_at).toLocaleString()}</div>
+    </div>
+  `;
+  return div;
+}
+
+function refreshAgentMessages() {
+  fetch(AGENT_FETCH_URL, { headers: { 'X-Requested-With': 'XMLHttpRequest' }})
+    .then(r => r.json())
+    .then(data => {
+      if (!data.success) return;
+
+      const first = agentSeenIds.size === 0;
+      if (first) agentChatMessages.innerHTML = '';
+
+      data.messages.forEach(m => {
+        if (!agentSeenIds.has(m.id)) {
+          agentSeenIds.add(m.id);
+          agentChatMessages.appendChild(buildAgentMessageBubble(m));
+        }
+      });
+
+      scrollAgentChatToBottom();
+    })
+    .catch(() => {});
+}
+
+function updateUnreadAgentCount() {
+  fetch(AGENT_UNREAD_URL, { headers: { 'X-Requested-With': 'XMLHttpRequest' }})
+    .then(r => r.json())
+    .then(data => {
+      if (data.success && data.unread_count > 0) {
+        unreadAgentBadge.textContent = data.unread_count;
+        unreadAgentBadge.classList.remove('d-none');
+      } else {
+        unreadAgentBadge.classList.add('d-none');
+      }
+    })
+    .catch(() => {});
+}
+
+function updateAgentStatus() {
+  fetch(AGENT_STATUS_URL, { headers: { 'X-Requested-With': 'XMLHttpRequest' }})
+    .then(r => r.json())
+    .then(data => {
+      // update your UI if you want (badge, pulse dot, etc.)
+    })
+    .catch(() => {});
+}
+
+function clearAgentImagePreview() {
+  agentChatImage.value = '';
+  agentImagePreview.classList.add('d-none');
+  const img = agentImagePreview.querySelector('img');
+  if (img) img.src = '';
+}
+
+if (agentChatImage) {
+  agentChatImage.addEventListener('change', function(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+      agentImagePreview.querySelector('img').src = ev.target.result;
+      agentImagePreview.classList.remove('d-none');
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+if (agentChatForm) {
+  agentChatForm.addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    const fd = new FormData(agentChatForm);
+    const text = (agentChatMessage.value || '').trim();
+    if (!text && !agentChatImage.value) return;
+
+    sendAgentMessageBtn.disabled = true;
+
+    fetch(AGENT_SEND_URL, {
+      method: 'POST',
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      body: fd
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (!data.success) throw new Error(data.message || 'Send failed');
+      agentChatMessage.value = '';
+      clearAgentImagePreview();
+      refreshAgentMessages();
+    })
+    .catch(err => alert('Failed to send: ' + err.message))
+    .finally(() => sendAgentMessageBtn.disabled = false);
+  });
+}
+
+/** ✅ load messages when modal opens */
+const agentChatModalEl = document.getElementById('agentChatModal');
+if (agentChatModalEl) {
+  agentChatModalEl.addEventListener('shown.bs.modal', () => {
+    refreshAgentMessages();
+  });
+}
+
+/** background refresh */
+setInterval(updateUnreadAgentCount, 10000);
+setInterval(updateAgentStatus, 15000);
+</script>
 
 <!-- ===== JS: Warehouse Checkbox Handler ===== -->
 <script>

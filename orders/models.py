@@ -10,6 +10,8 @@ from django.core.validators import FileExtensionValidator
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db.models import F, Sum, DecimalField, ExpressionWrapper, Q
 from django.db import IntegrityError, transaction
+from django.core.validators import RegexValidator
+from django.utils.translation import gettext_lazy as _
 
 class PromoCode(models.Model):
     code = models.CharField(max_length=50, unique=True)
@@ -769,37 +771,267 @@ class OrderItem(models.Model):
     def get_total_price(self) -> Decimal:
         return (self.discounted_unit_price * self.quantity).quantize(Decimal('0.01'))
 
+
 class ShippingAddress(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='shipping_addresses')
-    full_name = models.CharField(max_length=100)
-    street = models.CharField(max_length=255)
-    city = models.CharField(max_length=100)
-    region = models.CharField(max_length=100)
-    geo_code = models.CharField(max_length=64, blank=True, null=True, db_index=True)
-    latitude = models.DecimalField(max_digits=9, decimal_places=6, blank=True, null=True)
-    longitude = models.DecimalField(max_digits=9, decimal_places=6, blank=True, null=True)
-    country = models.CharField(max_length=100, default='Gambia')
-    phone_number = models.CharField(max_length=20)
-    is_default = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
+    """
+    Shipping address with geolocation support for precise delivery tracking.
+
+    Supports multiple location capture methods:
+    - Manual entry with optional postal code geocoding
+    - GPS device location with accuracy tracking
+    - Geocoded from address using Google Maps API
+    """
+
+    # Location Method Choices
+    LOCATION_METHOD_CHOICES = [
+        ('manual', 'Manual Entry'),
+        ('gps', 'GPS Device'),
+        ('geocoded', 'Geocoded from Address'),
+    ]
+
+    # Basic Information
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='shipping_addresses',
+        verbose_name=_("User")
+    )
+
+    # Contact Details
+    full_name = models.CharField(
+        max_length=100,
+        verbose_name=_("Full Name"),
+        help_text=_("Recipient's full name")
+    )
+
+    phone_number = models.CharField(
+        max_length=20,
+        validators=[
+            RegexValidator(
+                regex=r'^\+?1?\d{7,15}$',
+                message=_("Phone number must be in format: '+220XXXXXXX' or '7XXXXXXX'")
+            )
+        ],
+        verbose_name=_("Phone Number"),
+        help_text=_("Contact phone number for delivery")
+    )
+
+    # Address Fields
+    street = models.CharField(
+        max_length=255,
+        verbose_name=_("Street Address"),
+        help_text=_("House number and street name, or landmark description")
+    )
+
+    city = models.CharField(
+        max_length=100,
+        verbose_name=_("City"),
+        help_text=_("City or town name")
+    )
+
+    region = models.CharField(
+        max_length=100,
+        verbose_name=_("Region/State"),
+        help_text=_("Administrative region or state")
+    )
+
+    postal_code = models.CharField(
+        max_length=20,
+        blank=True,
+        verbose_name=_("Postal Code"),
+        help_text=_("Postal code or area code for geocoding")
+    )
+
+    country = models.CharField(
+        max_length=100,
+        default="The Gambia",
+        verbose_name=_("Country")
+    )
+
+    # Geolocation Fields
+    latitude = models.DecimalField(
+        max_digits=11,
+        decimal_places=8,
+        null=True,
+        blank=True,
+        verbose_name=_("Latitude"),
+        help_text=_("GPS latitude coordinate (e.g., 13.4549153)")
+    )
+
+    longitude = models.DecimalField(
+        max_digits=11,
+        decimal_places=8,
+        null=True,
+        blank=True,
+        verbose_name=_("Longitude"),
+        help_text=_("GPS longitude coordinate (e.g., -16.5790323)")
+    )
+
+    location_accuracy = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name=_("Location Accuracy"),
+        help_text=_("GPS accuracy in meters")
+    )
+
+    location_method = models.CharField(
+        max_length=20,
+        choices=LOCATION_METHOD_CHOICES,
+        default='manual',
+        verbose_name=_("Location Method"),
+        help_text=_("How the location was captured")
+    )
+
+    geocoded_address = models.TextField(
+        blank=True,
+        verbose_name=_("Geocoded Address"),
+        help_text=_("Full formatted address from geocoding service")
+    )
+
+    is_gambia = models.BooleanField(
+        default=False,
+        verbose_name=_("Is in Gambia"),
+        help_text=_("Whether this address is within The Gambia boundaries")
+    )
+
+    location_timestamp = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Location Timestamp"),
+        help_text=_("When the GPS location was captured")
+    )
+
+    # Additional Fields
+    delivery_instructions = models.TextField(
+        blank=True,
+        verbose_name=_("Delivery Instructions"),
+        help_text=_("Additional notes for delivery driver (landmarks, gate color, etc.)")
+    )
+
+    is_default = models.BooleanField(
+        default=False,
+        verbose_name=_("Default Address"),
+        help_text=_("Set as default delivery address")
+    )
+
+    # Timestamps
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name=_("Created At")
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name=_("Updated At")
+    )
 
     class Meta:
-        verbose_name = 'Shipping Address'
-        verbose_name_plural = 'Shipping Addresses'
+        verbose_name = _("Shipping Address")
+        verbose_name_plural = _("Shipping Addresses")
+        ordering = ['-is_default', '-created_at']
+        indexes = [
+            models.Index(fields=['user', '-is_default']),
+            models.Index(fields=['is_gambia']),
+            models.Index(fields=['location_method']),
+        ]
 
     def __str__(self):
         return f"{self.full_name} - {self.street}, {self.city}"
 
-    def has_coords(self):
+    def save(self, *args, **kwargs):
+        """Override save to ensure only one default address per user."""
+        if self.is_default:
+            # Set all other addresses for this user to non-default
+            ShippingAddress.objects.filter(
+                user=self.user,
+                is_default=True
+            ).exclude(pk=self.pk).update(is_default=False)
+
+        super().save(*args, **kwargs)
+
+    @property
+    def has_coordinates(self):
+        """Check if address has valid GPS coordinates."""
         return self.latitude is not None and self.longitude is not None
 
-    def save(self, *args, **kwargs):
-        # Ensure only one default address per user
-        if self.is_default:
-            ShippingAddress.objects.filter(
-                user=self.user, is_default=True
-            ).exclude(pk=self.pk).update(is_default=False)
-        super().save(*args, **kwargs)
+    @property
+    def coordinates(self):
+        """Return coordinates as tuple (lat, lng) or None."""
+        if self.has_coordinates:
+            return (float(self.latitude), float(self.longitude))
+        return None
+
+    @property
+    def accuracy_status(self):
+        """Return human-readable accuracy status."""
+        if not self.location_accuracy:
+            return "Unknown"
+
+        accuracy = float(self.location_accuracy)
+        if accuracy <= 20:
+            return "Excellent"
+        elif accuracy <= 50:
+            return "Good"
+        elif accuracy <= 100:
+            return "Fair"
+        else:
+            return "Poor"
+
+    @property
+    def short_address(self):
+        """Return shortened address for display."""
+        return f"{self.street}, {self.city}"
+
+    @property
+    def full_address(self):
+        """Return full formatted address."""
+        parts = [
+            self.street,
+            self.city,
+            self.region,
+            self.country
+        ]
+        if self.postal_code:
+            parts.insert(-1, self.postal_code)
+
+        return ", ".join(filter(None, parts))
+
+    def get_location_method_display_icon(self):
+        """Return icon class for location method."""
+        icons = {
+            'manual': 'fa-keyboard',
+            'gps': 'fa-map-marker-alt',
+            'geocoded': 'fa-search-location'
+        }
+        return icons.get(self.location_method, 'fa-map-marker')
+
+    def calculate_distance_to(self, other_address):
+        """
+        Calculate distance in kilometers to another address with coordinates.
+        Uses Haversine formula.
+        """
+        if not self.has_coordinates or not other_address.has_coordinates:
+            return None
+
+        from math import radians, cos, sin, asin, sqrt
+
+        lat1, lon1 = self.coordinates
+        lat2, lon2 = other_address.coordinates
+
+        # Convert to radians
+        lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
+
+        # Haversine formula
+        dlon = lon2 - lon1
+        dlat = lat2 - lat1
+        a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
+        c = 2 * asin(sqrt(a))
+
+        # Radius of earth in kilometers
+        km = 6371 * c
+        return round(km, 2)
 
 
 class OrderStatusHistory(models.Model):

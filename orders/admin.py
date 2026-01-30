@@ -7,8 +7,8 @@ from .models import (
     OrderStatusHistory, ReturnStatusHistory, ReturnImage,
     StoreInventory, ChatMessage
 )
-
-
+from logistics.models import OrderLogisticsAgent, LogisticsAgentMessage
+from django.urls import reverse
 class OrderItemInline(admin.TabularInline):
     model = OrderItem
     extra = 0
@@ -405,3 +405,236 @@ class ChatMessageAdmin(admin.ModelAdmin):
     list_display = ('order', 'sender', 'created_at', 'is_read')
     list_filter = ('is_read', 'created_at')
     search_fields = ('order__id', 'sender__username', 'content')
+
+
+@admin.register(OrderLogisticsAgent)
+class OrderLogisticsAgentAdmin(admin.ModelAdmin):
+    """
+    Admin interface for managing logistics agent assignments
+    """
+    list_display = [
+        'order_id',
+        'agent_name',
+        'status_badge',
+        'assigned_at',
+        'working_duration',
+        'is_available',
+        'last_activity',
+        'action_links'
+    ]
+    list_filter = [
+        'status',
+        'is_available',
+        'assigned_at',
+        'started_working_at'
+    ]
+    search_fields = [
+        'order__id',
+        'agent__username',
+        'agent__first_name',
+        'agent__last_name',
+        'agent__email',
+        'notes'
+    ]
+    readonly_fields = [
+        'assigned_at',
+        'started_working_at',
+        'completed_at',
+        'last_activity',
+        'working_duration_display'
+    ]
+    fieldsets = (
+        ('Assignment Details', {
+            'fields': (
+                'order',
+                'agent',
+                'status',
+                'is_available'
+            )
+        }),
+        ('Timeline', {
+            'fields': (
+                'assigned_at',
+                'started_working_at',
+                'completed_at',
+                'last_activity',
+                'working_duration_display'
+            )
+        }),
+        ('Additional Information', {
+            'fields': ('notes',),
+            'classes': ('collapse',)
+        }),
+    )
+    date_hierarchy = 'assigned_at'
+    actions = ['mark_as_working', 'mark_as_completed', 'mark_as_paused']
+
+    def agent_name(self, obj):
+        """Display agent's full name"""
+        if obj.agent:
+            return obj.agent.get_full_name() or obj.agent.username
+        return "Unassigned"
+
+    agent_name.short_description = 'Agent'
+
+    def status_badge(self, obj):
+        """Display status with color coding"""
+        colors = {
+            'assigned': '#3b82f6',
+            'working': '#22c55e',
+            'paused': '#f59e0b',
+            'completed': '#8b5cf6'
+        }
+        color = colors.get(obj.status, '#6b7280')
+        return format_html(
+            '<span style="background-color: {}; color: white; padding: 4px 12px; '
+            'border-radius: 12px; font-size: 12px; font-weight: 600;">{}</span>',
+            color,
+            obj.get_status_display()
+        )
+
+    status_badge.short_description = 'Status'
+
+    def working_duration(self, obj):
+        """Display how long agent has been working"""
+        if obj.working_duration:
+            total_seconds = int(obj.working_duration.total_seconds())
+            hours = total_seconds // 3600
+            minutes = (total_seconds % 3600) // 60
+
+            if hours > 0:
+                return f"{hours}h {minutes}m"
+            return f"{minutes}m"
+        return "-"
+
+    working_duration.short_description = 'Duration'
+
+    def working_duration_display(self, obj):
+        """Detailed working duration for detail view"""
+        if obj.working_duration:
+            return str(obj.working_duration)
+        return "Not started yet"
+
+    working_duration_display.short_description = 'Working Duration'
+
+    def action_links(self, obj):
+        """Quick action links"""
+        order_url = reverse('admin:orders_order_change', args=[obj.order.pk])
+        return format_html(
+            '<a href="{}" class="button">View Order</a>',
+            order_url
+        )
+
+    action_links.short_description = 'Actions'
+
+    def mark_as_working(self, request, queryset):
+        """Admin action to mark agents as working"""
+        count = 0
+        for assignment in queryset:
+            if assignment.status != 'working':
+                assignment.start_working()
+                count += 1
+
+        self.message_user(
+            request,
+            f'Successfully marked {count} assignment(s) as working.'
+        )
+
+    mark_as_working.short_description = 'Mark selected as Working'
+
+    def mark_as_completed(self, request, queryset):
+        """Admin action to mark assignments as completed"""
+        count = 0
+        for assignment in queryset:
+            if assignment.status != 'completed':
+                assignment.mark_completed()
+                count += 1
+
+        self.message_user(
+            request,
+            f'Successfully marked {count} assignment(s) as completed.'
+        )
+
+    mark_as_completed.short_description = 'Mark selected as Completed'
+
+    def mark_as_paused(self, request, queryset):
+        """Admin action to pause assignments"""
+        count = 0
+        for assignment in queryset:
+            if assignment.status != 'paused':
+                assignment.pause_work()
+                count += 1
+
+        self.message_user(
+            request,
+            f'Successfully paused {count} assignment(s).'
+        )
+
+    mark_as_paused.short_description = 'Mark selected as Paused'
+
+
+@admin.register(LogisticsAgentMessage)
+class LogisticsAgentMessageAdmin(admin.ModelAdmin):
+    """
+    Admin interface for logistics agent messages
+    """
+    list_display = [
+        'order_id',
+        'sender_name',
+        'message_preview',
+        'has_image',
+        'is_read',
+        'created_at'
+    ]
+    list_filter = [
+        'is_read',
+        'created_at',
+        'sender'
+    ]
+    search_fields = [
+        'order__id',
+        'sender__username',
+        'sender__email',
+        'message'
+    ]
+    readonly_fields = ['created_at', 'order', 'sender']
+    date_hierarchy = 'created_at'
+
+    def sender_name(self, obj):
+        """Display sender's name"""
+        return obj.sender.get_full_name() or obj.sender.username
+
+    sender_name.short_description = 'Sender'
+
+    def message_preview(self, obj):
+        """Display message preview"""
+        if len(obj.message) > 50:
+            return f"{obj.message[:50]}..."
+        return obj.message
+
+    message_preview.short_description = 'Message'
+
+    def has_image(self, obj):
+        """Display if message has image"""
+        if obj.image:
+            return format_html(
+                '<span style="color: green;">✓ Yes</span>'
+            )
+        return format_html(
+            '<span style="color: gray;">✗ No</span>'
+        )
+
+    has_image.short_description = 'Image'
+
+
+# Optional: Inline admin for adding logistics agent to Order admin
+class OrderLogisticsAgentInline(admin.StackedInline):
+    """
+    Inline form for assigning logistics agent directly from Order admin
+    """
+    model = OrderLogisticsAgent
+    extra = 0
+    max_num = 1
+    can_delete = True
+    fields = ['agent', 'status', 'is_available', 'notes']
+    readonly_fields = ['assigned_at', 'started_working_at', 'completed_at']

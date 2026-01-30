@@ -23,7 +23,7 @@ from django.views.decorators.http import require_POST, require_GET
 from django.forms import modelformset_factory
 from chat.models import ChatThread, ChatMessage
 from django.contrib.auth import get_user_model
-from marketplace.models import Product, ProductImage, ProductVariant, ProductView
+from marketplace.models import SocialCartChatMessage, Product, ProductImage, ProductVariant, ProductView
 from .forms import ProductForm, ProductImageForm, ProductVariantForm, ProductFeatureOption, StoreThemeForm, \
     StoreThemePresetForm
 from django.db import transaction
@@ -2844,6 +2844,13 @@ def store_dashboard(request, store_id):
         sender__is_staff=False  # Optional: ignore messages sent by the store owner/admin
     ).distinct().count()
 
+    # Count unread social cart messages
+    unread_seller_chats = SocialCartChatMessage.objects.filter(
+        scope='seller_item',
+        product_id__in=[str(pid) for pid in store_products],
+        social_cart__is_active=True
+    ).exclude(sender=store.owner).count()
+
     try:
         user_products = Product.objects.filter(seller=store.owner)
         total_products = user_products.count()
@@ -2988,6 +2995,7 @@ def store_dashboard(request, store_id):
         'pending_orders_count': pending_orders_count,
         "low_stock_products": low_stock_products,
         "unread_messages": unread_messages,
+        'unread_seller_chats': unread_seller_chats,
 
     }
 
@@ -6212,106 +6220,123 @@ def get_store_seller_chats(request, store_id):
     """
     Get all seller_item conversations for a store from active social carts.
 
-    Groups messages by: social_cart + product_id to create "conversation threads"
+    Returns a list of conversation threads grouped by social_cart + product_id.
     """
-    from marketplace.models import SocialCartChatMessage, Product, SocialCart
-    from stores.models import Store
+    try:
+        store = get_object_or_404(Store, id=store_id, owner=request.user)
 
-    store = get_object_or_404(Store, id=store_id, owner=request.user)
+        # Get all products from this store
+        store_products = Product.objects.filter(
+            Q(store=store) | Q(seller=store.owner)
+        ).values_list('id', flat=True)
 
-    # Get all products from this store
-    store_products = Product.objects.filter(
-        Q(store=store) | Q(seller=store.owner)
-    ).values_list('id', flat=True)
+        if not store_products:
+            return JsonResponse({
+                'success': True,
+                'threads': [],
+                'total': 0
+            })
 
-    # Get seller_item messages for these products from active social carts
-    seller_messages = SocialCartChatMessage.objects.filter(
-        scope='seller_item',
-        product_id__in=[str(pid) for pid in store_products],
-        social_cart__is_active=True,
-        social_cart__status__in=['open', 'checkout']
-    ).select_related(
-        'social_cart',
-        'sender'
-    ).order_by('-created_at')
+        # Get seller_item messages from active social carts
+        seller_messages = SocialCartChatMessage.objects.filter(
+            scope='seller_item',
+            product_id__in=[str(pid) for pid in store_products],
+            social_cart__is_active=True,
+            social_cart__status__in=['open', 'checkout']
+        ).select_related('social_cart', 'sender').order_by('-created_at')
 
-    # Group messages by social_cart + product_id to create conversation threads
-    conversations = {}
-    for msg in seller_messages:
-        key = f"{msg.social_cart.id}_{msg.product_id}"
+        # Group messages by social_cart + product_id to create conversation threads
+        conversations = {}
+        for msg in seller_messages:
+            key = f"{msg.social_cart.id}_{msg.product_id}"
 
-        if key not in conversations:
-            # Get product
-            try:
-                product = Product.objects.get(id=msg.product_id)
-            except Product.DoesNotExist:
-                continue
+            if key not in conversations:
+                # Get product
+                try:
+                    product = Product.objects.get(id=msg.product_id)
+                except Product.DoesNotExist:
+                    continue
 
-            # Get cart members
-            try:
-                members = msg.social_cart.members.filter(status='joined')
-                member_names = [m.user.get_full_name() or m.user.username for m in members[:3]]
-                member_count = members.count()
-            except:
-                member_names = []
-                member_count = 0
+                # Get cart members
+                try:
+                    members = msg.social_cart.members.filter(status='joined')
+                    member_names = [
+                        m.user.get_full_name() or m.user.username
+                        for m in members[:3]
+                    ]
+                    member_count = members.count()
+                except Exception:
+                    member_names = []
+                    member_count = 0
 
-            conversations[key] = {
-                'id': key,
-                'social_cart_id': str(msg.social_cart.id)[:8],
-                'full_cart_id': str(msg.social_cart.id),
-                'product_id': msg.product_id,
-                'product': {
-                    'id': product.id,
-                    'name': product.name,
-                    'image': product.image.url if product.image else None,
-                },
-                'members': member_names,
-                'member_count': member_count,
-                'messages': [],
-                'unread_count': 0,
-                'last_message': None,
-                'created_at': msg.created_at.isoformat(),
-            }
+                # Create conversation thread
+                conversations[key] = {
+                    'id': key,
+                    'social_cart_id': str(msg.social_cart.id)[:8],  # Short for display
+                    'full_cart_id': str(msg.social_cart.id),  # Full UUID for API calls
+                    'product_id': msg.product_id,
+                    'product': {
+                        'id': product.id,
+                        'name': product.name,
+                        'image': product.image.url if product.image else None,
+                    },
+                    'members': member_names,
+                    'member_count': member_count,
+                    'messages': [],
+                    'unread_count': 0,
+                    'last_message': None,
+                    'created_at': msg.created_at.isoformat(),
+                }
 
-        # Add message to conversation
-        conversations[key]['messages'].append(msg)
+            # Add message to conversation
+            conversations[key]['messages'].append(msg)
 
-        # Update last message
-        if not conversations[key]['last_message'] or msg.created_at > conversations[key]['last_message'][
-            'created_at_obj']:
-            conversations[key]['last_message'] = {
-                'content': msg.message,
-                'sender': msg.sender.get_full_name() or msg.sender.username,
-                'is_from_me': msg.sender == store.owner,
-                'created_at': msg.created_at.isoformat(),
-                'created_at_obj': msg.created_at,
-            }
+            # Update last message
+            if (not conversations[key]['last_message'] or
+                    msg.created_at > conversations[key]['last_message']['created_at_obj']):
+                conversations[key]['last_message'] = {
+                    'content': msg.message,
+                    'sender': msg.sender.get_full_name() or msg.sender.username,
+                    'is_from_me': msg.sender == store.owner,
+                    'created_at': msg.created_at.isoformat(),
+                    'created_at_obj': msg.created_at,
+                }
 
-        # Count unread (messages not from store owner)
-        if msg.sender != store.owner:
-            conversations[key]['unread_count'] += 1
+            # Count unread (messages not from store owner)
+            if msg.sender != store.owner:
+                conversations[key]['unread_count'] += 1
 
-    # Convert to list and add message counts
-    threads_data = []
-    for conv in conversations.values():
-        conv['message_count'] = len(conv['messages'])
-        # Remove messages list (we'll fetch them separately when needed)
-        del conv['messages']
-        # Remove helper object
-        if conv['last_message']:
-            del conv['last_message']['created_at_obj']
-        threads_data.append(conv)
+        # Convert to list and prepare for JSON response
+        threads_data = []
+        for conv in conversations.values():
+            conv['message_count'] = len(conv['messages'])
+            del conv['messages']
+            if conv['last_message']:
+                del conv['last_message']['created_at_obj']
+            threads_data.append(conv)
 
-    # Sort by last message time
-    threads_data.sort(key=lambda x: x['last_message']['created_at'] if x['last_message'] else x['created_at'],
-                      reverse=True)
+        # Sort by last message time
+        threads_data.sort(
+            key=lambda x: x['last_message']['created_at'] if x['last_message'] else x['created_at'],
+            reverse=True
+        )
 
-    return JsonResponse({
-        'success': True,
-        'threads': threads_data,
-        'total': len(threads_data)
-    })
+        return JsonResponse({
+            'success': True,
+            'threads': threads_data,
+            'total': len(threads_data)
+        })
+
+    except Exception as e:
+        # Log error for debugging (optional - import logging at top if using)
+        # import logging
+        # logger = logging.getLogger(__name__)
+        # logger.error(f"Error in get_store_seller_chats: {str(e)}", exc_info=True)
+
+        return JsonResponse({
+            'success': False,
+            'message': 'An error occurred while loading conversations.'
+        }, status=500)
 
 
 @login_required

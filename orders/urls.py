@@ -45,4 +45,32 @@ urlpatterns = [
 
     # API endpoints
     path('api/pending-orders-count/', views.pending_orders_count_api, name='pending_orders_count_api'),
+
+    # NEW: Geolocation API endpoints
+    path('api/geocode/', views.geocode_address, name='geocode_address'),
+    path('api/reverse-geocode/', views.reverse_geocode, name='reverse_geocode'),
+    path('api/save-shipping-address/', views.save_shipping_address_with_location, name='save_shipping_address'),
+
+    # Logistics Agent Chat URLs
+    path(
+        'manage/<uuid:store_id>/orders/<int:order_id>/agent-chat/send/',
+        views.send_agent_message,
+        name='send_agent_message'
+    ),
+    path(
+        'manage/<uuid:store_id>/orders/<int:order_id>/agent-chat/messages/',
+        views.fetch_agent_messages,
+        name='fetch_agent_messages'
+    ),
+    path(
+        'manage/<uuid:store_id>/orders/<int:order_id>/agent-chat/unread-count/',
+        views.get_unread_agent_messages_count,
+        name='get_unread_agent_messages_count'
+    ),
+    path(
+        'manage/<uuid:store_id>/orders/<int:order_id>/get-agent-status/',
+        views.get_agent_status,
+        name='get_agent_status'
+    ),
+
 ]

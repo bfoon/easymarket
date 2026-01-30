@@ -12,6 +12,19 @@ urlpatterns = [
     path('product/<int:product_id>/', views.product_detail, name='product_detail'),
     path('product/<int:product_id>/quick-view/', views.product_quick_view, name='product_quick_view'),
 
+    # Live viewer tracking
+    path('product/<int:product_id>/track-view/',
+         views.track_product_view,
+         name='track_product_view'),
+
+    path('api/live-viewers/',
+         views.get_live_viewer_counts,
+         name='get_live_viewer_counts'),
+
+    path('api/cleanup-live-viewers/',
+         views.cleanup_live_viewers,
+         name='cleanup_live_viewers'),
+
     path('all-products/', views.all_products, name='all_products'),
     path('hot-picks/', views.hot_picks, name='hot_picks'),
     path('used/', views.used_products_view, name='used_products'),
