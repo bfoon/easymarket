@@ -374,4 +374,46 @@ urlpatterns = [
         views.list_available_agents,
         name='list_available_agents'
     ),
+    path('shipments/<int:shipment_id>/chat/send/',
+         views.send_shipment_chat_message,
+         name='send_shipment_chat'),
+
+    path('shipments/<int:shipment_id>/chat/messages/',
+         views.get_shipment_chat_messages,
+         name='get_shipment_chat_messages'),
+
+    path('shipments/<int:shipment_id>/chat/unread-count/',
+         views.get_shipment_unread_count,
+         name='get_shipment_unread_count'),
+# Warehouse Receiving URLs
+    path(
+        'warehouse/receiving/',
+        views.warehouse_receiving_dashboard,
+        name='warehouse_receiving_dashboard'
+    ),
+    path(
+        'warehouse/scan/',
+        views.warehouse_scan_verify,
+        name='warehouse_scan_verify'
+    ),
+    path(
+        'warehouse/receipt/<int:receipt_id>/',
+        views.warehouse_receipt_detail,
+        name='warehouse_receipt_detail'
+    ),
+    path(
+        'warehouse/receipt/<int:receipt_id>/verify/',
+        views.warehouse_verify_receipt,
+        name='warehouse_verify_receipt'
+    ),
+    path(
+        'warehouse/receipt/<int:receipt_id>/qr-code/',
+        views.generate_receipt_qr_code,
+        name='generate_receipt_qr_code'
+    ),
+    path(
+        'warehouse/verify-code-ajax/',
+        views.verify_code_ajax,
+        name='verify_code_ajax'
+    ),
 ]

@@ -22,6 +22,7 @@ from io import BytesIO
 from django.conf import settings
 from django.template.loader import render_to_string
 from django.core.mail import EmailMultiAlternatives
+from django.core.mail import send_mail
 
 from django.shortcuts import render, get_object_or_404, redirect
 from django.views.generic import (
@@ -36,7 +37,8 @@ from django.contrib import messages
 from django.urls import reverse_lazy, reverse
 from django.db.models import (
     Q, Count, Avg, Sum, F, ExpressionWrapper,
-    DecimalField, Case, When, Value, DurationField
+    DecimalField, Case, When, Value, DurationField,
+    Subquery, OuterRef, IntegerField
 )
 from reportlab.lib.units import inch
 from reportlab.pdfgen import canvas
@@ -65,7 +67,8 @@ from openpyxl.styles import Font, PatternFill, Alignment
 from .models import (
     Shipment, ShipmentBox, BoxItem, Driver, Vehicle, ShipmentItem,
     Warehouse, LogisticOffice, DriverLocation, WarehouseShipmentNotification,
-    B2BShipment, B2BShipmentItem, B2BShipmentBox, B2BBoxItem, OrderLogisticsAgent, LogisticsAgentMessage
+    B2BShipment, B2BShipmentItem, B2BShipmentBox, B2BBoxItem, OrderLogisticsAgent, LogisticsAgentMessage,
+    WarehouseReceipt, WarehouseReceiptItem
 )
 
 from stores.b2b.models import B2BOrder, B2BOrderItem, B2BShippingAddress
@@ -1330,28 +1333,78 @@ def shipment_items_ajax(request, shipment_id):
 
 
 class ShipmentListView(LoginRequiredMixin, ListView):
-    """Enhanced shipment list view."""
+    """Enhanced shipment list view with message counts."""
     model = Shipment
     template_name = 'logistics/shipment_list.html'
     context_object_name = 'shipments'
     paginate_by = 20
 
     def get_queryset(self):
+        # ============================================================================
+        # MESSAGE COUNT SUBQUERIES (Efficient Database Annotations)
+        # ============================================================================
+
+        # Subquery for total message count per order
+        total_messages = LogisticsAgentMessage.objects.filter(
+            order=OuterRef('order')
+        ).values('order').annotate(
+            count=Count('id')
+        ).values('count')
+
+        # Subquery for unread message count (messages not from current user)
+        unread_messages = LogisticsAgentMessage.objects.filter(
+            order=OuterRef('order'),
+            is_read=False
+        ).exclude(
+            sender=self.request.user
+        ).values('order').annotate(
+            count=Count('id')
+        ).values('count')
+
+        # ============================================================================
+        # BUILD QUERYSET WITH MESSAGE COUNTS
+        # ============================================================================
+
         queryset = Shipment.objects.select_related(
-            'order', 'warehouse', 'driver', 'vehicle'
-        ).prefetch_related('shipment_items').order_by('-created_at')
+            'order', 'warehouse', 'driver', 'vehicle', 'shipping_address'
+        ).prefetch_related(
+            'shipment_items'
+        ).annotate(
+            # Add message count fields
+            message_count=Subquery(
+                total_messages,
+                output_field=IntegerField()
+            ),
+            unread_count=Subquery(
+                unread_messages,
+                output_field=IntegerField()
+            )
+        ).order_by('-created_at')
+
+        # ============================================================================
+        # APPLY FILTERS
+        # ============================================================================
 
         # Filter by status if provided
         status = self.request.GET.get('status')
         if status:
             queryset = queryset.filter(status=status)
 
-        # Search by order ID or shipment number
+        # Filter by order status if provided
+        order_status = self.request.GET.get('order_status')
+        if order_status:
+            queryset = queryset.filter(order__status=order_status)
+
+        # Search by order ID, shipment number, or address
         search = self.request.GET.get('search')
         if search:
             queryset = queryset.filter(
                 Q(order__id__icontains=search) |
-                Q(shipment_number__icontains=search)
+                Q(shipment_number__icontains=search) |
+                Q(shipping_address__address__icontains=search) |
+                Q(shipping_address__city__icontains=search) |
+                Q(driver__user__first_name__icontains=search) |
+                Q(driver__user__last_name__icontains=search)
             )
 
         return queryset
@@ -1361,12 +1414,19 @@ class ShipmentListView(LoginRequiredMixin, ListView):
 
         # Add filter options
         context['status_filter'] = self.request.GET.get('status', '')
+        context['current_status'] = self.request.GET.get('status', '')
+        context['current_order_status'] = self.request.GET.get('order_status', '')
         context['search_query'] = self.request.GET.get('search', '')
 
-        # Count by status
+        # Count by shipment status
         context['pending_count'] = Shipment.objects.filter(status='pending').count()
         context['in_transit_count'] = Shipment.objects.filter(status='in_transit').count()
         context['delivered_count'] = Shipment.objects.filter(status='delivered').count()
+
+        # Add status and order status choices for filters
+        context['status_choices'] = Shipment.STATUS_CHOICES
+        from orders.models import Order
+        context['order_status_choices'] = Order.STATUS_CHOICES
 
         return context
 
@@ -5296,3 +5356,544 @@ def list_available_agents(request):
             'success': False,
             'message': str(e)
         }, status=500)
+
+
+@login_required
+@require_POST
+def send_shipment_chat_message(request, shipment_id):
+    """
+    Send a chat message from shipment detail page (logistics agent side)
+    Reuses the existing LogisticsAgentMessage model from orders app
+    """
+    try:
+        from .models import Shipment
+
+        # Get the shipment
+        shipment = get_object_or_404(Shipment, pk=shipment_id)
+
+        # Get the order from shipment
+        if not shipment.order:
+            return JsonResponse({
+                'success': False,
+                'message': 'No order associated with this shipment'
+            }, status=400)
+
+        order = shipment.order
+
+        # Get message data
+        message_text = (request.POST.get('message') or '').strip()
+        message_image = request.FILES.get('image')
+
+        # Validate
+        if not message_text and not message_image:
+            return JsonResponse({
+                'success': False,
+                'message': 'Message or image is required'
+            }, status=400)
+
+        # Validate image size
+        if message_image and message_image.size > 5 * 1024 * 1024:
+            return JsonResponse({
+                'success': False,
+                'message': 'Image must be less than 5MB'
+            }, status=400)
+
+        # Create message using existing model
+        msg = LogisticsAgentMessage.objects.create(
+            order=order,
+            sender=request.user,
+            message=message_text,
+            image=message_image
+        )
+
+        # Update agent assignment activity (if exists)
+        assignment = OrderLogisticsAgent.objects.filter(order=order).first()
+        if assignment:
+            assignment.last_activity = timezone.now()
+            assignment.save(update_fields=['last_activity'])
+
+        # Return response (matching your existing format)
+        return JsonResponse({
+            'success': True,
+            'message': {
+                'id': msg.id,
+                'content': msg.message,
+                'image_url': msg.image.url if msg.image else '',
+                'timestamp': msg.created_at.strftime('%b %d, %Y %I:%M %p'),
+                'created_at': msg.created_at.strftime('%I:%M %p'),
+                'is_from_agent': True,
+                'sender_name': request.user.get_full_name() or request.user.username,
+                'sender_id': request.user.id
+            }
+        })
+
+    except Exception as e:
+        import traceback
+        print("Error in send_shipment_chat_message:")
+        print(traceback.format_exc())
+        return JsonResponse({
+            'success': False,
+            'message': str(e)
+        }, status=500)
+
+
+@login_required
+def get_shipment_chat_messages(request, shipment_id):
+    """
+    Fetch all messages for a shipment (from its linked order)
+    """
+    try:
+        from .models import Shipment
+
+        # Get the shipment
+        shipment = get_object_or_404(Shipment, pk=shipment_id)
+
+        # Get the order
+        if not shipment.order:
+            return JsonResponse({
+                'success': True,
+                'messages': []
+            })
+
+        order = shipment.order
+
+        # Get all messages for this order
+        messages = (
+            LogisticsAgentMessage.objects
+            .filter(order=order)
+            .select_related('sender')
+            .order_by('created_at')
+        )
+
+        # Mark unread messages as read (messages not sent by current user)
+        messages.filter(is_read=False).exclude(sender=request.user).update(is_read=True)
+
+        # Format messages for response
+        messages_data = []
+        for msg in messages:
+            is_from_current_user = (msg.sender == request.user)
+
+            messages_data.append({
+                'id': msg.id,
+                'content': msg.message,
+                'image_url': msg.image.url if msg.image else '',
+                'timestamp': msg.created_at.strftime('%I:%M %p'),
+                'full_timestamp': msg.created_at.strftime('%b %d, %Y %I:%M %p'),
+                'created_at': msg.created_at.isoformat(),
+                'is_from_agent': is_from_current_user,
+                'is_self': is_from_current_user,
+                'sender_name': msg.sender.get_full_name() or msg.sender.username,
+                'sender_id': msg.sender.id,
+                'is_read': msg.is_read
+            })
+
+        return JsonResponse({
+            'success': True,
+            'messages': messages_data
+        })
+
+    except Exception as e:
+        import traceback
+        print("Error in get_shipment_chat_messages:")
+        print(traceback.format_exc())
+        return JsonResponse({
+            'success': False,
+            'message': str(e)
+        }, status=500)
+
+
+@login_required
+def get_shipment_unread_count(request, shipment_id):
+    """
+    Get count of unread messages for a shipment
+    """
+    try:
+        from .models import Shipment
+
+        shipment = get_object_or_404(Shipment, pk=shipment_id)
+
+        if not shipment.order:
+            return JsonResponse({
+                'success': True,
+                'unread_count': 0
+            })
+
+        # Count unread messages not sent by current user
+        unread_count = LogisticsAgentMessage.objects.filter(
+            order=shipment.order,
+            is_read=False
+        ).exclude(sender=request.user).count()
+
+        return JsonResponse({
+            'success': True,
+            'unread_count': unread_count
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'message': str(e)
+        }, status=500)
+
+
+@login_required
+def warehouse_receiving_dashboard(request):
+    """
+    Main dashboard for warehouse receiving
+    Shows pending shipments waiting to be received
+    """
+    # Get pending receipts (shipments that have been shipped to warehouse)
+    pending_receipts = WarehouseReceipt.objects.filter(
+        status='pending'
+    ).select_related(
+        'order',
+        'shipment',
+        'received_by'
+    ).prefetch_related(
+        'items__order_item__product'
+    )
+
+    # Get recently received (last 7 days)
+    from datetime import timedelta
+    recent_receipts = WarehouseReceipt.objects.filter(
+        status='received',
+        received_at__gte=timezone.now() - timedelta(days=7)
+    ).select_related('order', 'shipment', 'received_by')[:10]
+
+    # Statistics
+    stats = {
+        'pending': WarehouseReceipt.objects.filter(status='pending').count(),
+        'received_today': WarehouseReceipt.objects.filter(
+            status='received',
+            received_at__date=timezone.now().date()
+        ).count(),
+        'has_issues': WarehouseReceipt.objects.filter(has_issues=True, status='pending').count(),
+    }
+
+    context = {
+        'pending_receipts': pending_receipts,
+        'recent_receipts': recent_receipts,
+        'stats': stats,
+    }
+
+    return render(request, 'logistics/warehouse_receiving.html', context)
+
+
+@login_required
+def warehouse_scan_verify(request):
+    """
+    QR Code scanning and manual entry page for verification
+    """
+    verification_result = None
+    receipt = None
+
+    if request.method == 'POST':
+        verification_code = request.POST.get('verification_code', '').strip()
+
+        if verification_code:
+            try:
+                receipt = WarehouseReceipt.objects.get(
+                    verification_code=verification_code
+                )
+                verification_result = {
+                    'success': True,
+                    'receipt': receipt,
+                    'message': 'Verification code found!'
+                }
+            except WarehouseReceipt.DoesNotExist:
+                verification_result = {
+                    'success': False,
+                    'message': 'Invalid verification code. Please try again.'
+                }
+
+    context = {
+        'verification_result': verification_result,
+        'receipt': receipt,
+    }
+
+    return render(request, 'logistics/warehouse_scan.html', context)
+
+
+@login_required
+@require_POST
+def warehouse_verify_receipt(request, receipt_id):
+    """
+    Verify and mark receipt as received
+    """
+    receipt = get_object_or_404(WarehouseReceipt, id=receipt_id)
+
+    # Update receipt items quantities
+    for item in receipt.items.all():
+        received_qty = request.POST.get(f'qty_{item.id}', item.expected_quantity)
+        condition = request.POST.get(f'condition_{item.id}', 'good')
+        item_notes = request.POST.get(f'notes_{item.id}', '')
+
+        item.received_quantity = int(received_qty)
+        item.condition = condition
+        item.notes = item_notes
+        item.save()
+
+    # Get notes
+    receipt_notes = request.POST.get('notes', '')
+    has_issues = request.POST.get('has_issues') == 'on'
+    issue_description = request.POST.get('issue_description', '')
+
+    # Mark as received
+    receipt.mark_received(
+        user=request.user,
+        notes=receipt_notes
+    )
+
+    if has_issues:
+        receipt.has_issues = True
+        receipt.issue_description = issue_description
+        receipt.save()
+
+    # Send email notification to store
+    send_warehouse_receipt_notification(receipt)
+
+    messages.success(
+        request,
+        f'Order #{receipt.order.id} has been verified and marked as received!'
+    )
+
+    return redirect('logistics:warehouse_receiving_dashboard')
+
+
+@login_required
+def generate_receipt_qr_code(request, receipt_id):
+    """
+    Generate QR code for a warehouse receipt
+    """
+    receipt = get_object_or_404(WarehouseReceipt, id=receipt_id)
+
+    # Generate verification code if not exists
+    if not receipt.verification_code:
+        receipt.generate_verification_code()
+
+    # Create QR code
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=10,
+        border=4,
+    )
+
+    # Add verification code to QR
+    qr_data = {
+        'type': 'warehouse_receipt',
+        'code': receipt.verification_code,
+        'order_id': receipt.order.id,
+    }
+
+    import json
+    qr.add_data(json.dumps(qr_data))
+    qr.make(fit=True)
+
+    # Create image
+    img = qr.make_image(fill_color="black", back_color="white")
+
+    # Save to buffer
+    buffer = BytesIO()
+    img.save(buffer, format='PNG')
+    buffer.seek(0)
+
+    # Return image
+    response = HttpResponse(buffer, content_type='image/png')
+    response['Content-Disposition'] = f'inline; filename="receipt_{receipt_id}_qr.png"'
+
+    return response
+
+
+@login_required
+def warehouse_receipt_detail(request, receipt_id):
+    """
+    View details of a specific warehouse receipt
+    """
+    receipt = get_object_or_404(
+        WarehouseReceipt.objects.select_related(
+            'order',
+            'shipment',
+            'received_by'
+        ).prefetch_related(
+            'items__order_item__product'
+        ),
+        id=receipt_id
+    )
+
+    context = {
+        'receipt': receipt,
+    }
+
+    return render(request, 'logistics/warehouse_receipt_detail.html', context)
+
+
+@login_required
+@require_http_methods(["GET"])
+def verify_code_ajax(request):
+    """
+    AJAX endpoint to verify code (for QR scanner)
+    """
+    code = request.GET.get('code', '').strip()
+
+    if not code:
+        return JsonResponse({
+            'success': False,
+            'message': 'No code provided'
+        })
+
+    try:
+        receipt = WarehouseReceipt.objects.select_related(
+            'order',
+            'shipment'
+        ).prefetch_related(
+            'items__order_item__product'
+        ).get(verification_code=code)
+
+        # Build items data
+        items_data = []
+        for item in receipt.items.all():
+            items_data.append({
+                'id': item.id,
+                'product_name': item.order_item.product.name,
+                'sku': item.order_item.product.sku or 'N/A',
+                'expected_quantity': item.expected_quantity,
+                'received_quantity': item.received_quantity,
+                'condition': item.condition,
+            })
+
+        return JsonResponse({
+            'success': True,
+            'receipt': {
+                'id': receipt.id,
+                'order_id': receipt.order.id,
+                'status': receipt.status,
+                'verification_code': receipt.verification_code,
+                'is_verified': receipt.is_verified,
+                'items': items_data,
+            },
+            'message': f'Found Order #{receipt.order.id}'
+        })
+
+    except WarehouseReceipt.DoesNotExist:
+        return JsonResponse({
+            'success': False,
+            'message': 'Invalid verification code'
+        })
+
+
+# ============================================================================
+# Email Notification Function
+# ============================================================================
+
+def send_warehouse_receipt_notification(receipt):
+    """
+    Send email notification to store owner when items are received at warehouse
+    """
+    try:
+        # Get store from order
+        order = receipt.order
+
+        # Get store owner email
+        # Assuming order has a store relationship
+        if hasattr(order, 'store') and order.store:
+            store = order.store
+            recipient_email = store.owner.email
+            store_name = store.name
+        else:
+            # Fallback to order user
+            recipient_email = order.user.email
+            store_name = "Your Store"
+
+        # Prepare email context
+        context = {
+            'receipt': receipt,
+            'order': order,
+            'store_name': store_name,
+            'received_at': receipt.received_at,
+            'received_by': receipt.received_by.get_full_name() if receipt.received_by else 'Warehouse Staff',
+            'has_issues': receipt.has_issues,
+            'issue_description': receipt.issue_description,
+        }
+
+        # Render email
+        subject = f'Order #{order.id} Received at Warehouse'
+        html_message = render_to_string(
+            'logistics/emails/warehouse_receipt_notification.html',
+            context
+        )
+        plain_message = f"""
+        Your order #{order.id} has been received at our warehouse!
+
+        Received by: {context['received_by']}
+        Received at: {receipt.received_at.strftime('%b %d, %Y %I:%M %p')}
+        Status: {receipt.get_status_display()}
+
+        {'Note: There are some issues reported with this shipment. Please check your dashboard for details.' if receipt.has_issues else 'All items received in good condition.'}
+
+        Thank you for your business!
+        """
+
+        # Send email
+        send_mail(
+            subject=subject,
+            message=plain_message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[recipient_email],
+            html_message=html_message,
+            fail_silently=False,
+        )
+
+        # Mark as notified
+        receipt.store_notified = True
+        receipt.notification_sent_at = timezone.now()
+        receipt.save()
+
+        return True
+
+    except Exception as e:
+        print(f"Error sending warehouse receipt notification: {str(e)}")
+        return False
+
+
+# ============================================================================
+# Helper Function to Create Receipt from Shipment
+# ============================================================================
+
+def create_warehouse_receipt_from_shipment(shipment):
+    """
+    Create a warehouse receipt when shipment is marked as shipped to warehouse
+    Called when items are marked as warehouse_shipped
+    """
+    if not shipment.order:
+        return None
+
+    # Check if receipt already exists
+    existing = WarehouseReceipt.objects.filter(
+        shipment=shipment,
+        order=shipment.order
+    ).first()
+
+    if existing:
+        return existing
+
+    # Create new receipt
+    receipt = WarehouseReceipt.objects.create(
+        shipment=shipment,
+        order=shipment.order,
+        status='pending'
+    )
+
+    # Generate verification code
+    receipt.generate_verification_code()
+
+    # Create receipt items from order items
+    for order_item in shipment.order.items.all():
+        WarehouseReceiptItem.objects.create(
+            receipt=receipt,
+            order_item=order_item,
+            expected_quantity=order_item.quantity,
+            received_quantity=0
+        )
+
+    return receipt

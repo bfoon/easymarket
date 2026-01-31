@@ -1830,3 +1830,136 @@ class LogisticsAgentMessage(models.Model):
 
     def __str__(self):
         return f"Message on Order #{self.order.id} from {self.sender.username}"
+
+
+class WarehouseReceipt(models.Model):
+    """
+    Tracks when shipments/orders are received at the warehouse
+    """
+    STATUS_CHOICES = [
+        ('pending', 'Pending Receipt'),
+        ('partial', 'Partially Received'),
+        ('received', 'Fully Received'),
+        ('discrepancy', 'Has Discrepancies'),
+    ]
+
+    shipment = models.ForeignKey(
+        'Shipment',
+        on_delete=models.CASCADE,
+        related_name='warehouse_receipts',
+        null=True,
+        blank=True
+    )
+    order = models.ForeignKey(
+        'orders.Order',
+        on_delete=models.CASCADE,
+        related_name='warehouse_receipts'
+    )
+
+    # Receipt details
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    received_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='warehouse_receipts_received'
+    )
+    received_at = models.DateTimeField(null=True, blank=True)
+
+    # Verification
+    verification_code = models.CharField(max_length=50, unique=True, db_index=True)
+    is_verified = models.BooleanField(default=False)
+    verified_at = models.DateTimeField(null=True, blank=True)
+
+    # Notes and issues
+    notes = models.TextField(blank=True, help_text="Any notes or observations")
+    has_issues = models.BooleanField(default=False)
+    issue_description = models.TextField(blank=True)
+
+    # Notifications
+    store_notified = models.BooleanField(default=False)
+    notification_sent_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Warehouse Receipt'
+        verbose_name_plural = 'Warehouse Receipts'
+
+    def __str__(self):
+        return f"Receipt for Order #{self.order.id} - {self.status}"
+
+    def mark_received(self, user, notes=''):
+        """Mark this receipt as received"""
+        self.status = 'received'
+        self.received_by = user
+        self.received_at = timezone.now()
+        self.is_verified = True
+        self.verified_at = timezone.now()
+        if notes:
+            self.notes = notes
+        self.save()
+
+    def generate_verification_code(self):
+        """Generate unique verification code"""
+        import uuid
+        self.verification_code = f"WH-{self.order.id}-{uuid.uuid4().hex[:8].upper()}"
+        self.save()
+        return self.verification_code
+
+
+class WarehouseReceiptItem(models.Model):
+    """
+    Individual items in a warehouse receipt
+    """
+    receipt = models.ForeignKey(
+        'WarehouseReceipt',
+        on_delete=models.CASCADE,
+        related_name='items'
+    )
+    order_item = models.ForeignKey(
+        'orders.OrderItem',
+        on_delete=models.CASCADE,
+        related_name='warehouse_receipt_items'
+    )
+
+    # Expected vs Received quantities
+    expected_quantity = models.PositiveIntegerField()
+    received_quantity = models.PositiveIntegerField(default=0)
+
+    # Condition
+    condition = models.CharField(
+        max_length=20,
+        choices=[
+            ('good', 'Good Condition'),
+            ('damaged', 'Damaged'),
+            ('missing', 'Missing'),
+        ],
+        default='good'
+    )
+
+    # Notes for this specific item
+    notes = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['id']
+        verbose_name = 'Warehouse Receipt Item'
+        verbose_name_plural = 'Warehouse Receipt Items'
+
+    def __str__(self):
+        return f"{self.order_item.product.name} - {self.received_quantity}/{self.expected_quantity}"
+
+    @property
+    def is_complete(self):
+        """Check if received quantity matches expected"""
+        return self.received_quantity == self.expected_quantity
+
+    @property
+    def has_discrepancy(self):
+        """Check if there's a discrepancy"""
+        return self.received_quantity != self.expected_quantity or self.condition != 'good'

@@ -3,6 +3,91 @@
 {% block title %}Shipments - Logistics Management{% endblock %}
 
 {% block content %}
+
+<!-- Add Chat Message Styles -->
+<style>
+  .message-indicator {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  .message-indicator.has-messages {
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    color: white;
+    box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
+  }
+
+  .message-indicator.has-messages:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4);
+    color: white;
+  }
+
+  .message-indicator.no-messages {
+    background: #f3f4f6;
+    color: #9ca3af;
+  }
+
+  .message-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    height: 24px;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 0 6px;
+  }
+
+  .message-indicator.has-messages .message-count {
+    background: rgba(255, 255, 255, 0.3);
+    color: white;
+  }
+
+  .message-indicator.has-unread {
+    animation: pulse-glow 2s infinite;
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% {
+      box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
+    }
+    50% {
+      box-shadow: 0 4px 16px rgba(239, 68, 68, 0.5);
+    }
+  }
+
+  .unread-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    width: 12px;
+    height: 12px;
+    background: #ef4444;
+    border: 2px solid white;
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  .chat-icon {
+    font-size: 14px;
+  }
+</style>
+
 <div class="page-header d-flex justify-content-between align-items-center">
     <div>
         <h1 class="page-title">Shipments</h1>
@@ -94,6 +179,7 @@
                             <th>Type</th>
                             <th>Shipment Status</th>
                             <th>Order Status</th>
+                            <th>Messages</th>
                             <th>Created</th>
                             <th>Actions</th>
                         </tr>
@@ -158,6 +244,39 @@
                                     <span class="text-muted">No order</span>
                                 {% endif %}
                             </td>
+
+                            <!-- NEW: Messages Column -->
+                            <td>
+                                {% if shipment.order %}
+                                    {% if shipment.message_count > 0 %}
+                                        <a href="{% url 'logistics:shipment_detail' shipment.pk %}#chat"
+                                           class="message-indicator has-messages {% if shipment.unread_count > 0 %}has-unread{% endif %}"
+                                           title="{% if shipment.unread_count > 0 %}{{ shipment.unread_count }} unread message{{ shipment.unread_count|pluralize }}{% else %}View messages{% endif %}">
+                                            <i class="fas fa-comments chat-icon"></i>
+                                            <span class="message-count">{{ shipment.message_count }}</span>
+                                            {% if shipment.unread_count > 0 %}
+                                                <span class="unread-badge"></span>
+                                            {% endif %}
+                                        </a>
+                                        {% if shipment.unread_count > 0 %}
+                                            <br>
+                                            <small class="text-danger fw-bold" style="font-size: 10px;">
+                                                {{ shipment.unread_count }} unread
+                                            </small>
+                                        {% endif %}
+                                    {% else %}
+                                        <a href="{% url 'logistics:shipment_detail' shipment.pk %}#chat"
+                                           class="message-indicator no-messages"
+                                           title="Start conversation">
+                                            <i class="fas fa-comment-slash chat-icon"></i>
+                                            <span style="font-size: 11px;">No messages</span>
+                                        </a>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="text-muted small">No order</span>
+                                {% endif %}
+                            </td>
+
                             <td>
                                 {{ shipment.created_at|date:"M d, Y" }}
                                 <br>
@@ -199,97 +318,65 @@
                     <ul class="pagination justify-content-center">
                         {% if page_obj.has_previous %}
                             <li class="page-item">
-                                <a class="page-link" href="?page=1{% if search_query %}&search={{ search_query }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if current_order_status %}&order_status={{ current_order_status }}{% endif %}">
-                                    <i class="fas fa-angle-double-left"></i>
-                                </a>
+                                <a class="page-link" href="?page=1{% if search_query %}&search={{ search_query }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if current_order_status %}&order_status={{ current_order_status }}{% endif %}">First</a>
                             </li>
                             <li class="page-item">
-                                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if current_order_status %}&order_status={{ current_order_status }}{% endif %}">
-                                    <i class="fas fa-angle-left"></i>
-                                </a>
+                                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if current_order_status %}&order_status={{ current_order_status }}{% endif %}">Previous</a>
                             </li>
                         {% endif %}
 
-                        {% for num in page_obj.paginator.page_range %}
-                            {% if page_obj.number == num %}
-                                <li class="page-item active">
-                                    <span class="page-link">{{ num }}</span>
-                                </li>
-                            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
-                                <li class="page-item">
-                                    <a class="page-link" href="?page={{ num }}{% if search_query %}&search={{ search_query }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if current_order_status %}&order_status={{ current_order_status }}{% endif %}">{{ num }}</a>
-                                </li>
-                            {% endif %}
-                        {% endfor %}
+                        <li class="page-item active">
+                            <span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+                        </li>
 
                         {% if page_obj.has_next %}
                             <li class="page-item">
-                                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if current_order_status %}&order_status={{ current_order_status }}{% endif %}">
-                                    <i class="fas fa-angle-right"></i>
-                                </a>
+                                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if current_order_status %}&order_status={{ current_order_status }}{% endif %}">Next</a>
                             </li>
                             <li class="page-item">
-                                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if search_query %}&search={{ search_query }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if current_order_status %}&order_status={{ current_order_status }}{% endif %}">
-                                    <i class="fas fa-angle-double-right"></i>
-                                </a>
+                                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if search_query %}&search={{ search_query }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}{% if current_order_status %}&order_status={{ current_order_status }}{% endif %}">Last</a>
                             </li>
                         {% endif %}
                     </ul>
                 </nav>
             {% endif %}
         {% else %}
-            <div class="text-center text-muted py-5">
-                <i class="fas fa-search fa-3x mb-3"></i>
-                <h5>No shipments found</h5>
-                {% if search_query or current_status %}
-                    <p>Try adjusting your search criteria or <a href="{% url 'logistics:shipment_list' %}">clear filters</a>.</p>
-                {% else %}
-                    <p>Start by creating your first shipment.</p>
-                    <a href="{% url 'logistics:shipment_create' %}" class="btn btn-primary">
-                        <i class="fas fa-plus me-1"></i>
-                        Create Shipment
-                    </a>
-                {% endif %}
+            <div class="alert alert-info text-center">
+                <i class="fas fa-info-circle me-2"></i>
+                No shipments found matching your criteria.
             </div>
         {% endif %}
     </div>
 </div>
 
-{% endblock %}
-
-{% block extra_js %}
 <script>
 function updateStatus(shipmentId, newStatus) {
-    if (confirm('Are you sure you want to update this shipment status?')) {
-        // Get CSRF token
-        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
-                         document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
-                         getCookie('csrftoken');
-
-        fetch(`/logistics/shipments/${shipmentId}/update-status/`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'X-CSRFToken': csrfToken,
-            },
-            body: `status=${newStatus}`
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                location.reload();
-            } else {
-                alert('Error updating status: ' + data.message);
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('An error occurred while updating the status.');
-        });
+    if (!confirm(`Are you sure you want to mark shipment #${shipmentId} as ${newStatus}?`)) {
+        return;
     }
+
+    fetch(`/logistics/shipments/${shipmentId}/update-status/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: JSON.stringify({ status: newStatus })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Error: ' + (data.message || 'Failed to update status'));
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        alert('An error occurred while updating the status');
+    });
 }
 
-// Helper function to get cookie
 function getCookie(name) {
     let cookieValue = null;
     if (document.cookie && document.cookie !== '') {
@@ -305,4 +392,5 @@ function getCookie(name) {
     return cookieValue;
 }
 </script>
+
 {% endblock %}

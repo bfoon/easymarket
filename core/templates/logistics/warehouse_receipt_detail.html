@@ -1,0 +1,326 @@
+{% extends 'logistics/base.html' %}
+
+{% block title %}Receipt #{{ receipt.id }} - Warehouse{% endblock %}
+
+{% block content %}
+
+<style>
+  .receipt-container {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  .receipt-header {
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    color: white;
+    border-radius: 16px;
+    padding: 30px;
+    margin-bottom: 24px;
+  }
+
+  .item-row {
+    background: white;
+    border: 2px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+    transition: all 0.3s ease;
+  }
+
+  .item-row:hover {
+    border-color: #4f46e5;
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.1);
+  }
+
+  .qty-input {
+    width: 100px;
+    text-align: center;
+    font-size: 18px;
+    font-weight: 600;
+    padding: 8px;
+    border: 2px solid #d1d5db;
+    border-radius: 8px;
+  }
+
+  .qty-input:focus {
+    border-color: #4f46e5;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+  }
+
+  .condition-badge {
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .condition-good {
+    background: #d1fae5;
+    color: #065f46;
+  }
+
+  .condition-damaged {
+    background: #fee2e2;
+    color: #991b1b;
+  }
+
+  .verify-btn {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    border: none;
+    padding: 15px 40px;
+    border-radius: 12px;
+    font-size: 18px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+  }
+
+  .verify-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3);
+    color: white;
+  }
+</style>
+
+<div class="receipt-container">
+  <!-- Back Button -->
+  <div class="mb-4">
+    <a href="{% url 'logistics:warehouse_receiving_dashboard' %}" class="btn btn-outline-secondary">
+      <i class="fas fa-arrow-left me-2"></i>
+      Back to Dashboard
+    </a>
+  </div>
+
+  <!-- Receipt Header -->
+  <div class="receipt-header">
+    <div class="row align-items-center">
+      <div class="col-md-8">
+        <h2 class="mb-2">
+          <i class="fas fa-box me-2"></i>
+          Order #{{ receipt.order.id }}
+        </h2>
+        <div class="d-flex align-items-center gap-3">
+          <div>
+            <i class="fas fa-barcode me-2"></i>
+            <span class="fs-6">{{ receipt.verification_code }}</span>
+          </div>
+          {% if receipt.shipment %}
+          <div>
+            <i class="fas fa-shipping-fast me-2"></i>
+            <span class="fs-6">Shipment #{{ receipt.shipment.id }}</span>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      <div class="col-md-4 text-end">
+        <a href="{% url 'logistics:generate_receipt_qr_code' receipt.id %}" 
+           class="btn btn-light btn-lg"
+           target="_blank">
+          <i class="fas fa-qrcode me-2"></i>
+          View QR Code
+        </a>
+      </div>
+    </div>
+  </div>
+
+  {% if receipt.is_verified %}
+    <!-- Already Verified -->
+    <div class="alert alert-success">
+      <div class="d-flex align-items-center">
+        <i class="fas fa-check-circle fa-2x me-3"></i>
+        <div>
+          <h5 class="mb-0">Already Verified</h5>
+          <p class="mb-0">
+            This receipt was verified on {{ receipt.verified_at|date:"M d, Y H:i" }}
+            by {{ receipt.received_by.get_full_name }}
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Show receipt details -->
+    <div class="card">
+      <div class="card-header">
+        <h5 class="mb-0">Received Items</h5>
+      </div>
+      <div class="card-body">
+        {% for item in receipt.items.all %}
+          <div class="item-row">
+            <div class="row align-items-center">
+              <div class="col-md-5">
+                <h6 class="mb-1">{{ item.order_item.product.name }}</h6>
+                <small class="text-muted">SKU: {{ item.order_item.product.sku|default:"N/A" }}</small>
+              </div>
+              <div class="col-md-3 text-center">
+                <div class="small text-muted">Quantity</div>
+                <div class="fw-bold fs-5">{{ item.received_quantity }}/{{ item.expected_quantity }}</div>
+              </div>
+              <div class="col-md-2">
+                <span class="condition-badge condition-{{ item.condition }}">
+                  {{ item.get_condition_display }}
+                </span>
+              </div>
+              <div class="col-md-2 text-end">
+                {% if item.is_complete and item.condition == 'good' %}
+                  <i class="fas fa-check-circle text-success fa-2x"></i>
+                {% else %}
+                  <i class="fas fa-exclamation-triangle text-warning fa-2x"></i>
+                {% endif %}
+              </div>
+            </div>
+            {% if item.notes %}
+              <div class="mt-2">
+                <small class="text-muted">Note: {{ item.notes }}</small>
+              </div>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+  {% else %}
+    <!-- Verification Form -->
+    <form method="post" action="{% url 'logistics:warehouse_verify_receipt' receipt.id %}" id="verifyForm">
+      {% csrf_token %}
+
+      <div class="card mb-4">
+        <div class="card-header">
+          <h5 class="mb-0">
+            <i class="fas fa-clipboard-check me-2"></i>
+            Verify Items
+            <span class="badge bg-info ms-2">{{ receipt.items.count }} items</span>
+          </h5>
+        </div>
+        <div class="card-body">
+          {% for item in receipt.items.all %}
+            <div class="item-row">
+              <div class="row align-items-center">
+                <!-- Product Info -->
+                <div class="col-md-4">
+                  <h6 class="mb-1">{{ item.order_item.product.name }}</h6>
+                  <small class="text-muted">SKU: {{ item.order_item.product.sku|default:"N/A" }}</small>
+                  <div class="mt-2">
+                    <span class="badge bg-secondary">Expected: {{ item.expected_quantity }}</span>
+                  </div>
+                </div>
+
+                <!-- Received Quantity -->
+                <div class="col-md-2">
+                  <label class="form-label small text-muted mb-1">Received</label>
+                  <input 
+                    type="number" 
+                    name="qty_{{ item.id }}" 
+                    class="qty-input form-control" 
+                    value="{{ item.expected_quantity }}"
+                    min="0"
+                    max="{{ item.expected_quantity|add:10 }}"
+                    required>
+                </div>
+
+                <!-- Condition -->
+                <div class="col-md-3">
+                  <label class="form-label small text-muted mb-1">Condition</label>
+                  <select name="condition_{{ item.id }}" class="form-select">
+                    <option value="good" selected>Good Condition</option>
+                    <option value="damaged">Damaged</option>
+                    <option value="missing">Missing</option>
+                  </select>
+                </div>
+
+                <!-- Notes -->
+                <div class="col-md-3">
+                  <label class="form-label small text-muted mb-1">Notes (Optional)</label>
+                  <input 
+                    type="text" 
+                    name="notes_{{ item.id }}" 
+                    class="form-control" 
+                    placeholder="Any issues?">
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Receipt Notes & Issues -->
+      <div class="card mb-4">
+        <div class="card-header">
+          <h5 class="mb-0">
+            <i class="fas fa-sticky-note me-2"></i>
+            Overall Notes
+          </h5>
+        </div>
+        <div class="card-body">
+          <div class="mb-3">
+            <label class="form-label">General Notes</label>
+            <textarea 
+              name="notes" 
+              class="form-control" 
+              rows="3"
+              placeholder="Any general observations about this shipment?"></textarea>
+          </div>
+
+          <div class="form-check">
+            <input 
+              class="form-check-input" 
+              type="checkbox" 
+              id="hasIssues" 
+              name="has_issues"
+              onchange="toggleIssueDescription()">
+            <label class="form-check-label fw-bold text-danger" for="hasIssues">
+              <i class="fas fa-exclamation-triangle me-2"></i>
+              Report Issues with this Shipment
+            </label>
+          </div>
+
+          <div id="issueDescriptionDiv" class="mt-3 d-none">
+            <label class="form-label">Issue Description</label>
+            <textarea 
+              name="issue_description" 
+              class="form-control" 
+              rows="3"
+              placeholder="Describe the issues found with this shipment..."></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- Verification Summary -->
+      <div class="card mb-4">
+        <div class="card-body text-center">
+          <h5 class="mb-3">Ready to Verify?</h5>
+          <p class="text-muted mb-4">
+            By clicking verify, you confirm that all information is accurate and
+            the store will be notified via email.
+          </p>
+          <button type="submit" class="verify-btn">
+            <i class="fas fa-check-circle me-2"></i>
+            Verify & Complete Receipt
+          </button>
+        </div>
+      </div>
+    </form>
+  {% endif %}
+</div>
+
+<script>
+function toggleIssueDescription() {
+  const checkbox = document.getElementById('hasIssues');
+  const div = document.getElementById('issueDescriptionDiv');
+  
+  if (checkbox.checked) {
+    div.classList.remove('d-none');
+  } else {
+    div.classList.add('d-none');
+  }
+}
+
+// Confirm before submitting
+document.getElementById('verifyForm')?.addEventListener('submit', function(e) {
+  if (!confirm('Are you sure you want to verify this receipt? The store will be notified.')) {
+    e.preventDefault();
+  }
+});
+</script>
+
+{% endblock %}

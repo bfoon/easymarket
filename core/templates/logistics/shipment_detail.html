@@ -3,6 +3,359 @@
 {% block title %}Shipment #{{ shipment.id }} - Logistics Management{% endblock %}
 
 {% block content %}
+
+<!-- ============================================================================
+     MODERN CHAT STYLES FOR AGENT-SHOP COMMUNICATION
+     ============================================================================ -->
+<style>
+  /* Chat Button Floating Action */
+  .chat-fab {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 24px;
+    box-shadow: 0 8px 24px rgba(79, 70, 229, 0.4);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    z-index: 999;
+    border: none;
+  }
+
+  .chat-fab:hover {
+    transform: scale(1.1);
+    box-shadow: 0 12px 32px rgba(79, 70, 229, 0.5);
+  }
+
+  .chat-fab.has-unread::after {
+    content: '';
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 12px;
+    height: 12px;
+    background: #ef4444;
+    border-radius: 50%;
+    border: 2px solid white;
+    animation: pulse 2s infinite;
+  }
+
+  /* Chat Overlay */
+  #shipmentChatOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    z-index: 9998;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+  }
+
+  #shipmentChatOverlay.active {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  /* Chat Container */
+  #shipmentChatContainer {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 450px;
+    max-width: calc(100vw - 40px);
+    height: 650px;
+    max-height: calc(100vh - 100px);
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    transform: translateY(100%) scale(0.8);
+    opacity: 0;
+    visibility: hidden;
+    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+                opacity 0.3s ease,
+                visibility 0.3s ease;
+  }
+
+  #shipmentChatContainer.active {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+    visibility: visible;
+  }
+
+  /* Chat Header */
+  .shipment-chat-header {
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    color: white;
+    padding: 20px;
+    border-radius: 20px 20px 0 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  }
+
+  .shipment-chat-header-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .shop-avatar {
+    width: 44px;
+    height: 44px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    backdrop-filter: blur(10px);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+  }
+
+  .shop-details h6 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  .shop-subtitle {
+    font-size: 12px;
+    opacity: 0.9;
+    margin-top: 2px;
+  }
+
+  .chat-close {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+  }
+
+  .chat-close:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: rotate(90deg);
+  }
+
+  /* Messages Area */
+  .shipment-chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    background: linear-gradient(to bottom, #f8f9fa 0%, #ffffff 100%);
+  }
+
+  .shipment-chat-messages::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .shipment-chat-messages::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .shipment-chat-messages::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 10px;
+  }
+
+  /* Message Bubble */
+  .chat-message {
+    margin-bottom: 12px;
+    animation: slideIn 0.3s ease;
+  }
+
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .chat-message-content {
+    max-width: 75%;
+    padding: 12px 16px;
+    border-radius: 16px;
+    word-wrap: break-word;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
+
+  .chat-message.from-agent .chat-message-content {
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    color: white;
+    margin-left: auto;
+    border-bottom-right-radius: 4px;
+  }
+
+  .chat-message.from-shop .chat-message-content {
+    background: white;
+    color: #1e293b;
+    border: 1px solid #e2e8f0;
+    border-bottom-left-radius: 4px;
+  }
+
+  .chat-message-image {
+    margin-top: 8px;
+    border-radius: 12px;
+    max-width: 250px;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+  }
+
+  .chat-message-image:hover {
+    transform: scale(1.02);
+  }
+
+  .chat-message-time {
+    font-size: 11px;
+    opacity: 0.6;
+    margin-top: 6px;
+    display: block;
+  }
+
+  /* Chat Input */
+  .shipment-chat-input {
+    padding: 15px 20px;
+    background: white;
+    border-radius: 0 0 20px 20px;
+    border-top: 1px solid #e9ecef;
+  }
+
+  .chat-controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .chat-controls input[type="text"] {
+    border-radius: 12px;
+    border: 2px solid #e2e8f0;
+    padding: 10px 15px;
+    transition: all 0.3s ease;
+  }
+
+  .chat-controls input[type="text"]:focus {
+    border-color: #4f46e5;
+    box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.1);
+    outline: none;
+  }
+
+  .chat-controls .btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+  }
+
+  .chat-controls .btn-primary {
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    border: none;
+  }
+
+  .chat-controls .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px rgba(79, 70, 229, 0.3);
+  }
+
+  /* Empty State */
+  .chat-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #94a3b8;
+    text-align: center;
+    padding: 40px;
+  }
+
+  .chat-empty-state i {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.5;
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    #shipmentChatContainer {
+      width: calc(100vw - 20px);
+      height: calc(100vh - 80px);
+      bottom: 10px;
+      right: 10px;
+    }
+
+    .chat-fab {
+      bottom: 20px;
+      right: 20px;
+      width: 56px;
+      height: 56px;
+    }
+  }
+
+  /* Image Preview */
+  .chat-image-preview {
+    position: relative;
+    display: inline-block;
+    margin-bottom: 8px;
+  }
+
+  .chat-image-preview img {
+    max-width: 150px;
+    max-height: 150px;
+    border-radius: 8px;
+    border: 2px solid #e2e8f0;
+  }
+
+  .chat-remove-image {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: #dc3545;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    transition: transform 0.2s ease;
+  }
+
+  .chat-remove-image:hover {
+    transform: scale(1.1);
+  }
+</style>
+
 <!-- Status Alert (In Transit or Delivered) -->
 {% if status_message %}
 <div class="alert alert-{{ status_message.type }} alert-dismissible fade show" role="alert">
@@ -35,14 +388,20 @@
             {% endif %}
         </p>
     </div>
-    <div>
+    <div class="d-flex gap-2">
+        <!-- Chat with Shop Button -->
+        <button type="button" class="btn btn-primary" onclick="toggleShipmentChat()">
+            <i class="fas fa-comments me-1"></i>
+            Chat with Shop
+        </button>
+
         {% if can_edit_shipment %}
-            <a href="{% url 'logistics:shipment_edit' shipment.pk %}" class="btn btn-warning me-2">
+            <a href="{% url 'logistics:shipment_edit' shipment.pk %}" class="btn btn-warning">
                 <i class="fas fa-edit me-1"></i>
                 Edit Shipment
             </a>
         {% else %}
-            <button class="btn btn-outline-secondary me-2" disabled
+            <button class="btn btn-outline-secondary" disabled
                     title="Cannot edit - Shipment is {{ shipment.get_status_display }}">
                 <i class="fas fa-lock me-1"></i>
                 Edit Locked
@@ -487,6 +846,90 @@
     </div>
 </div>
 
+<!-- ============================================================================
+     CHAT INTERFACE WITH SHOP
+     ============================================================================ -->
+<!-- Floating Action Button -->
+<button class="chat-fab" onclick="toggleShipmentChat()" title="Chat with Shop">
+  <i class="fas fa-comments"></i>
+</button>
+
+<!-- Chat Overlay -->
+<div id="shipmentChatOverlay" onclick="toggleShipmentChat()"></div>
+
+<!-- Chat Container -->
+<div id="shipmentChatContainer">
+  <!-- Chat Header -->
+  <div class="shipment-chat-header">
+    <div class="shipment-chat-header-info">
+      <div class="shop-avatar">
+        <i class="fas fa-store"></i>
+      </div>
+      <div class="shop-details">
+        <h6>Chat with Shop</h6>
+        <div class="shop-subtitle">
+          Shipment #{{ shipment.shipment_number }}
+        </div>
+      </div>
+    </div>
+    <button type="button" class="chat-close" onclick="toggleShipmentChat()">
+      <i class="fas fa-times"></i>
+    </button>
+  </div>
+
+  <!-- Chat Messages -->
+  <div class="shipment-chat-messages" id="shipmentChatMessages">
+    <!-- Empty State -->
+    <div class="chat-empty-state" id="chatEmptyState">
+      <i class="fas fa-comments"></i>
+      <h6 class="text-muted">No messages yet</h6>
+      <p class="small">Start the conversation with the shop</p>
+    </div>
+    <!-- Messages will be loaded here -->
+  </div>
+
+  <!-- Chat Input -->
+  <div class="shipment-chat-input">
+    <form id="shipmentChatForm" enctype="multipart/form-data">
+      {% csrf_token %}
+      <input type="hidden" name="shipment_id" value="{{ shipment.id }}">
+
+      <!-- Image Preview -->
+      <div id="chatImagePreview" class="d-none chat-image-preview">
+        <img id="chatImagePreviewImg" src="" alt="Preview">
+        <button type="button" class="chat-remove-image" onclick="clearChatImagePreview()">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+
+      <!-- Chat Controls -->
+      <div class="chat-controls">
+        <input type="file" id="chatImage" name="image" accept="image/*" class="d-none">
+
+        <button type="button"
+                class="btn btn-outline-secondary"
+                onclick="document.getElementById('chatImage').click()"
+                title="Attach image">
+          <i class="fas fa-image"></i>
+        </button>
+
+        <input type="text"
+               id="chatMessageInput"
+               name="message"
+               class="form-control flex-grow-1"
+               placeholder="Type your message to the shop..."
+               autocomplete="off">
+
+        <button type="submit"
+                class="btn btn-primary"
+                id="sendChatBtn">
+          <i class="fas fa-paper-plane"></i>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <style>
 .status-badge {
     display: inline-block;
@@ -531,7 +974,275 @@
 }
 </style>
 
+<!-- ============================================================================
+     JAVASCRIPT
+     ============================================================================ -->
 <script>
+// ========================================
+// CHAT FUNCTIONS
+// ========================================
+function toggleShipmentChat() {
+  const overlay = document.getElementById('shipmentChatOverlay');
+  const chatContainer = document.getElementById('shipmentChatContainer');
+  const fab = document.querySelector('.chat-fab');
+
+  overlay.classList.toggle('active');
+  chatContainer.classList.toggle('active');
+
+  if (chatContainer.classList.contains('active')) {
+    setTimeout(() => {
+      document.getElementById('chatMessageInput')?.focus();
+      scrollChatToBottom();
+    }, 300);
+  }
+}
+
+function scrollChatToBottom() {
+  const messagesContainer = document.getElementById('shipmentChatMessages');
+  if (messagesContainer) {
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+  }
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function buildChatMessage(msg, isFromAgent = false) {
+  const messageDiv = document.createElement('div');
+  messageDiv.className = `chat-message ${isFromAgent ? 'from-agent' : 'from-shop'}`;
+
+  let html = `<div class="chat-message-content">`;
+
+  if (msg.content) {
+    html += `<div>${escapeHtml(msg.content)}</div>`;
+  }
+
+  if (msg.image_url) {
+    html += `<img src="${msg.image_url}" alt="Image" class="chat-message-image" onclick="window.open('${msg.image_url}', '_blank')">`;
+  }
+
+  html += `<span class="chat-message-time">${msg.timestamp || 'Just now'}</span>`;
+  html += `</div>`;
+
+  messageDiv.innerHTML = html;
+  return messageDiv;
+}
+
+// Image Preview
+document.addEventListener('DOMContentLoaded', function() {
+  const chatImage = document.getElementById('chatImage');
+  const chatImagePreview = document.getElementById('chatImagePreview');
+  const chatImagePreviewImg = document.getElementById('chatImagePreviewImg');
+
+  if (chatImage) {
+    chatImage.addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      if (!file.type.startsWith('image/')) {
+        alert('Please select a valid image file.');
+        this.value = '';
+        return;
+      }
+
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Image size must be less than 5MB.');
+        this.value = '';
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        if (chatImagePreviewImg) chatImagePreviewImg.src = e.target.result;
+        if (chatImagePreview) chatImagePreview.classList.remove('d-none');
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Chat Form Submit
+  const chatForm = document.getElementById('shipmentChatForm');
+  const chatInput = document.getElementById('chatMessageInput');
+  const sendBtn = document.getElementById('sendChatBtn');
+  const chatMessages = document.getElementById('shipmentChatMessages');
+  const emptyState = document.getElementById('chatEmptyState');
+
+  if (chatForm) {
+    chatForm.addEventListener('submit', function(e) {
+      e.preventDefault();
+
+      const text = (chatInput?.value || '').trim();
+      const hasImage = chatImage && chatImage.files && chatImage.files[0];
+
+      if (!text && !hasImage) return;
+
+      const original = sendBtn.innerHTML;
+      sendBtn.disabled = true;
+      sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+      const formData = new FormData(chatForm);
+
+      // TODO: Replace with your actual endpoint
+      const sendUrl = '/logistics/shipments/{{ shipment.id }}/chat/send/';
+
+      fetch(sendUrl, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+        }
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (!data.success || !data.message) throw new Error(data.error || 'Send failed');
+
+        const m = data.message;
+        const messageEl = buildChatMessage({
+          content: m.content || text,
+          image_url: m.image_url || '',
+          timestamp: m.created_at || 'Just now'
+        }, true);
+
+        chatMessages.appendChild(messageEl);
+
+        if (emptyState) emptyState.style.display = 'none';
+
+        if (chatInput) chatInput.value = '';
+        clearChatImagePreview();
+        scrollChatToBottom();
+      })
+      .catch(() => alert('Failed to send message.'))
+      .finally(() => {
+        sendBtn.disabled = false;
+        sendBtn.innerHTML = original;
+      });
+    });
+  }
+
+  // Enter to send
+  if (chatInput) {
+    chatInput.addEventListener('keypress', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        chatForm.dispatchEvent(new Event('submit'));
+      }
+    });
+  }
+
+  // ========================================
+  // LOAD AND AUTO-REFRESH MESSAGES
+  // ========================================
+  const seenMessageIds = new Set();
+
+  function loadChatMessages() {
+    const loadUrl = '/logistics/shipments/{{ shipment.id }}/chat/messages/';
+    const chatMessages = document.getElementById('shipmentChatMessages');
+    const emptyState = document.getElementById('chatEmptyState');
+
+    if (!chatMessages) return;
+
+    fetch(loadUrl, {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(r => {
+      if (!r.ok) throw new Error('Failed to load');
+      return r.json();
+    })
+    .then(data => {
+      if (!data.success) {
+        console.error('Load failed:', data.message);
+        return;
+      }
+
+      // First load: clear everything and add all messages
+      if (seenMessageIds.size === 0) {
+        // Remove all existing messages except empty state
+        Array.from(chatMessages.children).forEach(child => {
+          if (child.id !== 'chatEmptyState') {
+            child.remove();
+          }
+        });
+
+        // Add all messages
+        data.messages.forEach(m => {
+          seenMessageIds.add(m.id);
+          const messageEl = buildChatMessage({
+            content: m.content,
+            image_url: m.image_url,
+            timestamp: m.timestamp
+          }, m.is_from_agent || m.is_self);
+
+          chatMessages.appendChild(messageEl);
+        });
+      } else {
+        // Subsequent loads: only add new messages
+        data.messages.forEach(m => {
+          if (!seenMessageIds.has(m.id)) {
+            seenMessageIds.add(m.id);
+            const messageEl = buildChatMessage({
+              content: m.content,
+              image_url: m.image_url,
+              timestamp: m.timestamp
+            }, m.is_from_agent || m.is_self);
+
+            chatMessages.appendChild(messageEl);
+          }
+        });
+      }
+
+      // Hide/show empty state
+      if (data.messages.length > 0 && emptyState) {
+        emptyState.style.display = 'none';
+      } else if (data.messages.length === 0 && emptyState) {
+        emptyState.style.display = 'flex';
+      }
+
+      scrollChatToBottom();
+    })
+    .catch(err => {
+      console.error('Error loading messages:', err);
+    });
+  }
+
+  // Load messages when page loads
+  loadChatMessages();
+
+  // Auto-refresh messages every 5 seconds
+  setInterval(loadChatMessages, 5000);
+
+  // Also load when chat is opened
+  window.toggleShipmentChat = function() {
+    const overlay = document.getElementById('shipmentChatOverlay');
+    const chatContainer = document.getElementById('shipmentChatContainer');
+
+    overlay.classList.toggle('active');
+    chatContainer.classList.toggle('active');
+
+    if (chatContainer.classList.contains('active')) {
+      setTimeout(() => {
+        document.getElementById('chatMessageInput')?.focus();
+        loadChatMessages(); // Load latest messages when opening
+        scrollChatToBottom();
+      }, 300);
+    }
+  };
+});
+
+function clearChatImagePreview() {
+  const chatImage = document.getElementById('chatImage');
+  const chatImagePreview = document.getElementById('chatImagePreview');
+
+  if (chatImage) chatImage.value = '';
+  if (chatImagePreview) chatImagePreview.classList.add('d-none');
+}
+
+// ========================================
+// SHIPMENT STATUS UPDATE
+// ========================================
 function updateStatus(newStatus) {
     if (!confirm(`Are you sure you want to mark this shipment as "${newStatus.replace('_', ' ')}"?`)) {
         return;

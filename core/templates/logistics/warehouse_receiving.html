@@ -1,0 +1,302 @@
+{% extends 'logistics/base.html' %}
+
+{% block title %}Warehouse Receiving - Logistics{% endblock %}
+
+{% block content %}
+
+<style>
+  .stats-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease;
+  }
+
+  .stats-card:hover {
+    transform: translateY(-4px);
+  }
+
+  .stats-number {
+    font-size: 48px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+
+  .stats-label {
+    font-size: 14px;
+    opacity: 0.9;
+  }
+
+  .receipt-card {
+    border-radius: 12px;
+    border: 2px solid #e5e7eb;
+    transition: all 0.3s ease;
+    margin-bottom: 16px;
+  }
+
+  .receipt-card:hover {
+    border-color: #667eea;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+  }
+
+  .receipt-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .status-pending {
+    background: #fef3c7;
+    color: #92400e;
+  }
+
+  .status-received {
+    background: #d1fae5;
+    color: #065f46;
+  }
+
+  .status-discrepancy {
+    background: #fee2e2;
+    color: #991b1b;
+  }
+
+  .qr-btn {
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+  }
+
+  .qr-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px rgba(79, 70, 229, 0.3);
+    color: white;
+  }
+
+  .scan-badge {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    width: 70px;
+    height: 70px;
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 28px;
+    box-shadow: 0 8px 24px rgba(16, 185, 129, 0.4);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    z-index: 999;
+  }
+
+  .scan-badge:hover {
+    transform: scale(1.1);
+    box-shadow: 0 12px 32px rgba(16, 185, 129, 0.5);
+  }
+</style>
+
+<!-- Page Header -->
+<div class="page-header d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h1 class="page-title">
+      <i class="fas fa-warehouse me-2"></i>
+      Warehouse Receiving
+    </h1>
+    <p class="page-subtitle">Scan, verify, and receive shipments</p>
+  </div>
+  <div>
+    <a href="{% url 'logistics:warehouse_scan_verify' %}" class="btn btn-success btn-lg">
+      <i class="fas fa-qrcode me-2"></i>
+      Scan QR Code
+    </a>
+  </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+  <div class="col-md-4">
+    <div class="stats-card" style="background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);">
+      <div class="stats-number">{{ stats.pending }}</div>
+      <div class="stats-label">
+        <i class="fas fa-clock me-1"></i>
+        Pending Receipt
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="stats-card" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
+      <div class="stats-number">{{ stats.received_today }}</div>
+      <div class="stats-label">
+        <i class="fas fa-check-circle me-1"></i>
+        Received Today
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="stats-card" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);">
+      <div class="stats-number">{{ stats.has_issues }}</div>
+      <div class="stats-label">
+        <i class="fas fa-exclamation-triangle me-1"></i>
+        Has Issues
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Pending Receipts -->
+<div class="card mb-4">
+  <div class="card-header">
+    <h5 class="mb-0">
+      <i class="fas fa-inbox me-2"></i>
+      Pending Shipments
+      <span class="badge bg-warning ms-2">{{ pending_receipts.count }}</span>
+    </h5>
+  </div>
+  <div class="card-body">
+    {% if pending_receipts %}
+      {% for receipt in pending_receipts %}
+        <div class="receipt-card p-3">
+          <div class="row align-items-center">
+            <div class="col-md-3">
+              <h6 class="mb-1">Order #{{ receipt.order.id }}</h6>
+              <small class="text-muted">
+                <i class="fas fa-barcode me-1"></i>
+                {{ receipt.verification_code }}
+              </small>
+            </div>
+            <div class="col-md-3">
+              <div class="small text-muted">Items</div>
+              <div class="fw-bold">{{ receipt.items.count }} items</div>
+            </div>
+            <div class="col-md-2">
+              <span class="receipt-status status-{{ receipt.status }}">
+                <i class="fas fa-circle" style="font-size: 8px;"></i>
+                {{ receipt.get_status_display }}
+              </span>
+            </div>
+            <div class="col-md-2">
+              <div class="small text-muted">Created</div>
+              <div class="fw-bold">{{ receipt.created_at|date:"M d, Y" }}</div>
+            </div>
+            <div class="col-md-2 text-end">
+              <div class="btn-group">
+                <a href="{% url 'logistics:warehouse_receipt_detail' receipt.id %}" 
+                   class="btn btn-sm btn-outline-primary">
+                  <i class="fas fa-eye"></i>
+                  View
+                </a>
+                <a href="{% url 'logistics:generate_receipt_qr_code' receipt.id %}" 
+                   class="btn btn-sm btn-outline-secondary"
+                   target="_blank"
+                   title="View QR Code">
+                  <i class="fas fa-qrcode"></i>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    {% else %}
+      <div class="alert alert-info text-center">
+        <i class="fas fa-inbox me-2"></i>
+        No pending shipments to receive.
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Recently Received -->
+<div class="card">
+  <div class="card-header">
+    <h5 class="mb-0">
+      <i class="fas fa-check-circle me-2"></i>
+      Recently Received
+      <small class="text-muted">(Last 7 days)</small>
+    </h5>
+  </div>
+  <div class="card-body">
+    {% if recent_receipts %}
+      <div class="table-responsive">
+        <table class="table table-hover">
+          <thead>
+            <tr>
+              <th>Order</th>
+              <th>Verification Code</th>
+              <th>Received By</th>
+              <th>Received At</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for receipt in recent_receipts %}
+              <tr>
+                <td>
+                  <strong>#{{ receipt.order.id }}</strong>
+                </td>
+                <td>
+                  <code>{{ receipt.verification_code }}</code>
+                </td>
+                <td>
+                  {% if receipt.received_by %}
+                    <div class="d-flex align-items-center gap-2">
+                      <i class="fas fa-user-circle"></i>
+                      {{ receipt.received_by.get_full_name }}
+                    </div>
+                  {% else %}
+                    <span class="text-muted">—</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {{ receipt.received_at|date:"M d, Y H:i" }}
+                </td>
+                <td>
+                  <span class="receipt-status status-{{ receipt.status }}">
+                    <i class="fas fa-circle" style="font-size: 8px;"></i>
+                    {{ receipt.get_status_display }}
+                  </span>
+                  {% if receipt.has_issues %}
+                    <span class="badge bg-danger ms-1">
+                      <i class="fas fa-exclamation-triangle"></i>
+                    </span>
+                  {% endif %}
+                </td>
+                <td>
+                  <a href="{% url 'logistics:warehouse_receipt_detail' receipt.id %}" 
+                     class="btn btn-sm btn-outline-primary">
+                    <i class="fas fa-eye me-1"></i>
+                    View
+                  </a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="alert alert-info text-center">
+        <i class="fas fa-info-circle me-2"></i>
+        No recent receipts.
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Floating Scan Button -->
+<a href="{% url 'logistics:warehouse_scan_verify' %}" class="scan-badge" title="Scan QR Code">
+  <i class="fas fa-qrcode"></i>
+</a>
+
+{% endblock %}

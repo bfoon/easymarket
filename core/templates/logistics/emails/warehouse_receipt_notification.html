@@ -1,0 +1,250 @@
+<!-- ============================================================================
+     EMAIL TEMPLATE: Warehouse Receipt Notification
+     Save as: templates/logistics/emails/warehouse_receipt_notification.html
+     ============================================================================ -->
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Received at Warehouse</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+        }
+        .header {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 28px;
+        }
+        .header p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+            font-size: 16px;
+        }
+        .content {
+            padding: 30px;
+        }
+        .info-box {
+            background: #f9fafb;
+            border-left: 4px solid #10b981;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .info-row:last-child {
+            border-bottom: none;
+        }
+        .info-label {
+            font-weight: 600;
+            color: #6b7280;
+        }
+        .info-value {
+            color: #111827;
+            font-weight: 600;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .status-success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        .status-warning {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        .status-danger {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        .items-table th {
+            background: #f3f4f6;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #374151;
+            border-bottom: 2px solid #e5e7eb;
+        }
+        .items-table td {
+            padding: 12px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .alert-box {
+            background: #fee2e2;
+            border: 2px solid #ef4444;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .alert-box h3 {
+            margin: 0 0 10px 0;
+            color: #991b1b;
+        }
+        .button {
+            display: inline-block;
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: white;
+            padding: 14px 30px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            margin: 20px 0;
+        }
+        .footer {
+            background: #f9fafb;
+            padding: 30px;
+            text-align: center;
+            color: #6b7280;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>✓ Order Received at Warehouse</h1>
+            <p>Your items have been successfully received</p>
+        </div>
+
+        <!-- Content -->
+        <div class="content">
+            <p>Hello {{ store_name }},</p>
+            
+            <p>Great news! Your order has been received at our warehouse and has been verified by our team.</p>
+
+            <!-- Order Information -->
+            <div class="info-box">
+                <div class="info-row">
+                    <span class="info-label">Order Number</span>
+                    <span class="info-value">#{{ order.id }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Verification Code</span>
+                    <span class="info-value">{{ receipt.verification_code }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Received At</span>
+                    <span class="info-value">{{ received_at|date:"M d, Y H:i" }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Received By</span>
+                    <span class="info-value">{{ received_by }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Status</span>
+                    <span class="info-value">
+                        <span class="status-badge status-{% if has_issues %}danger{% else %}success{% endif %}">
+                            {{ receipt.get_status_display }}
+                        </span>
+                    </span>
+                </div>
+            </div>
+
+            <!-- Items Received -->
+            <h3>Items Received:</h3>
+            <table class="items-table">
+                <thead>
+                    <tr>
+                        <th>Product</th>
+                        <th>Expected</th>
+                        <th>Received</th>
+                        <th>Condition</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in receipt.items.all %}
+                    <tr>
+                        <td>{{ item.order_item.product.name }}</td>
+                        <td>{{ item.expected_quantity }}</td>
+                        <td>
+                            <strong>{{ item.received_quantity }}</strong>
+                            {% if item.received_quantity != item.expected_quantity %}
+                                <span style="color: #dc2626;">⚠️</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="status-badge status-{% if item.condition == 'good' %}success{% elif item.condition == 'damaged' %}danger{% else %}warning{% endif %}">
+                                {{ item.get_condition_display }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <!-- Issues Alert -->
+            {% if has_issues %}
+            <div class="alert-box">
+                <h3>⚠️ Issues Reported</h3>
+                <p><strong>Issue Description:</strong></p>
+                <p>{{ issue_description }}</p>
+                <p><em>Please contact our warehouse team for more details or resolution.</em></p>
+            </div>
+            {% endif %}
+
+            <!-- Notes -->
+            {% if receipt.notes %}
+            <div class="info-box">
+                <strong>Warehouse Notes:</strong>
+                <p style="margin: 10px 0 0 0;">{{ receipt.notes }}</p>
+            </div>
+            {% endif %}
+
+            <!-- Call to Action -->
+            <div style="text-align: center;">
+                <a href="{{ order_url }}" class="button">
+                    View Order Details
+                </a>
+            </div>
+
+            <p style="margin-top: 30px;">
+                If you have any questions or concerns about this receipt, please don't hesitate to contact us.
+            </p>
+
+            <p>
+                Thank you for your business!<br>
+                <strong>The Logistics Team</strong>
+            </p>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p>This is an automated notification. Please do not reply to this email.</p>
+            <p>© 2026 Your Company. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>
