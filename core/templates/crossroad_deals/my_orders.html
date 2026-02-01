@@ -1,0 +1,284 @@
+{% extends "base.html" %}
+{% load static %}
+{% load humanize %}
+{% load currency_tags %}
+
+{% block title %}My Crossroad Orders{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+
+<style>
+  /* Lightweight local styles (safe + simple) */
+  .cr-hero {
+    border-radius: 18px;
+    background: linear-gradient(135deg, rgba(220,53,69,.10), rgba(13,110,253,.10));
+    border: 1px solid rgba(0,0,0,.06);
+  }
+  .cr-chip {
+    border-radius: 999px;
+    border: 1px solid rgba(0,0,0,.08);
+    background: #fff;
+    padding: .4rem .7rem;
+    font-size: .85rem;
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+  }
+  .cr-order-card {
+    border-radius: 18px;
+    border: 1px solid rgba(0,0,0,.08);
+  }
+  .cr-thumb {
+    width: 64px; height: 64px;
+    object-fit: cover;
+    border-radius: 14px;
+    border: 1px solid rgba(0,0,0,.10);
+    background: #f8f9fa;
+  }
+  .cr-muted { color: rgba(0,0,0,.55); }
+  .cr-actions .btn { border-radius: 12px; }
+</style>
+
+<div class="container py-4">
+
+  <!-- Hero Header -->
+  <div class="cr-hero p-4 p-md-4 mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+      <div>
+        <h3 class="fw-bold mb-1">
+          <i class="fas fa-receipt me-2 text-danger"></i>My Crossroad Orders
+        </h3>
+        <div class="cr-muted">
+          Track payments, delivery updates, and order status — all in one place.
+        </div>
+
+        <!-- Quick Chips -->
+        <div class="d-flex flex-wrap gap-2 mt-3">
+          <span class="cr-chip">
+            <i class="fas fa-list text-primary"></i>
+            <span>Total:</span>
+            <strong>{{ orders|length }}</strong>
+          </span>
+
+          {# Optional: if your view passes counts, show them. If not, chips still look fine. #}
+          {% if pending_payment_count is not None %}
+            <span class="cr-chip">
+              <i class="fas fa-lock text-warning"></i>
+              Pending payment: <strong>{{ pending_payment_count }}</strong>
+            </span>
+          {% endif %}
+
+          {% if delivered_count is not None %}
+            <span class="cr-chip">
+              <i class="fas fa-box-check text-success"></i>
+              Delivered: <strong>{{ delivered_count }}</strong>
+            </span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="d-flex gap-2">
+        <a href="{% url 'crossroad_deals:listing_list' %}" class="btn btn-outline-dark">
+          <i class="fas fa-road me-1"></i>Browse Deals
+        </a>
+      </div>
+    </div>
+  </div>
+
+  {% if orders %}
+
+    <!-- Orders List -->
+    <div class="row g-3">
+
+      {% for order in orders %}
+      <div class="col-12">
+        <div class="card shadow-sm cr-order-card">
+          <div class="card-body p-3 p-md-4">
+
+            <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+
+              <!-- Left: Item -->
+              <div class="d-flex gap-3 align-items-start" style="min-width: 280px;">
+                {% if order.listing.image_1 %}
+                  <img class="cr-thumb" src="{{ order.listing.image_1.url }}" alt="{{ order.listing.title }}">
+                {% else %}
+                  <div class="cr-thumb d-flex align-items-center justify-content-center">
+                    <i class="fas fa-box text-muted"></i>
+                  </div>
+                {% endif %}
+
+                <div class="min-w-0">
+                  <div class="d-flex flex-wrap align-items-center gap-2">
+                    <div class="fw-bold text-truncate" style="max-width: 520px;">
+                      {{ order.listing.title }}
+                    </div>
+
+                    <span class="badge bg-dark">
+                      {{ order.order_id|stringformat:"s"|slice:":8" }}
+                    </span>
+
+                    {% if order.requested_vetting %}
+                      <span class="badge bg-info">
+                        <i class="fas fa-shield-alt me-1"></i>Vetting
+                      </span>
+                    {% endif %}
+                  </div>
+
+                  <div class="small cr-muted mt-1">
+                    Qty: <strong>{{ order.quantity }}</strong>
+                    <span class="mx-2">•</span>
+                    Unit:
+                    <strong>D{{ order.unit_price|floatformat:2|intcomma }}</strong>
+                    <span class="mx-2">•</span>
+                    Created:
+                    <strong>{{ order.created_at|date:"M d, Y" }}</strong>
+                    <span class="cr-muted">({{ order.created_at|time:"H:i" }})</span>
+                  </div>
+
+                  <div class="small cr-muted mt-1">
+                    Delivery:
+                    {% if order.delivery_method == "pickup" %}
+                      <span class="badge bg-warning text-dark">
+                        <i class="fas fa-store me-1"></i>Pickup
+                      </span>
+                    {% elif order.delivery_method == "delivery" %}
+                      <span class="badge bg-success">
+                        <i class="fas fa-truck me-1"></i>Easy Move
+                      </span>
+                    {% else %}
+                      <span class="badge bg-light text-dark">{{ order.get_delivery_method_display }}</span>
+                    {% endif %}
+                    <span class="ms-2">Fee: <strong>D{{ order.delivery_fee|floatformat:2|intcomma }}</strong></span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Middle: Money + Status -->
+              <div class="d-flex flex-wrap align-items-start gap-3">
+                <div>
+                  <div class="small cr-muted">Subtotal</div>
+                  <div class="fw-semibold">D{{ order.subtotal|floatformat:2|intcomma }}</div>
+                </div>
+                <div>
+                  <div class="small cr-muted">Total</div>
+                  <div class="fw-bold text-danger">D{{ order.total_amount|floatformat:2|intcomma }}</div>
+                </div>
+
+                <div>
+                  <div class="small cr-muted">Status</div>
+
+                  {% if order.status == "pending_payment" %}
+                    <span class="badge bg-warning text-dark">
+                      <i class="fas fa-lock me-1"></i>Pending Payment
+                    </span>
+                  {% elif order.status == "paid" %}
+                    <span class="badge bg-info">
+                      <i class="fas fa-check-circle me-1"></i>Paid
+                    </span>
+                  {% elif order.status == "confirmed" %}
+                    <span class="badge bg-primary">
+                      <i class="fas fa-check me-1"></i>Confirmed
+                    </span>
+                  {% elif order.status == "pickup_scheduled" %}
+                    <span class="badge bg-info">
+                      <i class="fas fa-calendar-check me-1"></i>Pickup Scheduled
+                    </span>
+                  {% elif order.status == "in_transit" %}
+                    <span class="badge bg-secondary">
+                      <i class="fas fa-truck-moving me-1"></i>In Transit
+                    </span>
+                  {% elif order.status == "delivered" %}
+                    <span class="badge bg-success">
+                      <i class="fas fa-box-check me-1"></i>Delivered
+                    </span>
+                  {% elif order.status == "cancelled" %}
+                    <span class="badge bg-danger">
+                      <i class="fas fa-times me-1"></i>Cancelled
+                    </span>
+                  {% elif order.status == "disputed" %}
+                    <span class="badge bg-dark">
+                      <i class="fas fa-gavel me-1"></i>Disputed
+                    </span>
+                  {% else %}
+                    <span class="badge bg-light text-dark">{{ order.get_status_display }}</span>
+                  {% endif %}
+
+                  {% if order.confirmed_at %}
+                    <div class="small cr-muted mt-1">
+                      Confirmed: {{ order.confirmed_at|date:"M d, Y" }}
+                    </div>
+                  {% endif %}
+                </div>
+              </div>
+
+              <!-- Right: Actions -->
+              <div class="cr-actions ms-auto">
+                <div class="d-flex flex-wrap gap-2 justify-content-end">
+
+                  <a href="{% url 'crossroad_deals:listing_detail' order.listing.listing_id %}"
+                     class="btn btn-outline-primary btn-sm">
+                    <i class="fas fa-eye me-1"></i>View Item
+                  </a>
+
+                  {# Pay now button (only if you implemented payment flow) #}
+                  {% if order.status == "pending_payment" %}
+                    <a href="{% url 'crossroad_deals:order_pay' order.order_id %}"
+                       class="btn btn-danger btn-sm">
+                      <i class="fas fa-credit-card me-1"></i>Pay Now
+                    </a>
+                  {% endif %}
+
+                  {# Optional: Track button if you have a tracking page #}
+                  {% if order.status == "in_transit" %}
+                    <a href="#" class="btn btn-outline-dark btn-sm" aria-disabled="true">
+                      <i class="fas fa-location-arrow me-1"></i>Track
+                    </a>
+                  {% endif %}
+
+                  {# Review badge/action if delivered (connect to your review URL if you have one) #}
+                  {% if order.status == "delivered" %}
+                    <span class="badge bg-success-subtle text-success border align-self-center px-3 py-2" style="border-radius: 999px;">
+                      <i class="fas fa-star me-1"></i>Review available
+                    </span>
+                  {% endif %}
+                </div>
+
+                {# Payment method note (optional) #}
+                {% if order.payment_method %}
+                  <div class="small cr-muted text-end mt-2">
+                    Payment: <strong>{{ order.payment_method|upper }}</strong>
+                    {% if order.payment_reference %}
+                      <span class="cr-muted">• Ref: {{ order.payment_reference|slice:":12" }}</span>
+                    {% endif %}
+                  </div>
+                {% endif %}
+              </div>
+
+            </div>
+
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+
+    </div>
+
+  {% else %}
+    <!-- Empty State -->
+    <div class="text-center py-5">
+      <div class="mb-3">
+        <i class="fas fa-receipt fa-3x text-muted"></i>
+      </div>
+      <h5 class="fw-bold">No orders yet</h5>
+      <p class="text-muted mb-3">
+        You haven’t placed any Crossroad orders yet. When you do, they’ll appear here with tracking and payment status.
+      </p>
+      <a href="{% url 'crossroad_deals:listing_list' %}" class="btn btn-dark">
+        <i class="fas fa-road me-1"></i>Browse Listings
+      </a>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}

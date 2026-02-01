@@ -1,0 +1,285 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+<section class="py-4 bg-light min-vh-100">
+  <div class="container">
+    
+    <!-- Header -->
+    <div class="mb-4">
+      <h1 class="h2 fw-bold mb-2">
+        <i class="fas fa-plus me-2 text-danger"></i>Create Listing
+      </h1>
+      <p class="text-muted">List your item on Crossroad Deals</p>
+    </div>
+
+    <div class="row">
+      <div class="col-lg-8">
+        
+        <form method="post" enctype="multipart/form-data">
+          {% csrf_token %}
+          
+          <!-- Basic Information -->
+          <div class="card shadow-sm mb-4">
+            <div class="card-header bg-dark text-white">
+              <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>Basic Information</h5>
+            </div>
+            <div class="card-body">
+              
+              <div class="mb-3">
+                <label class="form-label">Title *</label>
+                <input type="text" class="form-control" name="title" required maxlength="200">
+                <small class="text-muted">Be clear and descriptive</small>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label">Description *</label>
+                <textarea class="form-control" name="description" rows="5" required></textarea>
+                <small class="text-muted">Provide detailed information about your item</small>
+              </div>
+
+              <div class="row">
+                <div class="col-md-6 mb-3">
+                  <label class="form-label">Condition *</label>
+                  <select class="form-select" name="condition" required>
+                    {% for value, label in conditions %}
+                      <option value="{{ value }}">{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+
+                <div class="col-md-6 mb-3">
+                  <label class="form-label">Quantity *</label>
+                  <input type="number" class="form-control" name="quantity" min="1" value="1" required>
+                </div>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label">Price (GMD) *</label>
+                <input type="number" class="form-control" name="price" step="0.01" min="0" required>
+                <small class="text-muted">Enter the price in Gambian Dalasi</small>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Images -->
+          <div class="card shadow-sm mb-4">
+            <div class="card-header bg-dark text-white">
+              <h5 class="mb-0"><i class="fas fa-images me-2"></i>Images (Max 2)</h5>
+            </div>
+            <div class="card-body">
+              
+              <div class="mb-3">
+                <label class="form-label">Primary Image *</label>
+                <input type="file" class="form-control" name="image_1" accept="image/*" required>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label">Secondary Image (Optional)</label>
+                <input type="file" class="form-control" name="image_2" accept="image/*">
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Location -->
+          <div class="card shadow-sm mb-4">
+            <div class="card-header bg-dark text-white">
+              <h5 class="mb-0"><i class="fas fa-map-marker-alt me-2"></i>Location</h5>
+            </div>
+            <div class="card-body">
+              
+              <div class="mb-3">
+                <label class="form-label">Geocode *</label>
+                <input type="text" class="form-control" name="geocode" required>
+                <small class="text-muted">Required for pickup/delivery tracking</small>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label">Location Description (Optional)</label>
+                <input type="text" class="form-control" name="location_description" placeholder="e.g., Serekunda Market Area">
+                <small class="text-muted">General area only, not exact address</small>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Privacy Controls -->
+          <div class="card shadow-sm mb-4 border-warning">
+            <div class="card-header bg-warning text-dark">
+              <h5 class="mb-0"><i class="fas fa-shield-alt me-2"></i>Privacy Controls</h5>
+            </div>
+            <div class="card-body">
+              
+              <p class="small text-muted mb-3">
+                Control when buyers can see your information. Information will be progressively revealed based on their engagement.
+              </p>
+
+              <div class="mb-3">
+                <label class="form-label">When to show Price?</label>
+                <select class="form-select" name="price_disclosure">
+                  {% for value, label in disclosure_choices %}
+                    <option value="{{ value }}" {% if value == 'immediately' %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label">When to show Contact Information?</label>
+                <select class="form-select" name="contact_disclosure">
+                  {% for value, label in disclosure_choices %}
+                    <option value="{{ value }}" {% if value == 'after_add_to_cart' %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label">When to show Location?</label>
+                <select class="form-select" name="location_disclosure">
+                  {% for value, label in disclosure_choices %}
+                    <option value="{{ value }}" {% if value == 'after_order_complete' %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" name="show_seller_name" id="showSellerName">
+                <label class="form-check-label" for="showSellerName">
+                  Show my name publicly
+                </label>
+              </div>
+
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="show_exact_location" id="showExactLocation">
+                <label class="form-check-label" for="showExactLocation">
+                  Show exact location (geocode) when revealed
+                </label>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Contact Information -->
+          <div class="card shadow-sm mb-4">
+            <div class="card-header bg-dark text-white">
+              <h5 class="mb-0"><i class="fas fa-phone me-2"></i>Contact Information</h5>
+            </div>
+            <div class="card-body">
+              
+              <div class="mb-3">
+                <label class="form-label">Phone Number</label>
+                <input type="tel" class="form-control" name="contact_phone" value="{{ user.telephone }}">
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label">Email (Optional)</label>
+                <input type="email" class="form-control" name="contact_email" value="{{ user.email }}">
+              </div>
+
+              <div class="alert alert-info small mb-0">
+                <i class="fas fa-info-circle me-2"></i>
+                This information will only be shown according to your privacy settings above.
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Vetting -->
+          <div class="card shadow-sm mb-4">
+            <div class="card-header bg-dark text-white">
+              <h5 class="mb-0"><i class="fas fa-check-circle me-2"></i>Optional Services</h5>
+            </div>
+            <div class="card-body">
+              
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="request_vetting" id="requestVetting">
+                <label class="form-check-label" for="requestVetting">
+                  Request Easy Move Vetting (+GMD {{ config.vetting_fee }})
+                </label>
+                <small class="form-text d-block text-muted">
+                  Easy Move will verify your item's condition and authenticity, increasing buyer trust.
+                </small>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Submit -->
+          <div class="card shadow-sm mb-4">
+            <div class="card-body">
+              
+              {% if not user.is_seller %}
+                <div class="alert alert-warning mb-3">
+                  <h6 class="alert-heading"><i class="fas fa-info-circle me-2"></i>Listing Fee</h6>
+                  <p class="mb-0">As a buyer creating a listing, a fee of <strong>GMD {{ config.listing_fee }}</strong> will be charged.</p>
+                </div>
+              {% endif %}
+
+              <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" id="agreeTerms" required>
+                <label class="form-check-label" for="agreeTerms">
+                  I agree to be truthful about my product and understand that illegal items are prohibited. *
+                </label>
+              </div>
+
+              <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                <a href="{% url 'crossroad_deals:listing_list' %}" class="btn btn-secondary">
+                  <i class="fas fa-times me-2"></i>Cancel
+                </a>
+                <button type="submit" class="btn btn-danger">
+                  <i class="fas fa-check me-2"></i>Create Listing
+                </button>
+              </div>
+
+            </div>
+          </div>
+
+        </form>
+
+      </div>
+
+      <!-- Sidebar -->
+      <div class="col-lg-4">
+        
+        <!-- Tips -->
+        <div class="card shadow-sm mb-4">
+          <div class="card-header bg-success text-white">
+            <h6 class="mb-0"><i class="fas fa-lightbulb me-2"></i>Listing Tips</h6>
+          </div>
+          <div class="card-body">
+            <ul class="small mb-0">
+              <li>Use clear, high-quality images</li>
+              <li>Be honest about item condition</li>
+              <li>Provide detailed descriptions</li>
+              <li>Set competitive prices</li>
+              <li>Respond to buyers promptly</li>
+              <li>Use vetting for valuable items</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Privacy Explanation -->
+        <div class="card shadow-sm border-warning">
+          <div class="card-header bg-warning text-dark">
+            <h6 class="mb-0"><i class="fas fa-shield-alt me-2"></i>Privacy Stages</h6>
+          </div>
+          <div class="card-body">
+            <ul class="small mb-0">
+              <li><strong>Immediately:</strong> Everyone sees</li>
+              <li><strong>After Interest:</strong> When user expresses interest</li>
+              <li><strong>After Add to Cart:</strong> When added to cart</li>
+              <li><strong>After Payment:</strong> When payment is made</li>
+              <li><strong>After Order Complete:</strong> When order is delivered</li>
+              <li><strong>Never:</strong> Always hidden</li>
+            </ul>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</section>
+{% endblock %}

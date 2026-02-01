@@ -92,6 +92,7 @@ INSTALLED_APPS = [
     "analytics",
     "supply_chain",
     "logistics.apps.LogisticsConfig",
+    'crossroad_deals',
 ]
 
 SITE_ID = config("SITE_ID", default=1, cast=int)

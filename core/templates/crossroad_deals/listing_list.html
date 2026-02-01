@@ -1,0 +1,202 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load currency_tags %}
+
+{% block content %}
+<link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+<section class="py-4 bg-light min-vh-100">
+  <div class="container">
+    
+    <!-- Header -->
+    <div class="row mb-4">
+      <div class="col-12">
+        <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3">
+          <div>
+            <h1 class="h2 fw-bold mb-2">
+              <i class="fas fa-store me-2 text-danger"></i>
+              Crossroad Deals
+              <span class="badge bg-warning text-dark ms-2">Black Market</span>
+            </h1>
+            <p class="text-muted mb-0">Browse unique items from sellers across The Gambia</p>
+          </div>
+          <div class="d-flex gap-2 flex-wrap">
+            {% if user.is_authenticated %}
+              <a href="{% url 'crossroad_deals:create_listing' %}" class="btn btn-danger">
+                <i class="fas fa-plus me-2"></i>List Item
+              </a>
+              <a href="{% url 'crossroad_deals:my_listings' %}" class="btn btn-outline-danger">
+                <i class="fas fa-list me-2"></i>My Listings
+              </a>
+              <a href="{% url 'crossroad_deals:my_orders' %}" class="btn btn-outline-primary">
+                <i class="fas fa-shopping-bag me-2"></i>My Orders
+              </a>
+            {% else %}
+              <a href="{% url 'accounts:sign_in' %}" class="btn btn-danger">
+                <i class="fas fa-sign-in-alt me-2"></i>Login to List
+              </a>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Search & Filters -->
+    <div class="card shadow-sm mb-4">
+      <div class="card-body">
+        <form method="get" class="row g-3">
+          <!-- Search -->
+          <div class="col-md-4">
+            <label class="form-label small text-muted mb-1">Search</label>
+            <input type="text" class="form-control" name="search" value="{{ search }}" placeholder="Search items...">
+          </div>
+          
+          <!-- Condition -->
+          <div class="col-md-3">
+            <label class="form-label small text-muted mb-1">Condition</label>
+            <select class="form-select" name="condition">
+              <option value="">All Conditions</option>
+              {% for value, label in conditions %}
+                <option value="{{ value }}" {% if condition == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          
+          <!-- Price Range -->
+          <div class="col-md-2">
+            <label class="form-label small text-muted mb-1">Min Price</label>
+            <input type="number" class="form-control" name="min_price" value="{{ min_price }}" placeholder="0">
+          </div>
+          
+          <div class="col-md-2">
+            <label class="form-label small text-muted mb-1">Max Price</label>
+            <input type="number" class="form-control" name="max_price" value="{{ max_price }}" placeholder="10000">
+          </div>
+          
+          <!-- Filter Button -->
+          <div class="col-md-1 d-flex align-items-end">
+            <button type="submit" class="btn btn-primary w-100">
+              <i class="fas fa-filter"></i>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Listings Grid -->
+    {% if page_obj %}
+      <div class="row g-4 mb-4">
+        {% for data in listings_data %}
+          <div class="col-lg-3 col-md-4 col-sm-6">
+            <div class="card h-100 shadow-sm hover-card">
+              <!-- Image -->
+              <div class="position-relative">
+                {% if data.image_1 %}
+                  <img src="{{ data.image_1 }}" class="card-img-top" style="height: 200px; object-fit: cover;" alt="{{ data.title }}">
+                {% else %}
+                  <div class="bg-secondary d-flex align-items-center justify-content-center" style="height: 200px;">
+                    <i class="fas fa-image fa-3x text-white opacity-50"></i>
+                  </div>
+                {% endif %}
+                
+                <!-- Condition Badge -->
+                <span class="position-absolute top-0 start-0 m-2 badge bg-dark">
+                  {{ data.condition|title }}
+                </span>
+              </div>
+              
+              <!-- Card Body -->
+              <div class="card-body">
+                <h6 class="card-title fw-bold mb-2">{{ data.title }}</h6>
+                <p class="card-text small text-muted mb-3" style="height: 40px; overflow: hidden;">
+                  {{ data.description|truncatewords:10 }}
+                </p>
+                
+                <!-- Price -->
+                <div class="mb-3">
+                  {% if data.can_show_price and data.price %}
+                    <h5 class="text-danger mb-0">{% display_money data.price %}</h5>
+                  {% else %}
+                    <span class="badge bg-warning text-dark">
+                      <i class="fas fa-lock me-1"></i>Price Hidden
+                    </span>
+                  {% endif %}
+                </div>
+                
+                <!-- Quantity -->
+                {% if data.quantity_available %}
+                  <small class="text-muted">
+                    <i class="fas fa-box me-1"></i>{{ data.quantity_available }} available
+                  </small>
+                {% endif %}
+              </div>
+              
+              <!-- Card Footer -->
+              <div class="card-footer bg-white border-top-0">
+                <a href="{% url 'crossroad_deals:listing_detail' data.listing_id %}" class="btn btn-outline-danger w-100 btn-sm">
+                  <i class="fas fa-eye me-1"></i>View Details
+                </a>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+
+      <!-- Pagination -->
+      {% if page_obj.has_other_pages %}
+        <nav aria-label="Page navigation">
+          <ul class="pagination justify-content-center">
+            {% if page_obj.has_previous %}
+              <li class="page-item">
+                <a class="page-link" href="?page=1{% if search %}&search={{ search }}{% endif %}{% if condition %}&condition={{ condition }}{% endif %}">First</a>
+              </li>
+              <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search %}&search={{ search }}{% endif %}{% if condition %}&condition={{ condition }}{% endif %}">Previous</a>
+              </li>
+            {% endif %}
+            
+            <li class="page-item active">
+              <span class="page-link">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+            </li>
+            
+            {% if page_obj.has_next %}
+              <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search %}&search={{ search }}{% endif %}{% if condition %}&condition={{ condition }}{% endif %}">Next</a>
+              </li>
+              <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if search %}&search={{ search }}{% endif %}{% if condition %}&condition={{ condition }}{% endif %}">Last</a>
+              </li>
+            {% endif %}
+          </ul>
+        </nav>
+      {% endif %}
+
+    {% else %}
+      <!-- Empty State -->
+      <div class="card shadow-sm">
+        <div class="card-body text-center py-5">
+          <i class="fas fa-box-open fa-4x text-muted opacity-25 mb-3"></i>
+          <h4 class="text-muted mb-3">No listings found</h4>
+          <p class="text-muted">Try adjusting your filters or be the first to list an item!</p>
+          {% if user.is_authenticated %}
+            <a href="{% url 'crossroad_deals:create_listing' %}" class="btn btn-danger mt-2">
+              <i class="fas fa-plus me-2"></i>Create First Listing
+            </a>
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
+
+  </div>
+</section>
+
+<style>
+.hover-card {
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.hover-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.15) !important;
+}
+</style>
+{% endblock %}
