@@ -5,6 +5,7 @@ from django.utils import timezone
 from decimal import Decimal
 from django.db.models import Avg, Sum, F, ExpressionWrapper, DecimalField
 import uuid
+import re
 import random
 import string
 from django.db.models.signals import post_save
@@ -14,7 +15,7 @@ from django.contrib.auth import get_user_model
 from marketplace.models import Product
 import threading
 from django.core.mail import send_mail
-from django.core.validators import MinValueValidator, RegexValidator
+from django.core.validators import MinValueValidator, RegexValidator, MaxValueValidator
 from django.contrib.postgres.fields import ArrayField
 
 from django.apps import apps
@@ -303,6 +304,31 @@ class Store(models.Model):
     allow_referrals = models.BooleanField(
         default=False,
         help_text="Allow buyers to refer this store and earn rewards."
+    )
+    # ✅ Location / Geo
+    geo_code = models.CharField(
+        max_length=120,
+        blank=True,
+        null=True,
+        help_text="Optional geo code. Accepts formats like '13.4543,-16.5775' or 'lat:13.45,lng:-16.57'"
+    )
+
+    latitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        blank=True,
+        null=True,
+        validators=[MinValueValidator(Decimal("-90.0")), MaxValueValidator(Decimal("90.0"))],
+        help_text="Latitude (-90 to 90). Example: 13.454900"
+    )
+
+    longitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        blank=True,
+        null=True,
+        validators=[MinValueValidator(Decimal("-180.0")), MaxValueValidator(Decimal("180.0"))],
+        help_text="Longitude (-180 to 180). Example: -16.579000"
     )
 
     # Timestamps
@@ -755,6 +781,58 @@ class Store(models.Model):
         }
         return height_map.get(self.banner_height, '400px')
 
+    def parse_geo_code(self):
+        """
+        Try to parse geo_code into (lat, lng).
+        Supports:
+          - "13.4543,-16.5775"
+          - "lat:13.45,lng:-16.57"
+          - "GEO:13.45,-16.57"
+        Returns: (lat, lng) floats or (None, None)
+        """
+        if not self.geo_code:
+            return (None, None)
+
+        s = str(self.geo_code).strip()
+
+        # match: "lat,lng"
+        m = re.search(r"(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)", s)
+        if m:
+            try:
+                return (float(m.group(1)), float(m.group(2)))
+            except Exception:
+                return (None, None)
+
+        # match: "lat:xx ... lng:yy"
+        m2 = re.search(r"lat[:\s]*(-?\d+(?:\.\d+)?).+lng[:\s]*(-?\d+(?:\.\d+)?)", s, flags=re.I)
+        if m2:
+            try:
+                return (float(m2.group(1)), float(m2.group(2)))
+            except Exception:
+                return (None, None)
+
+        return (None, None)
+
+    @property
+    def has_coordinates(self):
+        return self.latitude is not None and self.longitude is not None
+
+    @property
+    def map_latlng(self):
+        """
+        Returns (lat, lng) for mapping.
+        Priority: latitude/longitude fields, fallback: geo_code parsing.
+        """
+        if self.has_coordinates:
+            return (float(self.latitude), float(self.longitude))
+
+        lat, lng = self.parse_geo_code()
+        if lat is not None and lng is not None:
+            return (lat, lng)
+
+        return (None, None)
+
+
     # ---------- NOTIFICATIONS / EMAILS ----------
 
     def notify_followers(self, notification_type, title, message, product=None, **kwargs):
@@ -1016,12 +1094,25 @@ class Store(models.Model):
     def save(self, *args, **kwargs):
         """
         Auto-set approved_at when store becomes active.
+        Also: auto-fill latitude/longitude from geo_code if lat/lng missing.
         """
+        # ✅ fill lat/lng from geo_code if missing
+        if (self.latitude is None or self.longitude is None) and self.geo_code:
+            lat, lng = self.parse_geo_code()
+            if lat is not None and lng is not None:
+                if self.latitude is None:
+                    self.latitude = Decimal(str(lat))
+                if self.longitude is None:
+                    self.longitude = Decimal(str(lng))
+
+        # existing approved_at logic
         if not self._state.adding:
             old_store = Store.objects.filter(pk=self.pk).first()
             if old_store and old_store.status != self.status and self.status == 'active' and not self.approved_at:
                 self.approved_at = timezone.now()
+
         super().save(*args, **kwargs)
+
 
 class B2BInquiry(models.Model):
     CHANNEL_CHOICES = [

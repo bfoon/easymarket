@@ -4,6 +4,10 @@
 
 {% block content %}
 
+<!-- Leaflet (maps) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
 <style>
   .stats-card {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -13,21 +17,9 @@
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     transition: transform 0.3s ease;
   }
-
-  .stats-card:hover {
-    transform: translateY(-4px);
-  }
-
-  .stats-number {
-    font-size: 48px;
-    font-weight: 700;
-    margin-bottom: 8px;
-  }
-
-  .stats-label {
-    font-size: 14px;
-    opacity: 0.9;
-  }
+  .stats-card:hover { transform: translateY(-4px); }
+  .stats-number { font-size: 48px; font-weight: 700; margin-bottom: 8px; }
+  .stats-label { font-size: 14px; opacity: 0.9; }
 
   .receipt-card {
     border-radius: 12px;
@@ -35,7 +27,6 @@
     transition: all 0.3s ease;
     margin-bottom: 16px;
   }
-
   .receipt-card:hover {
     border-color: #667eea;
     box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
@@ -50,60 +41,51 @@
     font-size: 13px;
     font-weight: 600;
   }
+  .status-pending { background: #fef3c7; color: #92400e; }
+  .status-in_progress { background: #dbeafe; color: #1e40af; }
+  .status-received { background: #d1fae5; color: #065f46; }
+  .status-discrepancy { background: #fee2e2; color: #991b1b; }
 
-  .status-pending {
-    background: #fef3c7;
-    color: #92400e;
+  .incoming-card {
+    border-radius: 12px;
+    border: 2px dashed #c7d2fe;
+    padding: 16px;
+    margin-bottom: 16px;
+    background: #eef2ff;
+  }
+  .incoming-card:hover {
+    border-color: #6366f1;
+    background: #e0e7ff;
   }
 
-  .status-received {
-    background: #d1fae5;
-    color: #065f46;
+  .store-pill {
+    display: inline-flex;
+    align-items: stretch;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 999px;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    margin-right: 8px;
+    margin-top: 8px;
+  }
+  .store-pill .meta { font-size: 12px; color: #6b7280; line-height: 1.3; }
+  .store-pill .name { font-weight: 800; line-height: 1.1; }
+
+  .mini-map {
+    width: 100%;
+    height: 280px;
+    border-radius: 12px;
+    border: 1px solid #e5e7eb;
+    overflow: hidden;
   }
 
-  .status-discrepancy {
-    background: #fee2e2;
-    color: #991b1b;
-  }
-
-  .qr-btn {
-    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-    color: white;
-    border: none;
-    padding: 10px 20px;
-    border-radius: 8px;
-    font-weight: 600;
-    transition: all 0.3s ease;
-  }
-
-  .qr-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 16px rgba(79, 70, 229, 0.3);
-    color: white;
-  }
-
-  .scan-badge {
-    position: fixed;
-    bottom: 30px;
-    right: 30px;
-    width: 70px;
-    height: 70px;
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-size: 28px;
-    box-shadow: 0 8px 24px rgba(16, 185, 129, 0.4);
-    cursor: pointer;
-    transition: all 0.3s ease;
-    z-index: 999;
-  }
-
-  .scan-badge:hover {
-    transform: scale(1.1);
-    box-shadow: 0 12px 32px rgba(16, 185, 129, 0.5);
+  .all-stores-map {
+    width: 100%;
+    height: 520px;
+    border-radius: 14px;
+    border: 1px solid #e5e7eb;
+    overflow: hidden;
   }
 </style>
 
@@ -116,7 +98,15 @@
     </h1>
     <p class="page-subtitle">Scan, verify, and receive shipments</p>
   </div>
-  <div>
+
+  <div class="d-flex gap-2">
+    <!-- ✅ Menu button: View all stores on map -->
+    <button type="button" class="btn btn-outline-primary btn-lg"
+            data-bs-toggle="modal" data-bs-target="#allStoresMapModal">
+      <i class="fas fa-map-marked-alt me-2"></i>
+      Stores Map
+    </button>
+
     <a href="{% url 'logistics:warehouse_scan_verify' %}" class="btn btn-success btn-lg">
       <i class="fas fa-qrcode me-2"></i>
       Scan QR Code
@@ -124,100 +114,233 @@
   </div>
 </div>
 
-<!-- Statistics Cards -->
-<div class="row mb-4">
-  <div class="col-md-4">
-    <div class="stats-card" style="background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);">
-      <div class="stats-number">{{ stats.pending }}</div>
-      <div class="stats-label">
-        <i class="fas fa-clock me-1"></i>
-        Pending Receipt
-      </div>
-    </div>
+<!-- ================= INCOMING SHIPMENTS (BEFORE SHIPMENT EXISTS) ================= -->
+<div class="card mb-4">
+  <div class="card-header bg-primary text-white">
+    <h5 class="mb-0">
+      <i class="fas fa-boxes me-2"></i>
+      Incoming Shipments
+      <small class="opacity-75">(Before shipment is created)</small>
+      <span class="badge bg-light text-primary ms-2">
+        {{ stats.incoming_orders }}
+      </span>
+    </h5>
   </div>
-  <div class="col-md-4">
-    <div class="stats-card" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
-      <div class="stats-number">{{ stats.received_today }}</div>
-      <div class="stats-label">
-        <i class="fas fa-check-circle me-1"></i>
-        Received Today
+
+  <div class="card-body">
+    {% if incoming_orders %}
+      {% for order in incoming_orders %}
+        <div class="incoming-card">
+          <div class="row align-items-center">
+            <div class="col-md-4">
+              <h6 class="mb-1">Order #{{ order.id }}</h6>
+              <small class="text-muted">
+                <i class="fas fa-clock me-1"></i>
+                Waiting for shipment creation
+              </small>
+
+              <div class="mt-2">
+                <span class="badge bg-dark">
+                  <i class="fas fa-store me-1"></i>
+                  {{ order.incoming_store_display }}
+                </span>
+              </div>
+            </div>
+
+            <div class="col-md-3">
+              <div class="small text-muted">Items Ready</div>
+              <div class="fw-bold">
+                {{ order.incoming_items_count }} item{{ order.incoming_items_count|pluralize }}
+              </div>
+
+              <!-- ✅ store contact quick view -->
+              {% if order.incoming_stores %}
+                {% with s=order.incoming_stores.0 %}
+                  <div class="mt-2 small text-muted">
+                    <div><i class="fas fa-phone me-1"></i> {{ s.phone|default:"—" }}</div>
+                    <div><i class="fas fa-envelope me-1"></i> {{ s.email|default:"—" }}</div>
+                  </div>
+                {% endwith %}
+              {% endif %}
+            </div>
+
+            <div class="col-md-3">
+              <div class="small text-muted">Order Status</div>
+              <span class="badge bg-warning">
+                {{ order.get_status_display }}
+              </span>
+
+              <!-- ✅ Store pills + modal buttons -->
+              {% if order.incoming_stores %}
+                <div class="mt-2">
+                  {% for store in order.incoming_stores %}
+                    <span class="store-pill">
+                      <span>
+                        <div class="name">{{ store.name }}</div>
+                        <div class="meta">
+                          {{ store.phone|default:"—" }}
+                          {% if store.whatsapp %}<br>WhatsApp: {{ store.whatsapp }}{% endif %}
+                        </div>
+                      </span>
+
+                      <button class="btn btn-sm btn-outline-secondary"
+                              type="button"
+                              data-bs-toggle="modal"
+                              data-bs-target="#storeModal_{{ store.store_id }}">
+                        <i class="fas fa-info-circle"></i>
+                      </button>
+                    </span>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            </div>
+
+            <div class="col-md-2 text-end">
+              <a href="{% url 'logistics:shipment_create' %}" class="btn btn-sm btn-outline-primary">
+                <i class="fas fa-truck-loading me-1"></i>
+                Create Shipment
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <!-- ================= STORE MODALS ================= -->
+        {% if order.incoming_stores %}
+          {% for store in order.incoming_stores %}
+            <div class="modal fade" id="storeModal_{{ store.store_id }}" tabindex="-1" aria-hidden="true">
+              <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                <div class="modal-content">
+                  <div class="modal-header">
+                    <h5 class="modal-title">
+                      <i class="fas fa-store me-2"></i>{{ store.name }}
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                  </div>
+
+                  <div class="modal-body">
+                    <div class="row g-3">
+                      <div class="col-md-6">
+                        <div class="border rounded-3 p-3">
+                          <div class="fw-bold mb-2">Contact</div>
+                          <div><i class="fas fa-phone me-2 text-muted"></i> {{ store.phone|default:"—" }}</div>
+                          <div class="mt-1"><i class="fas fa-envelope me-2 text-muted"></i> {{ store.email|default:"—" }}</div>
+                          <div class="mt-1"><i class="fab fa-whatsapp me-2 text-muted"></i> {{ store.whatsapp|default:"—" }}</div>
+                        </div>
+                      </div>
+
+                      <div class="col-md-6">
+                        <div class="border rounded-3 p-3">
+                          <div class="fw-bold mb-2">Address</div>
+                          <div><i class="fas fa-map-marker-alt me-2 text-muted"></i> {{ store.address|default:"—" }}</div>
+
+                          {% if store.geo_code %}
+                            <div class="mt-2 small text-muted">
+                              <i class="fas fa-location-arrow me-1"></i>
+                              Geo code: {{ store.geo_code }}
+                            </div>
+                          {% endif %}
+                        </div>
+                      </div>
+
+                      <div class="col-12">
+                        <div class="fw-bold mb-2">Store Location Map</div>
+
+                        {% if store.lat and store.lng %}
+                          <div id="map_store_{{ store.store_id }}" class="mini-map"
+                               data-lat="{{ store.lat }}" data-lng="{{ store.lng }}"
+                               data-name="{{ store.name|escape }}"></div>
+                        {% elif store.geo_code %}
+                          <div id="map_store_{{ store.store_id }}" class="mini-map"
+                               data-geocode="{{ store.geo_code|escape }}"
+                               data-name="{{ store.name|escape }}"></div>
+                        {% else %}
+                          <div class="alert alert-info mb-0">
+                            No location coordinates found for this store.
+                          </div>
+                        {% endif %}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="modal-footer">
+                    <button class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        {% endif %}
+
+      {% endfor %}
+    {% else %}
+      <div class="alert alert-info text-center">
+        <i class="fas fa-info-circle me-2"></i>
+        No incoming shipments waiting to be created.
       </div>
-    </div>
-  </div>
-  <div class="col-md-4">
-    <div class="stats-card" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);">
-      <div class="stats-number">{{ stats.has_issues }}</div>
-      <div class="stats-label">
-        <i class="fas fa-exclamation-triangle me-1"></i>
-        Has Issues
-      </div>
-    </div>
+    {% endif %}
   </div>
 </div>
 
-<!-- Pending Receipts -->
+<!-- ================= PENDING RECEIPTS (SHIPMENT ALREADY EXISTS) ================= -->
 <div class="card mb-4">
   <div class="card-header">
     <h5 class="mb-0">
       <i class="fas fa-inbox me-2"></i>
       Pending Shipments
-      <span class="badge bg-warning ms-2">{{ pending_receipts.count }}</span>
+      <span class="badge bg-warning ms-2">{{ pending_receipts|length }}</span>
     </h5>
   </div>
+
   <div class="card-body">
     {% if pending_receipts %}
       {% for receipt in pending_receipts %}
         <div class="receipt-card p-3">
           <div class="row align-items-center">
             <div class="col-md-3">
-              <h6 class="mb-1">Order #{{ receipt.order.id }}</h6>
+              <h6 class="mb-1">Order #{{ receipt.shipment.order.id }}</h6>
+              <small class="text-muted d-block">
+                <i class="fas fa-truck me-1"></i>
+                {{ receipt.shipment.tracking_number }}
+              </small>
               <small class="text-muted">
                 <i class="fas fa-barcode me-1"></i>
                 {{ receipt.verification_code }}
               </small>
             </div>
+
             <div class="col-md-3">
               <div class="small text-muted">Items</div>
-              <div class="fw-bold">{{ receipt.items.count }} items</div>
+              <div class="fw-bold">{{ receipt.items.count }}</div>
             </div>
+
             <div class="col-md-2">
               <span class="receipt-status status-{{ receipt.status }}">
-                <i class="fas fa-circle" style="font-size: 8px;"></i>
                 {{ receipt.get_status_display }}
               </span>
             </div>
+
             <div class="col-md-2">
               <div class="small text-muted">Created</div>
               <div class="fw-bold">{{ receipt.created_at|date:"M d, Y" }}</div>
             </div>
+
             <div class="col-md-2 text-end">
-              <div class="btn-group">
-                <a href="{% url 'logistics:warehouse_receipt_detail' receipt.id %}" 
-                   class="btn btn-sm btn-outline-primary">
-                  <i class="fas fa-eye"></i>
-                  View
-                </a>
-                <a href="{% url 'logistics:generate_receipt_qr_code' receipt.id %}" 
-                   class="btn btn-sm btn-outline-secondary"
-                   target="_blank"
-                   title="View QR Code">
-                  <i class="fas fa-qrcode"></i>
-                </a>
-              </div>
+              <a href="{% url 'logistics:warehouse_receipt_detail' receipt.id %}"
+                 class="btn btn-sm btn-outline-primary">
+                <i class="fas fa-eye"></i>
+                View
+              </a>
             </div>
           </div>
         </div>
       {% endfor %}
     {% else %}
-      <div class="alert alert-info text-center">
-        <i class="fas fa-inbox me-2"></i>
-        No pending shipments to receive.
-      </div>
+      <div class="alert alert-info text-center">No pending receipts.</div>
     {% endif %}
   </div>
 </div>
 
-<!-- Recently Received -->
+<!-- ================= RECENTLY RECEIVED ================= -->
 <div class="card">
   <div class="card-header">
     <h5 class="mb-0">
@@ -226,77 +349,206 @@
       <small class="text-muted">(Last 7 days)</small>
     </h5>
   </div>
+
   <div class="card-body">
     {% if recent_receipts %}
-      <div class="table-responsive">
-        <table class="table table-hover">
-          <thead>
+      <table class="table table-hover">
+        <thead>
+          <tr>
+            <th>Order</th>
+            <th>Tracking</th>
+            <th>Received By</th>
+            <th>Date</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for receipt in recent_receipts %}
             <tr>
-              <th>Order</th>
-              <th>Verification Code</th>
-              <th>Received By</th>
-              <th>Received At</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for receipt in recent_receipts %}
-              <tr>
-                <td>
-                  <strong>#{{ receipt.order.id }}</strong>
-                </td>
-                <td>
-                  <code>{{ receipt.verification_code }}</code>
-                </td>
-                <td>
-                  {% if receipt.received_by %}
-                    <div class="d-flex align-items-center gap-2">
-                      <i class="fas fa-user-circle"></i>
-                      {{ receipt.received_by.get_full_name }}
-                    </div>
+              <td>#{{ receipt.shipment.order.id }}</td>
+              <td>{{ receipt.shipment.tracking_number }}</td>
+              <td>
+                {% if receipt.received_by %}
+                  {% if receipt.received_by.get_full_name %}
+                    {{ receipt.received_by.get_full_name }}
                   {% else %}
-                    <span class="text-muted">—</span>
+                    {{ receipt.received_by.username }}
                   {% endif %}
-                </td>
-                <td>
-                  {{ receipt.received_at|date:"M d, Y H:i" }}
-                </td>
-                <td>
-                  <span class="receipt-status status-{{ receipt.status }}">
-                    <i class="fas fa-circle" style="font-size: 8px;"></i>
-                    {{ receipt.get_status_display }}
-                  </span>
-                  {% if receipt.has_issues %}
-                    <span class="badge bg-danger ms-1">
-                      <i class="fas fa-exclamation-triangle"></i>
-                    </span>
-                  {% endif %}
-                </td>
-                <td>
-                  <a href="{% url 'logistics:warehouse_receipt_detail' receipt.id %}" 
-                     class="btn btn-sm btn-outline-primary">
-                    <i class="fas fa-eye me-1"></i>
-                    View
-                  </a>
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+              <td>{{ receipt.received_at|date:"M d, Y H:i" }}</td>
+              <td>
+                <span class="receipt-status status-{{ receipt.status }}">
+                  {{ receipt.get_status_display }}
+                </span>
+              </td>
+              <td>
+                <a href="{% url 'logistics:warehouse_receipt_detail' receipt.id %}"
+                   class="btn btn-sm btn-outline-primary">View</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     {% else %}
-      <div class="alert alert-info text-center">
-        <i class="fas fa-info-circle me-2"></i>
-        No recent receipts.
-      </div>
+      <div class="alert alert-info text-center">No recent receipts.</div>
     {% endif %}
   </div>
 </div>
 
-<!-- Floating Scan Button -->
-<a href="{% url 'logistics:warehouse_scan_verify' %}" class="scan-badge" title="Scan QR Code">
-  <i class="fas fa-qrcode"></i>
-</a>
+<!-- ================= ALL STORES MAP MODAL ================= -->
+<div class="modal fade" id="allStoresMapModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="fas fa-map me-2"></i>Incoming Stores Map
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="all-stores-map" id="allStoresMap"></div>
+        <div class="small text-muted mt-2">
+          Only stores with coordinates (lat/lng) or parseable geo_code will appear on the map.
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ✅ expects `incoming_store_points` from the view #}
+{{ incoming_store_points|json_script:"incomingStorePoints" }}
+
+<script>
+  // ---------- helpers ----------
+  function parseGeoCodeToLatLng(geo) {
+    if (!geo) return null;
+    const s = String(geo).trim();
+
+    // Match "lat,lng"
+    const m = s.match(/(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/);
+    if (m) return { lat: parseFloat(m[1]), lng: parseFloat(m[2]) };
+
+    // Match "lat:.. lng:.."
+    const m2 = s.match(/lat[:\s]*(-?\d+(?:\.\d+)?).+lng[:\s]*(-?\d+(?:\.\d+)?)/i);
+    if (m2) return { lat: parseFloat(m2[1]), lng: parseFloat(m2[2]) };
+
+    return null;
+  }
+
+  function ensureLeafletMap(containerId, center, zoom) {
+    const el = document.getElementById(containerId);
+    if (!el) return null;
+
+    // prevent duplicate init
+    if (el.dataset.mapReady === "1") return null;
+    el.dataset.mapReady = "1";
+
+    const map = L.map(el).setView([center.lat, center.lng], zoom);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: "&copy; OpenStreetMap"
+    }).addTo(map);
+
+    return map;
+  }
+
+  // ---------- init store modal maps ----------
+  document.addEventListener("shown.bs.modal", function (ev) {
+    const modal = ev.target;
+    if (!modal || !modal.id || !modal.id.startsWith("storeModal_")) return;
+
+    const mapEl = modal.querySelector(".mini-map");
+    if (!mapEl) return;
+
+    const name = mapEl.dataset.name || "Store";
+    let lat = mapEl.dataset.lat ? parseFloat(mapEl.dataset.lat) : null;
+    let lng = mapEl.dataset.lng ? parseFloat(mapEl.dataset.lng) : null;
+
+    if ((lat === null || lng === null) && mapEl.dataset.geocode) {
+      const parsed = parseGeoCodeToLatLng(mapEl.dataset.geocode);
+      if (parsed) { lat = parsed.lat; lng = parsed.lng; }
+    }
+
+    if (lat === null || lng === null || Number.isNaN(lat) || Number.isNaN(lng)) return;
+
+    const mapId = mapEl.id;
+    const map = ensureLeafletMap(mapId, {lat, lng}, 14);
+    if (!map) return;
+
+    L.marker([lat, lng]).addTo(map).bindPopup(`<b>${name}</b>`);
+
+    // fix sizing after bootstrap animation
+    setTimeout(() => { map.invalidateSize(); }, 220);
+  });
+
+  // ---------- init ALL STORES map ----------
+  const storePointsEl = document.getElementById("incomingStorePoints");
+  const storePoints = storePointsEl ? JSON.parse(storePointsEl.textContent || "[]") : [];
+
+  const allStoresModal = document.getElementById("allStoresMapModal");
+  if (allStoresModal) {
+    allStoresModal.addEventListener("shown.bs.modal", function () {
+      const containerId = "allStoresMap";
+      const el = document.getElementById(containerId);
+      if (!el || el.dataset.mapReady === "1") return;
+
+      // collect valid points
+      const points = [];
+      for (const s of storePoints) {
+        let lat = s.lat;
+        let lng = s.lng;
+
+        if ((lat === null || lng === null || typeof lat === "undefined" || typeof lng === "undefined") && s.geo_code) {
+          const parsed = parseGeoCodeToLatLng(s.geo_code);
+          if (parsed) { lat = parsed.lat; lng = parsed.lng; }
+        }
+
+        if (typeof lat === "number" && typeof lng === "number" && !Number.isNaN(lat) && !Number.isNaN(lng)) {
+          points.push({ ...s, lat, lng });
+        }
+      }
+
+      // default center (Gambia-ish). If we have points, use first one
+      const center = points.length ? { lat: points[0].lat, lng: points[0].lng } : { lat: 13.4549, lng: -16.5790 };
+
+      const map = ensureLeafletMap(containerId, center, points.length ? 11 : 6);
+      if (!map) return;
+
+      const bounds = [];
+      for (const s of points) {
+        bounds.push([s.lat, s.lng]);
+
+        const html = `
+          <div style="min-width:220px">
+            <div style="font-weight:800">${(s.name || "Store")}</div>
+            <div style="font-size:12px;color:#6b7280">${(s.address || "")}</div>
+            <div style="margin-top:8px;font-size:12px">
+              ${s.phone ? "📞 " + s.phone + "<br>" : ""}
+              ${s.email ? "✉️ " + s.email + "<br>" : ""}
+              ${s.whatsapp ? "🟢 WhatsApp: " + s.whatsapp : ""}
+            </div>
+          </div>
+        `;
+
+        L.marker([s.lat, s.lng]).addTo(map).bindPopup(html);
+      }
+
+      if (bounds.length) {
+        map.fitBounds(bounds, { padding: [30, 30] });
+      }
+
+      setTimeout(() => { map.invalidateSize(); }, 220);
+    });
+  }
+</script>
 
 {% endblock %}

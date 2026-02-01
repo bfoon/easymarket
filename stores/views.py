@@ -541,63 +541,77 @@ def get_user_store_counts(request):
 @login_required
 def create_store(request):
     if Store.objects.filter(owner=request.user).exists():
-        messages.warning(request, 'You already own a store.')
-        return redirect('stores:manage_stores')
+        messages.warning(request, "You already own a store.")
+        return redirect("stores:manage_stores")
 
     if request.user.is_seller == False:
-        messages.error(request, 'Only buyers can create a store.')
-        return redirect('marketplace:product_list')
+        messages.error(request, "Only buyers can create a store.")
+        return redirect("marketplace:product_list")
 
-    if request.method == 'POST':
-        # Validate data
+    def _to_decimal(v):
+        v = (v or "").strip()
+        if not v:
+            return None
+        try:
+            return Decimal(v)
+        except (InvalidOperation, ValueError):
+            return None
+
+    if request.method == "POST":
         errors = validate_store_data(request.POST, request.FILES)
-
         if errors:
-            # Add error messages
-            for field, error in errors.items():
+            for _, error in errors.items():
                 messages.error(request, error)
-            return render(request, 'stores/create_store.html', {
-                'form_data': request.POST,
-                'errors': errors
+            return render(request, "stores/create_store.html", {
+                "form_data": request.POST,
+                "errors": errors
             })
 
         try:
-            # Create store
+            geo_code = (request.POST.get("geo_code") or "").strip() or None
+            latitude = _to_decimal(request.POST.get("latitude"))
+            longitude = _to_decimal(request.POST.get("longitude"))
+
             store = Store.objects.create(
                 owner=request.user,
-                name=request.POST.get('name').strip(),
-                slug=request.POST.get('slug').strip().lower(),
-                description=request.POST.get('description', '').strip(),
-                short_description=request.POST.get('short_description', '').strip(),
-                email=request.POST.get('email').strip(),
-                phone=request.POST.get('phone', '').strip(),
-                website=request.POST.get('website', '').strip(),
-                address_line_1=request.POST.get('address_line_1', '').strip(),
-                address_line_2=request.POST.get('address_line_2', '').strip(),
-                city=request.POST.get('city', '').strip(),
-                region=request.POST.get('region', '').strip(),
-                postal_code=request.POST.get('postal_code', '').strip(),
-                country=request.POST.get('country', 'Gambia').strip(),
-                logo=request.FILES.get('logo'),
-                banner=request.FILES.get('banner'),
+                name=(request.POST.get("name") or "").strip(),
+                slug=(request.POST.get("slug") or "").strip().lower(),
+                description=(request.POST.get("description") or "").strip(),
+                short_description=(request.POST.get("short_description") or "").strip(),
+                email=(request.POST.get("email") or "").strip(),
+                phone=(request.POST.get("phone") or "").strip(),
+                website=(request.POST.get("website") or "").strip(),
+
+                address_line_1=(request.POST.get("address_line_1") or "").strip(),
+                address_line_2=(request.POST.get("address_line_2") or "").strip(),
+                city=(request.POST.get("city") or "").strip(),
+                region=(request.POST.get("region") or "").strip(),
+                postal_code=(request.POST.get("postal_code") or "").strip(),
+                country=(request.POST.get("country") or "Gambia").strip(),
+
+                # ✅ save geo fields
+                geo_code=geo_code,
+                latitude=latitude,
+                longitude=longitude,
+
+                logo=request.FILES.get("logo"),
+                banner=request.FILES.get("banner"),
             )
 
-            messages.success(request, 'Store created successfully.')
-            return redirect('stores:manage_stores')
+            messages.success(request, "Store created successfully.")
+            return redirect("stores:manage_stores")
 
-        except IntegrityError as e:
-            messages.error(request, 'A store with this slug already exists.')
-            return render(request, 'stores/create_store.html', {
-                'form_data': request.POST,
-                'errors': {'slug': 'This slug is already taken.'}
+        except IntegrityError:
+            messages.error(request, "A store with this slug already exists.")
+            return render(request, "stores/create_store.html", {
+                "form_data": request.POST,
+                "errors": {"slug": "This slug is already taken."}
             })
-        except Exception as e:
-            messages.error(request, 'An error occurred while creating the store. Please try again.')
-            return render(request, 'stores/create_store.html', {
-                'form_data': request.POST
-            })
+        except Exception:
+            messages.error(request, "An error occurred while creating the store. Please try again.")
+            return render(request, "stores/create_store.html", {"form_data": request.POST})
 
-    return render(request, 'stores/create_store.html')
+    return render(request, "stores/create_store.html")
 
 
 @login_required

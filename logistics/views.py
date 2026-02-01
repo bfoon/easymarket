@@ -68,7 +68,7 @@ from .models import (
     Shipment, ShipmentBox, BoxItem, Driver, Vehicle, ShipmentItem,
     Warehouse, LogisticOffice, DriverLocation, WarehouseShipmentNotification,
     B2BShipment, B2BShipmentItem, B2BShipmentBox, B2BBoxItem, OrderLogisticsAgent, LogisticsAgentMessage,
-    WarehouseReceipt, WarehouseReceiptItem, TrackingEvent
+    WarehouseReceiptOrder, WarehouseReceiptOrderItem, TrackingEventOrder
 )
 
 from stores.b2b.models import B2BOrder, B2BOrderItem, B2BShippingAddress
@@ -5535,114 +5535,251 @@ def get_shipment_unread_count(request, shipment_id):
             'message': str(e)
         }, status=500)
 
-
 # ============================================================================
 # Dashboard Views
 # ============================================================================
 @login_required
 def warehouse_receiving_dashboard(request):
     """
-    Main dashboard for warehouse receiving.
+    Dashboard for warehouse receiving.
 
-    Access Control:
-    - Superusers: Can see all warehouses
-    - Logistics staff (is_logistic=True): Can see their assigned warehouse only
-    - Others: Access denied
+    ✅ INCOMING SHIPMENTS (before Shipment exists) =
+       Order.items where shipped_to_warehouse=True AND current_shipment is NULL
     """
 
-    # ============================================================================
+    # =========================
     # PERMISSION CHECK
-    # ============================================================================
+    # =========================
+    if not (request.user.is_superuser or getattr(request.user, "is_logistic", False)):
+        messages.error(request, "You do not have permission to access the warehouse dashboard.")
+        return redirect("/")
 
-    # Check if user has permission
-    if not (request.user.is_superuser or request.user.is_logistic):
-        messages.error(request, 'You do not have permission to access the warehouse dashboard.')
-        return redirect('/')  # Or return HttpResponseForbidden() if you prefer
-
-    # ============================================================================
+    # =========================
     # WAREHOUSE ACCESS
-    # ============================================================================
-
+    # =========================
     user_warehouse = None
-
-    # Superusers see all warehouses
     if not request.user.is_superuser:
-        # Logistics users see only their warehouse
-        # Adjust this based on how warehouse is linked to user in your system
-        if hasattr(request.user, 'warehouse'):
+        if hasattr(request.user, "warehouse"):
             user_warehouse = request.user.warehouse
-        elif hasattr(request.user, 'managed_warehouses'):
+        elif hasattr(request.user, "managed_warehouses"):
             user_warehouse = request.user.managed_warehouses.first()
 
-    # ============================================================================
-    # QUERYSETS
-    # ============================================================================
-
-    # Base queryset
-    receipts_base = WarehouseReceipt.objects.select_related(
-        'shipment',
-        'warehouse',
-        'received_by'
-    ).prefetch_related(
-        'items__shipment_item__order_item__product'
+    # =========================
+    # RECEIPTS (existing workflow)
+    # =========================
+    receipts_base = (
+        WarehouseReceiptOrder.objects.select_related("shipment", "warehouse", "received_by")
+        .prefetch_related("items__shipment_item__order_item__product")
     )
 
-    # Filter by user's warehouse if applicable
     if user_warehouse:
         receipts_base = receipts_base.filter(warehouse=user_warehouse)
 
-    # Get pending receipts (waiting to be received)
-    pending_receipts = receipts_base.filter(
-        status__in=['pending', 'in_progress']
-    ).order_by('expected_arrival')
+    pending_receipts = receipts_base.filter(status__in=["pending", "in_progress"]).order_by("expected_arrival")
 
-    # Get shipments expected at warehouse (that have receipts created)
-    expected_shipments_qs = Shipment.objects.filter(
-        warehouse_receipts__status__in=['pending', 'in_progress']
-    ).select_related('warehouse', 'order').prefetch_related(
-        'shipment_items__order_item__product',
-        'warehouse_receipts'
-    ).distinct()
-
-    # Filter by user's warehouse BEFORE slicing
-    if user_warehouse:
-        expected_shipments_qs = expected_shipments_qs.filter(warehouse=user_warehouse)
-
-    # Now apply ordering and limit
-    expected_shipments = expected_shipments_qs.order_by('collect_time')[:20]
-
-    # Get recently received (last 7 days)
     recent_receipts = receipts_base.filter(
-        status='received',
-        received_at__gte=timezone.now() - timedelta(days=7)
-    ).order_by('-received_at')[:10]
+        status="received",
+        received_at__gte=timezone.now() - timedelta(days=7),
+    ).order_by("-received_at")[:10]
 
-    # Statistics
+    # =========================
+    # ✅ INCOMING (before shipment exists)
+    # =========================
+    incoming_items_qs = (
+        OrderItem.objects.select_related(
+            "order",
+            "product",
+            "product__store",
+            "product__store__owner",
+        )
+        .filter(
+            shipped_to_warehouse=True,
+            current_shipment__isnull=True,
+        )
+    )
+
+    # Optional: filter by warehouse if your Order has a warehouse FK
+    if user_warehouse and hasattr(Order, "warehouse"):
+        incoming_items_qs = incoming_items_qs.filter(order__warehouse=user_warehouse)
+
+    incoming_orders_qs = (
+        Order.objects.filter(
+            items__shipped_to_warehouse=True,
+            items__current_shipment__isnull=True,
+        )
+        .distinct()
+    )
+
+    if user_warehouse and hasattr(Order, "warehouse"):
+        incoming_orders_qs = incoming_orders_qs.filter(warehouse=user_warehouse)
+
+    incoming_orders = (
+        incoming_orders_qs.annotate(
+            incoming_items_count=Count(
+                "items",
+                filter=Q(items__shipped_to_warehouse=True, items__current_shipment__isnull=True),
+                distinct=True,
+            )
+        )
+        .order_by("-created_at")[:30]
+    )
+
+    incoming_items = incoming_items_qs.order_by("-order__created_at")[:200]
+
+    # =========================
+    # ✅ Store info per order (NO N+1)
+    # =========================
+    store_info_by_order_id = {}
+    incoming_store_points_map = {}  # unique store points for the "All Stores Map"
+
+    def _safe_attr(obj, *names, default=""):
+        """Safely read the first existing non-empty attribute from obj."""
+        if obj is None:
+            return default
+        for n in names:
+            if hasattr(obj, n):
+                val = getattr(obj, n)
+                if val not in (None, "", []):
+                    return val
+        return default
+
+    # Pull store + owner + geo fields once
+    for it in incoming_items_qs.only(
+        "order_id",
+        "product__store__id",
+        "product__store__name",
+        "product__store__email",
+        "product__store__phone",
+        "product__store__b2b_contact_email",
+        "product__store__b2b_whatsapp_number",
+        "product__store__address_line_1",
+        "product__store__city",
+        "product__store__region",
+        "product__store__country",
+        "product__store__geo_code",
+        "product__store__latitude",
+        "product__store__longitude",
+        "product__store__owner__first_name",
+        "product__store__owner__last_name",
+        "product__store__owner__username",
+        "product__store__owner__email",
+    ):
+        order_id = it.order_id
+        store = getattr(it.product, "store", None)
+        if store is None:
+            continue
+
+        owner = getattr(store, "owner", None)
+        owner_name = ""
+        if owner:
+            owner_name = (f"{owner.first_name} {owner.last_name}").strip() or owner.username
+
+        # Prefer B2B email if present
+        email = _safe_attr(store, "b2b_contact_email", "email", default="")
+        phone = _safe_attr(store, "phone", default="")
+        whatsapp = _safe_attr(store, "b2b_whatsapp_number", default="")
+
+        # Build a readable address
+        address_parts = [
+            _safe_attr(store, "address_line_1", default=""),
+            _safe_attr(store, "city", default=""),
+            _safe_attr(store, "region", default=""),
+        ]
+        address = ", ".join([p for p in address_parts if p])
+
+        # ✅ IMPORTANT: model fields are latitude/longitude, but your template expects lat/lng
+        lat_val = getattr(store, "latitude", None)
+        lng_val = getattr(store, "longitude", None)
+
+        # Convert Decimal -> float (JSON/JS friendly)
+        lat = float(lat_val) if lat_val is not None else None
+        lng = float(lng_val) if lng_val is not None else None
+
+        geo_code = _safe_attr(store, "geo_code", default="")
+
+        info = {
+            "store_id": store.id,
+            "name": _safe_attr(store, "name", default="Unknown Store"),
+            "phone": phone,
+            "whatsapp": whatsapp,
+            "email": email,
+            "address": address,
+            "country": _safe_attr(store, "country", default=""),
+            "owner_name": owner_name,
+            "owner_email": getattr(owner, "email", "") if owner else "",
+
+            # ✅ what your template/JS uses
+            "geo_code": geo_code,
+            "lat": lat,
+            "lng": lng,
+        }
+
+        # Attach store info to its order (avoid duplicates)
+        store_info_by_order_id.setdefault(order_id, [])
+        if info["store_id"] not in {x["store_id"] for x in store_info_by_order_id[order_id]}:
+            store_info_by_order_id[order_id].append(info)
+
+        # Collect unique stores for the "All Stores" map
+        # (even if lat/lng missing, geo_code may be parseable in JS)
+        if info["store_id"] not in incoming_store_points_map:
+            incoming_store_points_map[info["store_id"]] = {
+                "store_id": str(info["store_id"]),
+                "name": info["name"],
+                "phone": info["phone"],
+                "email": info["email"],
+                "whatsapp": info["whatsapp"],
+                "address": info["address"],
+                "geo_code": info["geo_code"],
+                "lat": info["lat"],
+                "lng": info["lng"],
+            }
+
+    # Attach to orders for easy template access
+    for o in incoming_orders:
+        stores = store_info_by_order_id.get(o.id, [])
+        o.incoming_stores = stores
+
+        if not stores:
+            o.incoming_store_display = "Unknown Store"
+        elif len(stores) == 1:
+            o.incoming_store_display = stores[0]["name"]
+        else:
+            o.incoming_store_display = f"{len(stores)} stores: " + ", ".join(sorted(s["name"] for s in stores))
+
+    # =========================
+    # STATS
+    # =========================
     stats = {
-        'expected_today': receipts_base.filter(
-            status='pending',
-            expected_arrival__date=timezone.now().date()
+        "expected_today": receipts_base.filter(
+            status="pending",
+            expected_arrival__date=timezone.now().date(),
         ).count(),
-        'pending': receipts_base.filter(status__in=['pending', 'in_progress']).count(),
-        'received_today': receipts_base.filter(
-            status='received',
-            received_at__date=timezone.now().date()
+        "pending": receipts_base.filter(status__in=["pending", "in_progress"]).count(),
+        "received_today": receipts_base.filter(
+            status="received",
+            received_at__date=timezone.now().date(),
         ).count(),
-        'has_issues': receipts_base.filter(
+        "has_issues": receipts_base.filter(
             has_issues=True,
-            status__in=['pending', 'in_progress', 'received']
+            status__in=["pending", "in_progress", "received"],
         ).count(),
+        "incoming_orders": incoming_orders_qs.count(),
+        "incoming_items": incoming_items_qs.count(),
     }
 
     context = {
-        'expected_shipments': expected_shipments,
-        'pending_receipts': pending_receipts,
-        'recent_receipts': recent_receipts,
-        'stats': stats,
-        'user_warehouse': user_warehouse,
+        "incoming_orders": incoming_orders,
+        "incoming_items": incoming_items,
+        "pending_receipts": pending_receipts,
+        "recent_receipts": recent_receipts,
+        "stats": stats,
+        "user_warehouse": user_warehouse,
+
+        # ✅ used by: {{ incoming_store_points|json_script:"incomingStorePoints" }}
+        "incoming_store_points": list(incoming_store_points_map.values()),
     }
 
-    return render(request, 'logistics/warehouse_receiving.html', context)
+    return render(request, "logistics/warehouse_receiving.html", context)
 
 # ============================================================================
 # Scanning and Verification
@@ -5679,23 +5816,16 @@ def warehouse_scan_verify(request):
 
 
 def verify_tracking_code(tracking_code, user=None):
-    """
-    Verify any tracking code (shipment tracking_number or receipt verification_code).
-    Returns structured result with type and data.
-    """
-    # Try to find warehouse receipt first (WRH- prefix)
+    # Receipt scan (WRH-...)
     if tracking_code.startswith('WRH-'):
         try:
-            receipt = WarehouseReceipt.objects.select_related(
-                'shipment',
-                'warehouse',
-                'received_by'
+            receipt = WarehouseReceiptOrder.objects.select_related(
+                'shipment', 'warehouse', 'received_by'
             ).prefetch_related(
                 'items__shipment_item__order_item__product'
             ).get(verification_code=tracking_code)
 
-            # Log scanning event
-            TrackingEvent.objects.create(
+            TrackingEventOrder.objects.create(
                 shipment=receipt.shipment,
                 receipt=receipt,
                 event_type='scanned',
@@ -5714,21 +5844,19 @@ def verify_tracking_code(tracking_code, user=None):
                     'can_receive': receipt.is_scannable(),
                 }
             }
-        except WarehouseReceipt.DoesNotExist:
+        except WarehouseReceiptOrder.DoesNotExist:
             pass
 
-    # Try to find shipment by tracking_number
+    # Shipment scan (tracking number)
     try:
         shipment = Shipment.objects.select_related(
-            'warehouse',
-            'order'
+            'warehouse', 'order'
         ).prefetch_related(
             'shipment_items__order_item__product',
             'warehouse_receipts'
         ).get(tracking_number=tracking_code)
 
-        # Log scanning event
-        TrackingEvent.objects.create(
+        TrackingEventOrder.objects.create(
             shipment=shipment,
             event_type='scanned',
             tracking_code=tracking_code,
@@ -5736,8 +5864,33 @@ def verify_tracking_code(tracking_code, user=None):
             notes='Shipment tracking number scanned at warehouse'
         )
 
-        # Check if warehouse receipt exists
-        existing_receipt = shipment.warehouse_receipts.first()
+        receipt = shipment.warehouse_receipts.first()
+
+        # ✅ If no receipt exists, create it right here so warehouse can verify immediately
+        if receipt is None:
+            receipt = WarehouseReceiptOrder.objects.create(
+                shipment=shipment,
+                warehouse=shipment.warehouse,
+                expected_arrival=shipment.collect_time or timezone.now(),
+                status='in_progress',  # scanning at warehouse usually means we're starting
+            )
+
+            for s_item in shipment.shipment_items.all():
+                WarehouseReceiptOrderItem.objects.create(
+                    receipt=receipt,
+                    shipment_item=s_item,
+                    expected_quantity=s_item.quantity,
+                    received_quantity=0
+                )
+
+            TrackingEventOrder.objects.create(
+                shipment=shipment,
+                receipt=receipt,
+                event_type='shipment_created',
+                tracking_code=receipt.verification_code,
+                performed_by=user,
+                notes='Receipt auto-created on shipment scan at warehouse'
+            )
 
         return {
             'success': True,
@@ -5745,15 +5898,15 @@ def verify_tracking_code(tracking_code, user=None):
             'message': f'Shipment {tracking_code} found!',
             'data': {
                 'shipment': shipment,
-                'receipt': existing_receipt,
+                'receipt': receipt,               # ✅ now guaranteed
                 'can_receive': shipment.status in ['pending', 'shipped', 'in_transit'],
-                'has_receipt': existing_receipt is not None,
+                'has_receipt': True,
             }
         }
+
     except Shipment.DoesNotExist:
         pass
 
-    # Code not found
     return {
         'success': False,
         'type': None,
@@ -5863,13 +6016,13 @@ def create_warehouse_receipt(request, shipment_id):
     shipment = get_object_or_404(Shipment, id=shipment_id)
 
     # Check if receipt already exists
-    existing = WarehouseReceipt.objects.filter(shipment=shipment).first()
+    existing = WarehouseReceiptOrder.objects.filter(shipment=shipment).first()
     if existing:
         messages.info(request, f'Receipt already exists: {existing.verification_code}')
         return redirect('logistics:warehouse_receipt_detail', receipt_id=existing.id)
 
     # Create receipt
-    receipt = WarehouseReceipt.objects.create(
+    receipt = WarehouseReceiptOrder.objects.create(
         shipment=shipment,
         warehouse=shipment.warehouse,
         expected_arrival=shipment.collect_time,
@@ -5878,7 +6031,7 @@ def create_warehouse_receipt(request, shipment_id):
 
     # Create receipt items from shipment items
     for shipment_item in shipment.shipment_items.all():
-        WarehouseReceiptItem.objects.create(
+        WarehouseReceiptOrderItem.objects.create(
             receipt=receipt,
             shipment_item=shipment_item,
             expected_quantity=shipment_item.quantity,
@@ -5886,7 +6039,7 @@ def create_warehouse_receipt(request, shipment_id):
         )
 
     # Log event
-    TrackingEvent.objects.create(
+    TrackingEventOrder.objects.create(
         shipment=shipment,
         receipt=receipt,
         event_type='shipment_created',
@@ -5912,7 +6065,7 @@ def start_receiving_shipment(request, shipment_id):
 
     if not receipt:
         # Create new receipt
-        receipt = WarehouseReceipt.objects.create(
+        receipt = WarehouseReceiptOrder.objects.create(
             shipment=shipment,
             warehouse=shipment.warehouse,
             expected_arrival=shipment.collect_time,
@@ -5921,7 +6074,7 @@ def start_receiving_shipment(request, shipment_id):
 
         # Create receipt items
         for shipment_item in shipment.shipment_items.all():
-            WarehouseReceiptItem.objects.create(
+            WarehouseReceiptOrderItem.objects.create(
                 receipt=receipt,
                 shipment_item=shipment_item,
                 expected_quantity=shipment_item.quantity,
@@ -5933,7 +6086,7 @@ def start_receiving_shipment(request, shipment_id):
             receipt.start_receiving()
 
     # Log event
-    TrackingEvent.objects.create(
+    TrackingEventOrder.objects.create(
         shipment=shipment,
         receipt=receipt,
         event_type='receiving_started',
@@ -5953,7 +6106,7 @@ def warehouse_receipt_detail(request, receipt_id):
     Shows verification code, items, and tracking history.
     """
     receipt = get_object_or_404(
-        WarehouseReceipt.objects.select_related(
+        WarehouseReceiptOrder.objects.select_related(
             'shipment',
             'warehouse',
             'received_by'
@@ -5965,7 +6118,7 @@ def warehouse_receipt_detail(request, receipt_id):
     )
 
     # Get tracking events
-    tracking_events = TrackingEvent.objects.filter(
+    tracking_events = TrackingEventOrder.objects.filter(
         Q(receipt=receipt) | Q(shipment=receipt.shipment)
     ).select_related('performed_by').order_by('-created_at')
 
@@ -5984,7 +6137,7 @@ def warehouse_verify_receipt(request, receipt_id):
     Verify and mark receipt as received.
     Process received quantities and conditions for each item.
     """
-    receipt = get_object_or_404(WarehouseReceipt, id=receipt_id)
+    receipt = get_object_or_404(WarehouseReceiptOrder, id=receipt_id)
 
     # Update receipt items
     for item in receipt.items.all():
@@ -5998,7 +6151,7 @@ def warehouse_verify_receipt(request, receipt_id):
         item.save()
 
         # Log item verification
-        TrackingEvent.objects.create(
+        TrackingEventOrder.objects.create(
             shipment=receipt.shipment,
             receipt=receipt,
             event_type='item_verified',
@@ -6024,7 +6177,7 @@ def warehouse_verify_receipt(request, receipt_id):
         receipt.save()
 
         # Log issue
-        TrackingEvent.objects.create(
+        TrackingEventOrder.objects.create(
             shipment=receipt.shipment,
             receipt=receipt,
             event_type='issue_reported',
@@ -6090,7 +6243,7 @@ def generate_shipment_qr_code(request, shipment_id):
 @login_required
 def generate_receipt_qr_code(request, receipt_id):
     """Generate QR code for a warehouse receipt verification code"""
-    receipt = get_object_or_404(WarehouseReceipt, id=receipt_id)
+    receipt = get_object_or_404(WarehouseReceiptOrder, id=receipt_id)
 
     # Ensure verification code exists
     if not receipt.verification_code:
@@ -6210,7 +6363,7 @@ def shipment_tracking_detail(request, tracking_number):
     shipment = get_object_or_404(Shipment, tracking_number=tracking_number)
 
     # Get all tracking events
-    tracking_events = TrackingEvent.objects.filter(
+    tracking_events = TrackingEventOrder.objects.filter(
         Q(shipment=shipment) | Q(tracking_code=tracking_number)
     ).select_related('performed_by').order_by('-created_at')
 
@@ -6224,3 +6377,4 @@ def shipment_tracking_detail(request, tracking_number):
     }
 
     return render(request, 'logistics/shipment_tracking_detail.html', context)
+

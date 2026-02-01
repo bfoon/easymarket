@@ -124,6 +124,7 @@ class StoreAdmin(admin.ModelAdmin):
         ("Business Details", {
             "fields": ("business_registration_number", "tax_identification_number", "bank_account_number", "bank_name")
         }),
+        ("Location", {"fields": ("geo_code", "latitude", "longitude", "show_map_location")}),
         ("Media", {"fields": ("logo", "banner")}),
         ("Settings", {
             "fields": (

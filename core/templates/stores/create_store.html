@@ -155,7 +155,32 @@
                 </div>
               </div>
             </div>
+            <!-- ===== Store Geo Location ===== -->
+          <div class="col-12 mt-2">
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+              <button type="button" class="btn btn-outline-primary" id="btnPickLocation">
+                <i class="fas fa-location-crosshairs me-1"></i> Add Geo Location
+              </button>
 
+              <button type="button" class="btn btn-outline-secondary" id="btnClearLocation">
+                <i class="fas fa-trash me-1"></i> Clear Location
+              </button>
+
+              <span class="small text-muted" id="locStatus">No location selected.</span>
+            </div>
+
+            <!-- hidden fields that get saved to DB -->
+            <input type="hidden" name="geo_code" id="geo_code" value="{{ form_data.geo_code|default:'' }}">
+            <input type="hidden" name="latitude" id="latitude" value="{{ form_data.latitude|default:'' }}">
+            <input type="hidden" name="longitude" id="longitude" value="{{ form_data.longitude|default:'' }}">
+
+            <div class="mt-3">
+              <div id="storeCreateMap" style="height:320px; border-radius:14px; border:1px solid #e5e7eb; overflow:hidden;"></div>
+              <div class="form-text">
+                Tip: Click on the map to set the pin, or press “Add Geo Location” to use your current GPS.
+              </div>
+            </div>
+          </div>
             <!-- Media Upload Section -->
             <div class="form-section mb-4">
               <h5 class="text-dark mb-3">
@@ -217,8 +242,167 @@
     </div>
   </div>
 </div>
+<!-- Leaflet (maps) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script src="{% static 'js/main.js' %}"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const latInput = document.getElementById("latitude");
+  const lngInput = document.getElementById("longitude");
+  const geoInput = document.getElementById("geo_code");
+  const statusEl = document.getElementById("locStatus");
+
+  const btnPick = document.getElementById("btnPickLocation");
+  const btnClear = document.getElementById("btnClearLocation");
+
+  const countrySelect = document.querySelector('select[name="country"]');
+
+  // Centers
+  const COUNTRY_CENTER = {
+    "Gambia":  { lat: 13.4549, lng: -16.5790, zoom: 7 },
+    "Senegal": { lat: 14.4974, lng: -14.4524, zoom: 7 },
+    "Ghana":   { lat: 7.9465,  lng: -1.0232,  zoom: 7 },
+    "Nigeria": { lat: 9.0820,  lng: 8.6753,   zoom: 6 },
+    "Mali":    { lat: 17.5707, lng: -3.9962,  zoom: 6 },
+  };
+
+  /**
+   * ✅ Bounding boxes (approx) to validate GPS is inside selected country.
+   * Format: [minLat, minLng, maxLat, maxLng]
+   * (These are intentionally generous to avoid false negatives.)
+   */
+  const COUNTRY_BBOX = {
+    "Gambia":  [13.05, -16.95, 13.90, -13.70],
+    "Senegal": [12.25, -17.60, 16.75, -11.35],
+    "Ghana":   [4.70,  -3.30,  11.20,  1.30],
+    "Nigeria": [4.10,   2.60,  13.95, 14.70],
+    "Mali":    [10.10, -12.30, 25.00,  4.30],
+  };
+
+  function getSelectedCountry() {
+    return (countrySelect && countrySelect.value) ? countrySelect.value : "Gambia";
+  }
+
+  function getCountryCenter(country) {
+    return COUNTRY_CENTER[country] || COUNTRY_CENTER["Gambia"];
+  }
+
+  function isInsideBBox(country, lat, lng) {
+    const bb = COUNTRY_BBOX[country];
+    if (!bb) return true; // if unknown, don't block
+    const [minLat, minLng, maxLat, maxLng] = bb;
+    return lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng;
+  }
+
+  // Init map using selected country
+  const initial = getCountryCenter(getSelectedCountry());
+  const map = L.map("storeCreateMap").setView([initial.lat, initial.lng], initial.zoom);
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: "&copy; OpenStreetMap"
+  }).addTo(map);
+
+  let marker = null;
+
+  function setLocation(lat, lng, sourceLabel) {
+    if (typeof lat !== "number" || typeof lng !== "number" || Number.isNaN(lat) || Number.isNaN(lng)) return;
+
+    latInput.value = lat.toFixed(6);
+    lngInput.value = lng.toFixed(6);
+    geoInput.value = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+
+    const country = getSelectedCountry();
+    statusEl.textContent = `Location set (${sourceLabel}) • Country: ${country} • ${geoInput.value}`;
+
+    if (marker) marker.remove();
+    marker = L.marker([lat, lng]).addTo(map).bindPopup("Store Location").openPopup();
+    map.setView([lat, lng], 15);
+  }
+
+  function clearLocation() {
+    latInput.value = "";
+    lngInput.value = "";
+    geoInput.value = "";
+    statusEl.textContent = "No location selected.";
+    if (marker) { marker.remove(); marker = null; }
+  }
+
+  // Click on map sets location (always allowed, because user is placing it in selected country)
+  map.on("click", function (e) {
+    setLocation(e.latlng.lat, e.latlng.lng, "map click");
+  });
+
+  // When country changes: recenter map ONLY if user hasn't pinned yet
+  if (countrySelect) {
+    countrySelect.addEventListener("change", function () {
+      if (marker) return;
+      const c = getCountryCenter(getSelectedCountry());
+      map.setView([c.lat, c.lng], c.zoom);
+      statusEl.textContent = `Map centered for ${getSelectedCountry()}. Click map to set location.`;
+      setTimeout(() => map.invalidateSize(), 150);
+    });
+  }
+
+  /**
+   * ✅ Add Geo Location:
+   * - First centers map to selected country
+   * - Then tries GPS
+   * - If GPS is outside the selected country => DO NOT SET IT
+   */
+  btnPick.addEventListener("click", function () {
+    const country = getSelectedCountry();
+    const c = getCountryCenter(country);
+
+    // Always center to selected country first
+    map.setView([c.lat, c.lng], c.zoom);
+    statusEl.textContent = `Selected country: ${country}. Getting GPS… If GPS is outside ${country}, you must click the map to pin the store.`;
+
+    if (!navigator.geolocation) {
+      statusEl.textContent = "Geolocation not supported. Click on the map to set location manually.";
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      function (pos) {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+
+        // ✅ Validate GPS belongs to selected country
+        if (!isInsideBBox(country, lat, lng)) {
+          statusEl.textContent =
+            `Your GPS location is NOT in ${country} (looks like another country). ` +
+            `Please click on the map inside ${country} to set the store location, or change the country dropdown.`;
+          return; // do NOT set
+        }
+
+        setLocation(lat, lng, "GPS");
+      },
+      function (err) {
+        console.error(err);
+        statusEl.textContent = "Failed to get GPS location. Click on the map to set it manually.";
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  });
+
+  btnClear.addEventListener("click", clearLocation);
+
+  // Restore saved location if available
+  const existingLat = parseFloat(latInput.value || "");
+  const existingLng = parseFloat(lngInput.value || "");
+  if (!Number.isNaN(existingLat) && !Number.isNaN(existingLng)) {
+    setLocation(existingLat, existingLng, "saved");
+  } else {
+    statusEl.textContent = `Map ready. Country: ${getSelectedCountry()}. Click map or use Add Geo Location.`;
+  }
+
+  setTimeout(() => map.invalidateSize(), 150);
+});
+</script>
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('storeForm');

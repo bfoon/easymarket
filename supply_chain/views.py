@@ -21,7 +21,7 @@ from .models import (
 from stores.models import B2BOrder, B2BOrderItem, Store
 from stock.models import Warehouse, Stock
 from logistics.models import Warehouse as LogisticsWarehouse, Vehicle, Driver, B2BShipment
-
+from stock.models import Warehouse as StoreWarehouse
 
 # ==================== PERMISSION CHECKS ====================
 
@@ -326,117 +326,186 @@ def create_linkage(request):
     return render(request, 'supply_chain/create_linkage.html', context)
 
 
+def _get_user_logistics_warehouse(user):
+    """
+    Return the logistics warehouse for this warehouse staff user.
+    Adjust the attribute path to match your profile model.
+    """
+    # Common patterns:
+    # - user.logistics_profile.warehouse
+    # - user.warehouse_staff_profile.warehouse
+    # - user.profile.logistics_warehouse
+    lp = getattr(user, "logistics_profile", None)
+    if lp and getattr(lp, "warehouse", None):
+        return lp.warehouse
+
+    wsp = getattr(user, "warehouse_staff_profile", None)
+    if wsp and getattr(wsp, "warehouse", None):
+        return wsp.warehouse
+
+    prof = getattr(user, "profile", None)
+    if prof and getattr(prof, "logistics_warehouse", None):
+        return prof.logistics_warehouse
+
+    return None
+
+
+def _user_allowed_linkages(user):
+    """
+    Linkages that this user is allowed to operate on.
+    """
+    user_wh = _get_user_logistics_warehouse(user)
+    qs = WarehouseLinkage.objects.filter(is_active=True)
+    if user_wh:
+        qs = qs.filter(logistics_warehouse=user_wh)
+    else:
+        # If the user has no warehouse, show nothing (safer than leaking all transfers)
+        qs = qs.none()
+    return qs
+
+
 # ==================== TRANSFERS ====================
 
 @login_required
 @user_passes_test(is_warehouse_staff)
 def transfer_list(request):
-    """List all transfers with filtering"""
-    # ✅ FIXED: Removed 'picked_up_by' and 'received_by' - they don't exist in the model
-    transfers = StoreToLogisticsTransfer.objects.select_related(
-        'store_warehouse',
-        'logistics_warehouse',
-        'order',
-        'b2b_order',  # Added b2b_order
-        'requested_by'
-    ).prefetch_related('items__product')
+    """List transfers (restricted by linkage / user's logistics warehouse)"""
+
+    allowed_linkages = _user_allowed_linkages(request.user)
+    allowed_store_wh_ids = list(allowed_linkages.values_list("store_warehouse_id", flat=True))
+    allowed_logistics_wh_ids = list(allowed_linkages.values_list("logistics_warehouse_id", flat=True))
+
+    # ✅ Restrict base queryset to ONLY transfers user is allowed to see
+    transfers = (
+        StoreToLogisticsTransfer.objects
+        .select_related(
+            "store_warehouse",
+            "logistics_warehouse",
+            "order",
+            "b2b_order",
+            "requested_by",
+        )
+        .prefetch_related("items__product")
+        .filter(
+            store_warehouse_id__in=allowed_store_wh_ids,
+            logistics_warehouse_id__in=allowed_logistics_wh_ids,
+        )
+    )
 
     # Filters
-    status = request.GET.get('status')
-    date_from = request.GET.get('date_from')
-    date_to = request.GET.get('date_to')
-    store_warehouse_id = request.GET.get('store_warehouse')
-    logistics_warehouse_id = request.GET.get('logistics_warehouse')
-    linkage_id = request.GET.get('linkage')  # Added linkage filter
+    status = request.GET.get("status") or None
+    date_from = request.GET.get("date_from") or None
+    date_to = request.GET.get("date_to") or None
+    store_warehouse_id = request.GET.get("store_warehouse") or None
+    logistics_warehouse_id = request.GET.get("logistics_warehouse") or None
+    linkage_id = request.GET.get("linkage") or None
 
     if status:
         transfers = transfers.filter(status=status)
+
     if date_from:
         transfers = transfers.filter(requested_at__date__gte=date_from)
+
     if date_to:
         transfers = transfers.filter(requested_at__date__lte=date_to)
+
     if store_warehouse_id:
-        transfers = transfers.filter(store_warehouse_id=store_warehouse_id)
+        # ✅ keep it safe: only allow filtering within allowed stores
+        transfers = transfers.filter(store_warehouse_id=store_warehouse_id,
+                                     store_warehouse_id__in=allowed_store_wh_ids)
+
     if logistics_warehouse_id:
-        transfers = transfers.filter(logistics_warehouse_id=logistics_warehouse_id)
+        transfers = transfers.filter(logistics_warehouse_id=logistics_warehouse_id,
+                                     logistics_warehouse_id__in=allowed_logistics_wh_ids)
+
     if linkage_id:
-        # Filter by linkage (store + logistics warehouse combination)
-        from .models import WarehouseLinkage
-        try:
-            linkage = WarehouseLinkage.objects.get(id=linkage_id)
+        # ✅ linkage filter must also be allowed for this user
+        linkage = allowed_linkages.filter(id=linkage_id).first()
+        if linkage:
             transfers = transfers.filter(
-                store_warehouse=linkage.store_warehouse,
-                logistics_warehouse=linkage.logistics_warehouse
+                store_warehouse_id=linkage.store_warehouse_id,
+                logistics_warehouse_id=linkage.logistics_warehouse_id,
             )
-        except WarehouseLinkage.DoesNotExist:
-            pass
+        else:
+            # invalid or unauthorized linkage -> show none (safe)
+            transfers = transfers.none()
 
-    # Order by most recent
-    transfers = transfers.order_by('-requested_at')
+    transfers = transfers.order_by("-requested_at")
 
-    # Statistics
+    # Stats (on the filtered queryset, so numbers match what user can see)
     total_transfers = transfers.count()
-    pending_count = transfers.filter(status='PENDING').count()
-    in_transit_count = transfers.filter(status='PICKED_UP').count()
-    completed_count = transfers.filter(status='RECEIVED').count()
+    pending_count = transfers.filter(status="PENDING").count()
+    in_transit_count = transfers.filter(status="PICKED_UP").count()
+    completed_count = transfers.filter(status="RECEIVED").count()
 
     # Pagination
     paginator = Paginator(transfers, 25)
-    page = request.GET.get('page')
+    page = request.GET.get("page")
     transfers_page = paginator.get_page(page)
 
-    # Get warehouses for filter dropdowns
-    from stock.models import Warehouse
-    from logistics.models import Warehouse as LogisticsWarehouse
+    # Dropdowns (restricted)
+    store_warehouses = (
+        StoreWarehouse.objects
+        .filter(is_active=True, id__in=allowed_store_wh_ids)
+        .order_by("name")
+    )
 
-    store_warehouses = Warehouse.objects.filter(is_active=True).order_by('name')
-    logistics_warehouses = LogisticsWarehouse.objects.filter(is_active=True).order_by('name')
+    # logistics warehouse model might not be in logistics app; use the FK model instead
+    # This is the safest way: get model class from the FK field.
+    LogisticsWarehouseModel = StoreToLogisticsTransfer._meta.get_field("logistics_warehouse").remote_field.model
+    logistics_warehouses = (
+        LogisticsWarehouseModel.objects
+        .filter(is_active=True, id__in=allowed_logistics_wh_ids)
+        .order_by("name")
+        if hasattr(LogisticsWarehouseModel, "is_active")
+        else LogisticsWarehouseModel.objects.filter(id__in=allowed_logistics_wh_ids).order_by("name")
+    )
 
     context = {
-        'transfers': transfers_page,
-        'total_transfers': total_transfers,
-        'pending_count': pending_count,
-        'in_transit_count': in_transit_count,
-        'completed_count': completed_count,
-        'status_choices': StoreToLogisticsTransfer.STATUS_CHOICES,
-        'store_warehouses': store_warehouses,
-        'logistics_warehouses': logistics_warehouses,
-        'current_filters': {
-            'status': status,
-            'date_from': date_from,
-            'date_to': date_to,
-            'store_warehouse': store_warehouse_id,
-            'logistics_warehouse': logistics_warehouse_id,
-            'linkage': linkage_id,
-        }
+        "transfers": transfers_page,
+        "total_transfers": total_transfers,
+        "pending_count": pending_count,
+        "in_transit_count": in_transit_count,
+        "completed_count": completed_count,
+        "status_choices": getattr(StoreToLogisticsTransfer, "STATUS_CHOICES", []),
+        "store_warehouses": store_warehouses,
+        "logistics_warehouses": logistics_warehouses,
+        "linkages": allowed_linkages.select_related("store_warehouse", "logistics_warehouse").order_by("store_warehouse__name"),
+        "current_filters": {
+            "status": status,
+            "date_from": date_from,
+            "date_to": date_to,
+            "store_warehouse": store_warehouse_id,
+            "logistics_warehouse": logistics_warehouse_id,
+            "linkage": linkage_id,
+        },
     }
-
-    return render(request, 'supply_chain/transfer_list.html', context)
+    return render(request, "supply_chain/transfer_list.html", context)
 
 
 @login_required
 @user_passes_test(is_warehouse_staff)
 def transfer_detail(request, transfer_id):
-    """View transfer details"""
-    # ✅ FIXED: Removed non-existent fields
+    """View transfer details (restricted by user's linkage)"""
+
+    allowed_linkages = _user_allowed_linkages(request.user)
+    allowed_store_wh_ids = list(allowed_linkages.values_list("store_warehouse_id", flat=True))
+    allowed_logistics_wh_ids = list(allowed_linkages.values_list("logistics_warehouse_id", flat=True))
+
     transfer = get_object_or_404(
         StoreToLogisticsTransfer.objects.select_related(
-            'store_warehouse',
-            'logistics_warehouse',
-            'order',
-            'b2b_order',
-            'requested_by'
-            # 'picked_up_by', 'received_by', 'driver', 'vehicle' - DON'T EXIST
-        ).prefetch_related('items__product'),
-        id=transfer_id
+            "store_warehouse",
+            "logistics_warehouse",
+            "order",
+            "b2b_order",
+            "requested_by",
+        ).prefetch_related("items__product"),
+        id=transfer_id,
+        store_warehouse_id__in=allowed_store_wh_ids,
+        logistics_warehouse_id__in=allowed_logistics_wh_ids,
     )
 
-    context = {
-        'transfer': transfer,
-    }
-
-    return render(request, 'supply_chain/transfer_detail.html', context)
-
+    return render(request, "supply_chain/transfer_detail.html", {"transfer": transfer})
 
 @login_required
 @user_passes_test(is_warehouse_staff)

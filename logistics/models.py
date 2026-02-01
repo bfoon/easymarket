@@ -1840,7 +1840,7 @@ def generate_verification_code(prefix='WRH'):
     return f"{prefix}-{random_part}"
 
 
-class WarehouseReceipt(models.Model):
+class WarehouseReceiptOrder(models.Model):
     """
     Warehouse Receipt for tracking items received at warehouse from suppliers.
     Links to existing Shipment model for tracking.
@@ -1980,7 +1980,7 @@ class WarehouseReceipt(models.Model):
         """Generate unique verification code"""
         while True:
             code = generate_verification_code('WRH')
-            if not WarehouseReceipt.objects.filter(verification_code=code).exists():
+            if not WarehouseReceiptOrder.objects.filter(verification_code=code).exists():
                 return code
 
     def generate_verification_code(self):
@@ -2029,7 +2029,7 @@ class WarehouseReceipt(models.Model):
         }
 
 
-class WarehouseReceiptItem(models.Model):
+class WarehouseReceiptOrderItem(models.Model):
     """
     Individual items in a warehouse receipt.
     Links to ShipmentItem to track what was shipped vs what was received.
@@ -2042,7 +2042,7 @@ class WarehouseReceiptItem(models.Model):
     )
 
     receipt = models.ForeignKey(
-        WarehouseReceipt,
+        WarehouseReceiptOrder,
         on_delete=models.CASCADE,
         related_name='items',
         verbose_name=_("Warehouse Receipt")
@@ -2128,7 +2128,7 @@ class WarehouseReceiptItem(models.Model):
         return self.shipment_item.order_item
 
 
-class TrackingEvent(models.Model):
+class TrackingEventOrder(models.Model):
     """
     Track all scanning and verification events for shipments and receipts.
     Provides complete audit trail.
@@ -2154,7 +2154,7 @@ class TrackingEvent(models.Model):
         verbose_name=_("Shipment")
     )
     receipt = models.ForeignKey(
-        WarehouseReceipt,
+        WarehouseReceiptOrder,
         on_delete=models.CASCADE,
         related_name='tracking_events',
         null=True,
@@ -2223,6 +2223,7 @@ class TrackingEvent(models.Model):
     def __str__(self):
         return f"{self.get_event_type_display()} - {self.tracking_code} at {self.created_at}"
 
+
 # ============================================================================
 # SIGNAL HANDLERS
 # ============================================================================
@@ -2247,11 +2248,11 @@ def create_warehouse_receipt_for_shipment(sender, instance, created, **kwargs):
     # Example: Create receipt only for shipments with warehouse set
     if instance.warehouse and not hasattr(instance, '_skip_receipt_creation'):
         # Check if receipt already exists
-        existing = WarehouseReceipt.objects.filter(shipment=instance).first()
+        existing = WarehouseReceiptOrder.objects.filter(shipment=instance).first()
 
         if not existing:
             # Create warehouse receipt
-            receipt = WarehouseReceipt.objects.create(
+            receipt = WarehouseReceiptOrder.objects.create(
                 shipment=instance,
                 warehouse=instance.warehouse,
                 expected_arrival=instance.collect_time,
@@ -2260,7 +2261,7 @@ def create_warehouse_receipt_for_shipment(sender, instance, created, **kwargs):
 
             # Create receipt items from shipment items
             for shipment_item in instance.shipment_items.all():
-                WarehouseReceiptItem.objects.create(
+                WarehouseReceiptOrderItem.objects.create(
                     receipt=receipt,
                     shipment_item=shipment_item,
                     expected_quantity=shipment_item.quantity,
@@ -2268,7 +2269,7 @@ def create_warehouse_receipt_for_shipment(sender, instance, created, **kwargs):
                 )
 
             # Log creation event
-            TrackingEvent.objects.create(
+            TrackingEventOrder.objects.create(
                 shipment=instance,
                 receipt=receipt,
                 event_type='shipment_created',
@@ -2298,7 +2299,7 @@ def log_shipment_status_change_event(sender, instance, created, **kwargs):
         # Get associated receipt
         receipt = instance.warehouse_receipts.first()
 
-        TrackingEvent.objects.create(
+        TrackingEventOrder.objects.create(
             shipment=instance,
             receipt=receipt,
             event_type='status_changed',
@@ -2315,7 +2316,7 @@ def log_shipment_status_change_event(sender, instance, created, **kwargs):
         delattr(instance, '_old_status')
 
 
-@receiver(post_save, sender=WarehouseReceipt)
+@receiver(post_save, sender=WarehouseReceiptOrder)
 def log_receipt_status_change(sender, instance, created, **kwargs):
     """Log receipt events"""
     if created:
@@ -2324,7 +2325,7 @@ def log_receipt_status_change(sender, instance, created, **kwargs):
             instance.generate_verification_code()
     elif instance.status == 'received' and not instance._state.adding:
         # Receipt completed
-        TrackingEvent.objects.create(
+        TrackingEventOrder.objects.create(
             shipment=instance.shipment,
             receipt=instance,
             event_type='receipt_completed',
@@ -2332,3 +2333,4 @@ def log_receipt_status_change(sender, instance, created, **kwargs):
             performed_by=instance.received_by,
             notes='Receipt marked as completed'
         )
+
