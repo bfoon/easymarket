@@ -68,7 +68,7 @@ from .models import (
     Shipment, ShipmentBox, BoxItem, Driver, Vehicle, ShipmentItem,
     Warehouse, LogisticOffice, DriverLocation, WarehouseShipmentNotification,
     B2BShipment, B2BShipmentItem, B2BShipmentBox, B2BBoxItem, OrderLogisticsAgent, LogisticsAgentMessage,
-    WarehouseReceipt, WarehouseReceiptItem
+    WarehouseReceipt, WarehouseReceiptItem, TrackingEvent
 )
 
 from stores.b2b.models import B2BOrder, B2BOrderItem, B2BShippingAddress
@@ -5536,93 +5536,457 @@ def get_shipment_unread_count(request, shipment_id):
         }, status=500)
 
 
+# ============================================================================
+# Dashboard Views
+# ============================================================================
 @login_required
 def warehouse_receiving_dashboard(request):
     """
-    Main dashboard for warehouse receiving
-    Shows pending shipments waiting to be received
+    Main dashboard for warehouse receiving.
+
+    Access Control:
+    - Superusers: Can see all warehouses
+    - Logistics staff (is_logistic=True): Can see their assigned warehouse only
+    - Others: Access denied
     """
-    # Get pending receipts (shipments that have been shipped to warehouse)
-    pending_receipts = WarehouseReceipt.objects.filter(
-        status='pending'
-    ).select_related(
-        'order',
+
+    # ============================================================================
+    # PERMISSION CHECK
+    # ============================================================================
+
+    # Check if user has permission
+    if not (request.user.is_superuser or request.user.is_logistic):
+        messages.error(request, 'You do not have permission to access the warehouse dashboard.')
+        return redirect('/')  # Or return HttpResponseForbidden() if you prefer
+
+    # ============================================================================
+    # WAREHOUSE ACCESS
+    # ============================================================================
+
+    user_warehouse = None
+
+    # Superusers see all warehouses
+    if not request.user.is_superuser:
+        # Logistics users see only their warehouse
+        # Adjust this based on how warehouse is linked to user in your system
+        if hasattr(request.user, 'warehouse'):
+            user_warehouse = request.user.warehouse
+        elif hasattr(request.user, 'managed_warehouses'):
+            user_warehouse = request.user.managed_warehouses.first()
+
+    # ============================================================================
+    # QUERYSETS
+    # ============================================================================
+
+    # Base queryset
+    receipts_base = WarehouseReceipt.objects.select_related(
         'shipment',
+        'warehouse',
         'received_by'
     ).prefetch_related(
-        'items__order_item__product'
+        'items__shipment_item__order_item__product'
     )
 
+    # Filter by user's warehouse if applicable
+    if user_warehouse:
+        receipts_base = receipts_base.filter(warehouse=user_warehouse)
+
+    # Get pending receipts (waiting to be received)
+    pending_receipts = receipts_base.filter(
+        status__in=['pending', 'in_progress']
+    ).order_by('expected_arrival')
+
+    # Get shipments expected at warehouse (that have receipts created)
+    expected_shipments_qs = Shipment.objects.filter(
+        warehouse_receipts__status__in=['pending', 'in_progress']
+    ).select_related('warehouse', 'order').prefetch_related(
+        'shipment_items__order_item__product',
+        'warehouse_receipts'
+    ).distinct()
+
+    # Filter by user's warehouse BEFORE slicing
+    if user_warehouse:
+        expected_shipments_qs = expected_shipments_qs.filter(warehouse=user_warehouse)
+
+    # Now apply ordering and limit
+    expected_shipments = expected_shipments_qs.order_by('collect_time')[:20]
+
     # Get recently received (last 7 days)
-    from datetime import timedelta
-    recent_receipts = WarehouseReceipt.objects.filter(
+    recent_receipts = receipts_base.filter(
         status='received',
         received_at__gte=timezone.now() - timedelta(days=7)
-    ).select_related('order', 'shipment', 'received_by')[:10]
+    ).order_by('-received_at')[:10]
 
     # Statistics
     stats = {
-        'pending': WarehouseReceipt.objects.filter(status='pending').count(),
-        'received_today': WarehouseReceipt.objects.filter(
+        'expected_today': receipts_base.filter(
+            status='pending',
+            expected_arrival__date=timezone.now().date()
+        ).count(),
+        'pending': receipts_base.filter(status__in=['pending', 'in_progress']).count(),
+        'received_today': receipts_base.filter(
             status='received',
             received_at__date=timezone.now().date()
         ).count(),
-        'has_issues': WarehouseReceipt.objects.filter(has_issues=True, status='pending').count(),
+        'has_issues': receipts_base.filter(
+            has_issues=True,
+            status__in=['pending', 'in_progress', 'received']
+        ).count(),
     }
 
     context = {
+        'expected_shipments': expected_shipments,
         'pending_receipts': pending_receipts,
         'recent_receipts': recent_receipts,
         'stats': stats,
+        'user_warehouse': user_warehouse,
     }
 
     return render(request, 'logistics/warehouse_receiving.html', context)
 
+# ============================================================================
+# Scanning and Verification
+# ============================================================================
 
 @login_required
 def warehouse_scan_verify(request):
     """
-    QR Code scanning and manual entry page for verification
+    Universal scanning page for tracking codes.
+    Handles both:
+    - Shipment tracking numbers (existing tracking_number)
+    - Warehouse receipt verification codes (WRH-XXXXXXXX)
     """
     verification_result = None
-    receipt = None
+    item_data = None
+    scan_type = None
 
     if request.method == 'POST':
-        verification_code = request.POST.get('verification_code', '').strip()
+        tracking_code = request.POST.get('tracking_code', '').strip().upper()
 
-        if verification_code:
-            try:
-                receipt = WarehouseReceipt.objects.get(
-                    verification_code=verification_code
-                )
-                verification_result = {
-                    'success': True,
-                    'receipt': receipt,
-                    'message': 'Verification code found!'
-                }
-            except WarehouseReceipt.DoesNotExist:
-                verification_result = {
-                    'success': False,
-                    'message': 'Invalid verification code. Please try again.'
-                }
+        if tracking_code:
+            result = verify_tracking_code(tracking_code, request.user)
+            verification_result = result
+            item_data = result.get('data')
+            scan_type = result.get('type')
 
     context = {
         'verification_result': verification_result,
-        'receipt': receipt,
+        'item_data': item_data,
+        'scan_type': scan_type,
     }
 
     return render(request, 'logistics/warehouse_scan.html', context)
+
+
+def verify_tracking_code(tracking_code, user=None):
+    """
+    Verify any tracking code (shipment tracking_number or receipt verification_code).
+    Returns structured result with type and data.
+    """
+    # Try to find warehouse receipt first (WRH- prefix)
+    if tracking_code.startswith('WRH-'):
+        try:
+            receipt = WarehouseReceipt.objects.select_related(
+                'shipment',
+                'warehouse',
+                'received_by'
+            ).prefetch_related(
+                'items__shipment_item__order_item__product'
+            ).get(verification_code=tracking_code)
+
+            # Log scanning event
+            TrackingEvent.objects.create(
+                shipment=receipt.shipment,
+                receipt=receipt,
+                event_type='scanned',
+                tracking_code=tracking_code,
+                performed_by=user,
+                notes='Receipt verification code scanned at warehouse'
+            )
+
+            return {
+                'success': True,
+                'type': 'receipt',
+                'message': f'Receipt found! Shipment {receipt.shipment.tracking_number}',
+                'data': {
+                    'receipt': receipt,
+                    'shipment': receipt.shipment,
+                    'can_receive': receipt.is_scannable(),
+                }
+            }
+        except WarehouseReceipt.DoesNotExist:
+            pass
+
+    # Try to find shipment by tracking_number
+    try:
+        shipment = Shipment.objects.select_related(
+            'warehouse',
+            'order'
+        ).prefetch_related(
+            'shipment_items__order_item__product',
+            'warehouse_receipts'
+        ).get(tracking_number=tracking_code)
+
+        # Log scanning event
+        TrackingEvent.objects.create(
+            shipment=shipment,
+            event_type='scanned',
+            tracking_code=tracking_code,
+            performed_by=user,
+            notes='Shipment tracking number scanned at warehouse'
+        )
+
+        # Check if warehouse receipt exists
+        existing_receipt = shipment.warehouse_receipts.first()
+
+        return {
+            'success': True,
+            'type': 'shipment',
+            'message': f'Shipment {tracking_code} found!',
+            'data': {
+                'shipment': shipment,
+                'receipt': existing_receipt,
+                'can_receive': shipment.status in ['pending', 'shipped', 'in_transit'],
+                'has_receipt': existing_receipt is not None,
+            }
+        }
+    except Shipment.DoesNotExist:
+        pass
+
+    # Code not found
+    return {
+        'success': False,
+        'type': None,
+        'message': f'Tracking code "{tracking_code}" not found. Please verify and try again.',
+        'data': None
+    }
+
+
+@login_required
+@require_http_methods(["GET"])
+def verify_code_ajax(request):
+    """
+    AJAX endpoint to verify tracking code.
+    Supports both shipment tracking_number and receipt verification_code.
+    """
+    code = request.GET.get('code', '').strip().upper()
+
+    if not code:
+        return JsonResponse({
+            'success': False,
+            'message': 'No code provided'
+        })
+
+    result = verify_tracking_code(code, request.user)
+
+    if result['success']:
+        response_data = {
+            'success': True,
+            'type': result['type'],
+            'message': result['message']
+        }
+
+        if result['type'] == 'shipment':
+            shipment = result['data']['shipment']
+            receipt = result['data']['receipt']
+
+            # Build items data
+            items_data = []
+            for shipment_item in shipment.shipment_items.all():
+                items_data.append({
+                    'id': shipment_item.id,
+                    'product_name': shipment_item.order_item.product.name,
+                    'sku': getattr(shipment_item.order_item.product, 'sku', 'N/A'),
+                    'quantity': shipment_item.quantity,
+                })
+
+            response_data.update({
+                'shipment': {
+                    'id': shipment.id,
+                    'tracking_number': shipment.tracking_number,
+                    'status': shipment.status,
+                    'items': items_data,
+                },
+                'receipt_exists': receipt is not None,
+                'receipt_id': receipt.id if receipt else None,
+                'can_receive': result['data']['can_receive'],
+            })
+
+        elif result['type'] == 'receipt':
+            receipt = result['data']['receipt']
+
+            # Build items data
+            items_data = []
+            for item in receipt.items.all():
+                items_data.append({
+                    'id': item.id,
+                    'product_name': item.product.name,
+                    'sku': getattr(item.product, 'sku', 'N/A'),
+                    'expected_quantity': item.expected_quantity,
+                    'received_quantity': item.received_quantity,
+                    'condition': item.condition,
+                })
+
+            response_data.update({
+                'receipt': {
+                    'id': receipt.id,
+                    'verification_code': receipt.verification_code,
+                    'status': receipt.status,
+                    'is_verified': receipt.is_verified,
+                    'items': items_data,
+                },
+                'shipment': {
+                    'id': receipt.shipment.id,
+                    'tracking_number': receipt.shipment.tracking_number,
+                },
+                'can_receive': result['data']['can_receive'],
+            })
+
+        return JsonResponse(response_data)
+    else:
+        return JsonResponse({
+            'success': False,
+            'message': result['message']
+        })
+
+
+# ============================================================================
+# Receipt Management
+# ============================================================================
+
+@login_required
+def create_warehouse_receipt(request, shipment_id):
+    """
+    Manually create a warehouse receipt for a shipment.
+    This is for cases where auto-creation didn't happen or needs to be triggered manually.
+    """
+    shipment = get_object_or_404(Shipment, id=shipment_id)
+
+    # Check if receipt already exists
+    existing = WarehouseReceipt.objects.filter(shipment=shipment).first()
+    if existing:
+        messages.info(request, f'Receipt already exists: {existing.verification_code}')
+        return redirect('logistics:warehouse_receipt_detail', receipt_id=existing.id)
+
+    # Create receipt
+    receipt = WarehouseReceipt.objects.create(
+        shipment=shipment,
+        warehouse=shipment.warehouse,
+        expected_arrival=shipment.collect_time,
+        status='pending'
+    )
+
+    # Create receipt items from shipment items
+    for shipment_item in shipment.shipment_items.all():
+        WarehouseReceiptItem.objects.create(
+            receipt=receipt,
+            shipment_item=shipment_item,
+            expected_quantity=shipment_item.quantity,
+            received_quantity=0
+        )
+
+    # Log event
+    TrackingEvent.objects.create(
+        shipment=shipment,
+        receipt=receipt,
+        event_type='shipment_created',
+        tracking_code=receipt.verification_code,
+        performed_by=request.user,
+        notes='Warehouse receipt manually created'
+    )
+
+    messages.success(request, f'Warehouse receipt created: {receipt.verification_code}')
+    return redirect('logistics:warehouse_receipt_detail', receipt_id=receipt.id)
+
+
+@login_required
+def start_receiving_shipment(request, shipment_id):
+    """
+    Start the receiving process for a shipment.
+    Creates or updates warehouse receipt.
+    """
+    shipment = get_object_or_404(Shipment, id=shipment_id)
+
+    # Get or create warehouse receipt
+    receipt = shipment.warehouse_receipts.first()
+
+    if not receipt:
+        # Create new receipt
+        receipt = WarehouseReceipt.objects.create(
+            shipment=shipment,
+            warehouse=shipment.warehouse,
+            expected_arrival=shipment.collect_time,
+            status='in_progress'
+        )
+
+        # Create receipt items
+        for shipment_item in shipment.shipment_items.all():
+            WarehouseReceiptItem.objects.create(
+                receipt=receipt,
+                shipment_item=shipment_item,
+                expected_quantity=shipment_item.quantity,
+                received_quantity=0
+            )
+    else:
+        # Update existing receipt
+        if receipt.status == 'pending':
+            receipt.start_receiving()
+
+    # Log event
+    TrackingEvent.objects.create(
+        shipment=shipment,
+        receipt=receipt,
+        event_type='receiving_started',
+        tracking_code=receipt.verification_code,
+        performed_by=request.user,
+        notes='Started receiving process'
+    )
+
+    messages.info(request, f'Started receiving shipment {shipment.tracking_number}')
+    return redirect('logistics:warehouse_receipt_detail', receipt_id=receipt.id)
+
+
+@login_required
+def warehouse_receipt_detail(request, receipt_id):
+    """
+    View details of a specific warehouse receipt.
+    Shows verification code, items, and tracking history.
+    """
+    receipt = get_object_or_404(
+        WarehouseReceipt.objects.select_related(
+            'shipment',
+            'warehouse',
+            'received_by'
+        ).prefetch_related(
+            'items__shipment_item__order_item__product',
+            'tracking_events'
+        ),
+        id=receipt_id
+    )
+
+    # Get tracking events
+    tracking_events = TrackingEvent.objects.filter(
+        Q(receipt=receipt) | Q(shipment=receipt.shipment)
+    ).select_related('performed_by').order_by('-created_at')
+
+    context = {
+        'receipt': receipt,
+        'tracking_events': tracking_events,
+    }
+
+    return render(request, 'logistics/warehouse_receipt_detail.html', context)
 
 
 @login_required
 @require_POST
 def warehouse_verify_receipt(request, receipt_id):
     """
-    Verify and mark receipt as received
+    Verify and mark receipt as received.
+    Process received quantities and conditions for each item.
     """
     receipt = get_object_or_404(WarehouseReceipt, id=receipt_id)
 
-    # Update receipt items quantities
+    # Update receipt items
     for item in receipt.items.all():
         received_qty = request.POST.get(f'qty_{item.id}', item.expected_quantity)
         condition = request.POST.get(f'condition_{item.id}', 'good')
@@ -5633,7 +5997,17 @@ def warehouse_verify_receipt(request, receipt_id):
         item.notes = item_notes
         item.save()
 
-    # Get notes
+        # Log item verification
+        TrackingEvent.objects.create(
+            shipment=receipt.shipment,
+            receipt=receipt,
+            event_type='item_verified',
+            tracking_code=receipt.verification_code,
+            performed_by=request.user,
+            notes=f'Verified {item.product.name}: {received_qty} received, condition: {condition}'
+        )
+
+    # Get receipt notes
     receipt_notes = request.POST.get('notes', '')
     has_issues = request.POST.get('has_issues') == 'on'
     issue_description = request.POST.get('issue_description', '')
@@ -5649,25 +6023,76 @@ def warehouse_verify_receipt(request, receipt_id):
         receipt.issue_description = issue_description
         receipt.save()
 
-    # Send email notification to store
+        # Log issue
+        TrackingEvent.objects.create(
+            shipment=receipt.shipment,
+            receipt=receipt,
+            event_type='issue_reported',
+            tracking_code=receipt.verification_code,
+            performed_by=request.user,
+            notes=issue_description
+        )
+
+    # Update shipment status (optional - adjust based on your workflow)
+    if receipt.shipment.status in ['pending', 'shipped', 'in_transit']:
+        receipt.shipment.status = 'delivered'  # or create a new 'received_at_warehouse' status
+        receipt.shipment.save()
+
+    # Send email notification
     send_warehouse_receipt_notification(receipt)
 
     messages.success(
         request,
-        f'Order #{receipt.order.id} has been verified and marked as received!'
+        f'Shipment {receipt.shipment.tracking_number} has been verified and marked as received!'
     )
 
     return redirect('logistics:warehouse_receiving_dashboard')
 
 
+# ============================================================================
+# QR Code Generation
+# ============================================================================
+
+@login_required
+def generate_shipment_qr_code(request, shipment_id):
+    """Generate QR code for a shipment tracking number"""
+    shipment = get_object_or_404(Shipment, id=shipment_id)
+
+    # Create QR code
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=10,
+        border=4,
+    )
+
+    qr_data = {
+        'type': 'shipment',
+        'code': shipment.tracking_number,
+        'shipment_id': shipment.id,
+    }
+
+    qr.add_data(json.dumps(qr_data))
+    qr.make(fit=True)
+
+    img = qr.make_image(fill_color="black", back_color="white")
+
+    buffer = BytesIO()
+    img.save(buffer, format='PNG')
+    buffer.seek(0)
+
+    response = HttpResponse(buffer, content_type='image/png')
+    response['Content-Disposition'] = f'inline; filename="shipment_{shipment.tracking_number}_qr.png"'
+
+    return response
+
+
 @login_required
 def generate_receipt_qr_code(request, receipt_id):
-    """
-    Generate QR code for a warehouse receipt
-    """
+    """Generate QR code for a warehouse receipt verification code"""
     receipt = get_object_or_404(WarehouseReceipt, id=receipt_id)
 
-    # Generate verification code if not exists
+    # Ensure verification code exists
     if not receipt.verification_code:
         receipt.generate_verification_code()
 
@@ -5679,159 +6104,79 @@ def generate_receipt_qr_code(request, receipt_id):
         border=4,
     )
 
-    # Add verification code to QR
     qr_data = {
         'type': 'warehouse_receipt',
         'code': receipt.verification_code,
-        'order_id': receipt.order.id,
+        'receipt_id': receipt.id,
+        'shipment_tracking': receipt.shipment.tracking_number,
     }
 
-    import json
     qr.add_data(json.dumps(qr_data))
     qr.make(fit=True)
 
-    # Create image
     img = qr.make_image(fill_color="black", back_color="white")
 
-    # Save to buffer
     buffer = BytesIO()
     img.save(buffer, format='PNG')
     buffer.seek(0)
 
-    # Return image
     response = HttpResponse(buffer, content_type='image/png')
-    response['Content-Disposition'] = f'inline; filename="receipt_{receipt_id}_qr.png"'
+    response['Content-Disposition'] = f'inline; filename="receipt_{receipt.verification_code}_qr.png"'
 
     return response
 
 
-@login_required
-def warehouse_receipt_detail(request, receipt_id):
-    """
-    View details of a specific warehouse receipt
-    """
-    receipt = get_object_or_404(
-        WarehouseReceipt.objects.select_related(
-            'order',
-            'shipment',
-            'received_by'
-        ).prefetch_related(
-            'items__order_item__product'
-        ),
-        id=receipt_id
-    )
-
-    context = {
-        'receipt': receipt,
-    }
-
-    return render(request, 'logistics/warehouse_receipt_detail.html', context)
-
-
-@login_required
-@require_http_methods(["GET"])
-def verify_code_ajax(request):
-    """
-    AJAX endpoint to verify code (for QR scanner)
-    """
-    code = request.GET.get('code', '').strip()
-
-    if not code:
-        return JsonResponse({
-            'success': False,
-            'message': 'No code provided'
-        })
-
-    try:
-        receipt = WarehouseReceipt.objects.select_related(
-            'order',
-            'shipment'
-        ).prefetch_related(
-            'items__order_item__product'
-        ).get(verification_code=code)
-
-        # Build items data
-        items_data = []
-        for item in receipt.items.all():
-            items_data.append({
-                'id': item.id,
-                'product_name': item.order_item.product.name,
-                'sku': item.order_item.product.sku or 'N/A',
-                'expected_quantity': item.expected_quantity,
-                'received_quantity': item.received_quantity,
-                'condition': item.condition,
-            })
-
-        return JsonResponse({
-            'success': True,
-            'receipt': {
-                'id': receipt.id,
-                'order_id': receipt.order.id,
-                'status': receipt.status,
-                'verification_code': receipt.verification_code,
-                'is_verified': receipt.is_verified,
-                'items': items_data,
-            },
-            'message': f'Found Order #{receipt.order.id}'
-        })
-
-    except WarehouseReceipt.DoesNotExist:
-        return JsonResponse({
-            'success': False,
-            'message': 'Invalid verification code'
-        })
-
-
 # ============================================================================
-# Email Notification Function
+# Email Notifications
 # ============================================================================
 
 def send_warehouse_receipt_notification(receipt):
     """
-    Send email notification to store owner when items are received at warehouse
+    Send email notification when items are received at warehouse.
     """
     try:
-        # Get store from order
-        order = receipt.order
+        shipment = receipt.shipment
+        order = shipment.order
 
-        # Get store owner email
-        # Assuming order has a store relationship
+        if not order:
+            return False
+
+        # Get recipient email
         if hasattr(order, 'store') and order.store:
-            store = order.store
-            recipient_email = store.owner.email
-            store_name = store.name
+            recipient_email = order.store.owner.email
+            store_name = order.store.name
         else:
-            # Fallback to order user
             recipient_email = order.user.email
             store_name = "Your Store"
 
-        # Prepare email context
+        # Prepare context
         context = {
             'receipt': receipt,
+            'shipment': shipment,
             'order': order,
             'store_name': store_name,
             'received_at': receipt.received_at,
             'received_by': receipt.received_by.get_full_name() if receipt.received_by else 'Warehouse Staff',
             'has_issues': receipt.has_issues,
             'issue_description': receipt.issue_description,
+            'tracking_number': shipment.tracking_number,
+            'verification_code': receipt.verification_code,
         }
 
-        # Render email
-        subject = f'Order #{order.id} Received at Warehouse'
-        html_message = render_to_string(
-            'logistics/emails/warehouse_receipt_notification.html',
-            context
-        )
+        # Email content
+        subject = f'Shipment {shipment.tracking_number} Received at Warehouse'
+
         plain_message = f"""
-        Your order #{order.id} has been received at our warehouse!
+Your shipment has been received at our warehouse!
 
-        Received by: {context['received_by']}
-        Received at: {receipt.received_at.strftime('%b %d, %Y %I:%M %p')}
-        Status: {receipt.get_status_display()}
+Tracking Number: {shipment.tracking_number}
+Verification Code: {receipt.verification_code}
+Received by: {context['received_by']}
+Received at: {receipt.received_at.strftime('%b %d, %Y %I:%M %p')}
 
-        {'Note: There are some issues reported with this shipment. Please check your dashboard for details.' if receipt.has_issues else 'All items received in good condition.'}
+{'⚠️ Note: Issues reported - ' + receipt.issue_description if receipt.has_issues else '✅ All items received in good condition'}
 
-        Thank you for your business!
+Thank you for your business!
         """
 
         # Send email
@@ -5840,7 +6185,6 @@ def send_warehouse_receipt_notification(receipt):
             message=plain_message,
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[recipient_email],
-            html_message=html_message,
             fail_silently=False,
         )
 
@@ -5857,43 +6201,26 @@ def send_warehouse_receipt_notification(receipt):
 
 
 # ============================================================================
-# Helper Function to Create Receipt from Shipment
+# Tracking History
 # ============================================================================
 
-def create_warehouse_receipt_from_shipment(shipment):
-    """
-    Create a warehouse receipt when shipment is marked as shipped to warehouse
-    Called when items are marked as warehouse_shipped
-    """
-    if not shipment.order:
-        return None
+@login_required
+def shipment_tracking_detail(request, tracking_number):
+    """View complete tracking history for a shipment"""
+    shipment = get_object_or_404(Shipment, tracking_number=tracking_number)
 
-    # Check if receipt already exists
-    existing = WarehouseReceipt.objects.filter(
-        shipment=shipment,
-        order=shipment.order
-    ).first()
+    # Get all tracking events
+    tracking_events = TrackingEvent.objects.filter(
+        Q(shipment=shipment) | Q(tracking_code=tracking_number)
+    ).select_related('performed_by').order_by('-created_at')
 
-    if existing:
-        return existing
+    # Get associated receipt
+    receipt = shipment.warehouse_receipts.first()
 
-    # Create new receipt
-    receipt = WarehouseReceipt.objects.create(
-        shipment=shipment,
-        order=shipment.order,
-        status='pending'
-    )
+    context = {
+        'shipment': shipment,
+        'receipt': receipt,
+        'tracking_events': tracking_events,
+    }
 
-    # Generate verification code
-    receipt.generate_verification_code()
-
-    # Create receipt items from order items
-    for order_item in shipment.order.items.all():
-        WarehouseReceiptItem.objects.create(
-            receipt=receipt,
-            order_item=order_item,
-            expected_quantity=order_item.quantity,
-            received_quantity=0
-        )
-
-    return receipt
+    return render(request, 'logistics/shipment_tracking_detail.html', context)

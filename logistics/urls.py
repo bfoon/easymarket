@@ -386,34 +386,45 @@ urlpatterns = [
          views.get_shipment_unread_count,
          name='get_shipment_unread_count'),
 # Warehouse Receiving URLs
-    path(
-        'warehouse/receiving/',
-        views.warehouse_receiving_dashboard,
-        name='warehouse_receiving_dashboard'
-    ),
-    path(
-        'warehouse/scan/',
-        views.warehouse_scan_verify,
-        name='warehouse_scan_verify'
-    ),
-    path(
-        'warehouse/receipt/<int:receipt_id>/',
-        views.warehouse_receipt_detail,
-        name='warehouse_receipt_detail'
-    ),
-    path(
-        'warehouse/receipt/<int:receipt_id>/verify/',
-        views.warehouse_verify_receipt,
-        name='warehouse_verify_receipt'
-    ),
-    path(
-        'warehouse/receipt/<int:receipt_id>/qr-code/',
-        views.generate_receipt_qr_code,
-        name='generate_receipt_qr_code'
-    ),
-    path(
-        'warehouse/verify-code-ajax/',
-        views.verify_code_ajax,
-        name='verify_code_ajax'
-    ),
+    # Dashboard
+    path('warehouse/',
+         views.warehouse_receiving_dashboard,
+         name='warehouse_receiving_dashboard'),
+
+    # Scanning and Verification
+    path('warehouse/scan/',
+         views.warehouse_scan_verify,
+         name='warehouse_scan_verify'),
+
+    path('warehouse/verify-code/',
+         views.verify_code_ajax,
+         name='verify_code_ajax'),
+
+    # Shipment Management
+    path('shipment/<int:shipment_id>/start-receiving/',
+         views.start_receiving_shipment,
+         name='start_receiving_shipment'),
+
+    path('shipment/<str:tracking_code>/tracking/',
+         views.shipment_tracking_detail,
+         name='shipment_tracking_detail'),
+
+    # Receipt Management
+    path('warehouse/receipt/<int:receipt_id>/',
+         views.warehouse_receipt_detail,
+         name='warehouse_receipt_detail'),
+
+    path('warehouse/receipt/<int:receipt_id>/verify/',
+         views.warehouse_verify_receipt,
+         name='warehouse_verify_receipt'),
+
+    # QR Code Generation
+    path('shipment/<int:shipment_id>/qr/',
+         views.generate_shipment_qr_code,
+         name='generate_shipment_qr_code'),
+
+    path('warehouse/receipt/<int:receipt_id>/qr/',
+         views.generate_receipt_qr_code,
+         name='generate_receipt_qr_code'),
+
 ]

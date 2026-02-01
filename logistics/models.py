@@ -11,6 +11,8 @@ Version: 2.0.0
 from typing import Optional
 from decimal import Decimal
 import uuid
+import secrets
+import string
 
 from django.db import models
 from django.contrib.auth import get_user_model
@@ -1832,134 +1834,501 @@ class LogisticsAgentMessage(models.Model):
         return f"Message on Order #{self.order.id} from {self.sender.username}"
 
 
+def generate_verification_code(prefix='WRH'):
+    """Generate a unique verification code for warehouse receipts"""
+    random_part = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(8))
+    return f"{prefix}-{random_part}"
+
+
 class WarehouseReceipt(models.Model):
     """
-    Tracks when shipments/orders are received at the warehouse
+    Warehouse Receipt for tracking items received at warehouse from suppliers.
+    Links to existing Shipment model for tracking.
     """
-    STATUS_CHOICES = [
+    STATUS_CHOICES = (
         ('pending', 'Pending Receipt'),
-        ('partial', 'Partially Received'),
+        ('in_progress', 'Receipt In Progress'),
         ('received', 'Fully Received'),
-        ('discrepancy', 'Has Discrepancies'),
-    ]
+        ('partial', 'Partially Received'),
+        ('rejected', 'Rejected'),
+    )
 
+    # Link to existing shipment
     shipment = models.ForeignKey(
-        'Shipment',
+        'logistics.Shipment',
         on_delete=models.CASCADE,
         related_name='warehouse_receipts',
-        null=True,
-        blank=True
+        help_text="The shipment being received at warehouse"
     )
-    order = models.ForeignKey(
-        'orders.Order',
-        on_delete=models.CASCADE,
-        related_name='warehouse_receipts'
+
+    # Verification code for scanning (separate from shipment tracking_number)
+    verification_code = models.CharField(
+        max_length=20,
+        unique=True,
+        blank=True,
+        null=True,
+        db_index=True,
+        verbose_name=_("Verification Code"),
+        help_text=_("Unique code for scanning and verifying receipt (WRH-XXXXXXXX)")
+    )
+
+    # Status tracking
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='pending',
+        db_index=True,
+        verbose_name=_("Receipt Status")
+    )
+    is_verified = models.BooleanField(
+        default=False,
+        verbose_name=_("Is Verified")
     )
 
     # Receipt details
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     received_by = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
         null=True,
-        related_name='warehouse_receipts_received'
+        blank=True,
+        related_name='warehouse_receipts_received',
+        verbose_name=_("Received By")
     )
-    received_at = models.DateTimeField(null=True, blank=True)
+    received_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Received At")
+    )
 
-    # Verification
-    verification_code = models.CharField(max_length=50, unique=True, db_index=True)
-    is_verified = models.BooleanField(default=False)
-    verified_at = models.DateTimeField(null=True, blank=True)
+    # Expected vs actual receipt time
+    expected_arrival = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Expected Arrival"),
+        help_text=_("When shipment is expected to arrive at warehouse")
+    )
 
-    # Notes and issues
-    notes = models.TextField(blank=True, help_text="Any notes or observations")
-    has_issues = models.BooleanField(default=False)
-    issue_description = models.TextField(blank=True)
+    # Issue tracking
+    has_issues = models.BooleanField(
+        default=False,
+        verbose_name=_("Has Issues")
+    )
+    issue_description = models.TextField(
+        blank=True,
+        verbose_name=_("Issue Description")
+    )
+
+    # Warehouse location
+    warehouse = models.ForeignKey(
+        'logistics.Warehouse',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='receipts',
+        verbose_name=_("Receiving Warehouse")
+    )
+    receiving_location = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name=_("Receiving Location"),
+        help_text=_("Specific location/dock within warehouse")
+    )
 
     # Notifications
-    store_notified = models.BooleanField(default=False)
-    notification_sent_at = models.DateTimeField(null=True, blank=True)
+    store_notified = models.BooleanField(
+        default=False,
+        verbose_name=_("Store Notified")
+    )
+    notification_sent_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Notification Sent At")
+    )
 
+    # Notes
+    notes = models.TextField(
+        blank=True,
+        verbose_name=_("Receipt Notes")
+    )
+
+    # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['-created_at']
-        verbose_name = 'Warehouse Receipt'
-        verbose_name_plural = 'Warehouse Receipts'
+        verbose_name = _("Warehouse Receipt")
+        verbose_name_plural = _("Warehouse Receipts")
+        indexes = [
+            models.Index(fields=['verification_code']),
+            models.Index(fields=['status']),
+            models.Index(fields=['shipment']),
+            models.Index(fields=['warehouse']),
+            models.Index(fields=['-created_at']),
+        ]
 
     def __str__(self):
-        return f"Receipt for Order #{self.order.id} - {self.status}"
+        return f"Receipt {self.verification_code or self.id} - Shipment {self.shipment.tracking_number}"
 
-    def mark_received(self, user, notes=''):
-        """Mark this receipt as received"""
+    def save(self, *args, **kwargs):
+        """Auto-generate verification code if not exists"""
+        if not self.verification_code:
+            self.verification_code = self._generate_verification_code()
+        super().save(*args, **kwargs)
+
+    def _generate_verification_code(self):
+        """Generate unique verification code"""
+        while True:
+            code = generate_verification_code('WRH')
+            if not WarehouseReceipt.objects.filter(verification_code=code).exists():
+                return code
+
+    def generate_verification_code(self):
+        """Public method to generate verification code"""
+        if not self.verification_code:
+            self.verification_code = self._generate_verification_code()
+            self.save(update_fields=['verification_code'])
+        return self.verification_code
+
+    def mark_received(self, user=None, notes=''):
+        """Mark receipt as fully received"""
         self.status = 'received'
+        self.is_verified = True
         self.received_by = user
         self.received_at = timezone.now()
-        self.is_verified = True
-        self.verified_at = timezone.now()
         if notes:
             self.notes = notes
         self.save()
 
-    def generate_verification_code(self):
-        """Generate unique verification code"""
-        import uuid
-        self.verification_code = f"WH-{self.order.id}-{uuid.uuid4().hex[:8].upper()}"
-        self.save()
-        return self.verification_code
+    def start_receiving(self):
+        """Mark receipt as in progress"""
+        if self.status == 'pending':
+            self.status = 'in_progress'
+            self.save(update_fields=['status', 'updated_at'])
+
+    def get_tracking_number(self):
+        """Get the shipment tracking number"""
+        return self.shipment.tracking_number if self.shipment else None
+
+    def is_scannable(self):
+        """Check if this receipt can be scanned"""
+        return self.status in ['pending', 'in_progress'] and self.verification_code
+
+    def get_order(self):
+        """Get the associated order from shipment"""
+        return self.shipment.order if self.shipment else None
+
+    def get_items_summary(self):
+        """Get summary of items in this receipt"""
+        items = self.items.all()
+        return {
+            'total_items': items.count(),
+            'total_expected': sum(item.expected_quantity for item in items),
+            'total_received': sum(item.received_quantity for item in items),
+            'items_with_issues': items.filter(condition__in=['damaged', 'missing', 'incorrect']).count()
+        }
 
 
 class WarehouseReceiptItem(models.Model):
     """
-    Individual items in a warehouse receipt
+    Individual items in a warehouse receipt.
+    Links to ShipmentItem to track what was shipped vs what was received.
     """
+    CONDITION_CHOICES = (
+        ('good', 'Good Condition'),
+        ('damaged', 'Damaged'),
+        ('missing', 'Missing'),
+        ('incorrect', 'Incorrect Item'),
+    )
+
     receipt = models.ForeignKey(
-        'WarehouseReceipt',
+        WarehouseReceipt,
         on_delete=models.CASCADE,
-        related_name='items'
+        related_name='items',
+        verbose_name=_("Warehouse Receipt")
     )
-    order_item = models.ForeignKey(
-        'orders.OrderItem',
+    shipment_item = models.ForeignKey(
+        'logistics.ShipmentItem',
         on_delete=models.CASCADE,
-        related_name='warehouse_receipt_items'
+        related_name='warehouse_receipt_items',
+        verbose_name=_("Shipment Item")
     )
 
-    # Expected vs Received quantities
-    expected_quantity = models.PositiveIntegerField()
-    received_quantity = models.PositiveIntegerField(default=0)
+    # Quantities
+    expected_quantity = models.PositiveIntegerField(
+        verbose_name=_("Expected Quantity"),
+        help_text=_("Quantity expected from shipment")
+    )
+    received_quantity = models.PositiveIntegerField(
+        default=0,
+        verbose_name=_("Received Quantity"),
+        help_text=_("Actual quantity received")
+    )
 
-    # Condition
+    # Condition assessment
     condition = models.CharField(
         max_length=20,
-        choices=[
-            ('good', 'Good Condition'),
-            ('damaged', 'Damaged'),
-            ('missing', 'Missing'),
-        ],
-        default='good'
+        choices=CONDITION_CHOICES,
+        default='good',
+        verbose_name=_("Item Condition")
     )
 
-    # Notes for this specific item
-    notes = models.TextField(blank=True)
+    # Item-specific notes
+    notes = models.TextField(
+        blank=True,
+        verbose_name=_("Item Notes")
+    )
 
+    # Photo documentation
+    photo = models.ImageField(
+        upload_to='warehouse/receipt_items/%Y/%m/%d/',
+        null=True,
+        blank=True,
+        verbose_name=_("Item Photo"),
+        help_text=_("Photo of received item (especially for issues)")
+    )
+
+    # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['id']
-        verbose_name = 'Warehouse Receipt Item'
-        verbose_name_plural = 'Warehouse Receipt Items'
+        verbose_name = _("Warehouse Receipt Item")
+        verbose_name_plural = _("Warehouse Receipt Items")
+        unique_together = ['receipt', 'shipment_item']
 
     def __str__(self):
-        return f"{self.order_item.product.name} - {self.received_quantity}/{self.expected_quantity}"
+        product_name = self.shipment_item.order_item.product.name
+        return f"{product_name} - {self.received_quantity}/{self.expected_quantity}"
 
     @property
-    def is_complete(self):
-        """Check if received quantity matches expected"""
-        return self.received_quantity == self.expected_quantity
+    def is_fully_received(self):
+        """Check if expected quantity was received"""
+        return self.received_quantity >= self.expected_quantity
 
     @property
-    def has_discrepancy(self):
-        """Check if there's a discrepancy"""
-        return self.received_quantity != self.expected_quantity or self.condition != 'good'
+    def is_damaged_or_missing(self):
+        """Check if item has issues"""
+        return self.condition in ['damaged', 'missing', 'incorrect']
+
+    @property
+    def variance(self):
+        """Calculate quantity variance"""
+        return self.received_quantity - self.expected_quantity
+
+    @property
+    def product(self):
+        """Get the product from shipment item"""
+        return self.shipment_item.order_item.product
+
+    @property
+    def order_item(self):
+        """Get the order item from shipment item"""
+        return self.shipment_item.order_item
+
+
+class TrackingEvent(models.Model):
+    """
+    Track all scanning and verification events for shipments and receipts.
+    Provides complete audit trail.
+    """
+    EVENT_TYPE_CHOICES = (
+        ('shipment_created', 'Shipment Created'),
+        ('shipped_to_warehouse', 'Shipped to Warehouse'),
+        ('arrived_warehouse', 'Arrived at Warehouse'),
+        ('scanned', 'Code Scanned'),
+        ('receiving_started', 'Receiving Started'),
+        ('item_verified', 'Item Verified'),
+        ('receipt_completed', 'Receipt Completed'),
+        ('issue_reported', 'Issue Reported'),
+        ('status_changed', 'Status Changed'),
+    )
+
+    shipment = models.ForeignKey(
+        'logistics.Shipment',
+        on_delete=models.CASCADE,
+        related_name='tracking_events',
+        null=True,
+        blank=True,
+        verbose_name=_("Shipment")
+    )
+    receipt = models.ForeignKey(
+        WarehouseReceipt,
+        on_delete=models.CASCADE,
+        related_name='tracking_events',
+        null=True,
+        blank=True,
+        verbose_name=_("Warehouse Receipt")
+    )
+
+    event_type = models.CharField(
+        max_length=30,
+        choices=EVENT_TYPE_CHOICES,
+        db_index=True,
+        verbose_name=_("Event Type")
+    )
+
+    # Event details
+    tracking_code = models.CharField(
+        max_length=50,
+        db_index=True,
+        verbose_name=_("Tracking Code"),
+        help_text=_("Shipment tracking number or receipt verification code")
+    )
+
+    performed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name=_("Performed By")
+    )
+
+    location = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name=_("Location"),
+        help_text=_("Where the event occurred")
+    )
+
+    notes = models.TextField(
+        blank=True,
+        verbose_name=_("Event Notes")
+    )
+
+    # Additional metadata as JSON
+    metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name=_("Event Metadata"),
+        help_text=_("Additional event data")
+    )
+
+    # Timestamp
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = _("Tracking Event")
+        verbose_name_plural = _("Tracking Events")
+        indexes = [
+            models.Index(fields=['tracking_code']),
+            models.Index(fields=['event_type']),
+            models.Index(fields=['-created_at']),
+            models.Index(fields=['shipment', '-created_at']),
+            models.Index(fields=['receipt', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.get_event_type_display()} - {self.tracking_code} at {self.created_at}"
+
+# ============================================================================
+# SIGNAL HANDLERS
+# ============================================================================
+
+from django.db.models.signals import post_save, pre_save
+from django.dispatch import receiver
+
+
+@receiver(post_save, sender='logistics.Shipment')
+def create_warehouse_receipt_for_shipment(sender, instance, created, **kwargs):
+    """
+    Auto-create warehouse receipt when shipment is created or updated.
+    This is for shipments coming TO the warehouse (from suppliers).
+
+    You can customize the trigger condition based on your workflow.
+    For example, only create receipt when shipment has certain status.
+    """
+    # Only create receipt if shipment is going to warehouse
+    # You can add your own condition here, e.g., check if shipment is from supplier
+    # or has a specific status/flag indicating it's for warehouse receiving
+
+    # Example: Create receipt only for shipments with warehouse set
+    if instance.warehouse and not hasattr(instance, '_skip_receipt_creation'):
+        # Check if receipt already exists
+        existing = WarehouseReceipt.objects.filter(shipment=instance).first()
+
+        if not existing:
+            # Create warehouse receipt
+            receipt = WarehouseReceipt.objects.create(
+                shipment=instance,
+                warehouse=instance.warehouse,
+                expected_arrival=instance.collect_time,
+                status='pending'
+            )
+
+            # Create receipt items from shipment items
+            for shipment_item in instance.shipment_items.all():
+                WarehouseReceiptItem.objects.create(
+                    receipt=receipt,
+                    shipment_item=shipment_item,
+                    expected_quantity=shipment_item.quantity,
+                    received_quantity=0
+                )
+
+            # Log creation event
+            TrackingEvent.objects.create(
+                shipment=instance,
+                receipt=receipt,
+                event_type='shipment_created',
+                tracking_code=instance.tracking_number,
+                notes=f'Warehouse receipt {receipt.verification_code} created for shipment'
+            )
+
+
+@receiver(pre_save, sender='logistics.Shipment')
+def log_shipment_status_change(sender, instance, **kwargs):
+    """Log when shipment status changes"""
+    if instance.pk:
+        try:
+            old_instance = sender.objects.get(pk=instance.pk)
+            if old_instance.status != instance.status:
+                # Status changed - will log in post_save
+                instance._status_changed = True
+                instance._old_status = old_instance.status
+        except sender.DoesNotExist:
+            pass
+
+
+@receiver(post_save, sender='logistics.Shipment')
+def log_shipment_status_change_event(sender, instance, created, **kwargs):
+    """Log status change event"""
+    if hasattr(instance, '_status_changed') and instance._status_changed:
+        # Get associated receipt
+        receipt = instance.warehouse_receipts.first()
+
+        TrackingEvent.objects.create(
+            shipment=instance,
+            receipt=receipt,
+            event_type='status_changed',
+            tracking_code=instance.tracking_number,
+            notes=f'Status changed from {instance._old_status} to {instance.status}',
+            metadata={
+                'old_status': instance._old_status,
+                'new_status': instance.status
+            }
+        )
+
+        # Clean up temporary attributes
+        delattr(instance, '_status_changed')
+        delattr(instance, '_old_status')
+
+
+@receiver(post_save, sender=WarehouseReceipt)
+def log_receipt_status_change(sender, instance, created, **kwargs):
+    """Log receipt events"""
+    if created:
+        # Ensure verification code is generated
+        if not instance.verification_code:
+            instance.generate_verification_code()
+    elif instance.status == 'received' and not instance._state.adding:
+        # Receipt completed
+        TrackingEvent.objects.create(
+            shipment=instance.shipment,
+            receipt=instance,
+            event_type='receipt_completed',
+            tracking_code=instance.verification_code,
+            performed_by=instance.received_by,
+            notes='Receipt marked as completed'
+        )

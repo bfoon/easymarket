@@ -16,7 +16,7 @@ from django.views.decorators.http import require_GET
 from .models import (
     WarehouseLinkage, StoreToLogisticsTransfer, TransferItem,
     FulfillmentQueue, CountryShippingConfig, ShippingCompany,
-    ShippingCompanyCountry, ShipmentTracking
+    ShippingCompanyCountry, ShipmentTracking, B2BShipment
 )
 from stores.models import B2BOrder, B2BOrderItem, Store
 from stock.models import Warehouse, Stock
@@ -872,50 +872,63 @@ def country_detail(request, pk):
 @user_passes_test(is_logistics_staff)
 def b2b_shipments(request):
     """List and manage B2B shipments"""
-    shipments = B2BShipment.objects.select_related(
-        'b2b_order', 'shipping_company', 'country', 'company_config'
-    ).prefetch_related('tracking_history')
+    shipments = (
+        B2BShipment.objects
+        .select_related(
+            "order",
+            "shipping_address",
+            "locked_by",
+            "delivered_by",
+            "company_config",
+            "company_config__shipping_company",
+            "company_config__country",
+        )
+        .prefetch_related("tracking_history")
+    )
 
     # Filters
-    status = request.GET.get('status')
-    country_id = request.GET.get('country')
-    company_id = request.GET.get('company')
-    date_from = request.GET.get('date_from')
+    status = request.GET.get("status")
+    country_id = request.GET.get("country")
+    company_id = request.GET.get("company")
+    date_from = request.GET.get("date_from")
 
     if status:
         shipments = shipments.filter(status=status)
+
+    # IMPORTANT: country/company live on company_config (not on shipment directly)
     if country_id:
-        shipments = shipments.filter(country_id=country_id)
+        shipments = shipments.filter(company_config__country_id=country_id)
+
     if company_id:
-        shipments = shipments.filter(shipping_company_id=company_id)
+        shipments = shipments.filter(company_config__shipping_company_id=company_id)
+
     if date_from:
         shipments = shipments.filter(created_at__date__gte=date_from)
 
-    shipments = shipments.order_by('-created_at')
+    shipments = shipments.order_by("-created_at")
 
     # Pagination
     paginator = Paginator(shipments, 25)
-    page = request.GET.get('page')
+    page = request.GET.get("page")
     shipments_page = paginator.get_page(page)
 
-    # For filters
-    countries = CountryShippingConfig.objects.filter(is_active=True)
-    companies = ShippingCompany.objects.filter(is_active=True)
+    # For filters dropdowns (comes from supply_chain models)
+    countries = CountryShippingConfig.objects.filter(is_active=True).order_by("country_name")
+    companies = ShippingCompany.objects.filter(is_active=True).order_by("name")
 
     context = {
-        'shipments': shipments_page,
-        'status_choices': B2BShipment.STATUS_CHOICES,
-        'countries': countries,
-        'companies': companies,
-        'current_filters': {
-            'status': status,
-            'country': country_id,
-            'company': company_id,
-            'date_from': date_from,
-        }
+        "shipments": shipments_page,
+        "status_choices": getattr(B2BShipment, "STATUS_CHOICES", []),
+        "countries": countries,
+        "companies": companies,
+        "current_filters": {
+            "status": status,
+            "country": country_id,
+            "company": company_id,
+            "date_from": date_from,
+        },
     }
-
-    return render(request, 'supply_chain/b2b_shipments.html', context)
+    return render(request, "supply_chain/b2b_shipments.html", context)
 
 
 @login_required
@@ -985,29 +998,31 @@ def create_b2b_shipment(request, order_id):
 
     return render(request, 'supply_chain/create_b2b_shipment.html', context)
 
-
 @login_required
 def shipment_detail(request, shipment_id):
-    """View shipment details and tracking"""
     shipment = get_object_or_404(
         B2BShipment.objects.select_related(
-            'b2b_order', 'shipping_company', 'country', 'company_config'
-        ).prefetch_related('tracking_history'),
-        id=shipment_id
+            "order",
+            "shipping_company",
+            "country",
+            "company_config",
+        ),
+        id=shipment_id,
     )
 
-    # Check permission
-    if not (request.user.is_staff or
-            shipment.b2b_order.buyer == request.user or
-            shipment.b2b_order.store.owner == request.user):
+    if not (
+        request.user.is_staff
+        or shipment.order.buyer == request.user
+        or shipment.order.store.owner == request.user
+    ):
         return HttpResponseForbidden()
 
     context = {
-        'shipment': shipment,
-        'tracking_history': shipment.tracking_history.all()[:20],
+        "shipment": shipment,
+        # no tracking_history exists for B2BShipment
     }
 
-    return render(request, 'supply_chain/shipment_detail.html', context)
+    return render(request, "supply_chain/shipment_detail.html", context)
 
 
 @login_required
