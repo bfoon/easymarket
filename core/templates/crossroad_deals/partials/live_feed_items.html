@@ -1,0 +1,45 @@
+<!-- Place this file at: crossroad_deals/templates/crossroad_deals/partials/live_feed_items.html -->
+{% load static %}
+{% load humanize %}
+{% load currency_tags %}
+
+{% for data in listings_data %}
+<a href="{% url 'crossroad_deals:listing_detail' data.listing_id %}"
+   class="cr-feed-item"
+   data-listing-id="{{ data.listing_id }}"
+   data-created="{{ data.created_at }}">
+  <div class="cr-feed-item-content">
+    {% if data.image %}
+      <img src="{{ data.image }}" alt="{{ data.title }}" class="cr-feed-image">
+    {% else %}
+      <div class="cr-feed-image-placeholder">
+        <i class="fas fa-image"></i>
+      </div>
+    {% endif %}
+
+    <div class="cr-feed-details">
+      <div class="cr-feed-item-title">{{ data.title }}</div>
+
+      {% if data.price %}
+        <div class="cr-feed-item-price">D{{ data.price|floatformat:2 }}</div>
+      {% else %}
+        <div class="cr-feed-item-price">Price Hidden</div>
+      {% endif %}
+
+      <div class="cr-feed-item-time">
+        {% if data.is_new %}
+          <span class="cr-feed-new-badge">New</span>
+        {% endif %}
+        <i class="fas fa-clock"></i>
+        <span class="time-ago" data-timestamp="{{ data.created_at }}">Just now</span>
+      </div>
+    </div>
+  </div>
+</a>
+{% empty %}
+<!-- No listings available - this will show when the query returns empty -->
+<div style="padding: 2rem; text-align: center; color: #64748b;">
+  <i class="fas fa-inbox" style="font-size: 2rem; margin-bottom: 0.5rem; opacity: 0.5;"></i>
+  <p style="font-size: 0.9rem; margin: 0;">No active listings yet</p>
+</div>
+{% endfor %}

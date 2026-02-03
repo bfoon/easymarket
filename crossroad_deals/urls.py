@@ -35,4 +35,9 @@ urlpatterns = [
     path("payment/callback/<str:provider>/", views.payment_callback, name="payment_callback"),
     path("payment/webhook/<str:provider>/", views.payment_webhook, name="payment_webhook"),
 
+    # Live Feed
+    path('live-feed/', views.live_feed, name='live_feed'),
+
+    path("cart/count/", views.cart_count, name="cart_count"),
+
 ]

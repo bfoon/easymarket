@@ -8,6 +8,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.db.models import Q, Avg, Count
 from django.utils import timezone
+from datetime import timedelta
 from django.core.paginator import Paginator
 from decimal import Decimal
 from django.views.decorators.csrf import csrf_exempt
@@ -633,13 +634,13 @@ def cart_add(request):
         qty = 1
 
     qty = max(1, qty)
-    qty = min(qty, listing.quantity_available)
+    qty = min(qty, listing.quantity)
 
     cart = _get_cart(request)
     key = str(listing.listing_id)
 
     existing_qty = int(cart.get(key, {}).get("quantity", 0))
-    new_qty = min(existing_qty + qty, listing.quantity_available)
+    new_qty = min(existing_qty + qty, listing.quantity)
 
     cart[key] = {
         "quantity": new_qty,
@@ -673,7 +674,7 @@ def cart_view(request):
             "offer_note": data.get("offer_note"),
             "available": _is_listing_orderable(listing),
         })
-        cart_has_unavailable = any(not it.get("available", True) for it in items)
+    cart_has_unavailable = any(not it.get("available", True) for it in items)
 
     return render(request, "crossroad_deals/cart.html", {
         "items": items,
@@ -896,3 +897,58 @@ def payment_webhook(request, provider):
     # paid = payload.get("paid") is True
 
     return JsonResponse({"ok": True})
+
+def live_feed(request):
+    """
+    Returns the latest 10 active listings for the live feed.
+
+    ✅ JSON only when explicitly requested:
+        /live-feed/?format=json
+
+    ✅ Otherwise returns HTML partial:
+        /live-feed/
+    """
+    listings = (
+        CrossroadListing.objects
+        .filter(status="active", quantity__gt=0)
+        .select_related("seller")
+        .order_by("-created_at")[:10]
+    )
+
+    now = timezone.now()
+
+    listings_data = []
+    for listing in listings:
+        time_diff = now - listing.created_at
+        can_show_price = (listing.price_disclosure == "immediately")
+
+        listings_data.append({
+            "listing_id": str(listing.listing_id),
+            "title": listing.title,
+            "price": float(listing.price) if listing.price and can_show_price else None,
+            "image": listing.image_1.url if listing.image_1 else None,
+            "created_at": listing.created_at.isoformat(),
+            "is_new": time_diff < timedelta(minutes=5),
+        })
+
+    # ✅ Only return JSON when explicitly asked
+    if request.GET.get("format") == "json":
+        return JsonResponse({
+            "success": True,
+            "count": len(listings_data),
+            "listings": listings_data,
+            "timestamp": now.isoformat(),
+        })
+
+    # ✅ Default: return HTML partial
+    return render(request, "crossroad_deals/partials/live_feed_items.html", {
+        "listings": listings,
+        "listings_data": listings_data,
+    })
+
+CROSSROAD_CART_KEY = "crossroad_cart"
+
+@login_required
+def cart_count(request):
+    cart = request.session.get(CROSSROAD_CART_KEY, {})
+    return JsonResponse({"count": len(cart)})

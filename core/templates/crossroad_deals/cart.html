@@ -5,267 +5,1118 @@
 
 {% block content %}
 <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Fraunces:wght@600;700;800;900&display=swap" rel="stylesheet">
 
-<div class="container py-4">
+<style>
+  :root {
+    --cr-primary: #ff6b35;
+    --cr-secondary: #004e89;
+    --cr-accent: #ffc845;
+    --cr-success: #06d6a0;
+    --cr-danger: #ef476f;
+    --cr-dark: #1a1a2e;
+    --cr-light: #f7f9fb;
+    --cr-muted: #64748b;
+    --cr-border: rgba(0, 0, 0, 0.08);
+  }
 
-  <!-- Header -->
-  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-    <div>
-      <h4 class="fw-bold mb-1">
-        <i class="fas fa-shopping-basket me-2 text-danger"></i>Crossroad Cart
-      </h4>
-      <div class="text-muted small">
-        Review items, confirm delivery details, then proceed to payment.
+  /* Typography */
+  .cr-font-display {
+    font-family: 'Fraunces', serif;
+    letter-spacing: -0.02em;
+  }
+
+  .cr-font-body {
+    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  /* Page Wrapper */
+  .cr-cart-page {
+    background: linear-gradient(180deg, #fafbfc 0%, #f0f4f8 100%);
+    min-height: 100vh;
+    font-family: 'DM Sans', sans-serif;
+    padding: 2.5rem 0;
+    position: relative;
+  }
+
+  /* Decorative Background */
+  .cr-cart-page::before {
+    content: '';
+    position: fixed;
+    top: -20%;
+    right: -10%;
+    width: 700px;
+    height: 700px;
+    background: radial-gradient(circle, rgba(255, 107, 53, 0.06) 0%, transparent 70%);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .cr-cart-page::after {
+    content: '';
+    position: fixed;
+    bottom: -20%;
+    left: -10%;
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, rgba(0, 78, 137, 0.05) 0%, transparent 70%);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .cr-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 1.5rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Header */
+  .cr-cart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    margin-bottom: 2.5rem;
+    animation: slideInDown 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  @keyframes slideInDown {
+    from {
+      opacity: 0;
+      transform: translateY(-30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .cr-header-left h1 {
+    font-size: 2.5rem;
+    font-weight: 900;
+    margin-bottom: 0.5rem;
+    font-family: 'Fraunces', serif;
+    background: linear-gradient(135deg, var(--cr-dark), var(--cr-secondary));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .cr-cart-icon {
+    width: 56px;
+    height: 56px;
+    background: linear-gradient(135deg, var(--cr-danger), #f77f92);
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.75rem;
+    box-shadow: 0 4px 16px rgba(239, 71, 111, 0.3);
+    -webkit-background-clip: border-box !important;
+    background-clip: border-box !important;
+    -webkit-text-fill-color: white !important;
+  }
+
+  .cr-header-subtitle {
+    color: var(--cr-muted);
+    font-size: 1.05rem;
+  }
+
+  .cr-continue-btn {
+    padding: 1rem 1.75rem;
+    background: white;
+    border: 2px solid var(--cr-border);
+    border-radius: 14px;
+    color: var(--cr-dark);
+    text-decoration: none;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  }
+
+  .cr-continue-btn:hover {
+    background: var(--cr-dark);
+    color: white;
+    border-color: var(--cr-dark);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(26, 26, 46, 0.2);
+  }
+
+  /* Main Grid */
+  .cr-cart-grid {
+    display: grid;
+    grid-template-columns: 1fr 450px;
+    gap: 2.5rem;
+    margin-bottom: 3rem;
+  }
+
+  /* Cart Items Card */
+  .cr-items-card {
+    background: white;
+    border-radius: 24px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+    border: 1px solid var(--cr-border);
+    overflow: hidden;
+    animation: scaleIn 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.1s backwards;
+  }
+
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  .cr-items-header {
+    padding: 2rem;
+    border-bottom: 2px solid var(--cr-light);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .cr-items-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--cr-dark);
+  }
+
+  .cr-items-count {
+    background: linear-gradient(135deg, var(--cr-primary), #ff8c5a);
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 0.9rem;
+    box-shadow: 0 2px 8px rgba(255, 107, 53, 0.3);
+  }
+
+  /* Cart Item */
+  .cr-cart-item {
+    padding: 2rem;
+    border-bottom: 1px solid var(--cr-light);
+    transition: all 0.3s ease;
+    animation: fadeInUp 0.6s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+
+  .cr-cart-item:nth-child(1) { animation-delay: 0.2s; }
+  .cr-cart-item:nth-child(2) { animation-delay: 0.3s; }
+  .cr-cart-item:nth-child(3) { animation-delay: 0.4s; }
+  .cr-cart-item:nth-child(n+4) { animation-delay: 0.5s; }
+
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .cr-cart-item:last-child {
+    border-bottom: none;
+  }
+
+  .cr-cart-item:hover {
+    background: #fafbfc;
+  }
+
+  .cr-item-content {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  .cr-item-image {
+    width: 100px;
+    height: 100px;
+    border-radius: 16px;
+    object-fit: cover;
+    border: 2px solid var(--cr-border);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  }
+
+  .cr-item-placeholder {
+    width: 100px;
+    height: 100px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+    border: 2px solid var(--cr-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #cbd5e1;
+    font-size: 2rem;
+  }
+
+  .cr-item-details {
+    min-width: 0;
+  }
+
+  .cr-item-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--cr-dark);
+    margin-bottom: 0.5rem;
+    line-height: 1.4;
+  }
+
+  .cr-item-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+    font-size: 0.9rem;
+    color: var(--cr-muted);
+  }
+
+  .cr-item-meta-item {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .cr-item-meta-item i {
+    color: var(--cr-primary);
+  }
+
+  .cr-item-pricing {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: center;
+  }
+
+  .cr-offer-badge {
+    background: linear-gradient(135deg, rgba(13, 110, 253, 0.12), rgba(59, 130, 246, 0.08));
+    border: 2px solid #0d6efd;
+    color: #0d6efd;
+    padding: 0.4rem 0.85rem;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 0.85rem;
+  }
+
+  .cr-listed-price {
+    color: var(--cr-muted);
+    font-size: 0.9rem;
+  }
+
+  .cr-listed-price strong {
+    color: var(--cr-dark);
+    font-weight: 700;
+  }
+
+  .cr-unavailable-alert {
+    background: linear-gradient(135deg, rgba(239, 71, 111, 0.1), rgba(247, 127, 146, 0.05));
+    border: 2px solid var(--cr-danger);
+    border-radius: 12px;
+    padding: 0.75rem 1rem;
+    margin-top: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: var(--cr-danger);
+    font-size: 0.9rem;
+  }
+
+  .cr-item-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    align-items: flex-end;
+  }
+
+  .cr-qty-badge {
+    background: var(--cr-dark);
+    color: white;
+    padding: 0.6rem 1.25rem;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 1rem;
+  }
+
+  .cr-status-badge {
+    padding: 0.5rem 1rem;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .cr-status-badge.available {
+    background: linear-gradient(135deg, var(--cr-success), #2ee8ba);
+    color: white;
+  }
+
+  .cr-status-badge.unavailable {
+    background: linear-gradient(135deg, var(--cr-danger), #f77f92);
+    color: white;
+  }
+
+  .cr-action-buttons {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .cr-action-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    border: 1px solid var(--cr-border);
+    background: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+  }
+
+  .cr-action-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+
+  .cr-action-btn.view:hover {
+    background: var(--cr-secondary);
+    color: white;
+    border-color: var(--cr-secondary);
+  }
+
+  .cr-action-btn.remove:hover {
+    background: var(--cr-danger);
+    color: white;
+    border-color: var(--cr-danger);
+  }
+
+  /* Items Footer */
+  .cr-items-footer {
+    padding: 1.5rem 2rem;
+    background: #fafbfc;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .cr-footer-tip {
+    color: var(--cr-muted);
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .cr-add-more-btn {
+    padding: 0.75rem 1.25rem;
+    background: white;
+    border: 2px solid var(--cr-dark);
+    border-radius: 12px;
+    color: var(--cr-dark);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .cr-add-more-btn:hover {
+    background: var(--cr-dark);
+    color: white;
+    transform: translateY(-2px);
+  }
+
+  /* Checkout Card */
+  .cr-checkout-card {
+    background: white;
+    border-radius: 24px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+    border: 1px solid var(--cr-border);
+    overflow: hidden;
+    position: sticky;
+    top: 100px;
+    animation: slideInRight 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.2s backwards;
+  }
+
+  @keyframes slideInRight {
+    from {
+      opacity: 0;
+      transform: translateX(30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  .cr-checkout-header {
+    background: linear-gradient(135deg, var(--cr-dark), #2d2d44);
+    color: white;
+    padding: 2rem;
+  }
+
+  .cr-checkout-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .cr-checkout-subtitle {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.9rem;
+  }
+
+  .cr-checkout-body {
+    padding: 2rem;
+  }
+
+  .cr-warning-alert {
+    background: linear-gradient(135deg, rgba(255, 200, 69, 0.12), rgba(255, 217, 106, 0.08));
+    border: 2px solid var(--cr-accent);
+    border-radius: 12px;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: start;
+    gap: 0.75rem;
+    color: #d97706;
+  }
+
+  .cr-warning-alert i {
+    margin-top: 0.2rem;
+    font-size: 1.1rem;
+  }
+
+  .cr-form-group {
+    margin-bottom: 1.5rem;
+  }
+
+  .cr-form-label {
+    font-weight: 600;
+    color: var(--cr-dark);
+    margin-bottom: 0.5rem;
+    display: block;
+    font-size: 0.95rem;
+  }
+
+  .cr-form-input,
+  .cr-form-select {
+    width: 100%;
+    padding: 0.875rem 1rem;
+    border: 1px solid var(--cr-border);
+    border-radius: 12px;
+    font-size: 0.95rem;
+    font-family: 'DM Sans', sans-serif;
+    transition: all 0.2s ease;
+    background: #fafbfc;
+  }
+
+  .cr-form-input:focus,
+  .cr-form-select:focus {
+    outline: none;
+    border-color: var(--cr-primary);
+    box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
+    background: white;
+  }
+
+  .cr-form-text {
+    font-size: 0.85rem;
+    color: var(--cr-muted);
+    margin-top: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .cr-form-text i {
+    color: var(--cr-primary);
+    font-size: 0.75rem;
+  }
+
+  .cr-checkbox {
+    display: flex;
+    align-items: start;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .cr-checkbox-input {
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--cr-border);
+    border-radius: 6px;
+    cursor: pointer;
+    margin-top: 0.15rem;
+  }
+
+  .cr-checkbox-input:checked {
+    background-color: var(--cr-primary);
+    border-color: var(--cr-primary);
+  }
+
+  .cr-checkbox-label {
+    font-weight: 600;
+    color: var(--cr-dark);
+    cursor: pointer;
+  }
+
+  .cr-checkout-btn {
+    width: 100%;
+    padding: 1.125rem 1.5rem;
+    background: linear-gradient(135deg, var(--cr-danger), #f77f92);
+    color: white;
+    border: none;
+    border-radius: 14px;
+    font-weight: 700;
+    font-size: 1.05rem;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    box-shadow: 0 4px 16px rgba(239, 71, 111, 0.3);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .cr-checkout-btn::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.3);
+    transform: translate(-50%, -50%);
+    transition: width 0.6s ease, height 0.6s ease;
+  }
+
+  .cr-checkout-btn:hover::before {
+    width: 400px;
+    height: 400px;
+  }
+
+  .cr-checkout-btn span,
+  .cr-checkout-btn i {
+    position: relative;
+    z-index: 1;
+  }
+
+  .cr-checkout-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(239, 71, 111, 0.4);
+  }
+
+  .cr-checkout-btn:disabled {
+    background: #e5e7eb;
+    color: #9ca3af;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+
+  .cr-checkout-disclaimer {
+    font-size: 0.85rem;
+    color: var(--cr-muted);
+    margin-top: 1.5rem;
+    text-align: center;
+    line-height: 1.6;
+  }
+
+  /* Safety Card */
+  .cr-safety-card {
+    background: linear-gradient(135deg, rgba(255, 200, 69, 0.08), rgba(255, 200, 69, 0.04));
+    border: 2px solid var(--cr-accent);
+    border-radius: 24px;
+    padding: 1.75rem;
+    margin-top: 1.5rem;
+    animation: fadeIn 0.6s ease 0.4s backwards;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  .cr-safety-title {
+    font-weight: 700;
+    color: #d97706;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 1.05rem;
+  }
+
+  .cr-safety-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .cr-safety-list li {
+    display: flex;
+    align-items: start;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+    color: #4b5563;
+    font-size: 0.9rem;
+  }
+
+  .cr-safety-list li i {
+    color: var(--cr-success);
+    margin-top: 0.2rem;
+  }
+
+  /* Empty State */
+  .cr-empty-state {
+    text-align: center;
+    padding: 5rem 2rem;
+    background: white;
+    border-radius: 24px;
+    border: 2px dashed var(--cr-border);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+    animation: scaleIn 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.3s backwards;
+  }
+
+  .cr-empty-icon {
+    width: 140px;
+    height: 140px;
+    margin: 0 auto 2rem;
+    background: linear-gradient(135deg, var(--cr-light), #e0e7ef);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 4rem;
+    color: var(--cr-muted);
+  }
+
+  .cr-empty-title {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--cr-dark);
+    margin-bottom: 1rem;
+    font-family: 'Fraunces', serif;
+  }
+
+  .cr-empty-text {
+    color: var(--cr-muted);
+    font-size: 1.1rem;
+    margin-bottom: 2rem;
+  }
+
+  .cr-empty-btn {
+    padding: 1rem 2rem;
+    background: linear-gradient(135deg, var(--cr-dark), #2d2d44);
+    color: white;
+    border: none;
+    border-radius: 14px;
+    font-weight: 700;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 16px rgba(26, 26, 46, 0.2);
+  }
+
+  .cr-empty-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(26, 26, 46, 0.3);
+    color: white;
+  }
+
+  /* Responsive */
+  @media (max-width: 1200px) {
+    .cr-cart-grid {
+      grid-template-columns: 1fr 400px;
+      gap: 2rem;
+    }
+  }
+
+  @media (max-width: 992px) {
+    .cr-cart-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .cr-checkout-card {
+      position: static;
+    }
+
+    .cr-item-content {
+      grid-template-columns: 1fr;
+    }
+
+    .cr-item-actions {
+      flex-direction: row;
+      justify-content: space-between;
+      width: 100%;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .cr-container {
+      padding: 0 1rem;
+    }
+
+    .cr-header-left h1 {
+      font-size: 2rem;
+    }
+
+    .cr-cart-icon {
+      width: 48px;
+      height: 48px;
+      font-size: 1.5rem;
+    }
+
+    .cr-items-header,
+    .cr-cart-item,
+    .cr-checkout-body {
+      padding: 1.5rem;
+    }
+
+    .cr-checkout-header {
+      padding: 1.5rem;
+    }
+
+    .cr-item-image,
+    .cr-item-placeholder {
+      width: 80px;
+      height: 80px;
+    }
+
+    .cr-items-footer {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .cr-add-more-btn {
+      width: 100%;
+      justify-content: center;
+    }
+  }
+</style>
+
+<div class="cr-cart-page cr-font-body">
+  <div class="cr-container">
+
+    <!-- Header -->
+    <div class="cr-cart-header">
+      <div class="cr-header-left">
+        <h1>
+          <span class="cr-cart-icon">
+            <i class="fas fa-shopping-basket"></i>
+          </span>
+          <span>Black Market Cart</span>
+        </h1>
+        <p class="cr-header-subtitle">
+          Review items, confirm delivery details, then proceed to payment.
+        </p>
       </div>
+
+      <a href="{% url 'crossroad_deals:listing_list' %}" class="cr-continue-btn">
+        <i class="fas fa-road"></i>
+        <span>Continue browsing</span>
+      </a>
     </div>
 
-    <a href="{% url 'crossroad_deals:listing_list' %}" class="btn btn-outline-dark btn-sm">
-      <i class="fas fa-road me-1"></i>Continue browsing
-    </a>
-  </div>
+    {% if items %}
 
-  {% if items %}
+    <div class="cr-cart-grid">
 
-    <div class="row g-3">
+      <!-- Items Card -->
+      <div>
+        <div class="cr-items-card">
 
-      <!-- Items -->
-      <div class="col-lg-8">
-        <div class="card shadow-sm rounded-4">
-          <div class="card-header bg-white rounded-top-4 d-flex justify-content-between align-items-center">
-            <div class="fw-semibold">Items in your cart</div>
-            <span class="text-muted small">{{ items|length }} item{{ items|length|pluralize }}</span>
+          <!-- Header -->
+          <div class="cr-items-header">
+            <div class="cr-items-title">Items in your cart</div>
+            <div class="cr-items-count">
+              {{ items|length }} item{{ items|length|pluralize }}
+            </div>
           </div>
 
-          <div class="table-responsive">
-            <table class="table align-middle mb-0">
-              <thead class="table-light">
-                <tr>
-                  <th style="width: 55%;">Item</th>
-                  <th class="text-center" style="width: 10%;">Qty</th>
-                  <th style="width: 20%;">Status</th>
-                  <th class="text-end" style="width: 15%;">Action</th>
-                </tr>
-              </thead>
+          <!-- Items List -->
+          <div>
+            {% for it in items %}
+              <div class="cr-cart-item">
+                <div class="cr-item-content">
 
-              <tbody>
-                {% for it in items %}
-                  <tr>
-                    <!-- Item -->
-                    <td>
-                      <div class="d-flex gap-3">
-                        <!-- Thumb -->
-                        <div class="flex-shrink-0">
-                          {% if it.listing.image_1 %}
-                            <img src="{{ it.listing.image_1.url }}"
-                                 alt="{{ it.listing.title }}"
-                                 style="width: 68px; height: 68px; object-fit: cover;"
-                                 class="rounded-3 border">
-                          {% else %}
-                            <div class="rounded-3 border d-flex align-items-center justify-content-center text-muted"
-                                 style="width: 68px; height: 68px; background:#f8f9fa;">
-                              <i class="fas fa-image"></i>
-                            </div>
-                          {% endif %}
-                        </div>
-
-                        <!-- Details -->
-                        <div class="min-w-0">
-                          <div class="fw-semibold text-truncate" style="max-width: 520px;">
-                            {{ it.listing.title }}
-                          </div>
-
-                          <div class="small text-muted">
-                            Seller: <span class="fw-semibold">{{ it.listing.seller.username }}</span>
-                            {% if it.listing.condition %}
-                              <span class="mx-2 text-muted">•</span>
-                              Condition: <span class="text-uppercase">{{ it.listing.condition }}</span>
-                            {% endif %}
-                          </div>
-
-                          <!-- Pricing -->
-                          <div class="small mt-1">
-                            {% if it.offer_price %}
-                              <span class="badge bg-info-subtle text-info border">
-                                Offer: D{{ it.offer_price|floatformat:2|intcomma }}
-                              </span>
-                              <span class="text-muted ms-2">
-                                Listed:
-                                {% if it.listing.price %}
-                                  D{{ it.listing.price|floatformat:2|intcomma }}
-                                {% else %}
-                                  <span class="text-muted">Hidden</span>
-                                {% endif %}
-                              </span>
-                            {% else %}
-                              <span class="text-muted">
-                                Listed:
-                                {% if it.listing.price %}
-                                  <span class="fw-semibold">D{{ it.listing.price|floatformat:2|intcomma }}</span>
-                                {% else %}
-                                  <span class="text-muted">Hidden</span>
-                                {% endif %}
-                              </span>
-                            {% endif %}
-                          </div>
-
-                          {% if not it.available %}
-                            <div class="small text-danger mt-2">
-                              <i class="fas fa-exclamation-triangle me-1"></i>
-                              This item is currently unavailable (sold out / removed / suspended).
-                            </div>
-                          {% endif %}
-                        </div>
+                  <!-- Image -->
+                  <div>
+                    {% if it.listing.image_1 %}
+                      <img src="{{ it.listing.image_1.url }}" alt="{{ it.listing.title }}" class="cr-item-image">
+                    {% else %}
+                      <div class="cr-item-placeholder">
+                        <i class="fas fa-image"></i>
                       </div>
-                    </td>
+                    {% endif %}
+                  </div>
 
-                    <!-- Qty -->
-                    <td class="text-center">
-                      <span class="badge bg-secondary rounded-pill px-3 py-2">
-                        {{ it.quantity }}
-                      </span>
-                    </td>
+                  <!-- Details -->
+                  <div class="cr-item-details">
+                    <h3 class="cr-item-title">{{ it.listing.title }}</h3>
 
-                    <!-- Status -->
-                    <td>
-                      {% if it.available %}
-                        <span class="badge bg-success">
-                          <i class="fas fa-check me-1"></i>Available
+                    <div class="cr-item-meta">
+                      <div class="cr-item-meta-item">
+                        <i class="fas fa-user"></i>
+                        <span>Seller: <strong>{{ it.listing.seller.username }}</strong></span>
+                      </div>
+                      {% if it.listing.condition %}
+                        <div class="cr-item-meta-item">
+                          <i class="fas fa-box"></i>
+                          <span>Condition: <strong>{{ it.listing.condition|upper }}</strong></span>
+                        </div>
+                      {% endif %}
+                    </div>
+
+                    <div class="cr-item-pricing">
+                      {% if it.offer_price %}
+                        <span class="cr-offer-badge">
+                          <i class="fas fa-tag me-1"></i>
+                          Offer: D{{ it.offer_price|floatformat:2|intcomma }}
+                        </span>
+                        <span class="cr-listed-price">
+                          Listed:
+                          {% if it.listing.price %}
+                            <strong>D{{ it.listing.price|floatformat:2|intcomma }}</strong>
+                          {% else %}
+                            <span>Hidden</span>
+                          {% endif %}
                         </span>
                       {% else %}
-                        <span class="badge bg-danger">
-                          <i class="fas fa-times me-1"></i>Unavailable
+                        <span class="cr-listed-price">
+                          Listed:
+                          {% if it.listing.price %}
+                            <strong>D{{ it.listing.price|floatformat:2|intcomma }}</strong>
+                          {% else %}
+                            <span>Hidden</span>
+                          {% endif %}
                         </span>
                       {% endif %}
-                    </td>
+                    </div>
 
-                    <!-- Action -->
-                    <td class="text-end">
-                      <div class="btn-group btn-group-sm" role="group" aria-label="Cart Actions">
-                        <a href="{% url 'crossroad_deals:listing_detail' it.listing.listing_id %}"
-                           class="btn btn-outline-primary">
-                          <i class="fas fa-eye"></i>
-                        </a>
-
-                        <a href="{% url 'crossroad_deals:cart_remove' it.listing.listing_id %}"
-                           class="btn btn-outline-danger"
-                           onclick="return confirm('Remove this item from your cart?');">
-                          <i class="fas fa-trash"></i>
-                        </a>
+                    {% if not it.available %}
+                      <div class="cr-unavailable-alert">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <div>This item is currently unavailable (sold out / removed / suspended).</div>
                       </div>
-                    </td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
+                    {% endif %}
+                  </div>
+
+                  <!-- Actions -->
+                  <div class="cr-item-actions">
+                    <div class="cr-qty-badge">
+                      Qty: {{ it.quantity }}
+                    </div>
+
+                    {% if it.available %}
+                      <span class="cr-status-badge available">
+                        <i class="fas fa-check"></i>
+                        Available
+                      </span>
+                    {% else %}
+                      <span class="cr-status-badge unavailable">
+                        <i class="fas fa-times"></i>
+                        Unavailable
+                      </span>
+                    {% endif %}
+
+                    <div class="cr-action-buttons">
+                      <a href="{% url 'crossroad_deals:listing_detail' it.listing.listing_id %}" class="cr-action-btn view" title="View details">
+                        <i class="fas fa-eye"></i>
+                      </a>
+                      <a href="{% url 'crossroad_deals:cart_remove' it.listing.listing_id %}" class="cr-action-btn remove" title="Remove from cart" onclick="return confirm('Remove this item from your cart?');">
+                        <i class="fas fa-trash"></i>
+                      </a>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            {% endfor %}
           </div>
 
-          <div class="card-footer bg-white rounded-bottom-4 d-flex justify-content-between align-items-center">
-            <div class="text-muted small">
-              Tip: negotiate price from the listing page before checkout.
+          <!-- Footer -->
+          <div class="cr-items-footer">
+            <div class="cr-footer-tip">
+              <i class="fas fa-lightbulb"></i>
+              <span>Tip: negotiate price from the listing page before checkout.</span>
             </div>
-            <a href="{% url 'crossroad_deals:listing_list' %}" class="btn btn-sm btn-outline-dark">
-              <i class="fas fa-plus me-1"></i>Add more items
+            <a href="{% url 'crossroad_deals:listing_list' %}" class="cr-add-more-btn">
+              <i class="fas fa-plus"></i>
+              <span>Add more items</span>
             </a>
           </div>
+
         </div>
       </div>
 
-      <!-- Checkout -->
-      <div class="col-lg-4">
-        <div class="card shadow-sm rounded-4">
-          <div class="card-header bg-dark text-white rounded-top-4">
-            <div class="fw-semibold">
-              <i class="fas fa-truck me-2"></i>Delivery & Checkout
+      <!-- Checkout Sidebar -->
+      <div>
+        <div class="cr-checkout-card">
+
+          <!-- Header -->
+          <div class="cr-checkout-header">
+            <div class="cr-checkout-title">
+              <i class="fas fa-truck"></i>
+              <span>Delivery & Checkout</span>
             </div>
-            <div class="small text-white-50">Provide details to proceed to payment.</div>
+            <div class="cr-checkout-subtitle">
+              Provide details to proceed to payment.
+            </div>
           </div>
 
-          <div class="card-body">
+          <!-- Body -->
+          <div class="cr-checkout-body">
 
             {% if cart_has_unavailable %}
-              <div class="alert alert-warning small">
-                <i class="fas fa-exclamation-triangle me-2"></i>
-                Your cart contains unavailable items. Remove them to proceed.
+              <div class="cr-warning-alert">
+                <i class="fas fa-exclamation-triangle"></i>
+                <div>Your cart contains unavailable items. Remove them to proceed.</div>
               </div>
             {% endif %}
 
             <form method="post" action="{% url 'crossroad_deals:cart_checkout' %}">
               {% csrf_token %}
 
-              <div class="mb-3">
-                <label class="form-label">Delivery Method</label>
-                <select class="form-select" name="delivery_method" required>
+              <div class="cr-form-group">
+                <label class="cr-form-label">Delivery Method</label>
+                <select class="cr-form-select" name="delivery_method" required>
                   <option value="delivery">Easy Move Logistics</option>
                   <option value="pickup">Direct Pickup</option>
                 </select>
-                <div class="form-text">Choose delivery or pickup at a safe location.</div>
+                <div class="cr-form-text">
+                  <i class="fas fa-circle"></i>
+                  <span>Choose delivery or pickup at a safe location.</span>
+                </div>
               </div>
 
-              <div class="mb-3">
-                <label class="form-label">Your Geocode</label>
-                <input class="form-control" name="buyer_geocode" required placeholder="e.g. KM-23-AB">
-                <div class="form-text">Used for delivery coordination and pricing.</div>
+              <div class="cr-form-group">
+                <label class="cr-form-label">Your Geocode</label>
+                <input class="cr-form-input" name="buyer_geocode" required placeholder="e.g. KM-23-AB">
+                <div class="cr-form-text">
+                  <i class="fas fa-circle"></i>
+                  <span>Used for delivery coordination and pricing.</span>
+                </div>
               </div>
 
-              <div class="mb-3">
-                <label class="form-label">Phone</label>
-                <input class="form-control" name="buyer_phone" required value="{{ user.telephone }}" placeholder="e.g. 7xx xxx xxx">
-                <div class="form-text">We’ll contact you for delivery updates.</div>
+              <div class="cr-form-group">
+                <label class="cr-form-label">Phone Number</label>
+                <input class="cr-form-input" name="buyer_phone" required value="{{ user.telephone }}" placeholder="e.g. 7xx xxx xxx">
+                <div class="cr-form-text">
+                  <i class="fas fa-circle"></i>
+                  <span>We'll contact you for delivery updates.</span>
+                </div>
               </div>
 
-              <div class="mb-3">
-                <label class="form-label">Email (optional)</label>
-                <input class="form-control" name="buyer_email" value="{{ user.email }}" placeholder="you@example.com">
+              <div class="cr-form-group">
+                <label class="cr-form-label">Email (optional)</label>
+                <input class="cr-form-input" name="buyer_email" value="{{ user.email }}" placeholder="you@example.com">
               </div>
 
-              <div class="form-check mb-3">
-                <input class="form-check-input" type="checkbox" name="request_vetting" id="v">
-                <label class="form-check-label" for="v">
-                  Request Easy Move Vetting
-                </label>
-                <div class="form-text">Item inspection before delivery (recommended).</div>
+              <div class="cr-checkbox">
+                <input class="cr-checkbox-input" type="checkbox" name="request_vetting" id="vetting">
+                <div>
+                  <label class="cr-checkbox-label" for="vetting">Request Easy Move Vetting</label>
+                  <div class="cr-form-text" style="margin-top: 0.25rem;">
+                    <i class="fas fa-circle"></i>
+                    <span>Item inspection before delivery (recommended).</span>
+                  </div>
+                </div>
               </div>
 
-              <button class="btn btn-danger w-100" {% if cart_has_unavailable %}disabled{% endif %}>
-                <i class="fas fa-lock me-2"></i>Proceed to Payment
+              <button class="cr-checkout-btn" type="submit" {% if cart_has_unavailable %}disabled{% endif %}>
+                <i class="fas fa-lock"></i>
+                <span>Proceed to Payment</span>
               </button>
 
-              <div class="text-muted small mt-3">
+              <div class="cr-checkout-disclaimer">
                 By continuing, you agree to safe trading practices and platform rules.
               </div>
+
             </form>
 
           </div>
+
         </div>
 
         <!-- Safety Card -->
-        <div class="card shadow-sm rounded-4 mt-3 border-warning">
-          <div class="card-body">
-            <div class="fw-semibold text-warning mb-2">
-              <i class="fas fa-shield-alt me-2"></i>Safety reminder
-            </div>
-            <ul class="small mb-0">
-              <li>Meet in public places for pickup.</li>
-              <li>Inspect items before confirming delivery.</li>
-              <li>Report suspicious listings.</li>
-            </ul>
+        <div class="cr-safety-card">
+          <div class="cr-safety-title">
+            <i class="fas fa-shield-alt"></i>
+            <span>Safety Reminder</span>
           </div>
+          <ul class="cr-safety-list">
+            <li>
+              <i class="fas fa-check-circle"></i>
+              <span>Meet in public places for pickup.</span>
+            </li>
+            <li>
+              <i class="fas fa-check-circle"></i>
+              <span>Inspect items before confirming delivery.</span>
+            </li>
+            <li>
+              <i class="fas fa-check-circle"></i>
+              <span>Report suspicious listings.</span>
+            </li>
+          </ul>
         </div>
 
       </div>
+
     </div>
 
-  {% else %}
-    <!-- Empty -->
-    <div class="text-center py-5">
-      <i class="fas fa-shopping-basket fa-3x text-muted mb-3"></i>
-      <h5 class="fw-bold">Your cart is empty</h5>
-      <div class="text-muted mb-3">Browse listings and add items to your Crossroad cart.</div>
-      <a href="{% url 'crossroad_deals:listing_list' %}" class="btn btn-dark">
-        <i class="fas fa-road me-1"></i>Browse listings
+    {% else %}
+
+    <!-- Empty State -->
+    <div class="cr-empty-state">
+      <div class="cr-empty-icon">
+        <i class="fas fa-shopping-basket"></i>
+      </div>
+      <h2 class="cr-empty-title">Your cart is empty</h2>
+      <p class="cr-empty-text">
+        Browse listings and add items to your Crossroad cart.
+      </p>
+      <a href="{% url 'crossroad_deals:listing_list' %}" class="cr-empty-btn">
+        <i class="fas fa-road"></i>
+        <span>Browse listings</span>
       </a>
     </div>
-  {% endif %}
 
+    {% endif %}
+
+  </div>
 </div>
+
 {% endblock %}
