@@ -1,0 +1,278 @@
+{% extends 'crossroad_deals/base.html' %}
+{% load static %}
+
+{% block title %}Logistics Dashboard - Easy Move{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+    
+    .stat-card {
+        background: white;
+        border-radius: 8px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        border-left: 4px solid #3b82f6;
+    }
+    
+    .stat-card.pending { border-left-color: #f59e0b; }
+    .stat-card.vetting { border-left-color: #8b5cf6; }
+    .stat-card.transit { border-left-color: #06b6d4; }
+    .stat-card.delivered { border-left-color: #10b981; }
+    
+    .stat-value {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #1f2937;
+    }
+    
+    .stat-label {
+        font-size: 0.875rem;
+        color: #6b7280;
+        margin-top: 0.25rem;
+    }
+    
+    .filters {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 8px;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    .task-table {
+        background: white;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    .task-row {
+        border-bottom: 1px solid #e5e7eb;
+        padding: 1rem;
+        transition: background 0.2s;
+    }
+    
+    .task-row:hover {
+        background: #f9fafb;
+    }
+    
+    .status-badge {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    
+    .status-pending { background: #fef3c7; color: #92400e; }
+    .status-assigned { background: #dbeafe; color: #1e40af; }
+    .status-vetting_queue { background: #ede9fe; color: #5b21b6; }
+    .status-vetting_in_progress { background: #ede9fe; color: #6b21a8; }
+    .status-packaging { background: #fce7f3; color: #9f1239; }
+    .status-in_transit { background: #cffafe; color: #155e75; }
+    .status-delivered { background: #d1fae5; color: #065f46; }
+    .status-vetted_rejected { background: #fee2e2; color: #991b1b; }
+    
+    .priority-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        font-size: 0.75rem;
+        font-weight: bold;
+        color: white;
+    }
+    
+    .priority-1, .priority-2 { background: #dc2626; }
+    .priority-3, .priority-4 { background: #f59e0b; }
+    .priority-5, .priority-6 { background: #3b82f6; }
+    .priority-7, .priority-8, .priority-9, .priority-10 { background: #6b7280; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-3xl font-bold text-gray-900">Easy Move Logistics Dashboard</h1>
+        <a href="{% url 'crossroad_deals:vetting_queue' %}" class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700">
+            Vetting Queue ({{ stats.vetting_queue }})
+        </a>
+    </div>
+    
+    <!-- Statistics -->
+    <div class="stats-grid">
+        <div class="stat-card pending">
+            <div class="stat-value">{{ stats.pending }}</div>
+            <div class="stat-label">Pending Assignment</div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-value">{{ stats.assigned }}</div>
+            <div class="stat-label">Assigned</div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-value">{{ stats.picked_up }}</div>
+            <div class="stat-label">Picked Up</div>
+        </div>
+        
+        <div class="stat-card vetting">
+            <div class="stat-value">{{ stats.vetting_queue|add:stats.vetting_in_progress }}</div>
+            <div class="stat-label">In Vetting</div>
+        </div>
+        
+        <div class="stat-card transit">
+            <div class="stat-value">{{ stats.in_transit }}</div>
+            <div class="stat-label">In Transit</div>
+        </div>
+        
+        <div class="stat-card delivered">
+            <div class="stat-value">{{ stats.delivered }}</div>
+            <div class="stat-label">Delivered</div>
+        </div>
+    </div>
+    
+    <!-- Filters -->
+    <div class="filters">
+        <form method="get" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <select name="status" class="w-full border-gray-300 rounded-lg">
+                    <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All Statuses</option>
+                    {% for value, label in status_choices %}
+                    <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Agent</label>
+                <select name="agent" class="w-full border-gray-300 rounded-lg">
+                    <option value="">All Agents</option>
+                    {% for agent in available_agents %}
+                    <option value="{{ agent.id }}" {% if agent_filter == agent.id|stringformat:"s" %}selected{% endif %}>
+                        {{ agent.get_full_name|default:agent.username }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Search</label>
+                <input type="text" name="search" value="{{ search }}" 
+                       placeholder="Order ID, Item, Customer..." 
+                       class="w-full border-gray-300 rounded-lg">
+            </div>
+            
+            <div class="flex items-end">
+                <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 w-full">
+                    Filter
+                </button>
+            </div>
+        </form>
+    </div>
+    
+    <!-- Tasks Table -->
+    <div class="task-table">
+        <div class="overflow-x-auto">
+            <table class="min-w-full">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Priority</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Task ID</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Item</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Customer</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Agent</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for task in page_obj %}
+                    <tr class="task-row">
+                        <td class="px-6 py-4">
+                            <span class="priority-badge priority-{{ task.priority }}">{{ task.priority }}</span>
+                        </td>
+                        <td class="px-6 py-4">
+                            <div class="text-sm font-mono text-gray-900">{{ task.task_id|slice:":8" }}</div>
+                        </td>
+                        <td class="px-6 py-4">
+                            <div class="text-sm font-medium text-gray-900">{{ task.order.listing.title|truncatewords:5 }}</div>
+                            <div class="text-xs text-gray-500">Order: {{ task.order.order_id|slice:":8" }}</div>
+                        </td>
+                        <td class="px-6 py-4">
+                            <div class="text-sm text-gray-900">{{ task.order.buyer.get_full_name|default:task.order.buyer.username }}</div>
+                        </td>
+                        <td class="px-6 py-4">
+                            <span class="status-badge status-{{ task.status }}">
+                                {{ task.get_status_display }}
+                            </span>
+                            {% if task.requires_vetting %}
+                            <span class="ml-2 text-xs text-purple-600 font-semibold">⭐ VETTING</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4">
+                            {% if task.assigned_agent %}
+                            <div class="text-sm text-gray-900">{{ task.assigned_agent.get_full_name|default:task.assigned_agent.username }}</div>
+                            {% else %}
+                            <span class="text-sm text-gray-400">Unassigned</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 text-sm text-gray-500">
+                            {{ task.created_at|date:"M d, Y" }}
+                        </td>
+                        <td class="px-6 py-4">
+                            <a href="{% url 'crossroad_deals:logistics_task_detail' task.task_id %}" 
+                               class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                                View Details →
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="px-6 py-8 text-center text-gray-500">
+                            No logistics tasks found.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        {% if page_obj.has_other_pages %}
+        <div class="px-6 py-4 bg-gray-50 border-t border-gray-200">
+            <div class="flex justify-between items-center">
+                <div class="text-sm text-gray-700">
+                    Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ page_obj.paginator.count }} tasks
+                </div>
+                <div class="flex gap-2">
+                    {% if page_obj.has_previous %}
+                    <a href="?page={{ page_obj.previous_page_number }}&status={{ status_filter }}&agent={{ agent_filter }}&search={{ search }}" 
+                       class="px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50">
+                        Previous
+                    </a>
+                    {% endif %}
+                    {% if page_obj.has_next %}
+                    <a href="?page={{ page_obj.next_page_number }}&status={{ status_filter }}&agent={{ agent_filter }}&search={{ search }}" 
+                       class="px-3 py-2 border border-gray-300 rounded-md hover:bg-gray-50">
+                        Next
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

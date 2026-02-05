@@ -6466,7 +6466,7 @@ def logistics_dashboard(request):
         'status_choices': CrossroadLogisticsTask.TASK_STATUS_CHOICES,
     }
 
-    return render(request, 'crossroad_deals/logistics/dashboard.html', context)
+    return render(request, 'logistics/crossroad_deals/dashboard.html', context)
 
 
 @login_required
@@ -6497,7 +6497,7 @@ def logistics_task_detail(request, task_id):
         'vetting_checklist': vetting_checklist,
     }
 
-    return render(request, 'crossroad_deals/logistics/task_detail.html', context)
+    return render(request, 'logistics/crossroad_deals/task_detail.html', context)
 
 
 @login_required
@@ -6584,7 +6584,7 @@ def vetting_queue(request):
         'page_obj': page_obj,
     }
 
-    return render(request, 'crossroad_deals/logistics/vetting_queue.html', context)
+    return render(request, 'logistics/crossroad_deals/vetting_queue.html', context)
 
 
 @login_required
@@ -6713,7 +6713,7 @@ def vetting_form(request, task_id):
         'checklist_items': checklist_items,
     }
 
-    return render(request, 'crossroad_deals/logistics/vetting_form.html', context)
+    return render(request, 'logistics/crossroad_deals/vetting_form.html', context)
 
 
 @login_required
@@ -6844,7 +6844,7 @@ def task_update_status(request, task_id):
         'status_choices': CrossroadLogisticsTask.TASK_STATUS_CHOICES,
     }
 
-    return render(request, 'crossroad_deals/logistics/update_status.html', context)
+    return render(request, 'logistics/crossroad_deals/update_status.html', context)
 
 
 # Customer-facing views
@@ -6870,7 +6870,7 @@ def my_logistics_tracking(request):
         'page_obj': page_obj,
     }
 
-    return render(request, 'crossroad_deals/customer/logistics_tracking.html', context)
+    return render(request, 'logistics/crossroad_deals/logistics_tracking.html', context)
 
 
 @login_required
@@ -6900,4 +6900,4 @@ def logistics_tracking_detail(request, task_id):
         'show_vetting_results': show_vetting_results,
     }
 
-    return render(request, 'crossroad_deals/customer/tracking_detail.html', context)
+    return render(request, 'logistics/crossroad_deals/tracking_detail.html', context)

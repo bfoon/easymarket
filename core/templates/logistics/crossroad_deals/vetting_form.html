@@ -1,0 +1,343 @@
+{% extends 'crossroad_deals/base.html' %}
+{% load static %}
+
+{% block title %}Vetting - {{ task.task_id }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .vetting-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 2rem;
+    }
+    
+    .vetting-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: 12px;
+        margin-bottom: 2rem;
+    }
+    
+    .section-card {
+        background: white;
+        border-radius: 12px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    
+    .section-title {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #1f2937;
+        margin-bottom: 1.5rem;
+        padding-bottom: 0.75rem;
+        border-bottom: 2px solid #e5e7eb;
+    }
+    
+    .checklist-item {
+        display: flex;
+        align-items: start;
+        padding: 1rem;
+        border: 2px solid #e5e7eb;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+        transition: all 0.2s;
+    }
+    
+    .checklist-item:hover {
+        border-color: #cbd5e1;
+        background: #f9fafb;
+    }
+    
+    .checklist-item.checked {
+        background: #f0fdf4;
+        border-color: #86efac;
+    }
+    
+    .checkbox-custom {
+        width: 24px;
+        height: 24px;
+        cursor: pointer;
+    }
+    
+    .photo-upload-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+    
+    .photo-upload-slot {
+        border: 2px dashed #cbd5e1;
+        border-radius: 8px;
+        padding: 2rem;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    
+    .photo-upload-slot:hover {
+        border-color: #3b82f6;
+        background: #eff6ff;
+    }
+    
+    .decision-buttons {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+        margin-top: 2rem;
+    }
+    
+    .approve-button {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        color: white;
+        padding: 1rem 2rem;
+        border-radius: 8px;
+        font-size: 1.125rem;
+        font-weight: bold;
+        border: none;
+        cursor: pointer;
+        transition: transform 0.2s;
+    }
+    
+    .approve-button:hover {
+        transform: translateY(-2px);
+    }
+    
+    .reject-button {
+        background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+        color: white;
+        padding: 1rem 2rem;
+        border-radius: 8px;
+        font-size: 1.125rem;
+        font-weight: bold;
+        border: none;
+        cursor: pointer;
+        transition: transform 0.2s;
+    }
+    
+    .reject-button:hover {
+        transform: translateY(-2px);
+    }
+    
+    .item-info {
+        background: #f9fafb;
+        border-left: 4px solid #3b82f6;
+        padding: 1.5rem;
+        border-radius: 8px;
+        margin-bottom: 2rem;
+    }
+    
+    .item-image {
+        width: 100%;
+        max-width: 300px;
+        border-radius: 8px;
+        margin-top: 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="vetting-container">
+    <!-- Header -->
+    <div class="vetting-header">
+        <h1 class="text-3xl font-bold mb-2">Product Vetting Form</h1>
+        <p class="text-purple-100">Task ID: {{ task.task_id }}</p>
+        <p class="text-purple-100 mt-1">Started: {{ task.vetting_started_at|date:"F d, Y g:i A" }}</p>
+    </div>
+    
+    <!-- Item Information -->
+    <div class="section-card">
+        <h2 class="section-title">📦 Item Information</h2>
+        <div class="item-info">
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <p class="text-sm text-gray-600">Product Title</p>
+                    <p class="text-lg font-semibold">{{ task.order.listing.title }}</p>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-600">Condition</p>
+                    <p class="text-lg font-semibold">{{ task.order.listing.get_condition_display }}</p>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-600">Quantity</p>
+                    <p class="text-lg font-semibold">{{ task.order.quantity }}</p>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-600">Order Value</p>
+                    <p class="text-lg font-semibold">D{{ task.order.total_amount }}</p>
+                </div>
+            </div>
+            
+            <div class="mt-4">
+                <p class="text-sm text-gray-600">Description</p>
+                <p class="text-gray-900 mt-1">{{ task.order.listing.description }}</p>
+            </div>
+            
+            {% if task.order.listing.image_1 %}
+            <img src="{{ task.order.listing.image_1.url }}" alt="{{ task.order.listing.title }}" class="item-image">
+            {% endif %}
+        </div>
+        
+        <div class="grid grid-cols-2 gap-4 mt-4">
+            <div>
+                <p class="text-sm text-gray-600">Vendor Location</p>
+                <p class="font-medium">{{ task.vendor_location|default:"Not specified" }}</p>
+            </div>
+            <div>
+                <p class="text-sm text-gray-600">Picked Up</p>
+                <p class="font-medium">{{ task.pickup_completed_time|date:"M d, Y g:i A" }}</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Vetting Form -->
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        
+        <!-- Checklist -->
+        <div class="section-card">
+            <h2 class="section-title">✅ Vetting Checklist</h2>
+            <p class="text-gray-600 mb-4">Check each item as you verify it. Add notes if needed.</p>
+            
+            {% for item in checklist_items %}
+            <div class="checklist-item {% if item.is_checked %}checked{% endif %}">
+                <input type="checkbox" 
+                       name="check_{{ item.id }}" 
+                       id="check_{{ item.id }}"
+                       class="checkbox-custom"
+                       {% if item.is_checked %}checked{% endif %}
+                       onchange="this.parentElement.classList.toggle('checked', this.checked)">
+                <label for="check_{{ item.id }}" class="flex-1 ml-3 cursor-pointer">
+                    <div class="font-semibold text-gray-900">{{ item.item_name }}</div>
+                    {% if item.description %}
+                    <div class="text-sm text-gray-600 mt-1">{{ item.description }}</div>
+                    {% endif %}
+                    <div class="mt-2">
+                        <textarea name="notes_{{ item.id }}" 
+                                  rows="2" 
+                                  placeholder="Add notes (optional)"
+                                  class="w-full border-gray-300 rounded text-sm">{{ item.notes }}</textarea>
+                    </div>
+                </label>
+            </div>
+            {% endfor %}
+            
+            <button type="submit" class="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">
+                💾 Save Checklist Progress
+            </button>
+        </div>
+        
+        <!-- Photos -->
+        <div class="section-card">
+            <h2 class="section-title">📸 Vetting Photos</h2>
+            <p class="text-gray-600 mb-4">Upload photos of the product from different angles. Maximum 5 photos.</p>
+            
+            <div class="photo-upload-grid">
+                {% for i in "12345" %}
+                <div class="photo-upload-slot">
+                    <input type="file" 
+                           name="photo_{{ forloop.counter }}" 
+                           id="photo_{{ forloop.counter }}"
+                           accept="image/*"
+                           class="hidden"
+                           onchange="previewPhoto(this, {{ forloop.counter }})">
+                    <label for="photo_{{ forloop.counter }}" class="cursor-pointer">
+                        <div id="preview_{{ forloop.counter }}">
+                            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                            </svg>
+                            <p class="mt-2 text-sm text-gray-600">Photo {{ forloop.counter }}</p>
+                        </div>
+                    </label>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        
+        <!-- Vetting Comments -->
+        <div class="section-card">
+            <h2 class="section-title">💬 Vetting Comments</h2>
+            
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                    Customer-Facing Comments <span class="text-red-600">*</span>
+                </label>
+                <p class="text-sm text-gray-600 mb-2">These comments will be sent to the customer.</p>
+                <textarea name="comments" 
+                          rows="5" 
+                          required
+                          placeholder="Provide detailed comments about the vetting process..."
+                          class="w-full border-gray-300 rounded-lg"></textarea>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                    Internal Notes (Optional)
+                </label>
+                <p class="text-sm text-gray-600 mb-2">These notes are for internal use only and won't be shared with the customer.</p>
+                <textarea name="internal_notes" 
+                          rows="3" 
+                          placeholder="Add internal notes..."
+                          class="w-full border-gray-300 rounded-lg"></textarea>
+            </div>
+        </div>
+        
+        <!-- Decision -->
+        <div class="section-card">
+            <h2 class="section-title">⚖️ Vetting Decision</h2>
+            
+            <div class="decision-buttons">
+                <button type="submit" 
+                        name="submit_vetting"
+                        value="1"
+                        onclick="return setApprovalStatus(true)"
+                        class="approve-button">
+                    ✅ APPROVE & CONTINUE
+                </button>
+                
+                <button type="submit" 
+                        name="submit_vetting"
+                        value="1"
+                        onclick="return setApprovalStatus(false)"
+                        class="reject-button">
+                    ❌ REJECT ITEM
+                </button>
+            </div>
+            
+            <input type="hidden" name="approved" id="approved" value="">
+        </div>
+    </form>
+</div>
+
+<script>
+function setApprovalStatus(approved) {
+    document.getElementById('approved').value = approved ? 'yes' : 'no';
+    
+    if (!approved) {
+        const comments = document.querySelector('textarea[name="comments"]').value;
+        if (!comments) {
+            alert('Please provide comments explaining why the item is being rejected.');
+            return false;
+        }
+        
+        return confirm('Are you sure you want to REJECT this item? The customer will be notified.');
+    } else {
+        return confirm('Approve this item and continue to packaging?');
+    }
+}
+
+function previewPhoto(input, number) {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('preview_' + number).innerHTML = 
+                '<img src="' + e.target.result + '" class="w-full h-32 object-cover rounded">';
+        };
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+</script>
+{% endblock %}

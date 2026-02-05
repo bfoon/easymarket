@@ -1,0 +1,383 @@
+{% extends 'crossroad_deals/base.html' %}
+{% load static %}
+
+{% block title %}Track Order - {{ task.task_id }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .tracking-container {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 2rem;
+    }
+    
+    .tracking-header {
+        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+        color: white;
+        padding: 2.5rem;
+        border-radius: 16px;
+        margin-bottom: 2rem;
+        box-shadow: 0 8px 16px rgba(59, 130, 246, 0.3);
+    }
+    
+    .status-timeline {
+        position: relative;
+        padding: 2rem 0;
+    }
+    
+    .timeline-item {
+        position: relative;
+        padding-left: 3rem;
+        padding-bottom: 2rem;
+    }
+    
+    .timeline-item:last-child {
+        padding-bottom: 0;
+    }
+    
+    .timeline-icon {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    
+    .timeline-icon.completed {
+        background: #10b981;
+        color: white;
+    }
+    
+    .timeline-icon.current {
+        background: #3b82f6;
+        color: white;
+        animation: pulse 2s infinite;
+    }
+    
+    .timeline-icon.pending {
+        background: #e5e7eb;
+        color: #9ca3af;
+    }
+    
+    .timeline-line {
+        position: absolute;
+        left: 19px;
+        top: 40px;
+        bottom: 0;
+        width: 2px;
+        background: #e5e7eb;
+    }
+    
+    .timeline-line.completed {
+        background: #10b981;
+    }
+    
+    .timeline-content {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    .timeline-content.current {
+        border: 2px solid #3b82f6;
+    }
+    
+    @keyframes pulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.1); }
+    }
+    
+    .info-card {
+        background: white;
+        border-radius: 12px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    .vetting-results {
+        background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+        border-left: 4px solid #10b981;
+        padding: 1.5rem;
+        border-radius: 8px;
+        margin-top: 1rem;
+    }
+    
+    .vetting-results.rejected {
+        background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+        border-left-color: #ef4444;
+    }
+    
+    .status-badge {
+        display: inline-block;
+        padding: 0.5rem 1rem;
+        border-radius: 9999px;
+        font-weight: 600;
+        font-size: 0.875rem;
+    }
+    
+    .agent-info {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 1rem;
+        background: #f9fafb;
+        border-radius: 8px;
+        margin-top: 1rem;
+    }
+    
+    .agent-avatar {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: #3b82f6;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+        font-weight: bold;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="tracking-container">
+    <!-- Header -->
+    <div class="tracking-header">
+        <h1 class="text-3xl font-bold mb-2">🚚 Order Tracking</h1>
+        <p class="text-blue-100 text-lg mb-4">{{ task.order.listing.title }}</p>
+        <div class="grid grid-cols-2 gap-4 text-sm">
+            <div>
+                <p class="text-blue-200">Task ID</p>
+                <p class="font-mono font-semibold">{{ task.task_id }}</p>
+            </div>
+            <div>
+                <p class="text-blue-200">Order ID</p>
+                <p class="font-mono font-semibold">{{ task.order.order_id }}</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Current Status -->
+    <div class="info-card">
+        <h2 class="text-2xl font-bold text-gray-900 mb-4">📍 Current Status</h2>
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-4xl font-bold text-blue-600">{{ task.get_status_display }}</p>
+                <p class="text-gray-600 mt-2">Updated {{ task.updated_at|timesince }} ago</p>
+            </div>
+            {% if task.requires_vetting %}
+            <div class="text-right">
+                <span class="text-purple-600 font-bold text-lg">⭐ Easy Move Service</span>
+                <p class="text-sm text-gray-600 mt-1">With Vetting & Verification</p>
+            </div>
+            {% endif %}
+        </div>
+        
+        {% if task.assigned_agent %}
+        <div class="agent-info">
+            <div class="agent-avatar">
+                {{ task.assigned_agent.get_full_name|first|upper|default:task.assigned_agent.username|first|upper }}
+            </div>
+            <div>
+                <p class="text-sm text-gray-600">Your Logistics Agent</p>
+                <p class="font-semibold text-gray-900">{{ task.assigned_agent.get_full_name|default:task.assigned_agent.username }}</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- Vetting Results (if completed) -->
+    {% if show_vetting_results %}
+    <div class="info-card">
+        <h2 class="text-2xl font-bold text-gray-900 mb-4">🔍 Vetting Results</h2>
+        
+        <div class="vetting-results {% if not task.vetting_approved %}rejected{% endif %}">
+            <div class="flex items-center gap-3 mb-3">
+                {% if task.vetting_approved %}
+                <div class="text-4xl">✅</div>
+                <div>
+                    <h3 class="text-xl font-bold text-green-800">APPROVED</h3>
+                    <p class="text-green-700">Your item passed vetting inspection</p>
+                </div>
+                {% else %}
+                <div class="text-4xl">❌</div>
+                <div>
+                    <h3 class="text-xl font-bold text-red-800">NOT APPROVED</h3>
+                    <p class="text-red-700">Your item did not pass vetting</p>
+                </div>
+                {% endif %}
+            </div>
+            
+            {% if task.vetting_comments %}
+            <div class="mt-4 pt-4 border-t {% if task.vetting_approved %}border-green-300{% else %}border-red-300{% endif %}">
+                <p class="font-semibold mb-2">Vetting Comments:</p>
+                <p class="text-gray-900">{{ task.vetting_comments }}</p>
+            </div>
+            {% endif %}
+            
+            <div class="mt-3 text-sm {% if task.vetting_approved %}text-green-700{% else %}text-red-700{% endif %}">
+                Vetted on {{ task.vetting_completed_at|date:"F d, Y" }} by {{ task.vetted_by.get_full_name|default:task.vetted_by.username }}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Timeline -->
+    <div class="info-card">
+        <h2 class="text-2xl font-bold text-gray-900 mb-6">📋 Delivery Timeline</h2>
+        
+        <div class="status-timeline">
+            <!-- Pending -->
+            <div class="timeline-item">
+                <div class="timeline-icon {% if task.status != 'pending' %}completed{% elif task.status == 'pending' %}current{% else %}pending{% endif %}">
+                    📝
+                </div>
+                <div class="timeline-line {% if task.status != 'pending' %}completed{% endif %}"></div>
+                <div class="timeline-content {% if task.status == 'pending' %}current{% endif %}">
+                    <h3 class="font-bold text-gray-900">Order Placed</h3>
+                    <p class="text-sm text-gray-600 mt-1">{{ task.created_at|date:"F d, Y g:i A" }}</p>
+                </div>
+            </div>
+            
+            <!-- Assigned -->
+            {% if task.assigned_at %}
+            <div class="timeline-item">
+                <div class="timeline-icon completed">👤</div>
+                <div class="timeline-line completed"></div>
+                <div class="timeline-content">
+                    <h3 class="font-bold text-gray-900">Agent Assigned</h3>
+                    <p class="text-sm text-gray-600 mt-1">{{ task.assigned_at|date:"F d, Y g:i A" }}</p>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Picked Up -->
+            {% if task.pickup_completed_time %}
+            <div class="timeline-item">
+                <div class="timeline-icon completed">📦</div>
+                <div class="timeline-line {% if task.vetting_completed_at or task.packaging_completed_at %}completed{% endif %}"></div>
+                <div class="timeline-content">
+                    <h3 class="font-bold text-gray-900">Picked Up from Vendor</h3>
+                    <p class="text-sm text-gray-600 mt-1">{{ task.pickup_completed_time|date:"F d, Y g:i A" }}</p>
+                    {% if task.pickup_notes %}
+                    <p class="text-sm text-gray-700 mt-2">{{ task.pickup_notes }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Vetting (if required) -->
+            {% if task.requires_vetting %}
+            <div class="timeline-item">
+                <div class="timeline-icon {% if task.vetting_completed_at %}completed{% elif task.status == 'vetting_in_progress' %}current{% else %}pending{% endif %}">
+                    🔍
+                </div>
+                <div class="timeline-line {% if task.vetting_completed_at %}completed{% endif %}"></div>
+                <div class="timeline-content {% if task.status == 'vetting_in_progress' %}current{% endif %}">
+                    <h3 class="font-bold text-gray-900">Vetting & Inspection</h3>
+                    {% if task.vetting_completed_at %}
+                    <p class="text-sm text-gray-600 mt-1">Completed {{ task.vetting_completed_at|date:"F d, Y g:i A" }}</p>
+                    {% elif task.vetting_started_at %}
+                    <p class="text-sm text-gray-600 mt-1">In progress since {{ task.vetting_started_at|date:"F d, Y g:i A" }}</p>
+                    {% else %}
+                    <p class="text-sm text-gray-600 mt-1">Waiting for vetting...</p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Packaging -->
+            {% if task.packaging_completed_at %}
+            <div class="timeline-item">
+                <div class="timeline-icon completed">📮</div>
+                <div class="timeline-line {% if task.delivery_started_at %}completed{% endif %}"></div>
+                <div class="timeline-content">
+                    <h3 class="font-bold text-gray-900">Packaged</h3>
+                    <p class="text-sm text-gray-600 mt-1">{{ task.packaging_completed_at|date:"F d, Y g:i A" }}</p>
+                    {% if task.package_weight %}
+                    <p class="text-sm text-gray-700 mt-2">Weight: {{ task.package_weight }} kg</p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- In Transit -->
+            {% if task.delivery_started_at %}
+            <div class="timeline-item">
+                <div class="timeline-icon {% if task.delivery_completed_at %}completed{% else %}current{% endif %}">
+                    🚚
+                </div>
+                <div class="timeline-line {% if task.delivery_completed_at %}completed{% endif %}"></div>
+                <div class="timeline-content {% if not task.delivery_completed_at %}current{% endif %}">
+                    <h3 class="font-bold text-gray-900">Out for Delivery</h3>
+                    <p class="text-sm text-gray-600 mt-1">{{ task.delivery_started_at|date:"F d, Y g:i A" }}</p>
+                    {% if task.estimated_delivery_date %}
+                    <p class="text-sm text-gray-700 mt-2">Estimated: {{ task.estimated_delivery_date|date:"F d, Y" }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Delivered -->
+            {% if task.delivery_completed_at %}
+            <div class="timeline-item">
+                <div class="timeline-icon completed">✅</div>
+                <div class="timeline-content">
+                    <h3 class="font-bold text-gray-900">Delivered!</h3>
+                    <p class="text-sm text-gray-600 mt-1">{{ task.delivery_completed_at|date:"F d, Y g:i A" }}</p>
+                    {% if task.delivery_notes %}
+                    <p class="text-sm text-gray-700 mt-2">{{ task.delivery_notes }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Order Details -->
+    <div class="info-card">
+        <h2 class="text-2xl font-bold text-gray-900 mb-4">📄 Order Details</h2>
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <p class="text-sm text-gray-600">Quantity</p>
+                <p class="font-semibold">{{ task.order.quantity }}</p>
+            </div>
+            <div>
+                <p class="text-sm text-gray-600">Total Amount</p>
+                <p class="font-semibold">D{{ task.order.total_amount }}</p>
+            </div>
+            <div>
+                <p class="text-sm text-gray-600">Delivery Method</p>
+                <p class="font-semibold">{{ task.order.get_delivery_method_display }}</p>
+            </div>
+            <div>
+                <p class="text-sm text-gray-600">Payment Status</p>
+                <p class="font-semibold">{{ task.order.get_status_display }}</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Actions -->
+    <div class="flex gap-4 justify-center">
+        <a href="{% url 'crossroad_deals:my_logistics_tracking' %}" 
+           class="bg-gray-100 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-200 font-medium">
+            ← Back to All Orders
+        </a>
+        {% if task.status == 'delivered' %}
+        <a href="{% url 'crossroad_deals:review_order' task.order.order_id %}" 
+           class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 font-medium">
+            Leave a Review
+        </a>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
