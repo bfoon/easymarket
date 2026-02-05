@@ -2224,6 +2224,426 @@ class TrackingEventOrder(models.Model):
         return f"{self.get_event_type_display()} - {self.tracking_code} at {self.created_at}"
 
 
+class CrossroadLogisticsTask(models.Model):
+    """
+    Tracks logistics workflow for Crossroad orders with Easy Move
+    Links Crossroad orders to logistics system
+    """
+    TASK_STATUS_CHOICES = [
+        ('pending', 'Pending Assignment'),
+        ('assigned', 'Assigned to Agent'),
+        ('pickup_scheduled', 'Pickup Scheduled'),
+        ('picked_up', 'Picked Up from Vendor'),
+        ('vetting_queue', 'In Vetting Queue'),
+        ('vetting_in_progress', 'Vetting In Progress'),
+        ('vetted_approved', 'Vetted - Approved'),
+        ('vetted_rejected', 'Vetted - Rejected'),
+        ('packaging', 'Packaging'),
+        ('ready_for_delivery', 'Ready for Delivery'),
+        ('in_transit', 'In Transit to Customer'),
+        ('delivered', 'Delivered'),
+        ('failed', 'Failed'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    # Basic Info
+    task_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    order = models.OneToOneField(
+        'crossroad_deals.CrossroadOrder',
+        on_delete=models.CASCADE,
+        related_name='logistics_task'
+    )
+
+    # Workflow tracking
+    status = models.CharField(max_length=30, choices=TASK_STATUS_CHOICES, default='pending')
+    priority = models.PositiveIntegerField(default=5, validators=[MinValueValidator(1)])
+
+    # Assignment
+    assigned_agent = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='crossroad_logistics_tasks'
+    )
+    assigned_at = models.DateTimeField(null=True, blank=True)
+
+    # Pickup details
+    vendor_location = models.CharField(max_length=200, blank=True)
+    vendor_geocode = models.CharField(max_length=100, blank=True)
+    vendor_contact = models.CharField(max_length=20, blank=True)
+    pickup_scheduled_time = models.DateTimeField(null=True, blank=True)
+    pickup_completed_time = models.DateTimeField(null=True, blank=True)
+    pickup_notes = models.TextField(blank=True)
+    pickup_verification_photo = models.ImageField(
+        upload_to='logistics/pickups/',
+        null=True,
+        blank=True
+    )
+
+    # Vetting (if requested)
+    requires_vetting = models.BooleanField(default=False)
+    vetting_started_at = models.DateTimeField(null=True, blank=True)
+    vetting_completed_at = models.DateTimeField(null=True, blank=True)
+    vetted_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='vetted_logistics_tasks'
+    )
+    vetting_approved = models.BooleanField(null=True, blank=True)
+    vetting_comments = models.TextField(
+        blank=True,
+        help_text="Comments about the vetting process - visible to customer"
+    )
+    vetting_internal_notes = models.TextField(
+        blank=True,
+        help_text="Internal notes - not visible to customer"
+    )
+    vetting_photos = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of photo URLs from vetting inspection"
+    )
+
+    # Packaging
+    packaging_started_at = models.DateTimeField(null=True, blank=True)
+    packaging_completed_at = models.DateTimeField(null=True, blank=True)
+    packaging_notes = models.TextField(blank=True)
+    package_weight = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Weight in kg"
+    )
+    package_dimensions = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="LxWxH in cm"
+    )
+    package_photo = models.ImageField(
+        upload_to='logistics/packages/',
+        null=True,
+        blank=True
+    )
+
+    # Delivery
+    delivery_scheduled_time = models.DateTimeField(null=True, blank=True)
+    delivery_started_at = models.DateTimeField(null=True, blank=True)
+    delivery_completed_at = models.DateTimeField(null=True, blank=True)
+    delivery_notes = models.TextField(blank=True)
+    delivery_verification_photo = models.ImageField(
+        upload_to='logistics/deliveries/',
+        null=True,
+        blank=True
+    )
+    delivery_signature = models.ImageField(
+        upload_to='logistics/signatures/',
+        null=True,
+        blank=True,
+        help_text="Customer signature on delivery"
+    )
+    customer_verification_code = models.CharField(
+        max_length=6,
+        blank=True,
+        help_text="6-digit code customer provides on delivery"
+    )
+
+    # Tracking
+    current_location_geocode = models.CharField(max_length=100, blank=True)
+    estimated_delivery_date = models.DateTimeField(null=True, blank=True)
+
+    # Failure handling
+    failure_reason = models.TextField(blank=True)
+    failure_timestamp = models.DateTimeField(null=True, blank=True)
+    retry_count = models.PositiveIntegerField(default=0)
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['status', '-created_at']),
+            models.Index(fields=['assigned_agent', 'status']),
+            models.Index(fields=['task_id']),
+        ]
+
+    def __str__(self):
+        return f"Logistics Task {self.task_id} - {self.get_status_display()}"
+
+    def save(self, *args, **kwargs):
+        # Set vetting requirement from order
+        if not self.pk and self.order:
+            self.requires_vetting = self.order.requested_vetting
+
+            # Copy vendor details from order/listing
+            if self.order.listing:
+                self.vendor_location = self.order.listing.location_description
+                self.vendor_geocode = self.order.listing.geocode
+                self.vendor_contact = self.order.listing.contact_phone
+
+        super().save(*args, **kwargs)
+
+    def assign_to_agent(self, agent):
+        """Assign task to logistics agent"""
+        self.assigned_agent = agent
+        self.assigned_at = timezone.now()
+        self.status = 'assigned'
+        self.save()
+
+    def mark_picked_up(self, notes='', photo=None):
+        """Mark item as picked up from vendor"""
+        self.status = 'picked_up'
+        self.pickup_completed_time = timezone.now()
+        self.pickup_notes = notes
+        if photo:
+            self.pickup_verification_photo = photo
+
+        # Move to vetting queue if required
+        if self.requires_vetting:
+            self.status = 'vetting_queue'
+        else:
+            self.status = 'packaging'
+
+        self.save()
+
+        # Notify customer
+        self._send_status_notification()
+
+    def start_vetting(self, vetter):
+        """Start vetting process"""
+        self.status = 'vetting_in_progress'
+        self.vetting_started_at = timezone.now()
+        self.vetted_by = vetter
+        self.save()
+
+    def complete_vetting(self, approved, comments, internal_notes='', photos=None):
+        """Complete vetting with approval/rejection"""
+        self.vetting_approved = approved
+        self.vetting_comments = comments
+        self.vetting_internal_notes = internal_notes
+        self.vetting_completed_at = timezone.now()
+
+        if photos:
+            self.vetting_photos = photos
+
+        if approved:
+            self.status = 'vetted_approved'
+            # Move to packaging
+            self.status = 'packaging'
+        else:
+            self.status = 'vetted_rejected'
+
+        self.save()
+
+        # Notify customer about vetting results
+        self._send_vetting_notification()
+
+    def mark_packaged(self, weight=None, dimensions='', notes='', photo=None):
+        """Mark item as packaged"""
+        self.status = 'ready_for_delivery'
+        self.packaging_completed_at = timezone.now()
+        self.packaging_notes = notes
+
+        if weight:
+            self.package_weight = weight
+        if dimensions:
+            self.package_dimensions = dimensions
+        if photo:
+            self.package_photo = photo
+
+        self.save()
+
+        # Notify customer
+        self._send_status_notification()
+
+    def start_delivery(self):
+        """Start delivery to customer"""
+        self.status = 'in_transit'
+        self.delivery_started_at = timezone.now()
+        self.save()
+
+        # Notify customer
+        self._send_status_notification()
+
+    def mark_delivered(self, verification_code='', signature=None, photo=None, notes=''):
+        """Mark as delivered with verification"""
+        self.status = 'delivered'
+        self.delivery_completed_at = timezone.now()
+        self.customer_verification_code = verification_code
+        self.delivery_notes = notes
+
+        if signature:
+            self.delivery_signature = signature
+        if photo:
+            self.delivery_verification_photo = photo
+
+        self.save()
+
+        # Update the order status
+        if self.order:
+            self.order.status = 'delivered'
+            self.order.delivered_at = timezone.now()
+            self.order.save()
+
+        # Notify customer
+        self._send_status_notification()
+
+    def _send_status_notification(self):
+        """Send notification to customer about status change"""
+        from crossroad_deals.tasks import send_crossroad_email, send_crossroad_whatsapp
+
+        if not self.order or not self.order.buyer:
+            return
+
+        customer = self.order.buyer
+        status_messages = {
+            'picked_up': 'Your order has been picked up from the vendor.',
+            'packaging': 'Your order is being packaged for delivery.',
+            'ready_for_delivery': 'Your order is packaged and ready for delivery.',
+            'in_transit': 'Your order is now in transit to your location.',
+            'delivered': 'Your order has been delivered successfully!',
+        }
+
+        message = status_messages.get(self.status, f'Order status updated to: {self.get_status_display()}')
+
+        subject = f"Crossroad Deals - Order Update: {self.order.order_id}"
+        email_body = f"""
+        Hello {customer.get_full_name() or customer.username},
+
+        {message}
+
+        Order ID: {self.order.order_id}
+        Item: {self.order.listing.title if self.order.listing else 'N/A'}
+        Current Status: {self.get_status_display()}
+
+        Track your order: [Link to tracking page]
+
+        Thank you for using Crossroad Deals!
+        """
+
+        # Send email
+        if customer.email:
+            send_crossroad_email.delay(subject, email_body, customer.email)
+
+        # Send WhatsApp if phone available
+        phone = getattr(customer, 'telephone', None) or getattr(customer, 'phone', None)
+        if phone:
+            whatsapp_msg = f"{message}\nOrder ID: {self.order.order_id}\nStatus: {self.get_status_display()}"
+            send_crossroad_whatsapp.delay(phone, whatsapp_msg)
+
+    def _send_vetting_notification(self):
+        """Send vetting results notification to customer"""
+        from crossroad_deals.tasks import send_crossroad_email, send_crossroad_whatsapp
+
+        if not self.order or not self.order.buyer:
+            return
+
+        customer = self.order.buyer
+
+        if self.vetting_approved:
+            status_text = "✓ APPROVED"
+            message = "Good news! Your order has been vetted and approved."
+        else:
+            status_text = "✗ REJECTED"
+            message = "Unfortunately, your order did not pass vetting."
+
+        subject = f"Crossroad Deals - Vetting Results: {status_text}"
+        email_body = f"""
+        Hello {customer.get_full_name() or customer.username},
+
+        {message}
+
+        Order ID: {self.order.order_id}
+        Item: {self.order.listing.title if self.order.listing else 'N/A'}
+        Vetting Status: {status_text}
+
+        Vetting Comments:
+        {self.vetting_comments}
+
+        {"Your order will now be packaged and delivered." if self.vetting_approved else "Please contact support for more information."}
+
+        Thank you for using Crossroad Deals!
+        """
+
+        # Send email
+        if customer.email:
+            send_crossroad_email.delay(subject, email_body, customer.email)
+
+        # Send WhatsApp
+        phone = getattr(customer, 'telephone', None) or getattr(customer, 'phone', None)
+        if phone:
+            whatsapp_msg = f"{message}\nOrder: {self.order.order_id}\nStatus: {status_text}\n\nComments: {self.vetting_comments}"
+            send_crossroad_whatsapp.delay(phone, whatsapp_msg)
+
+
+class LogisticsStatusUpdate(models.Model):
+    """
+    Track all status updates for logistics tasks
+    """
+    task = models.ForeignKey(
+        CrossroadLogisticsTask,
+        on_delete=models.CASCADE,
+        related_name='status_updates'
+    )
+
+    previous_status = models.CharField(max_length=30)
+    new_status = models.CharField(max_length=30)
+
+    updated_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
+    )
+
+    notes = models.TextField(blank=True)
+    location_geocode = models.CharField(max_length=100, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.task.task_id} - {self.previous_status} → {self.new_status}"
+
+
+class VettingChecklistItem(models.Model):
+    """
+    Checklist items for vetting process
+    """
+    task = models.ForeignKey(
+        CrossroadLogisticsTask,
+        on_delete=models.CASCADE,
+        related_name='vetting_checklist'
+    )
+
+    item_name = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+
+    is_checked = models.BooleanField(default=False)
+    checked_at = models.DateTimeField(null=True, blank=True)
+    checked_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
+    )
+
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['id']
+
+    def __str__(self):
+        status = "✓" if self.is_checked else "☐"
+        return f"{status} {self.item_name}"
+
 # ============================================================================
 # SIGNAL HANDLERS
 # ============================================================================

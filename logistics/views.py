@@ -32,7 +32,7 @@ from django.views.generic import (
 from django.contrib.auth.mixins import (
     LoginRequiredMixin, PermissionRequiredMixin, UserPassesTestMixin
 )
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib import messages
 from django.urls import reverse_lazy, reverse
 from django.db.models import (
@@ -68,14 +68,17 @@ from .models import (
     Shipment, ShipmentBox, BoxItem, Driver, Vehicle, ShipmentItem,
     Warehouse, LogisticOffice, DriverLocation, WarehouseShipmentNotification,
     B2BShipment, B2BShipmentItem, B2BShipmentBox, B2BBoxItem, OrderLogisticsAgent, LogisticsAgentMessage,
-    WarehouseReceiptOrder, WarehouseReceiptOrderItem, TrackingEventOrder
+    WarehouseReceiptOrder, WarehouseReceiptOrderItem, TrackingEventOrder, CrossroadLogisticsTask,
+    LogisticsStatusUpdate,
+    VettingChecklistItem,
 )
-
+from crossroad_deals.models import CrossroadOrder
 from stores.b2b.models import B2BOrder, B2BOrderItem, B2BShippingAddress
 from .forms import (
     ShipmentForm, ShipmentBoxForm, BoxItemForm,
     DriverForm, VehicleForm, WarehouseForm
 )
+from crossroad_deals.tasks import send_crossroad_email, send_crossroad_whatsapp
 from .decorators import driver_required, warehouse_manager_required
 from .utils import (
     send_delivery_notification,
@@ -794,6 +797,10 @@ class ExportMixin:
 
         return data
 
+
+def is_logistics_staff(user):
+    """Check if user is logistics staff"""
+    return user.is_staff or user.groups.filter(name__in=['Logistics', 'Logistics Manager']).exists()
 
 # ============================================================================
 # DASHBOARD VIEWS
@@ -6378,3 +6385,519 @@ def shipment_tracking_detail(request, tracking_number):
 
     return render(request, 'logistics/shipment_tracking_detail.html', context)
 
+# ==============================================================================
+# Crossroad Deal
+# ===============================================================================
+
+@login_required
+@user_passes_test(is_logistics_staff)
+def logistics_dashboard(request):
+    """
+    Logistics dashboard showing all tasks requiring Easy Move service
+    """
+    # Get all tasks that require Easy Move (vetting)
+    tasks = CrossroadLogisticsTask.objects.select_related(
+        'order__listing__seller',
+        'order__buyer',
+        'assigned_agent',
+        'vetted_by'
+    ).filter(
+        requires_vetting=True
+    )
+
+    # Filter by status
+    status_filter = request.GET.get('status', 'all')
+    if status_filter != 'all':
+        tasks = tasks.filter(status=status_filter)
+
+    # Filter by agent
+    agent_filter = request.GET.get('agent')
+    if agent_filter:
+        tasks = tasks.filter(assigned_agent_id=agent_filter)
+
+    # Search
+    search = request.GET.get('search', '')
+    if search:
+        tasks = tasks.filter(
+            Q(task_id__icontains=search) |
+            Q(order__order_id__icontains=search) |
+            Q(order__listing__title__icontains=search) |
+            Q(order__buyer__username__icontains=search)
+        )
+
+    # Order by priority and date
+    tasks = tasks.order_by('-priority', '-created_at')
+
+    # Statistics
+    stats = {
+        'total': tasks.count(),
+        'pending': tasks.filter(status='pending').count(),
+        'assigned': tasks.filter(status='assigned').count(),
+        'pickup_scheduled': tasks.filter(status='pickup_scheduled').count(),
+        'picked_up': tasks.filter(status='picked_up').count(),
+        'vetting_queue': tasks.filter(status='vetting_queue').count(),
+        'vetting_in_progress': tasks.filter(status='vetting_in_progress').count(),
+        'packaging': tasks.filter(status='packaging').count(),
+        'ready_for_delivery': tasks.filter(status='ready_for_delivery').count(),
+        'in_transit': tasks.filter(status='in_transit').count(),
+        'delivered': tasks.filter(status='delivered').count(),
+        'failed': tasks.filter(status='failed').count(),
+    }
+
+    # Pagination
+    paginator = Paginator(tasks, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    # Get available agents for assignment
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    available_agents = User.objects.filter(
+        Q(is_staff=True) | Q(groups__name__in=['Logistics', 'Logistics Manager'])
+    ).distinct()
+
+    context = {
+        'page_obj': page_obj,
+        'stats': stats,
+        'status_filter': status_filter,
+        'agent_filter': agent_filter,
+        'search': search,
+        'available_agents': available_agents,
+        'status_choices': CrossroadLogisticsTask.TASK_STATUS_CHOICES,
+    }
+
+    return render(request, 'crossroad_deals/logistics/dashboard.html', context)
+
+
+@login_required
+@user_passes_test(is_logistics_staff)
+def logistics_task_detail(request, task_id):
+    """
+    Detailed view of a logistics task
+    """
+    task = get_object_or_404(
+        CrossroadLogisticsTask.objects.select_related(
+            'order__listing__seller',
+            'order__buyer',
+            'assigned_agent',
+            'vetted_by'
+        ),
+        task_id=task_id
+    )
+
+    # Get status history
+    status_updates = task.status_updates.all()
+
+    # Get vetting checklist if exists
+    vetting_checklist = task.vetting_checklist.all()
+
+    context = {
+        'task': task,
+        'status_updates': status_updates,
+        'vetting_checklist': vetting_checklist,
+    }
+
+    return render(request, 'crossroad_deals/logistics/task_detail.html', context)
+
+
+@login_required
+@user_passes_test(is_logistics_staff)
+@require_POST
+def assign_logistics_task(request, task_id):
+    """
+    Assign task to logistics agent
+    """
+    task = get_object_or_404(CrossroadLogisticsTask, task_id=task_id)
+    agent_id = request.POST.get('agent_id')
+
+    if not agent_id:
+        messages.error(request, "Please select an agent.")
+        return redirect('crossroad_deals:logistics_task_detail', task_id=task_id)
+
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    agent = get_object_or_404(User, id=agent_id)
+
+    # Record status update
+    LogisticsStatusUpdate.objects.create(
+        task=task,
+        previous_status=task.status,
+        new_status='assigned',
+        updated_by=request.user,
+        notes=f"Assigned to {agent.get_full_name() or agent.username}"
+    )
+
+    task.assign_to_agent(agent)
+
+    messages.success(request, f"Task assigned to {agent.get_full_name() or agent.username}")
+    return redirect('crossroad_deals:logistics_task_detail', task_id=task_id)
+
+
+@login_required
+@user_passes_test(is_logistics_staff)
+@require_POST
+def mark_task_picked_up(request, task_id):
+    """
+    Mark task as picked up from vendor
+    """
+    task = get_object_or_404(CrossroadLogisticsTask, task_id=task_id)
+
+    notes = request.POST.get('notes', '')
+    photo = request.FILES.get('photo')
+
+    # Record status update
+    old_status = task.status
+
+    task.mark_picked_up(notes=notes, photo=photo)
+
+    LogisticsStatusUpdate.objects.create(
+        task=task,
+        previous_status=old_status,
+        new_status=task.status,
+        updated_by=request.user,
+        notes=notes
+    )
+
+    messages.success(request, "Item marked as picked up from vendor.")
+    return redirect('crossroad_deals:logistics_task_detail', task_id=task_id)
+
+
+@login_required
+@user_passes_test(is_logistics_staff)
+def vetting_queue(request):
+    """
+    Queue of items waiting for vetting
+    """
+    tasks = CrossroadLogisticsTask.objects.filter(
+        status='vetting_queue'
+    ).select_related(
+        'order__listing__seller',
+        'order__buyer'
+    ).order_by('-priority', 'pickup_completed_time')
+
+    # Pagination
+    paginator = Paginator(tasks, 15)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    context = {
+        'page_obj': page_obj,
+    }
+
+    return render(request, 'crossroad_deals/logistics/vetting_queue.html', context)
+
+
+@login_required
+@user_passes_test(is_logistics_staff)
+def start_vetting(request, task_id):
+    """
+    Start vetting process for a task
+    """
+    task = get_object_or_404(CrossroadLogisticsTask, task_id=task_id)
+
+    if task.status != 'vetting_queue':
+        messages.error(request, "This task is not in the vetting queue.")
+        return redirect('crossroad_deals:logistics_task_detail', task_id=task_id)
+
+    # Record status update
+    LogisticsStatusUpdate.objects.create(
+        task=task,
+        previous_status=task.status,
+        new_status='vetting_in_progress',
+        updated_by=request.user,
+        notes="Started vetting process"
+    )
+
+    task.start_vetting(request.user)
+
+    # Create default checklist items if they don't exist
+    if not task.vetting_checklist.exists():
+        default_items = [
+            "Product matches description",
+            "Product is in stated condition",
+            "No visible damage or defects",
+            "All accessories/parts included",
+            "Product is authentic (not counterfeit)",
+            "Packaging is adequate",
+        ]
+        for item_name in default_items:
+            VettingChecklistItem.objects.create(
+                task=task,
+                item_name=item_name
+            )
+
+    messages.success(request, "Vetting process started.")
+    return redirect('crossroad_deals:vetting_form', task_id=task_id)
+
+
+@login_required
+@user_passes_test(is_logistics_staff)
+def vetting_form(request, task_id):
+    """
+    Vetting form for completing the vetting process
+    """
+    task = get_object_or_404(
+        CrossroadLogisticsTask.objects.select_related(
+            'order__listing__seller',
+            'order__buyer'
+        ),
+        task_id=task_id
+    )
+
+    if task.status != 'vetting_in_progress':
+        messages.warning(request, "This task is not currently being vetted.")
+        return redirect('crossroad_deals:logistics_task_detail', task_id=task_id)
+
+    # Get checklist items
+    checklist_items = task.vetting_checklist.all()
+
+    if request.method == 'POST':
+        # Update checklist items
+        for item in checklist_items:
+            is_checked = request.POST.get(f'check_{item.id}') == 'on'
+            item_notes = request.POST.get(f'notes_{item.id}', '')
+
+            if is_checked != item.is_checked:
+                item.is_checked = is_checked
+                item.checked_at = timezone.now() if is_checked else None
+                item.checked_by = request.user if is_checked else None
+
+            item.notes = item_notes
+            item.save()
+
+        # Check if submitting final vetting
+        if 'submit_vetting' in request.POST:
+            approved = request.POST.get('approved') == 'yes'
+            comments = request.POST.get('comments', '')
+            internal_notes = request.POST.get('internal_notes', '')
+
+            if not comments:
+                messages.error(request, "Please provide vetting comments for the customer.")
+                return redirect('crossroad_deals:vetting_form', task_id=task_id)
+
+            # Process photos if uploaded
+            photos = []
+            for i in range(1, 6):  # Allow up to 5 photos
+                photo = request.FILES.get(f'photo_{i}')
+                if photo:
+                    # Save photo and get URL (you'll need to implement file saving)
+                    # photos.append(photo_url)
+                    pass
+
+            # Record status update
+            LogisticsStatusUpdate.objects.create(
+                task=task,
+                previous_status=task.status,
+                new_status='vetted_approved' if approved else 'vetted_rejected',
+                updated_by=request.user,
+                notes=f"Vetting completed: {'Approved' if approved else 'Rejected'}"
+            )
+
+            task.complete_vetting(
+                approved=approved,
+                comments=comments,
+                internal_notes=internal_notes,
+                photos=photos
+            )
+
+            messages.success(
+                request,
+                f"Vetting completed: {'Approved' if approved else 'Rejected'}. Customer has been notified."
+            )
+            return redirect('crossroad_deals:logistics_task_detail', task_id=task_id)
+        else:
+            messages.success(request, "Checklist updated.")
+
+    context = {
+        'task': task,
+        'checklist_items': checklist_items,
+    }
+
+    return render(request, 'crossroad_deals/logistics/vetting_form.html', context)
+
+
+@login_required
+@user_passes_test(is_logistics_staff)
+@require_POST
+def mark_task_packaged(request, task_id):
+    """
+    Mark task as packaged
+    """
+    task = get_object_or_404(CrossroadLogisticsTask, task_id=task_id)
+
+    weight = request.POST.get('weight')
+    dimensions = request.POST.get('dimensions', '')
+    notes = request.POST.get('notes', '')
+    photo = request.FILES.get('photo')
+
+    # Record status update
+    LogisticsStatusUpdate.objects.create(
+        task=task,
+        previous_status=task.status,
+        new_status='ready_for_delivery',
+        updated_by=request.user,
+        notes=notes
+    )
+
+    task.mark_packaged(
+        weight=Decimal(weight) if weight else None,
+        dimensions=dimensions,
+        notes=notes,
+        photo=photo
+    )
+
+    messages.success(request, "Item marked as packaged and ready for delivery.")
+    return redirect('crossroad_deals:logistics_task_detail', task_id=task_id)
+
+
+@login_required
+@user_passes_test(is_logistics_staff)
+@require_POST
+def start_task_delivery(request, task_id):
+    """
+    Start delivery to customer
+    """
+    task = get_object_or_404(CrossroadLogisticsTask, task_id=task_id)
+
+    # Record status update
+    LogisticsStatusUpdate.objects.create(
+        task=task,
+        previous_status=task.status,
+        new_status='in_transit',
+        updated_by=request.user,
+        notes="Started delivery to customer"
+    )
+
+    task.start_delivery()
+
+    messages.success(request, "Delivery started. Customer has been notified.")
+    return redirect('crossroad_deals:logistics_task_detail', task_id=task_id)
+
+
+@login_required
+@user_passes_test(is_logistics_staff)
+@require_POST
+def mark_task_delivered(request, task_id):
+    """
+    Mark task as delivered with verification
+    """
+    task = get_object_or_404(CrossroadLogisticsTask, task_id=task_id)
+
+    verification_code = request.POST.get('verification_code', '')
+    notes = request.POST.get('notes', '')
+    signature = request.FILES.get('signature')
+    photo = request.FILES.get('photo')
+
+    # Record status update
+    LogisticsStatusUpdate.objects.create(
+        task=task,
+        previous_status=task.status,
+        new_status='delivered',
+        updated_by=request.user,
+        notes=notes
+    )
+
+    task.mark_delivered(
+        verification_code=verification_code,
+        signature=signature,
+        photo=photo,
+        notes=notes
+    )
+
+    messages.success(request, "Order marked as delivered successfully!")
+    return redirect('crossroad_deals:logistics_task_detail', task_id=task_id)
+
+
+@login_required
+@user_passes_test(is_logistics_staff)
+def task_update_status(request, task_id):
+    """
+    Update task status manually
+    """
+    task = get_object_or_404(CrossroadLogisticsTask, task_id=task_id)
+
+    if request.method == 'POST':
+        new_status = request.POST.get('status')
+        notes = request.POST.get('notes', '')
+
+        if new_status not in dict(CrossroadLogisticsTask.TASK_STATUS_CHOICES):
+            messages.error(request, "Invalid status.")
+            return redirect('crossroad_deals:logistics_task_detail', task_id=task_id)
+
+        # Record status update
+        LogisticsStatusUpdate.objects.create(
+            task=task,
+            previous_status=task.status,
+            new_status=new_status,
+            updated_by=request.user,
+            notes=notes
+        )
+
+        task.status = new_status
+        task.save()
+
+        messages.success(request, f"Status updated to: {task.get_status_display()}")
+        return redirect('crossroad_deals:logistics_task_detail', task_id=task_id)
+
+    context = {
+        'task': task,
+        'status_choices': CrossroadLogisticsTask.TASK_STATUS_CHOICES,
+    }
+
+    return render(request, 'crossroad_deals/logistics/update_status.html', context)
+
+
+# Customer-facing views
+
+@login_required
+def my_logistics_tracking(request):
+    """
+    Customer view to track their orders with Easy Move
+    """
+    tasks = CrossroadLogisticsTask.objects.filter(
+        order__buyer=request.user
+    ).select_related(
+        'order__listing',
+        'assigned_agent'
+    ).order_by('-created_at')
+
+    # Pagination
+    paginator = Paginator(tasks, 10)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    context = {
+        'page_obj': page_obj,
+    }
+
+    return render(request, 'crossroad_deals/customer/logistics_tracking.html', context)
+
+
+@login_required
+def logistics_tracking_detail(request, task_id):
+    """
+    Customer view for detailed tracking of their order
+    """
+    task = get_object_or_404(
+        CrossroadLogisticsTask.objects.select_related(
+            'order__listing__seller',
+            'assigned_agent',
+            'vetted_by'
+        ),
+        task_id=task_id,
+        order__buyer=request.user
+    )
+
+    # Get status updates
+    status_updates = task.status_updates.all()
+
+    # Show vetting comments if vetting is complete
+    show_vetting_results = task.vetting_completed_at is not None
+
+    context = {
+        'task': task,
+        'status_updates': status_updates,
+        'show_vetting_results': show_vetting_results,
+    }
+
+    return render(request, 'crossroad_deals/customer/tracking_detail.html', context)

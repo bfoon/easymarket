@@ -5,6 +5,8 @@ from django.dispatch import receiver
 
 from logistics.models import Shipment, WarehouseShipmentNotification
 from orders.models import Order, OrderItem
+from crossroad_deals.models import CrossroadOrder
+from .models import CrossroadLogisticsTask
 
 
 
@@ -104,3 +106,63 @@ def create_warehouse_shipping_notification(sender, instance: OrderItem, created:
         )
 
     transaction.on_commit(_on_commit)
+
+
+@receiver(post_save, sender=CrossroadOrder)
+def create_logistics_task_for_easy_move(sender, instance, created, **kwargs):
+    """
+    Automatically create a logistics task when an order with Easy Move (vetting) is created
+    """
+    if created and instance.requested_vetting:
+        # Check if logistics task doesn't already exist
+        if not hasattr(instance, 'logistics_task'):
+            # Create logistics task
+            task = CrossroadLogisticsTask.objects.create(
+                order=instance,
+                requires_vetting=True,
+                status='pending',
+                priority=5,  # Default priority
+            )
+
+            # Send notification to logistics team
+            from crossroad_deals.tasks import send_crossroad_email
+
+            # Get logistics team email (you'll need to configure this)
+            logistics_email = "logistics@yourdomain.com"  # Update with actual email
+
+            subject = f"New Easy Move Order - Task {task.task_id}"
+            message = f"""
+            New Easy Move order requires logistics handling:
+
+            Task ID: {task.task_id}
+            Order ID: {instance.order_id}
+            Item: {instance.listing.title if instance.listing else 'N/A'}
+            Quantity: {instance.quantity}
+            Customer: {instance.buyer.get_full_name() or instance.buyer.username}
+
+            Vendor Location: {instance.listing.location_description if instance.listing else 'N/A'}
+            Delivery Location: {instance.buyer_geocode}
+
+            Please assign an agent to handle this pickup and vetting.
+
+            View task: [Dashboard Link]
+            """
+
+            # Send email to logistics team
+            send_crossroad_email.delay(subject, message, logistics_email)
+
+
+@receiver(post_save, sender=CrossroadOrder)
+def update_logistics_task_on_order_change(sender, instance, created, **kwargs):
+    """
+    Update logistics task when order status changes
+    """
+    if not created and hasattr(instance, 'logistics_task'):
+        task = instance.logistics_task
+
+        # If order is cancelled, cancel the logistics task
+        if instance.status == 'cancelled' and task.status not in ['delivered', 'cancelled']:
+            task.status = 'cancelled'
+            task.failure_reason = "Order cancelled by customer"
+            task.save()
+

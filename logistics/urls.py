@@ -427,4 +427,22 @@ urlpatterns = [
          views.generate_receipt_qr_code,
          name='generate_receipt_qr_code'),
 
+    path('logistics/task/<uuid:task_id>/', views.logistics_task_detail, name='logistics_task_detail'),
+    path('logistics/task/<uuid:task_id>/assign/', views.assign_logistics_task, name='assign_logistics_task'),
+    path('logistics/task/<uuid:task_id>/pickup/', views.mark_task_picked_up, name='mark_task_picked_up'),
+    path('logistics/task/<uuid:task_id>/package/', views.mark_task_packaged, name='mark_task_packaged'),
+    path('logistics/task/<uuid:task_id>/start-delivery/', views.start_task_delivery, name='start_task_delivery'),
+    path('logistics/task/<uuid:task_id>/delivered/', views.mark_task_delivered, name='mark_task_delivered'),
+    path('logistics/task/<uuid:task_id>/update-status/', views.task_update_status, name='task_update_status'),
+
+    # Vetting URLs
+    path('logistics/vetting/queue/', views.vetting_queue, name='vetting_queue'),
+    path('logistics/vetting/<uuid:task_id>/start/', views.start_vetting, name='start_vetting'),
+    path('logistics/vetting/<uuid:task_id>/form/', views.vetting_form, name='vetting_form'),
+
+    # Customer Tracking URLs
+    path('my-logistics/', views.my_logistics_tracking, name='my_logistics_tracking'),
+    path('tracking/<uuid:task_id>/', views.logistics_tracking_detail, name='logistics_tracking_detail'),
+
+
 ]
