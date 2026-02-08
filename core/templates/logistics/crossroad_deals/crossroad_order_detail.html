@@ -1,0 +1,1425 @@
+{% extends 'logistics/base.html' %}
+{% load static %}
+{% load currency_tags %}
+
+{% block title %}Order #{{ order.order_id|slice:":8" }} - Crossroad Logistics{% endblock %}
+
+{% block content %}
+<style>
+    :root {
+        --primary-color: #3b82f6;
+        --success-color: #10b981;
+        --warning-color: #f59e0b;
+        --danger-color: #ef4444;
+        --purple-color: #8b5cf6;
+    }
+
+    .detail-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 1.5rem;
+    }
+
+    /* Header */
+    .detail-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 16px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        color: white;
+        box-shadow: 0 10px 40px rgba(102, 126, 234, 0.4);
+        position: relative;
+    }
+
+    /* Payment Status Badge in Header */
+    .header-payment-badge {
+        position: absolute;
+        top: 2rem;
+        right: 2rem;
+        padding: 0.75rem 1.5rem;
+        border-radius: 9999px;
+        font-weight: 700;
+        font-size: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+
+    .header-payment-badge.paid {
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: white;
+    }
+
+    .header-payment-badge.unpaid {
+        background: linear-gradient(135deg, #ef4444, #dc2626);
+        color: white;
+        animation: pulse-warning 2s infinite;
+    }
+
+    @keyframes pulse-warning {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.8; }
+    }
+
+    .detail-header h1 {
+        font-size: 1.75rem;
+        font-weight: 800;
+        margin-bottom: 0.5rem;
+    }
+
+    .header-meta {
+        display: flex;
+        gap: 2rem;
+        margin-top: 1rem;
+        flex-wrap: wrap;
+    }
+
+    .header-meta-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.875rem;
+        opacity: 0.9;
+    }
+
+    .header-actions {
+        display: flex;
+        gap: 1rem;
+        margin-top: 1.5rem;
+        flex-wrap: wrap;
+    }
+
+    .action-btn {
+        padding: 0.75rem 1.5rem;
+        background: rgba(255, 255, 255, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 8px;
+        color: white;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        border: none;
+    }
+
+    .action-btn:hover {
+        background: rgba(255, 255, 255, 0.3);
+        transform: translateY(-2px);
+    }
+
+    .action-btn.primary {
+        background: white;
+        color: #667eea;
+    }
+
+    /* Grid Layout */
+    .detail-grid {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    /* Cards */
+    .detail-card {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+        padding-bottom: 1rem;
+        border-bottom: 2px solid #e5e7eb;
+    }
+
+    .card-title {
+        font-size: 1.125rem;
+        font-weight: 700;
+        color: #1f2937;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    /* Info Rows */
+    .info-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid #f3f4f6;
+        align-items: center;
+    }
+
+    .info-row:last-child {
+        border-bottom: none;
+    }
+
+    .info-label {
+        font-weight: 600;
+        color: #6b7280;
+        font-size: 0.875rem;
+    }
+
+    .info-value {
+        font-weight: 500;
+        color: #1f2937;
+        text-align: right;
+    }
+
+    .info-value.editable {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .edit-btn {
+        padding: 0.25rem 0.5rem;
+        background: #3b82f6;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .edit-btn:hover {
+        background: #2563eb;
+    }
+
+    /* Map Container */
+    .map-container {
+        width: 100%;
+        height: 350px;
+        border-radius: 8px;
+        overflow: hidden;
+        margin-top: 1rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        position: relative;
+    }
+
+    #deliveryMap {
+        width: 100%;
+        height: 100%;
+    }
+
+    .map-loading {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: #f9fafb;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 1rem;
+        z-index: 1;
+    }
+
+    .map-loading.hidden {
+        display: none;
+    }
+
+    .spinner {
+        width: 40px;
+        height: 40px;
+        border: 4px solid #e5e7eb;
+        border-top-color: #3b82f6;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    .geocode-info {
+        background: #f9fafb;
+        padding: 0.75rem 1rem;
+        border-radius: 8px;
+        margin-top: 0.5rem;
+        font-size: 0.875rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .geocode-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.25rem 0.75rem;
+        background: #3b82f6;
+        color: white;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        font-family: monospace;
+    }
+
+    .copy-btn {
+        padding: 0.25rem 0.75rem;
+        background: #e5e7eb;
+        border: none;
+        border-radius: 6px;
+        font-size: 0.75rem;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .copy-btn:hover {
+        background: #d1d5db;
+    }
+
+    /* Status Badge */
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.5rem 1rem;
+        border-radius: 9999px;
+        font-size: 0.875rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .status-pending { background: #fef3c7; color: #92400e; }
+    .status-confirmed { background: #dbeafe; color: #1e40af; }
+    .status-pickup_scheduled { background: #e0e7ff; color: #3730a3; }
+    .status-in_transit { background: #bfdbfe; color: #1e40af; }
+    .status-delivered { background: #d1fae5; color: #065f46; }
+    .status-cancelled { background: #fee2e2; color: #991b1b; }
+    .status-disputed { background: #fef3c7; color: #92400e; }
+
+    /* Timeline */
+    .timeline {
+        position: relative;
+        padding-left: 2rem;
+    }
+
+    .timeline::before {
+        content: '';
+        position: absolute;
+        left: 0.5rem;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: #e5e7eb;
+    }
+
+    .timeline-item {
+        position: relative;
+        margin-bottom: 1.5rem;
+        padding-left: 1rem;
+    }
+
+    .timeline-item::before {
+        content: '';
+        position: absolute;
+        left: -1.4rem;
+        top: 0.25rem;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: white;
+        border: 3px solid #e5e7eb;
+    }
+
+    .timeline-item.completed::before {
+        background: var(--success-color);
+        border-color: var(--success-color);
+    }
+
+    .timeline-item.current::before {
+        background: var(--primary-color);
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2);
+    }
+
+    .timeline-title {
+        font-weight: 600;
+        color: #1f2937;
+        margin-bottom: 0.25rem;
+    }
+
+    .timeline-time {
+        font-size: 0.75rem;
+        color: #6b7280;
+    }
+
+    /* Item Display */
+    .item-display {
+        display: flex;
+        gap: 1.5rem;
+        padding: 1rem;
+        background: #f9fafb;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+    }
+
+    .item-image {
+        width: 100px;
+        height: 100px;
+        border-radius: 8px;
+        object-fit: cover;
+        background: #e5e7eb;
+    }
+
+    .item-info {
+        flex: 1;
+    }
+
+    .item-title {
+        font-size: 1.125rem;
+        font-weight: 700;
+        color: #1f2937;
+        margin-bottom: 0.5rem;
+    }
+
+    .item-meta {
+        font-size: 0.875rem;
+        color: #6b7280;
+        margin-bottom: 0.25rem;
+    }
+
+    /* Customer Card */
+    .customer-card {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 1rem;
+        background: #f9fafb;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+    }
+
+    .customer-avatar {
+        width: 64px;
+        height: 64px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        font-weight: 700;
+    }
+
+    .customer-info h3 {
+        font-weight: 700;
+        color: #1f2937;
+        margin-bottom: 0.25rem;
+    }
+
+    .customer-info p {
+        font-size: 0.875rem;
+        color: #6b7280;
+        margin: 0.125rem 0;
+    }
+
+    /* Payment Info */
+    .payment-card {
+        padding: 1.5rem;
+        background: linear-gradient(135deg, #10b981, #059669);
+        border-radius: 12px;
+        color: white;
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        position: relative;
+    }
+
+    .payment-card.unpaid {
+        background: linear-gradient(135deg, #ef4444, #dc2626);
+        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+    }
+
+    .payment-amount {
+        font-size: 2.5rem;
+        font-weight: 800;
+        margin-bottom: 0.5rem;
+    }
+
+    .payment-details {
+        font-size: 0.875rem;
+        opacity: 0.95;
+        line-height: 1.6;
+    }
+
+    .payment-status-icon {
+        font-size: 3rem;
+        opacity: 0.2;
+        position: absolute;
+        right: 1.5rem;
+        top: 50%;
+        transform: translateY(-50%);
+    }
+
+    /* Vetting Card */
+    .vetting-card {
+        padding: 1.5rem;
+        background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+        border-radius: 12px;
+        color: white;
+        margin-bottom: 1rem;
+        position: relative;
+    }
+
+    .vetting-card.not-required {
+        background: #f3f4f6;
+        color: #6b7280;
+    }
+
+    .vetting-status {
+        font-size: 1.25rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+    }
+
+    .vetting-fee-display {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: rgba(255, 255, 255, 0.1);
+        padding: 0.75rem 1rem;
+        border-radius: 8px;
+        margin-top: 1rem;
+    }
+
+    .vetting-fee-display.not-required {
+        background: rgba(0, 0, 0, 0.05);
+    }
+
+    .vetting-notes {
+        background: rgba(255, 255, 255, 0.1);
+        padding: 1rem;
+        border-radius: 8px;
+        margin-top: 1rem;
+        font-size: 0.875rem;
+    }
+
+    .vetting-notes.not-required {
+        background: rgba(0, 0, 0, 0.05);
+    }
+
+    /* Action Buttons */
+    .action-section {
+        margin-top: 1.5rem;
+        padding-top: 1.5rem;
+        border-top: 2px solid #e5e7eb;
+    }
+
+    .btn {
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        font-weight: 600;
+        border: none;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        text-decoration: none;
+        font-size: 0.875rem;
+    }
+
+    .btn-primary {
+        background: var(--primary-color);
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: #2563eb;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+    }
+
+    .btn-success {
+        background: var(--success-color);
+        color: white;
+    }
+
+    .btn-success:hover {
+        background: #059669;
+    }
+
+    .btn-danger {
+        background: var(--danger-color);
+        color: white;
+    }
+
+    .btn-danger:hover {
+        background: #dc2626;
+    }
+
+    .btn-secondary {
+        background: #e5e7eb;
+        color: #374151;
+    }
+
+    .btn-secondary:hover {
+        background: #d1d5db;
+    }
+
+    /* Modal */
+    .modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(4px);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+    }
+
+    .modal.active {
+        display: flex;
+    }
+
+    .modal-content {
+        background: white;
+        border-radius: 16px;
+        max-width: 500px;
+        width: 100%;
+        max-height: 90vh;
+        overflow-y: auto;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        animation: modalSlideIn 0.3s ease-out;
+    }
+
+    @keyframes modalSlideIn {
+        from {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .modal-header {
+        padding: 1.5rem;
+        border-bottom: 1px solid #e5e7eb;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .modal-header h3 {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #1f2937;
+        margin: 0;
+    }
+
+    .modal-close {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        border: none;
+        background: #f3f4f6;
+        color: #6b7280;
+        font-size: 1.5rem;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+    }
+
+    .modal-close:hover {
+        background: #e5e7eb;
+        color: #1f2937;
+    }
+
+    .modal-body {
+        padding: 1.5rem;
+    }
+
+    .modal-footer {
+        padding: 1.5rem;
+        border-top: 1px solid #e5e7eb;
+        display: flex;
+        gap: 1rem;
+        justify-content: flex-end;
+    }
+
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+
+    .form-group label {
+        display: block;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 0.5rem;
+    }
+
+    .form-control {
+        width: 100%;
+        padding: 0.75rem;
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        font-size: 0.875rem;
+        transition: all 0.2s;
+    }
+
+    .form-control:focus {
+        outline: none;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    /* Alerts */
+    .alert {
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+        display: flex;
+        gap: 0.75rem;
+    }
+
+    .alert-warning {
+        background: #fef3c7;
+        color: #92400e;
+        border-left: 4px solid #f59e0b;
+    }
+
+    .alert-success {
+        background: #d1fae5;
+        color: #065f46;
+        border-left: 4px solid #10b981;
+    }
+
+    .alert-info {
+        background: #dbeafe;
+        color: #1e40af;
+        border-left: 4px solid #3b82f6;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        .detail-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .item-display {
+            flex-direction: column;
+        }
+
+        .header-actions {
+            flex-direction: column;
+        }
+
+        .action-btn {
+            width: 100%;
+            justify-content: center;
+        }
+
+        .header-payment-badge {
+            position: static;
+            margin-top: 1rem;
+            justify-content: center;
+        }
+
+        .geocode-info {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+    }
+</style>
+
+<!-- Include Leaflet CSS and JS for Maps -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<div class="detail-container">
+    <!-- Header -->
+    <div class="detail-header">
+        <!-- Payment Status Badge -->
+        <div class="header-payment-badge {% if order.paid_at %}paid{% else %}unpaid{% endif %}">
+            {% if order.paid_at %}
+            <span>✅</span>
+            <span>PAID</span>
+            {% else %}
+            <span>❌</span>
+            <span>UNPAID</span>
+            {% endif %}
+        </div>
+
+        <h1>📦 Order #{{ order.order_id|slice:":8" }}...</h1>
+        <div class="header-meta">
+            <div class="header-meta-item">
+                <span>📅</span>
+                <span>Created: {{ order.created_at|date:"M d, Y g:i A" }}</span>
+            </div>
+            <div class="header-meta-item">
+                <span>🚚</span>
+                <span>Delivery: Easy Move Logistics</span>
+            </div>
+            <div class="header-meta-item">
+                <span class="status-badge status-{{ order.status }}">
+                    {{ order.get_status_display }}
+                </span>
+            </div>
+        </div>
+
+        <div class="header-actions">
+            <a href="{% url 'logistics:crossroad_dashboard' %}" class="action-btn">
+                <span>←</span>
+                <span>Back to Dashboard</span>
+            </a>
+            <button onclick="printOrder()" class="action-btn">
+                <span>🖨️</span>
+                <span>Print</span>
+            </button>
+            <button onclick="exportOrder()" class="action-btn">
+                <span>📥</span>
+                <span>Export</span>
+            </button>
+            <button onclick="contactCustomer()" class="action-btn primary">
+                <span>📞</span>
+                <span>Contact Customer</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Alerts -->
+    {% if order.status == 'disputed' %}
+    <div class="alert alert-warning">
+        <span>⚠️</span>
+        <div>
+            <strong>Order Disputed</strong>
+            <p>This order has been flagged for dispute. Please review and take appropriate action.</p>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if order.requested_vetting and not order.vetting_completed %}
+    <div class="alert alert-info">
+        <span>🔍</span>
+        <div>
+            <strong>Vetting Required</strong>
+            <p>This order requires vetting before delivery. Please complete vetting process.</p>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if not order.paid_at %}
+    <div class="alert alert-warning">
+        <span>💰</span>
+        <div>
+            <strong>Payment Pending</strong>
+            <p>Customer has not completed payment for this order. Total amount: {% display_money order.total_amount %}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Main Grid -->
+    <div class="detail-grid">
+        <!-- Left Column -->
+        <div>
+            <!-- Item Details -->
+            <div class="detail-card">
+                <div class="card-header">
+                    <h2 class="card-title">
+                        <span>📦</span>
+                        <span>Item Details</span>
+                    </h2>
+                </div>
+
+                <div class="item-display">
+                    {% if order.listing.image_1 %}
+                    <img src="{{ order.listing.image_1.url }}"
+                         alt="{{ order.listing.title }}"
+                         class="item-image">
+                    {% else %}
+                    <div class="item-image" style="display: flex; align-items: center; justify-content: center; font-size: 2rem; color: #9ca3af;">
+                        📦
+                    </div>
+                    {% endif %}
+
+                    <div class="item-info">
+                        <div class="item-title">{{ order.listing.title }}</div>
+                        <div class="item-meta">
+                            <strong>Seller:</strong> {{ order.listing.seller.get_full_name|default:order.listing.seller.username }}
+                        </div>
+                        <div class="item-meta">
+                            <strong>Category:</strong> {{ order.listing.category.name|default:"N/A" }}
+                        </div>
+                        <div class="item-meta">
+                            <strong>Condition:</strong> {{ order.listing.get_condition_display|default:"N/A" }}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="info-row">
+                    <span class="info-label">Quantity</span>
+                    <span class="info-value">{{ order.quantity }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Unit Price</span>
+                    <span class="info-value">{% display_money order.unit_price %}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Subtotal</span>
+                    <span class="info-value">{% display_money order.subtotal %}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Delivery Fee</span>
+                    <span class="info-value">{% display_money order.delivery_fee %}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Vetting Fee</span>
+                    <span class="info-value editable">
+                        <span id="vettingFeeDisplay">{% display_money order.vetting_fee %}</span>
+                        <button class="edit-btn" onclick="openVettingFeeModal()">✏️ Edit</button>
+                    </span>
+                </div>
+                <div class="info-row" style="border-top: 2px solid #e5e7eb; margin-top: 0.5rem; padding-top: 1rem;">
+                    <span class="info-label" style="font-size: 1.125rem; color: #1f2937;">Total Amount</span>
+                    <span class="info-value" style="font-size: 1.25rem; font-weight: 700; color: #1f2937;">{% display_money order.total_amount %}</span>
+                </div>
+            </div>
+
+            <!-- Order Timeline -->
+            <div class="detail-card" style="margin-top: 1.5rem;">
+                <div class="card-header">
+                    <h2 class="card-title">
+                        <span>📋</span>
+                        <span>Order Timeline</span>
+                    </h2>
+                </div>
+
+                <div class="timeline">
+                    <div class="timeline-item completed">
+                        <div class="timeline-title">Order Created</div>
+                        <div class="timeline-time">{{ order.created_at|date:"M d, Y g:i A" }}</div>
+                    </div>
+
+                    {% if order.confirmed_at %}
+                    <div class="timeline-item completed">
+                        <div class="timeline-title">Order Confirmed</div>
+                        <div class="timeline-time">{{ order.confirmed_at|date:"M d, Y g:i A" }}</div>
+                    </div>
+                    {% endif %}
+
+                    {% if order.status == 'pickup_scheduled' or order.status == 'in_transit' or order.status == 'delivered' %}
+                    <div class="timeline-item {% if order.status == 'pickup_scheduled' %}current{% else %}completed{% endif %}">
+                        <div class="timeline-title">Pickup Scheduled</div>
+                        <div class="timeline-time">{{ order.updated_at|date:"M d, Y g:i A" }}</div>
+                    </div>
+                    {% endif %}
+
+                    {% if order.requested_vetting %}
+                        {% if order.vetting_completed %}
+                        <div class="timeline-item completed">
+                            <div class="timeline-title">Vetting Completed</div>
+                            <div class="timeline-time">{{ order.updated_at|date:"M d, Y g:i A" }}</div>
+                        </div>
+                        {% else %}
+                        <div class="timeline-item current">
+                            <div class="timeline-title">Awaiting Vetting</div>
+                            <div class="timeline-time">Pending...</div>
+                        </div>
+                        {% endif %}
+                    {% endif %}
+
+                    {% if order.status == 'in_transit' or order.status == 'delivered' %}
+                    <div class="timeline-item {% if order.status == 'in_transit' %}current{% else %}completed{% endif %}">
+                        <div class="timeline-title">In Transit</div>
+                        <div class="timeline-time">{{ order.updated_at|date:"M d, Y g:i A" }}</div>
+                    </div>
+                    {% endif %}
+
+                    {% if order.delivered_at %}
+                    <div class="timeline-item completed">
+                        <div class="timeline-title">Delivered</div>
+                        <div class="timeline-time">{{ order.delivered_at|date:"M d, Y g:i A" }}</div>
+                    </div>
+                    {% endif %}
+
+                    {% if order.status == 'cancelled' %}
+                    <div class="timeline-item" style="border-color: #ef4444;">
+                        <div class="timeline-title" style="color: #ef4444;">Order Cancelled</div>
+                        <div class="timeline-time">{{ order.updated_at|date:"M d, Y g:i A" }}</div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Vetting Information -->
+            {% if order.requested_vetting %}
+            <div class="detail-card" style="margin-top: 1.5rem;">
+                <div class="card-header">
+                    <h2 class="card-title">
+                        <span>🔍</span>
+                        <span>Vetting Information</span>
+                    </h2>
+                </div>
+
+                <div class="{% if order.vetting_completed %}vetting-card{% else %}vetting-card not-required{% endif %}">
+                    <div class="vetting-status">
+                        {% if order.vetting_completed %}
+                        ✅ Vetting Completed
+                        {% else %}
+                        ⏳ Vetting Pending
+                        {% endif %}
+                    </div>
+
+                    <div class="vetting-fee-display {% if not order.vetting_completed %}not-required{% endif %}">
+                        <span style="font-size: 0.875rem; opacity: 0.9;">Vetting Fee</span>
+                        <span style="font-size: 1.25rem; font-weight: 700;">{% display_money order.vetting_fee %}</span>
+                    </div>
+
+                    {% if order.vetting_notes %}
+                    <div class="vetting-notes {% if not order.vetting_completed %}not-required{% endif %}">
+                        <strong>Vetting Notes:</strong><br>
+                        {{ order.vetting_notes }}
+                    </div>
+                    {% endif %}
+                </div>
+
+                {% if not order.vetting_completed %}
+                <div class="action-section">
+                    <button onclick="completeVetting()" class="btn btn-success">
+                        ✅ Mark Vetting Complete
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Right Column -->
+        <div>
+            <!-- Customer Information -->
+            <div class="detail-card">
+                <div class="card-header">
+                    <h2 class="card-title">
+                        <span>👤</span>
+                        <span>Customer & Location</span>
+                    </h2>
+                </div>
+
+                <div class="customer-card">
+                    <div class="customer-avatar">
+                        {{ order.buyer.get_full_name|first|upper|default:order.buyer.username|first|upper }}
+                    </div>
+                    <div class="customer-info">
+                        <h3>{{ order.buyer.get_full_name|default:order.buyer.username }}</h3>
+                        <p>📞 {{ order.buyer_phone }}</p>
+                        <p>📧 {{ order.buyer_email|default:order.buyer.email }}</p>
+                    </div>
+                </div>
+
+                {% if order.buyer_geocode %}
+                <!-- Plus Code Display -->
+                <div class="geocode-info">
+                    <div>
+                        <div style="font-size: 0.75rem; color: #6b7280; margin-bottom: 0.25rem;">Plus Code (OLC)</div>
+                        <div class="geocode-badge">
+                            📍 {{ order.buyer_geocode }}
+                        </div>
+                    </div>
+                    <button class="copy-btn" onclick="copyPlusCode('{{ order.buyer_geocode }}')">
+                        📋 Copy
+                    </button>
+                </div>
+
+                <!-- Map Display -->
+                <div class="map-container">
+                    <div class="map-loading" id="mapLoading">
+                        <div class="spinner"></div>
+                        <p style="color: #6b7280; font-size: 0.875rem;">Loading map...</p>
+                    </div>
+                    <div id="deliveryMap"></div>
+                </div>
+
+                <p style="font-size: 0.75rem; color: #6b7280; margin-top: 0.5rem; text-align: center;">
+                    📍 Delivery location based on Plus Code
+                </p>
+                {% endif %}
+
+                <div class="action-section">
+                    <button onclick="callCustomer('{{ order.buyer_phone }}')" class="btn btn-primary" style="width: 100%;">
+                        📞 Call Customer
+                    </button>
+                    <button onclick="emailCustomer('{{ order.buyer_email|default:order.buyer.email }}')" class="btn btn-secondary" style="width: 100%; margin-top: 0.5rem;">
+                        📧 Send Email
+                    </button>
+                    {% if order.buyer_geocode %}
+                    <button onclick="openInGoogleMaps('{{ order.buyer_geocode }}')" class="btn btn-secondary" style="width: 100%; margin-top: 0.5rem;">
+                        🗺️ Open in Google Maps
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Payment Information -->
+            <div class="detail-card" style="margin-top: 1.5rem;">
+                <div class="card-header">
+                    <h2 class="card-title">
+                        <span>💰</span>
+                        <span>Payment Status</span>
+                    </h2>
+                </div>
+
+                <div class="payment-card {% if not order.paid_at %}unpaid{% endif %}" style="position: relative;">
+                    <div class="payment-status-icon">
+                        {% if order.paid_at %}✅{% else %}❌{% endif %}
+                    </div>
+                    <div class="payment-amount">{% display_money order.total_amount %}</div>
+                    <div class="payment-details">
+                        {% if order.paid_at %}
+                        <strong style="font-size: 1rem;">✅ PAYMENT RECEIVED</strong><br><br>
+                        📅 Paid on: {{ order.paid_at|date:"M d, Y g:i A" }}<br>
+                        💳 Method: {{ order.payment_method|upper|default:"N/A" }}<br>
+                        🔖 Reference: {{ order.payment_reference|default:"N/A" }}
+                        {% else %}
+                        <strong style="font-size: 1rem;">❌ PAYMENT PENDING</strong><br><br>
+                        ⏳ Awaiting customer payment<br>
+                        💰 Amount Due: {% display_money order.total_amount %}<br>
+                        📧 Reminder sent to customer
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="detail-card" style="margin-top: 1.5rem;">
+                <div class="card-header">
+                    <h2 class="card-title">
+                        <span>⚡</span>
+                        <span>Quick Actions</span>
+                    </h2>
+                </div>
+
+                {% if order.status == 'pending' %}
+                <button onclick="updateStatus('confirmed')" class="btn btn-success" style="width: 100%; margin-bottom: 0.5rem;">
+                    ✅ Confirm Order
+                </button>
+                {% endif %}
+
+                {% if order.status == 'confirmed' %}
+                <button onclick="updateStatus('pickup_scheduled')" class="btn btn-primary" style="width: 100%; margin-bottom: 0.5rem;">
+                    📅 Schedule Pickup
+                </button>
+                {% endif %}
+
+                {% if order.status == 'pickup_scheduled' %}
+                <button onclick="updateStatus('in_transit')" class="btn btn-primary" style="width: 100%; margin-bottom: 0.5rem;">
+                    🚛 Mark In Transit
+                </button>
+                {% endif %}
+
+                {% if order.status == 'in_transit' %}
+                <button onclick="updateStatus('delivered')" class="btn btn-success" style="width: 100%; margin-bottom: 0.5rem;">
+                    ✅ Mark Delivered
+                </button>
+                {% endif %}
+
+                {% if order.status not in 'delivered,cancelled' %}
+                <button onclick="updateStatus('cancelled')" class="btn btn-danger" style="width: 100%;">
+                    ❌ Cancel Order
+                </button>
+                {% endif %}
+            </div>
+
+            <!-- Order Reference -->
+            <div class="detail-card" style="margin-top: 1.5rem;">
+                <div class="card-header">
+                    <h2 class="card-title">
+                        <span>🔖</span>
+                        <span>Reference</span>
+                    </h2>
+                </div>
+
+                <div class="info-row">
+                    <span class="info-label">Order ID</span>
+                    <span class="info-value" style="font-family: monospace;">{{ order.order_id }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Created</span>
+                    <span class="info-value">{{ order.created_at|date:"M d, Y g:i A" }}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Last Updated</span>
+                    <span class="info-value">{{ order.updated_at|date:"M d, Y g:i A" }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Vetting Fee Edit Modal -->
+<div id="vettingFeeModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>✏️ Edit Vetting Fee</h3>
+            <button class="modal-close" onclick="closeVettingFeeModal()">×</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label for="newVettingFee">Vetting Fee Amount ($)</label>
+                <input type="number"
+                       id="newVettingFee"
+                       class="form-control"
+                       step="0.01"
+                       min="0"
+                       value="{{ order.vetting_fee }}"
+                       placeholder="Enter vetting fee">
+            </div>
+            <div class="form-group">
+                <label for="feeReason">Reason for Change (Optional)</label>
+                <textarea id="feeReason"
+                          class="form-control"
+                          rows="3"
+                          placeholder="Why is the vetting fee being changed?"></textarea>
+            </div>
+            <p style="font-size: 0.875rem; color: #6b7280;">
+                Current fee: ${{ order.vetting_fee }}<br>
+                This will update the total order amount.
+            </p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeVettingFeeModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="saveVettingFee()">💾 Save Changes</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// Plus Code to LatLng conversion using Google Maps API
+{% if order.buyer_geocode %}
+document.addEventListener('DOMContentLoaded', function() {
+    initializeMapWithPlusCode('{{ order.buyer_geocode }}');
+});
+
+function initializeMapWithPlusCode(plusCode) {
+    const mapLoading = document.getElementById('mapLoading');
+
+    // Use Google Maps Geocoding API to convert Plus Code to coordinates
+    // Note: You'll need to add your Google Maps API key
+    const googleMapsApiKey = 'YOUR_GOOGLE_MAPS_API_KEY'; // Replace with your actual API key
+
+    // For demonstration, we'll use a direct approach
+    // Plus Codes can be decoded to coordinates
+    // Format: XXXX+XX City, Country OR full code like 8FVC9G8F+6W
+
+    // Try using Google Maps Plus Codes API
+    const geocodeUrl = `https://plus.codes/api?address=${encodeURIComponent(plusCode)}&ekey=${googleMapsApiKey}`;
+
+    // Alternative: Direct map URL approach (simpler, no API key needed for basic display)
+    // We'll create a fallback that opens Google Maps with the Plus Code
+
+    // For now, let's use a simplified approach with OpenStreetMap Nominatim
+    // Note: Plus Codes need special handling
+
+    // Best approach: Use Google's Plus Codes library or API
+    // For this demo, we'll show a message and provide a Google Maps link
+
+    try {
+        // Attempt to use Google Maps embed (works without API for basic display)
+        const mapDiv = document.getElementById('deliveryMap');
+        const iframe = document.createElement('iframe');
+        iframe.width = '100%';
+        iframe.height = '100%';
+        iframe.style.border = 0;
+        iframe.loading = 'lazy';
+        iframe.referrerPolicy = 'no-referrer-when-downgrade';
+        iframe.src = `https://www.google.com/maps?q=${encodeURIComponent(plusCode)}&output=embed`;
+
+        mapDiv.innerHTML = '';
+        mapDiv.appendChild(iframe);
+
+        // Hide loading spinner
+        mapLoading.classList.add('hidden');
+
+    } catch (error) {
+        console.error('Error loading map:', error);
+        document.getElementById('deliveryMap').innerHTML =
+            '<div style="display: flex; align-items: center; justify-content: center; height: 100%; padding: 2rem; text-align: center; color: #6b7280; flex-direction: column; gap: 1rem;">' +
+            '<div style="font-size: 2rem;">📍</div>' +
+            '<div><strong>Plus Code:</strong> ' + plusCode + '</div>' +
+            '<button onclick="openInGoogleMaps(\'' + plusCode + '\')" style="padding: 0.5rem 1rem; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer;">View in Google Maps</button>' +
+            '</div>';
+        mapLoading.classList.add('hidden');
+    }
+}
+
+function openInGoogleMaps(plusCode) {
+    window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(plusCode)}`, '_blank');
+}
+
+function copyPlusCode(plusCode) {
+    navigator.clipboard.writeText(plusCode).then(() => {
+        alert('Plus Code copied to clipboard: ' + plusCode);
+    }).catch(err => {
+        console.error('Failed to copy:', err);
+        alert('Plus Code: ' + plusCode);
+    });
+}
+{% endif %}
+
+// Vetting Fee Modal Functions
+function openVettingFeeModal() {
+    document.getElementById('vettingFeeModal').classList.add('active');
+}
+
+function closeVettingFeeModal() {
+    document.getElementById('vettingFeeModal').classList.remove('active');
+}
+
+function saveVettingFee() {
+    const newFee = document.getElementById('newVettingFee').value;
+    const reason = document.getElementById('feeReason').value;
+
+    if (!newFee || parseFloat(newFee) < 0) {
+        alert('Please enter a valid fee amount');
+        return;
+    }
+
+    if (confirm(`Update vetting fee to $${newFee}?`)) {
+        fetch('{% url "logistics:update_vetting_fee" order.order_id %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: `vetting_fee=${newFee}&reason=${encodeURIComponent(reason)}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Vetting fee updated successfully!');
+                location.reload();
+            } else {
+                alert('Error: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            alert('Error updating vetting fee: ' + error.message);
+        });
+
+        closeVettingFeeModal();
+    }
+}
+
+function updateStatus(newStatus) {
+    if (!confirm(`Are you sure you want to change the order status to "${newStatus}"?`)) {
+        return;
+    }
+
+    fetch('{% url "logistics:update_order_status" order.order_id %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: `status=${newStatus}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('Error: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        alert('Error: ' + error.message);
+    });
+}
+
+function completeVetting() {
+    const notes = prompt('Enter vetting notes (optional):');
+    if (notes === null) return;
+
+    fetch('{% url "logistics:mark_vetting_complete" order.order_id %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: `notes=${encodeURIComponent(notes)}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('Error: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        alert('Error: ' + error.message);
+    });
+}
+
+function printOrder() {
+    window.print();
+}
+
+function exportOrder() {
+    alert('Export functionality coming soon!');
+}
+
+function contactCustomer() {
+    alert('Contact customer via phone: {{ order.buyer_phone }} or email: {{ order.buyer_email|default:order.buyer.email }}');
+}
+
+function callCustomer(phone) {
+    window.location.href = `tel:${phone}`;
+}
+
+function emailCustomer(email) {
+    window.location.href = `mailto:${email}`;
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// Close modal when clicking outside
+document.addEventListener('click', function(event) {
+    const modal = document.getElementById('vettingFeeModal');
+    if (event.target === modal) {
+        closeVettingFeeModal();
+    }
+});
+</script>
+{% endblock %}

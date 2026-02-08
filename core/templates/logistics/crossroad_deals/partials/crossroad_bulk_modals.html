@@ -1,0 +1,358 @@
+
+<!-- Assignment Modal -->
+<div id="assignmentModal" class="modal" style="display: none;">
+    <div class="modal-overlay" onclick="closeModal('assignmentModal')"></div>
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>👥 Assign Crossroad Tasks to Agent</h3>
+            <button class="modal-close" onclick="closeModal('assignmentModal')">×</button>
+        </div>
+        <div class="modal-body">
+            <p class="modal-description">
+                Select an agent to assign <span id="assignTaskCount">0</span> selected crossroad task(s).
+            </p>
+
+            <div class="form-group">
+                <label for="assignAgent">Agent</label>
+                <select id="assignAgent" class="form-control" required>
+                    <option value="">Select an agent...</option>
+                    {% for agent in available_agents %}
+                    <option value="{{ agent.id }}">
+                        {{ agent.get_full_name|default:agent.username }}
+                        {% if agent.active_task_count > 0 %}
+                        ({{ agent.active_task_count }} active)
+                        {% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="assignNotes">Notes (Optional)</label>
+                <textarea id="assignNotes" class="form-control" rows="3"
+                          placeholder="Add any notes about this assignment..."></textarea>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal('assignmentModal')">
+                Cancel
+            </button>
+            <button class="btn btn-primary" onclick="submitBulkAssignment()">
+                Assign Tasks
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Priority Modal -->
+<div id="priorityModal" class="modal" style="display: none;">
+    <div class="modal-overlay" onclick="closeModal('priorityModal')"></div>
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>🎯 Change Priority</h3>
+            <button class="modal-close" onclick="closeModal('priorityModal')">×</button>
+        </div>
+        <div class="modal-body">
+            <p class="modal-description">
+                Set priority for <span id="priorityTaskCount">0</span> selected crossroad task(s).
+            </p>
+
+            <div class="form-group">
+                <label for="priorityLevel">Priority Level</label>
+                <select id="priorityLevel" class="form-control" required>
+                    <option value="">Select priority...</option>
+                    <option value="1" style="color: #dc2626; font-weight: bold;">🔴 Priority 1 (Urgent)</option>
+                    <option value="2" style="color: #dc2626; font-weight: bold;">🔴 Priority 2 (High)</option>
+                    <option value="3" style="color: #f59e0b; font-weight: bold;">🟡 Priority 3 (Medium-High)</option>
+                    <option value="4" style="color: #f59e0b; font-weight: bold;">🟡 Priority 4 (Medium)</option>
+                    <option value="5" style="color: #3b82f6;">🔵 Priority 5 (Normal)</option>
+                    <option value="6" style="color: #3b82f6;">🔵 Priority 6 (Normal)</option>
+                    <option value="7" style="color: #6b7280;">⚪ Priority 7 (Low)</option>
+                    <option value="8" style="color: #6b7280;">⚪ Priority 8 (Low)</option>
+                    <option value="9" style="color: #6b7280;">⚪ Priority 9 (Very Low)</option>
+                    <option value="10" style="color: #6b7280;">⚪ Priority 10 (Lowest)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="priorityReason">Reason for Change</label>
+                <textarea id="priorityReason" class="form-control" rows="3"
+                          placeholder="Why are you changing the priority?"></textarea>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal('priorityModal')">
+                Cancel
+            </button>
+            <button class="btn btn-primary" onclick="submitBulkPriority()">
+                Update Priority
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Styles for Modals -->
+<style>
+    .modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+    }
+
+    .modal-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(4px);
+    }
+
+    .modal-content {
+        position: relative;
+        background: white;
+        border-radius: 16px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        max-width: 500px;
+        width: 100%;
+        max-height: 90vh;
+        overflow-y: auto;
+        animation: modalSlideIn 0.3s ease-out;
+    }
+
+    @keyframes modalSlideIn {
+        from {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .modal-header {
+        padding: 1.5rem;
+        border-bottom: 1px solid #e5e7eb;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .modal-header h3 {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #1f2937;
+        margin: 0;
+    }
+
+    .modal-close {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        border: none;
+        background: #f3f4f6;
+        color: #6b7280;
+        font-size: 1.5rem;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+    }
+
+    .modal-close:hover {
+        background: #e5e7eb;
+        color: #1f2937;
+    }
+
+    .modal-body {
+        padding: 1.5rem;
+    }
+
+    .modal-description {
+        color: #6b7280;
+        margin-bottom: 1.5rem;
+        font-size: 0.875rem;
+    }
+
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+
+    .form-group label {
+        display: block;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 0.5rem;
+    }
+
+    .form-control {
+        width: 100%;
+        padding: 0.75rem;
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        font-size: 0.875rem;
+        transition: all 0.2s;
+    }
+
+    .form-control:focus {
+        outline: none;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    .modal-footer {
+        padding: 1.5rem;
+        border-top: 1px solid #e5e7eb;
+        display: flex;
+        gap: 1rem;
+        justify-content: flex-end;
+    }
+</style>
+
+<!-- JavaScript for Modals -->
+<script>
+    let selectedTaskIds = [];
+
+    function showModal(modalId) {
+        document.getElementById(modalId).style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeModal(modalId) {
+        document.getElementById(modalId).style.display = 'none';
+        document.body.style.overflow = 'auto';
+    }
+
+    function showAssignmentModal(taskIds = null) {
+        if (taskIds) {
+            selectedTaskIds = taskIds;
+        } else {
+            selectedTaskIds = Array.from(document.querySelectorAll('.task-checkbox:checked'))
+                                   .map(cb => cb.value);
+        }
+
+        if (selectedTaskIds.length === 0) {
+            alert('Please select at least one task');
+            return;
+        }
+
+        document.getElementById('assignTaskCount').textContent = selectedTaskIds.length;
+        showModal('assignmentModal');
+    }
+
+    function showPriorityModal(taskIds = null) {
+        if (taskIds) {
+            selectedTaskIds = taskIds;
+        } else {
+            selectedTaskIds = Array.from(document.querySelectorAll('.task-checkbox:checked'))
+                                   .map(cb => cb.value);
+        }
+
+        if (selectedTaskIds.length === 0) {
+            alert('Please select at least one task');
+            return;
+        }
+
+        document.getElementById('priorityTaskCount').textContent = selectedTaskIds.length;
+        showModal('priorityModal');
+    }
+
+    function submitBulkAssignment() {
+        const agentId = document.getElementById('assignAgent').value;
+        const notes = document.getElementById('assignNotes').value;
+
+        if (!agentId) {
+            alert('Please select an agent');
+            return;
+        }
+
+        const formData = new FormData();
+        selectedTaskIds.forEach(id => formData.append('task_ids[]', id));
+        formData.append('agent_id', agentId);
+        if (notes) formData.append('notes', notes);
+
+        fetch('{% url "logistics:crossroad_bulk_assign" %}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+                closeModal('assignmentModal');
+                location.reload();
+            } else {
+                alert('Error: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            alert('Error: ' + error.message);
+        });
+    }
+
+    function submitBulkPriority() {
+        const priority = document.getElementById('priorityLevel').value;
+        const reason = document.getElementById('priorityReason').value;
+
+        if (!priority) {
+            alert('Please select a priority level');
+            return;
+        }
+
+        const formData = new FormData();
+        selectedTaskIds.forEach(id => formData.append('task_ids[]', id));
+        formData.append('priority', priority);
+        if (reason) formData.append('reason', reason);
+
+        fetch('{% url "logistics:crossroad_bulk_priority" %}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+                closeModal('priorityModal');
+                location.reload();
+            } else {
+                alert('Error: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            alert('Error: ' + error.message);
+        });
+    }
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+</script>

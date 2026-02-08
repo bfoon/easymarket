@@ -1,0 +1,935 @@
+{% extends 'logistics/base.html' %}
+{% load static %}
+{% load currency_tags %}
+
+{% block title %}Crossroad Dashboard - Easy Move{% endblock %}
+
+{% block content %}
+<style>
+    :root {
+        --primary-color: #3b82f6;
+        --success-color: #10b981;
+        --warning-color: #f59e0b;
+        --danger-color: #ef4444;
+        --purple-color: #8b5cf6;
+        --cyan-color: #06b6d4;
+    }
+
+    .dashboard-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 1.5rem;
+    }
+
+    /* Header Section */
+    .dashboard-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 16px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        color: white;
+        box-shadow: 0 10px 40px rgba(102, 126, 234, 0.4);
+    }
+
+    .dashboard-header h1 {
+        font-size: 2rem;
+        font-weight: 800;
+        margin-bottom: 0.5rem;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .dashboard-header .subtitle {
+        font-size: 1rem;
+        opacity: 0.9;
+    }
+
+    .header-actions {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+        margin-top: 1.5rem;
+    }
+
+    .action-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.75rem 1.5rem;
+        background: rgba(255, 255, 255, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 8px;
+        color: white;
+        font-weight: 600;
+        transition: all 0.3s;
+        text-decoration: none;
+        backdrop-filter: blur(10px);
+    }
+
+    .action-btn:hover {
+        background: rgba(255, 255, 255, 0.3);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+
+    .action-btn.primary {
+        background: white;
+        color: #667eea;
+    }
+
+    .action-btn.primary:hover {
+        background: #f8f9fa;
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .stat-card {
+        background: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        border-left: 4px solid var(--primary-color);
+        transition: all 0.3s;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .stat-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 100px;
+        height: 100px;
+        background: linear-gradient(135deg, transparent, rgba(59, 130, 246, 0.05));
+        border-radius: 0 0 0 100%;
+    }
+
+    .stat-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 16px rgba(0,0,0,0.12);
+    }
+
+    .stat-card.pending { border-left-color: var(--warning-color); }
+    .stat-card.vetting { border-left-color: var(--purple-color); }
+    .stat-card.transit { border-left-color: var(--cyan-color); }
+    .stat-card.delivered { border-left-color: var(--success-color); }
+    .stat-card.urgent { border-left-color: var(--danger-color); }
+
+    .stat-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+
+    .stat-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        background: rgba(59, 130, 246, 0.1);
+    }
+
+    .stat-value {
+        font-size: 2.5rem;
+        font-weight: 800;
+        color: #1f2937;
+        line-height: 1;
+        margin-bottom: 0.5rem;
+    }
+
+    .stat-label {
+        font-size: 0.875rem;
+        color: #6b7280;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .stat-change {
+        font-size: 0.75rem;
+        margin-top: 0.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+    .stat-change.positive { color: var(--success-color); }
+    .stat-change.negative { color: var(--danger-color); }
+
+    /* Filters Section */
+    .filters-section {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 12px;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .filters-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+    }
+
+    .filters-header h3 {
+        font-size: 1.125rem;
+        font-weight: 700;
+        color: #1f2937;
+        margin: 0;
+    }
+
+    .filter-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+    }
+
+    .filter-field {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .filter-field label {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 0.5rem;
+    }
+
+    .filter-field select,
+    .filter-field input {
+        padding: 0.75rem;
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        font-size: 0.875rem;
+        transition: all 0.2s;
+    }
+
+    .filter-field select:focus,
+    .filter-field input:focus {
+        outline: none;
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    .filter-actions {
+        display: flex;
+        gap: 1rem;
+        align-items: flex-end;
+    }
+
+    .btn {
+        padding: 0.75rem 1.5rem;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 0.875rem;
+        border: none;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        text-decoration: none;
+    }
+
+    .btn-primary {
+        background: var(--primary-color);
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: #2563eb;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+    }
+
+    .btn-secondary {
+        background: #e5e7eb;
+        color: #374151;
+    }
+
+    .btn-secondary:hover {
+        background: #d1d5db;
+    }
+
+    .btn-success {
+        background: var(--success-color);
+        color: white;
+    }
+
+    .btn-success:hover {
+        background: #059669;
+    }
+
+    /* Quick Actions */
+    .quick-actions {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 2rem;
+        flex-wrap: wrap;
+    }
+
+    .quick-action-card {
+        flex: 1;
+        min-width: 200px;
+        background: white;
+        padding: 1rem;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        transition: all 0.2s;
+        cursor: pointer;
+        text-decoration: none;
+        color: inherit;
+    }
+
+    .quick-action-card:hover {
+        box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+        transform: translateY(-2px);
+    }
+
+    .quick-action-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+    }
+
+    /* Tasks Table */
+    .tasks-section {
+        background: white;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .tasks-header {
+        padding: 1.5rem;
+        border-bottom: 1px solid #e5e7eb;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: #f9fafb;
+    }
+
+    .tasks-header h3 {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #1f2937;
+        margin: 0;
+    }
+
+    .bulk-actions {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+    }
+
+    .table-container {
+        overflow-x: auto;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    thead {
+        background: #f9fafb;
+        border-bottom: 2px solid #e5e7eb;
+    }
+
+    th {
+        padding: 1rem 1.5rem;
+        text-align: left;
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    tbody tr {
+        border-bottom: 1px solid #e5e7eb;
+        transition: background 0.2s;
+    }
+
+    tbody tr:hover {
+        background: #f9fafb;
+    }
+
+    td {
+        padding: 1rem 1.5rem;
+        font-size: 0.875rem;
+        color: #374151;
+    }
+
+    /* Status Badges */
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.375rem 0.75rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .status-badge::before {
+        content: '';
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: currentColor;
+        animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+
+    .status-pending { background: #fef3c7; color: #92400e; }
+    .status-assigned { background: #dbeafe; color: #1e40af; }
+    .status-pickup_scheduled { background: #e0e7ff; color: #3730a3; }
+    .status-picked_up { background: #ddd6fe; color: #5b21b6; }
+    .status-vetting_queue { background: #ede9fe; color: #6b21a8; }
+    .status-vetting_in_progress { background: #f3e8ff; color: #7c3aed; }
+    .status-vetted_approved { background: #d1fae5; color: #065f46; }
+    .status-vetted_rejected { background: #fee2e2; color: #991b1b; }
+    .status-packaging { background: #fce7f3; color: #9f1239; }
+    .status-ready_for_delivery { background: #cffafe; color: #155e75; }
+    .status-in_transit { background: #bfdbfe; color: #1e40af; }
+    .status-delivered { background: #d1fae5; color: #065f46; }
+    .status-failed { background: #fee2e2; color: #991b1b; }
+    .status-cancelled { background: #f3f4f6; color: #6b7280; }
+
+    /* Priority Badges */
+    .priority-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        font-size: 0.875rem;
+        font-weight: 700;
+        color: white;
+        padding: 0 0.5rem;
+    }
+
+    .priority-1, .priority-2 {
+        background: linear-gradient(135deg, #dc2626, #ef4444);
+        box-shadow: 0 2px 8px rgba(220, 38, 38, 0.3);
+    }
+    .priority-3, .priority-4 {
+        background: linear-gradient(135deg, #f59e0b, #fbbf24);
+        box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+    }
+    .priority-5, .priority-6 {
+        background: linear-gradient(135deg, #3b82f6, #60a5fa);
+        box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+    }
+    .priority-7, .priority-8, .priority-9, .priority-10 {
+        background: linear-gradient(135deg, #6b7280, #9ca3af);
+    }
+
+    /* Vetting Badge */
+    .vetting-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0.25rem 0.5rem;
+        background: linear-gradient(135deg, #8b5cf6, #a78bfa);
+        color: white;
+        border-radius: 6px;
+        font-size: 0.625rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-left: 0.5rem;
+    }
+
+    /* Action Links */
+    .action-link {
+        color: var(--primary-color);
+        font-weight: 600;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        transition: all 0.2s;
+    }
+
+    .action-link:hover {
+        color: #2563eb;
+        gap: 0.5rem;
+    }
+
+    /* Pagination */
+    .pagination-container {
+        padding: 1.5rem;
+        background: #f9fafb;
+        border-top: 1px solid #e5e7eb;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+
+    .pagination-info {
+        font-size: 0.875rem;
+        color: #6b7280;
+    }
+
+    .pagination-controls {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .pagination-btn {
+        padding: 0.5rem 1rem;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        background: white;
+        color: #374151;
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+        text-decoration: none;
+    }
+
+    .pagination-btn:hover:not(:disabled) {
+        background: #f9fafb;
+        border-color: var(--primary-color);
+        color: var(--primary-color);
+    }
+
+    .pagination-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    /* Empty State */
+    .empty-state {
+        padding: 4rem 2rem;
+        text-align: center;
+        color: #9ca3af;
+    }
+
+    .empty-state-icon {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+        opacity: 0.5;
+    }
+
+    .empty-state h4 {
+        font-size: 1.125rem;
+        color: #6b7280;
+        margin-bottom: 0.5rem;
+    }
+
+    .empty-state p {
+        font-size: 0.875rem;
+        color: #9ca3af;
+    }
+
+    /* Tooltips */
+    .tooltip {
+        position: relative;
+        display: inline-block;
+    }
+
+    .tooltip .tooltiptext {
+        visibility: hidden;
+        background-color: #1f2937;
+        color: white;
+        text-align: center;
+        padding: 0.5rem;
+        border-radius: 6px;
+        position: absolute;
+        z-index: 1;
+        bottom: 125%;
+        left: 50%;
+        transform: translateX(-50%);
+        white-space: nowrap;
+        font-size: 0.75rem;
+        opacity: 0;
+        transition: opacity 0.3s;
+    }
+
+    .tooltip:hover .tooltiptext {
+        visibility: visible;
+        opacity: 1;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+        .dashboard-header h1 {
+            font-size: 1.5rem;
+        }
+
+        .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .filter-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .header-actions {
+            flex-direction: column;
+        }
+
+        .action-btn {
+            width: 100%;
+            justify-content: center;
+        }
+
+        .table-container {
+            font-size: 0.75rem;
+        }
+
+        th, td {
+            padding: 0.75rem 0.5rem;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .stats-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+        }
+    }
+</style>
+
+<div class="dashboard-container">
+    <!-- Header -->
+    <div class="dashboard-header">
+        <h1>🚚 Crossroad Easy Move Dashboard</h1>
+        <p class="subtitle">Manage all your Crossroad Easy Move orders</p>
+
+        <div class="header-actions">
+            <a href="{% url 'logistics:crossroad_vetting_queue' %}" class="action-btn primary">
+                <span>🔍</span>
+                <span>Vetting Queue ({{ stats.vetting_queue }})</span>
+            </a>
+            <a href="#" onclick="exportOrders()" class="action-btn">
+                <span>📥</span>
+                <span>Export</span>
+            </a>
+            <a href="#" onclick="refreshDashboard()" class="action-btn">
+                <span>🔄</span>
+                <span>Refresh</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Statistics -->
+    <div class="stats-grid">
+        <div class="stat-card urgent">
+            <div class="stat-header">
+                <div class="stat-icon" style="background: rgba(239, 68, 68, 0.1); color: #ef4444;">⚠️</div>
+            </div>
+            <div class="stat-value">{{ stats.pending }}</div>
+            <div class="stat-label">Pending Orders</div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-header">
+                <div class="stat-icon" style="background: rgba(59, 130, 246, 0.1); color: #3b82f6;">📦</div>
+            </div>
+            <div class="stat-value">{{ stats.total }}</div>
+            <div class="stat-label">Total Easy Move Orders</div>
+            <div class="stat-change">
+                <span>{{ stats.total_vetting }} with vetting</span>
+            </div>
+        </div>
+
+        <div class="stat-card vetting">
+            <div class="stat-header">
+                <div class="stat-icon" style="background: rgba(139, 92, 246, 0.1); color: #8b5cf6;">🔍</div>
+            </div>
+            <div class="stat-value">{{ stats.needs_vetting }}</div>
+            <div class="stat-label">Needs Vetting</div>
+            <div class="stat-change">
+                <span>{{ stats.vetting_queue }} waiting</span>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-header">
+                <div class="stat-icon" style="background: rgba(6, 182, 212, 0.1); color: #06b6d4;">🚛</div>
+            </div>
+            <div class="stat-value">{{ stats.in_transit }}</div>
+            <div class="stat-label">In Transit</div>
+        </div>
+
+        <div class="stat-card delivered">
+            <div class="stat-header">
+                <div class="stat-icon" style="background: rgba(16, 185, 129, 0.1); color: #10b981;">✅</div>
+            </div>
+            <div class="stat-value">{{ stats.delivered }}</div>
+            <div class="stat-label">Delivered Today</div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-header">
+                <div class="stat-icon" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b;">💰</div>
+            </div>
+            <div class="stat-value">{{ stats.paid }}</div>
+            <div class="stat-label">Paid Orders</div>
+            <div class="stat-change">
+                <span>{{ stats.unpaid }} unpaid</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filters-section">
+        <div class="filters-header">
+            <h3>🔎 Filters</h3>
+            <button class="btn btn-secondary" onclick="clearFilters()">
+                Clear All
+            </button>
+        </div>
+
+        <form method="get" id="filterForm">
+            <div class="filter-grid">
+                <div class="filter-field">
+                    <label for="status">Status</label>
+                    <select name="status" id="status" onchange="this.form.submit()">
+                        <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All Statuses</option>
+                        {% for value, label in status_choices %}
+                        <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="filter-field">
+                    <label for="vetting">Vetting Required</label>
+                    <select name="vetting" id="vetting" onchange="this.form.submit()">
+                        <option value="all" {% if vetting_filter == 'all' or not vetting_filter %}selected{% endif %}>All Orders</option>
+                        <option value="yes" {% if vetting_filter == 'yes' %}selected{% endif %}>⭐ Vetting Required</option>
+                        <option value="no" {% if vetting_filter == 'no' %}selected{% endif %}>Direct Delivery</option>
+                    </select>
+                </div>
+
+                <div class="filter-field">
+                    <label for="payment">Payment Status</label>
+                    <select name="payment" id="payment" onchange="this.form.submit()">
+                        <option value="all" {% if not payment_filter or payment_filter == 'all' %}selected{% endif %}>All</option>
+                        <option value="paid" {% if payment_filter == 'paid' %}selected{% endif %}>💰 Paid</option>
+                        <option value="unpaid" {% if payment_filter == 'unpaid' %}selected{% endif %}>❌ Unpaid</option>
+                    </select>
+                </div>
+
+                <div class="filter-field">
+                    <label for="search">Search</label>
+                    <input type="text"
+                           name="search"
+                           id="search"
+                           value="{{ search }}"
+                           placeholder="🔍 Order ID, Item, Customer..."
+                           autocomplete="off">
+                </div>
+            </div>
+
+            <div class="filter-actions" style="margin-top: 1rem;">
+                <button type="submit" class="btn btn-primary">
+                    Apply Filters
+                </button>
+                <button type="button" class="btn btn-success" onclick="exportFiltered()">
+                    📥 Export Filtered
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Orders Table -->
+    <div class="tasks-section">
+        <div class="tasks-header">
+            <h3>📋 Easy Move Orders</h3>
+        </div>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Order ID</th>
+                        <th>Item</th>
+                        <th>Customer</th>
+                        <th>Quantity</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                        <th>Vetting</th>
+                        <th>Payment</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for order in page_obj %}
+                    <tr data-order-id="{{ order.order_id }}">
+                        <td>
+                            <div style="font-family: monospace; font-weight: 600; color: #1f2937;">
+                                {{ order.order_id|slice:":8" }}...
+                            </div>
+                        </td>
+                        <td>
+                            <div style="font-weight: 600; color: #1f2937; margin-bottom: 0.25rem;">
+                                {{ order.listing.title|truncatewords:5 }}
+                            </div>
+                            <div style="font-size: 0.75rem; color: #6b7280;">
+                                Seller: {{ order.listing.seller.get_full_name|default:order.listing.seller.username }}
+                            </div>
+                        </td>
+                        <td>
+                            <div style="font-weight: 500;">
+                                {{ order.buyer.get_full_name|default:order.buyer.username }}
+                            </div>
+                            <div style="font-size: 0.75rem; color: #6b7280;">
+                                {{ order.buyer_phone }}
+                            </div>
+                        </td>
+                        <td>
+                            <div style="font-weight: 600;">{{ order.quantity }}</div>
+                        </td>
+                        <td>
+                            <div style="font-weight: 600; color: #1f2937;">
+                                {% display_money order.total_amount %}
+                            </div>
+                        </td>
+                        <td>
+                            <span class="status-badge status-{{ order.status }}">
+                                {{ order.get_status_display }}
+                            </span>
+                        </td>
+                        <td>
+                            {% if order.requested_vetting %}
+                                {% if order.vetting_completed %}
+                                <span class="vetting-badge" style="background: #10b981;">✅ Done</span>
+                                {% else %}
+                                <span class="vetting-badge" style="background: #f59e0b;">⏳ Pending</span>
+                                {% endif %}
+                            {% else %}
+                            <span style="color: #9ca3af; font-size: 0.75rem;">No vetting</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if order.paid_at %}
+                            <span style="color: #10b981; font-weight: 600;">✅ Paid</span>
+                            {% else %}
+                            <span style="color: #ef4444; font-weight: 600;">❌ Unpaid</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div>{{ order.created_at|date:"M d, Y" }}</div>
+                            <div style="font-size: 0.75rem; color: #6b7280;">
+                                {{ order.created_at|date:"g:i A" }}
+                            </div>
+                        </td>
+                        <td>
+                            <a href="{% url 'logistics:crossroad_order_detail' order.order_id %}"
+                               class="action-link">
+                                View Details →
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="10">
+                            <div class="empty-state">
+                                <div class="empty-state-icon">📦</div>
+                                <h4>No Easy Move Orders Found</h4>
+                                <p>There are no orders matching your current filters.</p>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if page_obj.has_other_pages %}
+        <div class="pagination-container">
+            <div class="pagination-info">
+                Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ page_obj.paginator.count }} orders
+            </div>
+            <div class="pagination-controls">
+                {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}&status={{ status_filter }}&vetting={{ vetting_filter }}&payment={{ payment_filter }}&search={{ search }}"
+                   class="pagination-btn">
+                    ← Previous
+                </a>
+                {% endif %}
+
+                <span class="pagination-btn" style="background: var(--primary-color); color: white; border-color: var(--primary-color);">
+                    Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                </span>
+
+                {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}&status={{ status_filter }}&vetting={{ vetting_filter }}&payment={{ payment_filter }}&search={{ search }}"
+                   class="pagination-btn">
+                    Next →
+                </a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+// Refresh Dashboard
+function refreshDashboard() {
+    location.reload();
+}
+
+// Export Orders
+function exportOrders() {
+    window.location.href = '{% url "logistics:crossroad_export_orders" %}';
+}
+
+// Export Filtered
+function exportFiltered() {
+    const form = document.getElementById('filterForm');
+    const formData = new FormData(form);
+    const params = new URLSearchParams(formData);
+    window.location.href = `{% url "logistics:crossroad_export_orders" %}?${params.toString()}`;
+}
+
+// Clear Filters
+function clearFilters() {
+    document.getElementById('status').value = 'all';
+    document.getElementById('vetting').value = 'all';
+    document.getElementById('payment').value = 'all';
+    document.getElementById('search').value = '';
+    document.getElementById('filterForm').submit();
+}
+</script>
+{% endblock %}
