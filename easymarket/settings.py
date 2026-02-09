@@ -170,6 +170,7 @@ TEMPLATES = [
                 "analytics.context_processors.store_analytics_kpis",
                 "logistics.context_processors.logistics_nav_counts",
                 "logistics.context_processors.notification_context",
+                "logistics.context_processors.nav_counts",
                 "accounts.context_processors.currency_context",
             ],
         },

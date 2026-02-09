@@ -55,6 +55,7 @@ def nav_counts(request):
         active_shipment_statuses = [
             'pending',
             'picked_up',
+            'shipped',
             'in_transit',
             'at_warehouse',
             'out_for_delivery',
