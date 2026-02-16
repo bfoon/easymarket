@@ -25,6 +25,7 @@ import qrcode
 from io import BytesIO
 from django.core.files.base import ContentFile
 from django.urls import reverse
+from django.conf import settings
 
 from orders.models import Order, ShippingAddress, OrderItem
 from stores.b2b.models import B2BOrder, B2BOrderItem, B2BShippingAddress
@@ -2643,6 +2644,243 @@ class VettingChecklistItem(models.Model):
     def __str__(self):
         status = "✓" if self.is_checked else "☐"
         return f"{status} {self.item_name}"
+
+
+class LogisticsLocation(models.Model):
+    """
+    Represents a location in the logistics network
+    (Stores, Warehouses, Customer Addresses, Distribution Centers)
+    """
+    LOCATION_TYPES = [
+        ('store', 'Store'),
+        ('warehouse', 'Warehouse'),
+        ('distribution_center', 'Distribution Center'),
+        ('customer', 'Customer Address'),
+        ('pickup_point', 'Pickup Point'),
+    ]
+
+    name = models.CharField(max_length=255)
+    location_type = models.CharField(max_length=30, choices=LOCATION_TYPES)
+    address = models.TextField()
+    latitude = models.DecimalField(max_digits=10, decimal_places=7)
+    longitude = models.DecimalField(max_digits=10, decimal_places=7)
+    contact_person = models.CharField(max_length=255, blank=True)
+    contact_phone = models.CharField(max_length=20, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    # Reference to actual models
+    store = models.ForeignKey('stores.Store', on_delete=models.CASCADE, null=True, blank=True,
+                              related_name='logistics_locations')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Logistics Location'
+        verbose_name_plural = 'Logistics Locations'
+        indexes = [
+            models.Index(fields=['location_type', 'is_active']),
+            models.Index(fields=['latitude', 'longitude']),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.get_location_type_display()})"
+
+
+class DeliveryRoute(models.Model):
+    """
+    Track delivery routes and their status
+    """
+    ROUTE_STATUS = [
+        ('planned', 'Planned'),
+        ('in_progress', 'In Progress'),
+        ('completed', 'Completed'),
+        ('delayed', 'Delayed'),
+        ('cancelled', 'Cancelled'),
+    ]
+
+    route_number = models.CharField(max_length=50, unique=True)
+    driver = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+                               related_name='delivery_routes')
+    vehicle = models.CharField(max_length=100)
+    status = models.CharField(max_length=20, choices=ROUTE_STATUS, default='planned')
+
+    start_location = models.ForeignKey(LogisticsLocation, on_delete=models.SET_NULL, null=True,
+                                       related_name='routes_starting')
+    planned_start_time = models.DateTimeField()
+    actual_start_time = models.DateTimeField(null=True, blank=True)
+    estimated_end_time = models.DateTimeField(null=True, blank=True)
+    actual_end_time = models.DateTimeField(null=True, blank=True)
+
+    total_distance_km = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    total_stops = models.IntegerField(default=0)
+    completed_stops = models.IntegerField(default=0)
+
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Delivery Route'
+        verbose_name_plural = 'Delivery Routes'
+
+    def __str__(self):
+        return f"Route {self.route_number} - {self.get_status_display()}"
+
+    @property
+    def progress_percentage(self):
+        if self.total_stops == 0:
+            return 0
+        return int((self.completed_stops / self.total_stops) * 100)
+
+
+class DeliveryStop(models.Model):
+    """
+    Individual stops in a delivery route
+    """
+    STOP_TYPES = [
+        ('pickup', 'Pickup'),
+        ('delivery', 'Delivery'),
+        ('return', 'Return'),
+    ]
+
+    STOP_STATUS = [
+        ('pending', 'Pending'),
+        ('arrived', 'Arrived'),
+        ('in_progress', 'In Progress'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+        ('skipped', 'Skipped'),
+    ]
+
+    route = models.ForeignKey(DeliveryRoute, on_delete=models.CASCADE, related_name='stops')
+    order = models.ForeignKey('orders.Order', on_delete=models.CASCADE, related_name='delivery_stops', null=True, blank=True)
+
+    stop_type = models.CharField(max_length=20, choices=STOP_TYPES)
+    status = models.CharField(max_length=20, choices=STOP_STATUS, default='pending')
+    sequence_number = models.IntegerField()
+
+    location = models.ForeignKey(LogisticsLocation, on_delete=models.SET_NULL, null=True)
+    address = models.TextField()
+    latitude = models.DecimalField(max_digits=10, decimal_places=7)
+    longitude = models.DecimalField(max_digits=10, decimal_places=7)
+
+    contact_name = models.CharField(max_length=255)
+    contact_phone = models.CharField(max_length=20)
+
+    packages_count = models.IntegerField(default=1)
+    tracking_numbers = models.JSONField(default=list, blank=True)
+
+    # Timing
+    planned_arrival = models.DateTimeField(null=True, blank=True)
+    actual_arrival = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    # Details
+    notes = models.TextField(blank=True)
+    signature_image = models.ImageField(upload_to='delivery_signatures/', null=True, blank=True)
+    proof_of_delivery_image = models.ImageField(upload_to='delivery_proofs/', null=True, blank=True)
+    failure_reason = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['route', 'sequence_number']
+        verbose_name = 'Delivery Stop'
+        verbose_name_plural = 'Delivery Stops'
+
+    def __str__(self):
+        return f"Stop #{self.sequence_number} - {self.get_stop_type_display()} ({self.address})"
+
+
+class VehicleTracking(models.Model):
+    """
+    Real-time vehicle GPS tracking
+    """
+    route = models.ForeignKey(DeliveryRoute, on_delete=models.CASCADE, related_name='tracking_points')
+    latitude = models.DecimalField(max_digits=10, decimal_places=7)
+    longitude = models.DecimalField(max_digits=10, decimal_places=7)
+    speed_kmh = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    heading = models.IntegerField(help_text="Compass heading 0-360", null=True, blank=True)
+    accuracy_meters = models.IntegerField(default=0)
+    timestamp = models.DateTimeField(default=timezone.now)
+
+    # Battery and connection info
+    battery_level = models.IntegerField(null=True, blank=True, help_text="Percentage")
+    is_connected = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+        verbose_name = 'Vehicle Tracking Point'
+        verbose_name_plural = 'Vehicle Tracking Points'
+        indexes = [
+            models.Index(fields=['route', '-timestamp']),
+        ]
+
+    def __str__(self):
+        return f"{self.route.route_number} - {self.timestamp}"
+
+
+class FleetVehicle(models.Model):
+    """
+    Fleet vehicle information
+    """
+    VEHICLE_STATUS = [
+        ('active', 'Active'),
+        ('maintenance', 'In Maintenance'),
+        ('inactive', 'Inactive'),
+        ('out_of_service', 'Out of Service'),
+    ]
+
+    VEHICLE_TYPES = [
+        ('van', 'Van'),
+        ('truck', 'Truck'),
+        ('motorcycle', 'Motorcycle'),
+        ('bicycle', 'Bicycle'),
+        ('car', 'Car'),
+    ]
+
+    vehicle_number = models.CharField(max_length=50, unique=True)
+    license_plate = models.CharField(max_length=20, unique=True)
+    vehicle_type = models.CharField(max_length=20, choices=VEHICLE_TYPES)
+    make_model = models.CharField(max_length=100)
+    year = models.IntegerField(null=True, blank=True)
+
+    status = models.CharField(max_length=20, choices=VEHICLE_STATUS, default='active')
+    current_driver = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='current_vehicle'
+    )
+
+    capacity_kg = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    capacity_cubic_meters = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+
+    # Maintenance
+    last_maintenance_date = models.DateField(null=True, blank=True)
+    next_maintenance_date = models.DateField(null=True, blank=True)
+    mileage_km = models.IntegerField(default=0)
+
+    # Location
+    current_latitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+    current_longitude = models.DecimalField(max_digits=10, decimal_places=7, null=True, blank=True)
+    last_location_update = models.DateTimeField(null=True, blank=True)
+
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Fleet Vehicle'
+        verbose_name_plural = 'Fleet Vehicles'
+
+    def __str__(self):
+        return f"{self.vehicle_number} - {self.license_plate}"
+
 
 # ============================================================================
 # SIGNAL HANDLERS

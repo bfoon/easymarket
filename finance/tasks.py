@@ -4,20 +4,23 @@ from stores.models import Store  # Import from stores app
 from .models import LogisticsIntegration, FinancialMetricsIntegration
 from decimal import Decimal
 
-
 @shared_task
 def update_logistics_data():
-    """Background task to update logistics data periodically"""
-    try:
-        from orders.models import OrderItem, Return
+    from logistics.models import Shipment
 
-        for store in Store.objects.filter(status='active'):
-            # Your logistics data update logic here
-            # This is similar to the management command above
-            pass
+    for store in Store.objects.filter(status="active"):
+        logistics, _ = LogisticsIntegration.objects.get_or_create(store=store)
 
-    except ImportError:
-        print("Order models not found")
+        qs = Shipment.objects.filter(order__items__product__store=store).distinct()
+
+        logistics.total_shipments = qs.count()
+        logistics.pending_shipments = qs.filter(status__in=["pending", "in_transit"]).count()
+        logistics.completed_shipments = qs.filter(status__in=["delivered", "completed"]).count()
+        logistics.failed_shipments = qs.filter(status="failed").count()
+
+        logistics.save(update_fields=[
+            "total_shipments", "pending_shipments", "completed_shipments", "failed_shipments", "last_updated"
+        ])
 
 
 @shared_task

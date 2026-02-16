@@ -1,3 +1,14 @@
+# finance/dashboards.py
+
+from datetime import timedelta
+from django.utils import timezone
+from django.db.models import Sum, Q
+
+from .models import FinancialRecord
+from orders.models import Order, Return
+from logistics.models import Shipment
+
+
 class FinancialDashboard:
     """Create dashboard widgets and data"""
 

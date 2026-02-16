@@ -10,6 +10,12 @@ Version: 2.0.0
 
 from django.urls import path, include
 from . import views
+from .fleet_map_views import (
+    fleet_map_view,
+    fleet_map_data,
+    route_detail_api,
+    update_vehicle_location
+)
 
 app_name = 'logistics'
 
@@ -442,5 +448,11 @@ urlpatterns = [
     # Vetting
     path('crossroad/vetting/queue/', views.crossroad_vetting_queue, name='crossroad_vetting_queue'),
     path('order/<uuid:order_id>/update-vetting-fee/', views.update_vetting_fee, name='update_vetting_fee'),
+
+    # Fleet Management Map
+    path('fleet-map/', fleet_map_view, name='fleet_map'),
+    path('api/fleet-map-data/', fleet_map_data, name='fleet_map_data'),
+    path('api/route/<int:route_id>/', route_detail_api, name='route_detail_api'),
+    path('api/update-vehicle-location/', update_vehicle_location, name='update_vehicle_location'),
 
 ]

@@ -1,37 +1,24 @@
-from django.db.models import Sum, Avg, Count, Q, F, Value
+# finance/analytics.py
+
+from django.db.models import (
+    Sum, Avg, Count, Q, F, Value,
+    Case, When, FloatField, DurationField, Min
+)
 from django.db.models.functions import TruncDate, TruncMonth, Coalesce
 from django.utils import timezone
-from datetime import timedelta, date
+from datetime import timedelta
 from decimal import Decimal
-import pandas as pd
-from .models import FinancialRecord, LogisticsIntegration
-from stores.models import Store, StoreMetrics
-from orders.models import Order, OrderItem, Return
+
+from .models import FinancialRecord
+from stores.models import Store
+from orders.models import Order, Return
 from payments.models import Payment
 from logistics.models import Shipment
 
 
+
 class AdvancedFinancialAnalytics:
     """Advanced analytics for financial performance"""
-
-    @staticmethod
-    def get_cohort_analysis(store, months=6):
-        """Analyze customer cohorts and retention"""
-        end_date = timezone.now().date()
-        start_date = end_date - timedelta(days=30 * months)
-
-        # Get customers by month they first ordered
-        customer_cohorts = Order.objects.filter(
-            items__product__store=store,
-            created_at__date__gte=start_date
-        ).values('buyer').annotate(
-            first_order_month=TruncMonth('created_at'),
-            total_orders=Count('id'),
-            total_spent=Sum('items__price_at_time'),
-            last_order_date=F('created_at')
-        ).order_by('first_order_month')
-
-        return customer_cohorts
 
     @staticmethod
     def get_seasonal_trends(store, years=2):

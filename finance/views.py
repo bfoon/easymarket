@@ -32,36 +32,57 @@ def staff_required(user):
 def store_dashboard(request):
     stores = Store.objects.filter(status="active")
 
-    current_month = timezone.now().replace(day=1)
+    current_month = timezone.now().replace(day=1).date()
+
     store_data = []
 
+    total_revenue_all = Decimal("0.00")
+    total_expenses_all = Decimal("0.00")
+    total_shipments_all = 0
+
     for store in stores:
-        summary = FinancialRecord.objects.filter(
+        agg = FinancialRecord.objects.filter(
             store=store,
             transaction_date__gte=current_month
         ).aggregate(
-            revenue=Sum("amount", filter=Q(record_type="revenue")),
-            expenses=Sum("amount", filter=Q(record_type="expense")),
-            refunds=Sum("amount", filter=Q(record_type="refund")),
-            commissions=Sum("amount", filter=Q(record_type="commission")),
+            total_revenue=Sum("amount", filter=Q(record_type="revenue")),
+            total_expenses=Sum("amount", filter=Q(record_type="expense")),
+            total_refunds=Sum("amount", filter=Q(record_type="refund")),
+            total_commissions=Sum("amount", filter=Q(record_type="commission")),
             return_costs=Sum("amount", filter=Q(record_type="return_cost")),
+            shipping_costs=Sum("amount", filter=Q(record_type="shipping_cost")),
         )
 
-        revenue = summary["revenue"] or Decimal("0.00")
-        expenses = summary["expenses"] or Decimal("0.00")
-        refunds = summary["refunds"] or Decimal("0.00")
-        commissions = summary["commissions"] or Decimal("0.00")
-        return_costs = summary["return_costs"] or Decimal("0.00")
+        total_revenue = agg["total_revenue"] or Decimal("0.00")
+        total_expenses = agg["total_expenses"] or Decimal("0.00")
+        total_refunds = agg["total_refunds"] or Decimal("0.00")
+        total_commissions = agg["total_commissions"] or Decimal("0.00")
+        return_costs = agg["return_costs"] or Decimal("0.00")
+        shipping_costs = agg["shipping_costs"] or Decimal("0.00")
 
-        net_profit = revenue - expenses - refunds - commissions - return_costs
+        # Net profit: revenue - all costs out
+        net_profit = total_revenue - (
+            total_expenses + total_refunds + total_commissions + return_costs + shipping_costs
+        )
 
         logistics, _ = LogisticsIntegration.objects.get_or_create(store=store)
 
+        total_revenue_all += total_revenue
+        total_expenses_all += total_expenses
+        total_shipments_all += int(logistics.total_shipments or 0)
+
         store_data.append({
             "store": store,
-            "financial": summary,
+            "financial_summary": {
+                "total_revenue": total_revenue,
+                "total_expenses": total_expenses,
+                "total_refunds": total_refunds,
+                "total_commissions": total_commissions,
+                "return_costs": return_costs,
+                "shipping_costs": shipping_costs,
+            },
             "net_profit": net_profit,
-            "logistics": logistics,
+            "logistics_data": logistics,  # template expects logistics_data.*
             "total_products": store.get_total_products(),
             "total_orders": store.get_total_orders(),
             "total_sales": store.get_total_sales(),
@@ -74,13 +95,11 @@ def store_dashboard(request):
         "store_data": store_data,
         "current_month": current_month,
         "total_stores": stores.count(),
-        "total_revenue_all": sum(
-            (d["financial"]["revenue"] or Decimal("0")) for d in store_data
-        ),
+        "total_revenue_all": total_revenue_all,
+        "total_expenses_all": total_expenses_all,
+        "total_shipments_all": total_shipments_all,
     }
-
     return render(request, "finance/store_dashboard.html", context)
-
 
 # =============================
 # STORE FINANCIAL DETAIL

@@ -343,11 +343,27 @@ class Order(models.Model):
 
     # ✅ Tracking number like EM0000000001
     tracking_number = models.CharField(
-        max_length=12,
+        max_length=100,
         blank=True,
         null=True,
         unique=True,
         db_index=True
+    )
+
+    # GPS Coordinates for delivery location (if not already present)
+    shipping_latitude = models.DecimalField(
+        max_digits=10,
+        decimal_places=7,
+        null=True,
+        blank=True,
+        help_text="Delivery location latitude"
+    )
+    shipping_longitude = models.DecimalField(
+        max_digits=10,
+        decimal_places=7,
+        null=True,
+        blank=True,
+        help_text="Delivery location longitude"
     )
 
     shipping_address = models.ForeignKey('orders.ShippingAddress', on_delete=models.SET_NULL, blank=True, null=True)

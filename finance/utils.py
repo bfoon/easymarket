@@ -1,4 +1,5 @@
 from django.db.models import Sum, Q
+from django.db.models.functions import Coalesce
 from .models import FinancialRecord
 from decimal import Decimal
 
@@ -21,12 +22,12 @@ def get_financial_summary_for_period(store, start_date, end_date):
         store=store,
         transaction_date__range=[start_date, end_date]
     ).aggregate(
-        revenue=Sum('amount', filter=Q(record_type='revenue')) or 0,
-        expenses=Sum('amount', filter=Q(record_type='expense')) or 0,
-        refunds=Sum('amount', filter=Q(record_type='refund')) or 0,
-        commissions=Sum('amount', filter=Q(record_type='commission')) or 0,
-        return_costs=Sum('amount', filter=Q(record_type='return_cost')) or 0,
-        shipping_costs=Sum('amount', filter=Q(record_type='shipping_cost')) or 0,
+        revenue=Coalesce(Sum('amount', filter=Q(record_type='revenue')), Decimal('0')),
+        expenses=Coalesce(Sum('amount', filter=Q(record_type='expense')), Decimal('0')),
+        refunds=Coalesce(Sum('amount', filter=Q(record_type='refund')), Decimal('0')),
+        commissions=Coalesce(Sum('amount', filter=Q(record_type='commission')), Decimal('0')),
+        return_costs=Coalesce(Sum('amount', filter=Q(record_type='return_cost')), Decimal('0')),
+        shipping_costs=Coalesce(Sum('amount', filter=Q(record_type='shipping_cost')), Decimal('0')),
     )
 
 
