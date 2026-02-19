@@ -1,0 +1,134 @@
+{% load static %}
+{% load humanize %}
+{% load product_image_tags %}
+{% load currency_tags %}
+{% for product in products %}
+
+  <article class="sf-product-card"
+           onclick="window.location.href='{% url 'stores:product_detail' product.id %}'">
+
+    <!-- Image area -->
+    <div class="sf-product-img">
+      {% if product.images.first %}
+        <img src="{{ product.images.first.image.url }}"
+             alt="{{ product.name }}"
+             loading="lazy"
+             onerror="this.onerror=null; this.src='{% static 'images/placeholder.jpg' %}';">
+      {% elif product.image %}
+        <img src="{{ product.image.url }}"
+             alt="{{ product.name }}"
+             loading="lazy"
+             onerror="this.onerror=null; this.src='{% static 'images/placeholder.jpg' %}';">
+      {% elif product.primary_image %}
+        <img src="{{ product.primary_image.url }}"
+             alt="{{ product.name }}"
+             loading="lazy"
+             onerror="this.onerror=null; this.src='{% static 'images/placeholder.jpg' %}';">
+      {% else %}
+        <img src="{% static 'images/placeholder.jpg' %}"
+             alt="{{ product.name }}"
+             loading="lazy">
+      {% endif %}
+
+      <!-- Badges -->
+      <div class="sf-product-badges">
+        {% if product.is_featured %}
+          <span class="sf-product-tag sf-tag-featured">★ Featured</span>
+        {% endif %}
+        {% if product.is_new %}
+          <span class="sf-product-tag sf-tag-new">New</span>
+        {% endif %}
+        {% if product.original_price and product.original_price > product.price %}
+          <span class="sf-product-tag sf-tag-sale">DEAL</span>
+        {% endif %}
+      </div>
+
+      <!-- Wishlist btn (top-right) -->
+      {% if store.enable_wishlist %}
+        <button class="sf-product-wish-btn"
+                onclick="event.stopPropagation(); addToWishlist({{ product.id }})"
+                title="Wishlist" type="button">
+          <i class="far fa-heart"></i>
+        </button>
+      {% endif %}
+
+      <!-- Cart btn (bottom-right) -->
+      <a href="{% url 'stores:product_detail' product.id %}"
+         class="sf-product-cart-btn"
+         onclick="event.stopPropagation()"
+         title="View Product">
+        <i class="fas fa-shopping-cart"></i>
+      </a>
+    </div><!-- /.sf-product-img -->
+
+    <!-- Body -->
+    <div class="sf-product-body">
+      {% if product.category %}
+        <div class="sf-product-cat">{{ product.category.name }}</div>
+      {% endif %}
+
+      <h3 class="sf-product-name">{{ product.name }}</h3>
+
+      <p class="sf-product-desc">
+        {% if product.description %}
+          {{ product.description|striptags|truncatewords:14 }}
+        {% else %}
+          Quality product from {{ store.name }}.
+        {% endif %}
+      </p>
+
+      <!-- Price -->
+      <div class="sf-price-row">
+        <span class="sf-price-current">{% display_money product.price %}</span>
+        {% if product.original_price and product.original_price > product.price %}
+          <span class="sf-price-original">{% display_money product.original_price %}</span>
+          <span class="sf-price-save">SAVE</span>
+        {% endif %}
+      </div>
+
+      <!-- Rating bar -->
+      {% if show_product_ratings %}
+      <div class="sf-rating-bar">
+        <div class="sf-stars-row">
+          {% with avg=product.average_rating|default:0 %}
+            {% for i in "12345" %}
+              {% if forloop.counter <= avg %}
+                <i class="fas fa-star"></i>
+              {% elif forloop.counter|add:"-1" < avg %}
+                <i class="fas fa-star-half-alt"></i>
+              {% else %}
+                <i class="far fa-star"></i>
+              {% endif %}
+            {% endfor %}
+          {% endwith %}
+        </div>
+        <span class="sf-rating-num">{{ product.average_rating|default:0|floatformat:1 }}</span>
+        <span class="sf-rating-count">({{ product.review_count|default:0 }})</span>
+      </div>
+      {% endif %}
+
+      <!-- Meta: stock -->
+      <div class="sf-product-meta">
+        <div>
+          {% if product.warehouse_qty is not None %}
+            {% if product.warehouse_qty > 10 %}
+              <span class="sf-stock-badge sf-stock-in">In Stock</span>
+            {% elif product.warehouse_qty > 0 %}
+              <span class="sf-stock-badge sf-stock-low">Low Stock</span>
+            {% else %}
+              <span class="sf-stock-badge sf-stock-out">Out of Stock</span>
+            {% endif %}
+          {% elif product.stock_quantity > 10 %}
+            <span class="sf-stock-badge sf-stock-in">In Stock</span>
+          {% elif product.stock_quantity > 0 %}
+            <span class="sf-stock-badge sf-stock-low">Low Stock</span>
+          {% else %}
+            <span class="sf-stock-badge sf-stock-out">Out of Stock</span>
+          {% endif %}
+        </div>
+      </div>
+
+    </div><!-- /.sf-product-body -->
+  </article>
+
+{% endfor %}
