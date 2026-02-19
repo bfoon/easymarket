@@ -31,7 +31,7 @@ from accounts.models import AdminLog
 import re
 from decimal import InvalidOperation, ROUND_HALF_UP
 from accounts.utils import log_admin_action
-from .models import Store, StoreFollow, StoreNotification, StoreFavorite, B2BInquiry
+from .models import Store, StoreFollow, StoreNotification, StoreFavorite, B2BInquiry, StoreReview
 from reviews.models import Review
 from marketplace.models import Product, Category, ProductImage
 from orders.models import ChatMessage
@@ -1662,6 +1662,46 @@ def get_store_follow_status(request, store_id):
 
     return JsonResponse(data)
 
+@login_required
+@require_POST
+def rate_store(request, slug):
+    """
+    AJAX endpoint — create or update a StoreReview.
+    POST body (JSON): { "rating": 1-5, "comment": "..." }
+    """
+    try:
+        data    = json.loads(request.body)
+        rating  = int(data.get('rating', 0))
+        comment = data.get('comment', '').strip()[:1000]
+
+        if rating < 1 or rating > 5:
+            return JsonResponse({'success': False, 'message': 'Rating must be between 1 and 5.'})
+
+        store = get_object_or_404(Store, slug=slug, status='active')
+
+        review, created = StoreReview.objects.update_or_create(
+            store=store,
+            user=request.user,
+            defaults={'rating': rating, 'comment': comment}
+        )
+
+        # Recompute aggregates to return fresh values
+        new_avg   = StoreReview.objects.filter(store=store).aggregate(avg=Avg('rating'))['avg'] or 0
+        new_count = StoreReview.objects.filter(store=store).count()
+
+        return JsonResponse({
+            'success':   True,
+            'created':   created,
+            'message':   'Rating submitted!' if created else 'Rating updated!',
+            'new_avg':   round(new_avg, 1),
+            'new_count': new_count,
+        })
+
+    except (ValueError, TypeError) as e:
+        return JsonResponse({'success': False, 'message': f'Invalid data: {e}'})
+    except Exception as e:
+        logger.error(f"rate_store error: {e}")
+        return JsonResponse({'success': False, 'message': 'An error occurred. Please try again.'})
 
 def store_detail(request, slug):
     """
@@ -1737,7 +1777,29 @@ def store_detail(request, slug):
     page_number = request.GET.get('page', 1)
     products_page = paginator.get_page(page_number)
 
-    # ⭐ Reviews and ratings
+    # ── AJAX / Load More: return rendered cards as JSON ──────────
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.GET.get('ajax') == '1':
+        from django.template.loader import render_to_string
+        html = render_to_string(
+            'stores/partials/product_cards.html',
+            {
+                'products':            products_page,
+                'store':               store,
+                'show_product_ratings': getattr(store, 'show_product_ratings', True),
+                'show_product_badges':  getattr(store, 'show_product_badges', True),
+                'request':             request,
+            },
+            request=request,
+        )
+        return JsonResponse({
+            'html':        html,
+            'has_next':    products_page.has_next(),
+            'has_previous':products_page.has_previous(),
+            'page':        products_page.number,
+            'total_pages': paginator.num_pages,
+            'total_count': paginator.count,
+            'end_index':   products_page.end_index(),
+        })
     reviews = Review.objects.filter(product_id__in=product_ids)
     review_count = reviews.count()
     average_rating = reviews.aggregate(avg=Avg('rating'))['avg'] or 0
@@ -1782,13 +1844,54 @@ def store_detail(request, slug):
     # 🕒 Store hours (grouped for better display)
     store_hours = None
     grouped_hours = []
+    is_open = False  # ← NEW
 
     if hasattr(store, 'hours'):
         store_hours = store.hours.order_by('day_of_week')
         grouped_hours = group_store_hours(store_hours)
 
+        # ─── Calculate whether store is open right now ────────────
+        now = datetime.now()
+        current_day = now.weekday()  # 0 = Monday … 6 = Sunday
+        current_time = now.time()
+
+        for hours_entry in store_hours:
+            # day_of_week field: 0=Mon … 6=Sun  (matches Python weekday())
+            if (
+                    getattr(hours_entry, 'day_of_week', None) == current_day
+                    and not getattr(hours_entry, 'is_closed', True)
+                    and hours_entry.opening_time is not None
+                    and hours_entry.closing_time is not None
+            ):
+                if hours_entry.opening_time <= current_time <= hours_entry.closing_time:
+                    is_open = True
+                break
+
     # 📊 Store statistics
     products_count = products_queryset.count()
+
+    # ⭐ Store-level ratings (StoreReview — not product reviews)
+    store_reviews_qs      = StoreReview.objects.filter(store=store)
+    store_rating_count    = store_reviews_qs.count()
+    store_avg_rating_raw  = store_reviews_qs.aggregate(avg=Avg('rating'))['avg'] or 0
+    store_avg_rating      = round(store_avg_rating_raw, 1)
+    store_rating_breakdown = {i: store_reviews_qs.filter(rating=i).count() for i in range(1, 6)}
+
+    # Pre-built list of (star, count, percentage) for the breakdown bars — 5★ down to 1★
+    store_rating_items = [
+        {
+            'star':  star,
+            'count': store_rating_breakdown.get(star, 0),
+            'pct':   round(store_rating_breakdown.get(star, 0) / store_rating_count * 100)
+                     if store_rating_count else 0,
+        }
+        for star in [5, 4, 3, 2, 1]
+    ]
+
+    # Current user's existing store rating (if any)
+    user_store_rating = None
+    if request.user.is_authenticated:
+        user_store_rating = store_reviews_qs.filter(user=request.user).first()
 
     # 🎨 Theme configuration
     # Get theme-related data if available, with fallbacks
@@ -1830,6 +1933,14 @@ def store_detail(request, slug):
         # Store Hours
         'grouped_hours': grouped_hours,
         'store_hours': store_hours,
+        'is_open': is_open,
+
+        # Store Ratings (StoreReview)
+        'store_rating_count':      store_rating_count,
+        'store_avg_rating':        store_avg_rating,
+        'store_rating_breakdown':  store_rating_breakdown,
+        'store_rating_items':      store_rating_items,
+        'user_store_rating':       user_store_rating,
 
         # Theme & Customization
         'theme_colors': theme_colors,

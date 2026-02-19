@@ -98,6 +98,8 @@ urlpatterns = [
     path('<slug:slug>/follow/', views.follow_store_by_slug, name='follow_store_by_slug'),
     path('<slug:slug>/follow-status/', views.get_follow_status_by_slug, name='follow_status_by_slug'),
 
+    path('<slug:slug>/rate/', views.rate_store, name='rate_store'),
+
     # Public store display URLs (using slug for SEO-friendly URLs) - MUST come AFTER specific slug patterns
     path('<slug:slug>/', views.store_detail, name='store_detail'),
     path('<slug:slug>/products/', views.store_products, name='store_products'),

@@ -2,6 +2,7 @@
 {% load static %}
 {% load humanize %}
 {% load product_image_tags %}
+{% load currency_tags %}
 
 {% block title %}{{ store.name }} - Premium Store{% endblock %}
 
@@ -21,144 +22,181 @@
   <meta name="csrf-token" content="{{ csrf_token }}">
   <meta name="user-auth" content="{% if user.is_authenticated %}true{% else %}false{% endif %}">
 
-  <!-- Async Font Awesome -->
+  <!-- Font Awesome -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" media="print" onload="this.media='all'">
-
-  <!-- Keep your main CSS if needed -->
   <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
 
-  <!-- Scoped Theme Tokens (won't affect base.css) -->
   <style>
-    .storefront-v1{
-      --sf-primary: {{ theme_colors.primary|default:'#2563eb' }};
-      --sf-secondary: {{ theme_colors.secondary|default:'#64748b' }};
-      --sf-accent: {{ theme_colors.accent|default:'#f59e0b' }};
-      --sf-text: {{ theme_colors.text|default:'#1e293b' }};
-      --sf-bg: {{ theme_colors.background|default:'#ffffff' }};
+    /* ═══════════════════════════════════════════════════════
+       STOREFRONT v2 — Scoped under .storefront-v1
+       ═══════════════════════════════════════════════════════ */
+
+    .storefront-v1 {
+      --sf-primary:    {{ theme_colors.primary|default:'#2563eb' }};
+      --sf-secondary:  {{ theme_colors.secondary|default:'#64748b' }};
+      --sf-accent:     {{ theme_colors.accent|default:'#f59e0b' }};
+      --sf-text:       {{ theme_colors.text|default:'#1e293b' }};
+      --sf-bg:         {{ theme_colors.background|default:'#f8fafc' }};
+      --sf-card:       #ffffff;
+      --sf-radius:     14px;
+      --sf-shadow:     0 6px 18px rgba(17,24,39,.07);
+      --sf-shadow-lg:  0 14px 30px rgba(17,24,39,.13);
+      background: var(--sf-bg);
+      color: var(--sf-text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     }
+    .storefront-v1, .storefront-v1 * { box-sizing: border-box; }
+    .storefront-v1 .sf-container { max-width: 1400px; margin: 0 auto; padding: 0 1.25rem; }
 
-    /* ============================================
-      STOREFRONT v1 (SCOPED)
-      Wrapper: .storefront-v1
-      Prefix: sf-
-    ============================================ */
-
-    .storefront-v1 { background: var(--sf-bg); color: var(--sf-text); }
-    .storefront-v1,
-    .storefront-v1 * { box-sizing: border-box; }
-
-    .storefront-v1 .sf-container { max-width: 1400px; margin: 0 auto; padding: 0 1rem; }
-
-    /* HERO */
+    /* ── HERO ──────────────────────────────────────────────── */
     .storefront-v1 .sf-hero {
-      background: linear-gradient(135deg, var(--sf-primary) 0%, var(--sf-secondary) 100%);
-      color: #fff;
-      padding: 3rem 0 2rem;
       position: relative;
+      min-height: 400px;
+      display: flex;
+      align-items: flex-end;
       overflow: hidden;
+      color: #fff;
     }
-    .storefront-v1 .sf-hero::before {
-      content: '';
+    .storefront-v1 .sf-hero-banner {
       position: absolute;
       inset: 0;
-      background:
-        radial-gradient(circle at 20% 50%, rgba(255,255,255,0.1) 0%, transparent 50%),
-        radial-gradient(circle at 80% 80%, rgba(255,255,255,0.1) 0%, transparent 50%);
-      opacity: 0.6;
+      background: linear-gradient(135deg, var(--sf-primary) 0%, var(--sf-secondary) 100%);
+      background-size: cover;
+      background-position: center;
     }
+    .storefront-v1 .sf-hero-banner.has-banner {
+      background-image: url('');  /* set inline */
+    }
+    .storefront-v1 .sf-hero-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        180deg,
+        rgba(0,0,0,0.05) 0%,
+        rgba(0,0,0,0.55) 60%,
+        rgba(0,0,0,0.82) 100%
+      );
+    }
+    /* animated orbs */
+    .storefront-v1 .sf-hero-orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(60px);
+      opacity: 0.25;
+      animation: sfOrb 8s ease-in-out infinite alternate;
+    }
+    .storefront-v1 .sf-hero-orb:nth-child(1){
+      width:350px; height:350px; background:rgba(255,255,255,0.3);
+      top:-80px; right:5%; animation-delay:0s;
+    }
+    .storefront-v1 .sf-hero-orb:nth-child(2){
+      width:250px; height:250px; background:rgba(255,255,255,0.18);
+      bottom:0; left:8%; animation-delay:-3s;
+    }
+    @keyframes sfOrb {
+      from { transform: translate(0,0) scale(1); }
+      to   { transform: translate(15px, -20px) scale(1.08); }
+    }
+
     .storefront-v1 .sf-hero-content {
       position: relative;
-      z-index: 1;
-      text-align: center;
-      max-width: 900px;
-      margin: 0 auto;
+      z-index: 2;
+      width: 100%;
+      padding: 3rem 0 2.5rem;
+    }
+    .storefront-v1 .sf-hero-inner {
+      display: flex;
+      align-items: flex-end;
+      gap: 2rem;
+      flex-wrap: wrap;
     }
 
+    /* Logo */
     .storefront-v1 .sf-store-logo {
-      width: 120px;
-      height: 120px;
-      border-radius: 50%;
-      border: 4px solid #fff;
-      margin-bottom: 1.5rem;
+      width: 110px;
+      height: 110px;
+      border-radius: 20px;
+      border: 3px solid rgba(255,255,255,0.8);
       object-fit: cover;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+      flex-shrink: 0;
+      background: #fff;
     }
+
+    .storefront-v1 .sf-hero-text { flex: 1; min-width: 0; }
     .storefront-v1 .sf-store-name {
-      font-size: 2.5rem;
-      font-weight: 800;
-      margin-bottom: 0.75rem;
+      font-size: 2.4rem;
+      font-weight: 900;
       letter-spacing: -0.02em;
+      margin: 0 0 0.5rem;
+      line-height: 1.1;
+      text-shadow: 0 2px 12px rgba(0,0,0,0.3);
     }
     .storefront-v1 .sf-store-description {
-      font-size: 1.125rem;
-      opacity: 0.95;
-      margin-bottom: 2rem;
+      font-size: 1rem;
+      opacity: 0.92;
+      margin: 0 0 1.25rem;
       line-height: 1.6;
-      max-width: 700px;
-      margin-left: auto;
-      margin-right: auto;
+      max-width: 620px;
     }
 
+    /* Hero badges */
     .storefront-v1 .sf-hero-badges {
       display: flex;
-      justify-content: center;
-      gap: 1rem;
-      margin-bottom: 2rem;
+      gap: 0.625rem;
       flex-wrap: wrap;
+      margin-bottom: 1.5rem;
     }
     .storefront-v1 .sf-badge {
       display: inline-flex;
       align-items: center;
-      gap: 0.5rem;
-      padding: 0.5rem 1.25rem;
-      background: rgba(255,255,255,0.2);
-      backdrop-filter: blur(10px);
+      gap: 0.375rem;
+      padding: 0.35rem 0.875rem;
+      background: rgba(255,255,255,0.18);
+      backdrop-filter: blur(12px);
       border-radius: 50px;
-      font-size: 0.9375rem;
-      font-weight: 600;
-      border: 1px solid rgba(255,255,255,0.3);
+      font-size: 0.8125rem;
+      font-weight: 700;
+      border: 1px solid rgba(255,255,255,0.28);
     }
-    .storefront-v1 .sf-badge i { font-size: 1.125rem; }
 
+    /* Hero stats */
     .storefront-v1 .sf-hero-stats {
       display: flex;
-      justify-content: center;
-      gap: 3rem;
-      margin-bottom: 2rem;
+      gap: 2.5rem;
+      margin-bottom: 1.75rem;
       flex-wrap: wrap;
     }
-    .storefront-v1 .sf-stat-item { text-align: center; min-width: 100px; }
+    .storefront-v1 .sf-stat-item { text-align: center; }
     .storefront-v1 .sf-stat-number {
       display: block;
-      font-size: 2.25rem;
-      font-weight: 800;
+      font-size: 2rem;
+      font-weight: 900;
       line-height: 1;
-      margin-bottom: 0.5rem;
+      margin-bottom: 0.3rem;
     }
     .storefront-v1 .sf-stat-label {
-      font-size: 0.875rem;
-      opacity: 0.9;
+      font-size: 0.75rem;
+      opacity: 0.85;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
-      font-weight: 600;
+      letter-spacing: 0.7px;
+      font-weight: 700;
     }
 
+    /* Hero actions */
     .storefront-v1 .sf-hero-actions {
       display: flex;
-      justify-content: center;
-      gap: 1rem;
+      gap: 0.75rem;
       flex-wrap: wrap;
     }
-
-    /* Buttons (avoid .btn collisions) */
     .storefront-v1 .sf-btn {
       display: inline-flex;
       align-items: center;
       gap: 0.5rem;
-      padding: 1rem 2rem;
-      border-radius: 12px;
-      font-weight: 600;
-      font-size: 1rem;
+      padding: 0.75rem 1.75rem;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 0.9375rem;
       border: none;
       cursor: pointer;
       transition: all 0.2s;
@@ -167,103 +205,148 @@
     .storefront-v1 .sf-btn-primary {
       background: #fff;
       color: var(--sf-primary);
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.18);
     }
     .storefront-v1 .sf-btn-primary:hover {
       transform: translateY(-2px);
-      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+      color: var(--sf-primary);
     }
     .storefront-v1 .sf-btn-secondary {
-      background: rgba(255,255,255,0.2);
+      background: rgba(255,255,255,0.16);
       color: #fff;
-      border: 2px solid rgba(255,255,255,0.4);
+      border: 1.5px solid rgba(255,255,255,0.38);
+      backdrop-filter: blur(10px);
     }
     .storefront-v1 .sf-btn-secondary:hover {
-      background: rgba(255,255,255,0.3);
-      border-color: rgba(255,255,255,0.6);
+      background: rgba(255,255,255,0.28);
+      color: #fff;
     }
     .storefront-v1 .sf-btn-secondary.sf-following {
-      background: rgba(34, 197, 94, 0.2);
-      border-color: rgba(34, 197, 94, 0.4);
+      background: rgba(34,197,94,0.25);
+      border-color: rgba(34,197,94,0.5);
     }
 
-    /* INFO BAR */
+    /* ── STICKY INFO BAR ───────────────────────────────────── */
     .storefront-v1 .sf-info-bar {
       background: #fff;
       border-bottom: 1px solid #e2e8f0;
-      padding: 1rem 0;
+      padding: 0.875rem 0;
       position: sticky;
       top: 0;
       z-index: 100;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.07);
     }
     .storefront-v1 .sf-info-bar-content {
       display: flex;
       justify-content: space-between;
       align-items: center;
       flex-wrap: wrap;
-      gap: 1rem;
+      gap: 0.75rem;
     }
     .storefront-v1 .sf-info-items {
       display: flex;
-      gap: 2rem;
+      gap: 1.75rem;
       flex-wrap: wrap;
+      align-items: center;
     }
     .storefront-v1 .sf-info-item {
       display: flex;
       align-items: center;
-      gap: 0.5rem;
+      gap: 0.45rem;
       font-size: 0.875rem;
       color: var(--sf-text);
     }
-    .storefront-v1 .sf-info-item i {
-      color: var(--sf-primary);
-      font-size: 1rem;
-    }
+    .storefront-v1 .sf-info-item i { color: var(--sf-primary); font-size: 0.9375rem; }
 
-    .storefront-v1 .sf-status-badge {
+    /* Open/Closed pill */
+    .storefront-v1 .sf-status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
       padding: 0.25rem 0.75rem;
       border-radius: 50px;
       font-size: 0.75rem;
-      font-weight: 700;
+      font-weight: 800;
       text-transform: uppercase;
+      letter-spacing: 0.4px;
     }
-    .storefront-v1 .sf-status-open { background: #d1fae5; color: #065f46; }
-    .storefront-v1 .sf-status-closed { background: #fee2e2; color: #991b1b; }
+    .storefront-v1 .sf-status-open {
+      background: #d1fae5;
+      color: #065f46;
+    }
+    .storefront-v1 .sf-status-closed {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+    /* pulsing dot for "Open" */
+    .storefront-v1 .sf-pulse-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: #10b981;
+      animation: sfPulseDot 1.8s ease-in-out infinite;
+      flex-shrink: 0;
+    }
+    .storefront-v1 .sf-status-closed .sf-pulse-dot {
+      background: #ef4444;
+      animation: none;
+    }
+    @keyframes sfPulseDot {
+      0%,100%{ opacity:1; transform:scale(1); }
+      50%{ opacity:0.55; transform:scale(1.4); }
+    }
 
-    /* MAIN */
-    .storefront-v1 .sf-main { padding: 3rem 0; }
-    .storefront-v1 .sf-grid { display: grid; grid-template-columns: 1fr 350px; gap: 2rem; }
+    /* ── MAIN LAYOUT ───────────────────────────────────────── */
+    .storefront-v1 .sf-main { padding: 2.5rem 0 3rem; }
+    .storefront-v1 .sf-grid {
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      gap: 2rem;
+      align-items: start;
+    }
 
-    .storefront-v1 .sf-section-header { margin-bottom: 2rem; }
-    .storefront-v1 .sf-section-title { font-size: 2rem; font-weight: 800; color: var(--sf-text); margin-bottom: 0.5rem; }
-    .storefront-v1 .sf-section-subtitle { font-size: 1.125rem; color: #64748b; }
+    /* ── SECTION HEADERS ───────────────────────────────────── */
+    .storefront-v1 .sf-section-header { margin-bottom: 1.5rem; }
+    .storefront-v1 .sf-section-title {
+      font-size: 1.625rem;
+      font-weight: 900;
+      color: var(--sf-text);
+      margin-bottom: 0.25rem;
+      letter-spacing: -0.01em;
+    }
+    .storefront-v1 .sf-section-subtitle { font-size: 0.9375rem; color: #64748b; }
 
-    /* PRODUCTS */
+    /* ── PRODUCT GRID (matches exp-card style) ─────────────── */
     .storefront-v1 .sf-products-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-      gap: 1.5rem;
-      margin-bottom: 3rem;
-    }
-    .storefront-v1 .sf-product-card {
-      background: #fff;
-      border-radius: 16px;
-      overflow: hidden;
-      border: 1px solid #e2e8f0;
-      transition: all 0.2s;
-    }
-    .storefront-v1 .sf-product-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 12px 32px rgba(0,0,0,0.12);
-      border-color: var(--sf-primary);
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 14px;
+      margin-bottom: 2.5rem;
     }
 
+    /* ── PRODUCT CARD (exp-card port) ──────────────────────── */
+    .storefront-v1 .sf-product-card {
+      background: var(--sf-card);
+      border: 1px solid #e5e7eb;
+      border-radius: var(--sf-radius);
+      overflow: hidden;
+      box-shadow: var(--sf-shadow);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      cursor: pointer;
+      position: relative;
+    }
+    .storefront-v1 .sf-product-card:hover {
+      transform: translateY(-3px);
+      box-shadow: var(--sf-shadow-lg);
+    }
+
+    /* Image wrapper — 3:2 aspect */
     .storefront-v1 .sf-product-img {
       position: relative;
       width: 100%;
-      padding-top: 100%;
-      background: #f8fafc;
+      padding-bottom: 72%;
+      background: #f3f4f6;
+      overflow: hidden;
     }
     .storefront-v1 .sf-product-img img {
       position: absolute;
@@ -271,241 +354,586 @@
       width: 100%;
       height: 100%;
       object-fit: cover;
+      transition: transform 0.28s ease;
+    }
+    .storefront-v1 .sf-product-card:hover .sf-product-img img {
+      transform: scale(1.05);
     }
 
+    /* Badges (top-left) */
     .storefront-v1 .sf-product-badges {
       position: absolute;
-      top: 0.75rem;
-      left: 0.75rem;
+      left: 10px;
+      top: 10px;
       display: flex;
       flex-direction: column;
-      gap: 0.5rem;
+      gap: 5px;
+      z-index: 2;
     }
-    .storefront-v1 .sf-product-badge {
-      padding: 0.25rem 0.75rem;
-      border-radius: 50px;
-      font-size: 0.75rem;
-      font-weight: 700;
-      backdrop-filter: blur(10px);
+    .storefront-v1 .sf-product-tag {
+      font-size: 0.7rem;
+      font-weight: 900;
+      padding: 3px 8px;
+      border-radius: 8px;
       color: #fff;
-      display: inline-flex;
-      align-items: center;
-      gap: .4rem;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.14);
+      width: max-content;
     }
-    .storefront-v1 .sf-badge-featured { background: rgba(245, 158, 11, 0.95); }
-    .storefront-v1 .sf-badge-new { background: rgba(34, 197, 94, 0.95); }
-    .storefront-v1 .sf-badge-sale { background: rgba(239, 68, 68, 0.95); }
+    .storefront-v1 .sf-tag-featured  { background: linear-gradient(45deg, #f59e0b, #fbbf24); color: #111; }
+    .storefront-v1 .sf-tag-new       { background: linear-gradient(45deg, #10b981, #34d399); }
+    .storefront-v1 .sf-tag-sale      { background: linear-gradient(45deg, #ef4444, #f87171); }
 
-    .storefront-v1 .sf-product-actions {
+    /* Cart button (bottom-right of image) */
+    .storefront-v1 .sf-product-cart-btn {
       position: absolute;
-      top: 0.75rem;
-      right: 0.75rem;
-      display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
-      opacity: 0;
-      transition: opacity 0.2s;
-    }
-    .storefront-v1 .sf-product-card:hover .sf-product-actions { opacity: 1; }
-
-    .storefront-v1 .sf-action-btn {
-      width: 40px;
-      height: 40px;
+      right: 10px;
+      bottom: 10px;
+      width: 38px;
+      height: 38px;
       border-radius: 50%;
+      border: 1px solid #d1d5db;
       background: #fff;
-      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.13);
+      cursor: pointer;
+      z-index: 3;
+      transition: all 0.2s;
+      font-size: 0.875rem;
+      color: #374151;
+    }
+    .storefront-v1 .sf-product-cart-btn:hover {
+      border-color: var(--sf-primary);
+      color: var(--sf-primary);
+      transform: scale(1.08);
+    }
+    .storefront-v1 .sf-product-cart-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    /* Wishlist quick action (top-right) */
+    .storefront-v1 .sf-product-wish-btn {
+      position: absolute;
+      right: 10px;
+      top: 10px;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: 1px solid #d1d5db;
+      background: rgba(255,255,255,0.9);
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      z-index: 3;
+      opacity: 0;
       transition: all 0.2s;
+      font-size: 0.8125rem;
+      color: #374151;
     }
-    .storefront-v1 .sf-action-btn:hover {
-      background: var(--sf-primary);
-      color: #fff;
-      transform: scale(1.06);
-    }
+    .storefront-v1 .sf-product-card:hover .sf-product-wish-btn { opacity: 1; }
+    .storefront-v1 .sf-product-wish-btn:hover { border-color: #ef4444; color: #ef4444; transform: scale(1.1); }
 
-    .storefront-v1 .sf-product-info { padding: 1.25rem; }
+    /* Body */
+    .storefront-v1 .sf-product-body { padding: 10px 10px 12px; }
     .storefront-v1 .sf-product-cat {
-      font-size: 0.75rem;
+      font-size: 0.7rem;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.6px;
       color: var(--sf-primary);
-      font-weight: 600;
-      margin-bottom: 0.5rem;
+      font-weight: 700;
+      margin-bottom: 4px;
     }
     .storefront-v1 .sf-product-name {
-      font-size: 1.125rem;
+      font-size: 0.9rem;
       font-weight: 800;
-      color: var(--sf-text);
-      margin-bottom: 0.35rem;
-      line-height: 1.35;
+      color: #111827;
+      line-height: 1.25;
+      margin: 0 0 6px;
       display: -webkit-box;
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
       overflow: hidden;
+      min-height: 2.25em;
     }
     .storefront-v1 .sf-product-name a { color: inherit; text-decoration: none; }
     .storefront-v1 .sf-product-name a:hover { color: var(--sf-primary); }
 
-    /* ✅ Product description */
     .storefront-v1 .sf-product-desc {
-      font-size: 0.9rem;
-      color: #64748b;
-      line-height: 1.5;
-      margin-bottom: 0.75rem;
+      font-size: 0.78rem;
+      color: #6b7280;
+      line-height: 1.4;
+      margin: 0 0 8px;
       display: -webkit-box;
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
       overflow: hidden;
+      min-height: 2.1em;
     }
 
+    /* Price row */
+    .storefront-v1 .sf-price-row {
+      display: flex;
+      align-items: flex-end;
+      gap: 7px;
+      margin-bottom: 8px;
+    }
+    .storefront-v1 .sf-price-current {
+      font-size: 1.125rem;
+      font-weight: 900;
+      color: var(--sf-primary);
+      letter-spacing: -0.01em;
+    }
+    .storefront-v1 .sf-price-original {
+      font-size: 0.8rem;
+      color: #9ca3af;
+      text-decoration: line-through;
+      margin-bottom: 1px;
+    }
+    .storefront-v1 .sf-price-save {
+      font-size: 0.72rem;
+      font-weight: 900;
+      padding: 2px 6px;
+      background: #fff7ed;
+      color: #c2410c;
+      border-radius: 6px;
+      margin-bottom: 1px;
+    }
+
+    /* Meta row: stars + stock */
     .storefront-v1 .sf-product-meta {
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      margin-bottom: 1rem;
-      padding-top: 0.75rem;
-      border-top: 1px solid #f1f5f9;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 0.78rem;
+      color: #6b7280;
     }
-    .storefront-v1 .sf-product-rating { display: flex; align-items: center; gap: 0.25rem; }
-    .storefront-v1 .sf-product-rating i { color: #fbbf24; font-size: 0.875rem; }
-    .storefront-v1 .sf-rating-text { font-size: 0.875rem; color: #64748b; margin-left: 0.25rem; }
 
-    .storefront-v1 .sf-stock-badge {
-      padding: 0.25rem 0.75rem;
-      border-radius: 50px;
-      font-size: 0.75rem;
-      font-weight: 700;
-    }
-    .storefront-v1 .sf-stock-in { background: #d1fae5; color: #065f46; }
-    .storefront-v1 .sf-stock-low { background: #fef3c7; color: #92400e; }
-    .storefront-v1 .sf-stock-out { background: #fee2e2; color: #991b1b; }
-
-    .storefront-v1 .sf-price {
+    /* ── Rating bar on product card ──────────────────────────── */
+    .storefront-v1 .sf-rating-bar {
       display: flex;
       align-items: center;
-      gap: 0.75rem;
-      margin-bottom: 1rem;
-      flex-wrap: wrap;
+      gap: 5px;
+      margin-bottom: 8px;
+      padding: 5px 8px;
+      background: #fffbeb;
+      border-radius: 8px;
+      border: 1px solid #fde68a;
     }
-    .storefront-v1 .sf-price-current { font-size: 1.5rem; font-weight: 900; color: var(--sf-primary); }
-    .storefront-v1 .sf-price-original { font-size: 1rem; color: #94a3b8; text-decoration: line-through; }
-    .storefront-v1 .sf-price-save {
-      padding: 0.25rem 0.5rem;
-      background: #fef3c7;
+    .storefront-v1 .sf-rating-bar .sf-stars-row { display: flex; gap: 1px; }
+    .storefront-v1 .sf-rating-bar .sf-stars-row i { color: #fbbf24; font-size: 0.72rem; }
+    .storefront-v1 .sf-rating-bar .sf-stars-row i.far { color: #d1d5db; }
+    .storefront-v1 .sf-rating-bar .sf-rating-num {
+      font-size: 0.8rem;
+      font-weight: 900;
       color: #92400e;
-      border-radius: 50px;
-      font-size: 0.75rem;
-      font-weight: 800;
+      margin-left: 2px;
     }
+    .storefront-v1 .sf-rating-bar .sf-rating-count {
+      font-size: 0.72rem;
+      color: #78716c;
+    }
+    .storefront-v1 .sf-product-stars { color: #fbbf24; font-size: 0.8rem; letter-spacing: -1px; }
 
-    .storefront-v1 .sf-cta {
-      width: 100%;
-      padding: 0.75rem;
-      background: var(--sf-primary);
-      color: #fff;
-      border: none;
+    /* ── REVIEWS with product image ──────────────────────────── */
+    .storefront-v1 .sf-review-item {
+      padding: 1.125rem;
+      background: #f8fafc;
       border-radius: 12px;
-      font-weight: 700;
-      cursor: pointer;
-      transition: all 0.2s;
-      text-decoration: none;
+      border: 1px solid #e5e7eb;
+      margin-bottom: 0.875rem;
+    }
+    .storefront-v1 .sf-review-layout {
+      display: flex;
+      gap: 1rem;
+      align-items: flex-start;
+    }
+    .storefront-v1 .sf-review-product-img {
+      flex-shrink: 0;
+      width: 72px;
+      height: 72px;
+      border-radius: 10px;
+      object-fit: cover;
+      border: 1px solid #e5e7eb;
+      background: #f3f4f6;
+    }
+    .storefront-v1 .sf-review-product-placeholder {
+      flex-shrink: 0;
+      width: 72px;
+      height: 72px;
+      border-radius: 10px;
+      border: 1px solid #e5e7eb;
+      background: #f3f4f6;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 0.5rem;
+      color: #9ca3af;
+      font-size: 1.5rem;
     }
-    .storefront-v1 .sf-cta:hover {
-      background: var(--sf-secondary);
-      transform: translateY(-2px);
-      color: #fff;
+    .storefront-v1 .sf-review-main { flex: 1; min-width: 0; }
+    .storefront-v1 .sf-review-product-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--sf-primary);
+      margin-bottom: 2px;
+    }
+    .storefront-v1 .sf-review-product-name {
+      font-size: 0.8rem;
+      font-weight: 800;
+      color: #111827;
+      margin-bottom: 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
-    /* EMPTY */
+    /* ── STORE RATING WIDGET ─────────────────────────────────── */
+    .storefront-v1 .sf-rate-section {
+      background: var(--sf-card);
+      border-radius: var(--sf-radius);
+      border: 1px solid #e5e7eb;
+      box-shadow: var(--sf-shadow);
+      margin-top: 1rem;
+      overflow: hidden;
+    }
+    .storefront-v1 .sf-rate-header {
+      background: linear-gradient(135deg, var(--sf-primary), var(--sf-secondary));
+      color: #fff;
+      padding: 1.375rem 1.75rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .storefront-v1 .sf-rate-header h2 {
+      font-size: 1.375rem;
+      font-weight: 900;
+      margin: 0;
+      letter-spacing: -0.01em;
+    }
+    .storefront-v1 .sf-rate-header p {
+      font-size: 0.875rem;
+      opacity: 0.88;
+      margin: 0.25rem 0 0;
+    }
+    /* Aggregate score display */
+    .storefront-v1 .sf-rate-agg {
+      display: flex;
+      align-items: center;
+      gap: 0.875rem;
+      background: rgba(255,255,255,0.15);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 14px;
+      padding: 0.875rem 1.25rem;
+    }
+    .storefront-v1 .sf-rate-big-num {
+      font-size: 2.75rem;
+      font-weight: 900;
+      line-height: 1;
+      letter-spacing: -0.03em;
+    }
+    .storefront-v1 .sf-rate-agg-stars i { color: #fbbf24; font-size: 1.1rem; }
+    .storefront-v1 .sf-rate-agg-label { font-size: 0.8125rem; opacity: 0.85; margin-top: 3px; }
+
+    /* Rating breakdown bars */
+    .storefront-v1 .sf-rate-body { padding: 1.75rem; }
+    .storefront-v1 .sf-breakdown { margin-bottom: 1.75rem; }
+    .storefront-v1 .sf-breakdown-row {
+      display: flex;
+      align-items: center;
+      gap: 0.625rem;
+      margin-bottom: 0.5rem;
+    }
+    .storefront-v1 .sf-breakdown-label {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #374151;
+      width: 18px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+    .storefront-v1 .sf-breakdown-bar-wrap {
+      flex: 1;
+      height: 8px;
+      background: #f3f4f6;
+      border-radius: 99px;
+      overflow: hidden;
+    }
+    .storefront-v1 .sf-breakdown-bar {
+      height: 100%;
+      border-radius: 99px;
+      background: linear-gradient(90deg, #fbbf24, #f59e0b);
+      transition: width 0.6s ease;
+    }
+    .storefront-v1 .sf-breakdown-count {
+      font-size: 0.75rem;
+      color: #6b7280;
+      width: 28px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    /* Interactive star picker */
+    .storefront-v1 .sf-rate-divider {
+      border: none;
+      border-top: 1px solid #f1f5f9;
+      margin-bottom: 1.5rem;
+    }
+    .storefront-v1 .sf-rate-form-title {
+      font-size: 1.0625rem;
+      font-weight: 900;
+      color: var(--sf-text);
+      margin-bottom: 1rem;
+    }
+    .storefront-v1 .sf-star-picker {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 1rem;
+      align-items: center;
+    }
+    .storefront-v1 .sf-star-picker label {
+      font-size: 2rem;
+      cursor: pointer;
+      color: #d1d5db;
+      transition: color 0.15s, transform 0.15s;
+      line-height: 1;
+      user-select: none;
+    }
+    .storefront-v1 .sf-star-picker label:hover,
+    .storefront-v1 .sf-star-picker label.hovered,
+    .storefront-v1 .sf-star-picker label.selected { color: #fbbf24; transform: scale(1.15); }
+    .storefront-v1 .sf-star-picker input { display: none; }
+    .storefront-v1 .sf-star-hint {
+      font-size: 0.8125rem;
+      color: #6b7280;
+      font-style: italic;
+      margin-left: 4px;
+    }
+
+    .storefront-v1 .sf-rate-textarea {
+      width: 100%;
+      min-height: 100px;
+      border: 1.5px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 0.875rem 1rem;
+      font-size: 0.9375rem;
+      color: var(--sf-text);
+      resize: vertical;
+      transition: border-color 0.2s;
+      font-family: inherit;
+      background: #fafafa;
+    }
+    .storefront-v1 .sf-rate-textarea:focus {
+      outline: none;
+      border-color: var(--sf-primary);
+      background: #fff;
+    }
+    .storefront-v1 .sf-rate-submit {
+      margin-top: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.875rem;
+      flex-wrap: wrap;
+    }
+    .storefront-v1 .sf-rate-btn {
+      padding: 0.75rem 2rem;
+      background: var(--sf-primary);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-weight: 800;
+      font-size: 0.9375rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .storefront-v1 .sf-rate-btn:hover { opacity: 0.88; transform: translateY(-1px); }
+    .storefront-v1 .sf-rate-btn:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+    .storefront-v1 .sf-rate-feedback {
+      font-size: 0.875rem;
+      color: #64748b;
+    }
+    .storefront-v1 .sf-rate-login-note {
+      font-size: 0.8125rem;
+      color: #64748b;
+      background: #f8fafc;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .storefront-v1 .sf-stock-badge {
+      padding: 2px 7px;
+      border-radius: 7px;
+      font-size: 0.7rem;
+      font-weight: 800;
+    }
+    .storefront-v1 .sf-stock-in  { background: #d1fae5; color: #065f46; }
+    .storefront-v1 .sf-stock-low { background: #fef3c7; color: #92400e; }
+    .storefront-v1 .sf-stock-out { background: #fee2e2; color: #991b1b; }
+
+    .storefront-v1 .sf-sold-chip {
+      background: #f3f4f6;
+      border: 1px solid #e5e7eb;
+      padding: 2px 6px;
+      border-radius: 7px;
+      white-space: nowrap;
+    }
+
+    /* EMPTY STATE */
     .storefront-v1 .sf-empty {
       text-align: center;
       padding: 4rem 2rem;
       color: #94a3b8;
-      border: 1px dashed #e2e8f0;
-      border-radius: 16px;
-      background: rgba(148,163,184,0.06);
+      border: 1.5px dashed #e2e8f0;
+      border-radius: var(--sf-radius);
+      background: rgba(248,250,252,0.8);
+      grid-column: 1 / -1;
     }
-    .storefront-v1 .sf-empty i { font-size: 4rem; margin-bottom: 1rem; opacity: 0.3; }
-    .storefront-v1 .sf-empty h3 { font-size: 1.5rem; font-weight: 800; color: #64748b; margin-bottom: 0.5rem; }
-    .storefront-v1 .sf-empty p { font-size: 1.0625rem; }
+    .storefront-v1 .sf-empty i { font-size: 3.5rem; margin-bottom: 1rem; opacity: 0.28; display: block; }
+    .storefront-v1 .sf-empty h3 { font-size: 1.375rem; font-weight: 800; color: #64748b; margin-bottom: 0.5rem; }
 
-    /* SIDEBAR */
-    .storefront-v1 .sf-sidebar { position: sticky; top: 120px; }
-    .storefront-v1 .sf-card {
+    /* ── LOAD MORE ──────────────────────────────────────────── */
+    .storefront-v1 .sf-load-more-wrap {
+      grid-column: 1 / -1;
+      display: flex;
+      justify-content: center;
+      margin-top: 1.75rem;
+      margin-bottom: 0.5rem;
+    }
+    .storefront-v1 .sf-load-more-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.8rem 2.25rem;
       background: #fff;
-      border-radius: 16px;
-      padding: 1.5rem;
-      border: 1px solid #e2e8f0;
-      margin-bottom: 1.5rem;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      border: 2px solid var(--sf-primary);
+      color: var(--sf-primary);
+      border-radius: 50px;
+      font-size: 0.9375rem;
+      font-weight: 800;
+      cursor: pointer;
+      transition: all 0.22s ease;
+      box-shadow: 0 4px 14px rgba(37,99,235,0.1);
+    }
+    .storefront-v1 .sf-load-more-btn:hover {
+      background: var(--sf-primary);
+      color: #fff;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(37,99,235,0.22);
+    }
+    .storefront-v1 .sf-load-more-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .storefront-v1 .sf-lm-count {
+      font-size: 0.8rem;
+      font-weight: 600;
+      opacity: 0.7;
+    }
+    .storefront-v1 .sf-lm-spinner {
+      width: 16px; height: 16px;
+      border: 2px solid currentColor;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: sfSpin 0.7s linear infinite;
+      flex-shrink: 0;
+    }
+    @keyframes sfSpin { to { transform: rotate(360deg); } }
+
+    /* Fade-in for newly loaded cards */
+    @keyframes sfCardIn {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .storefront-v1 .sf-product-card.sf-card-new {
+      animation: sfCardIn 0.35s ease forwards;
+    }
+
+    /* ── SIDEBAR ────────────────────────────────────────────── */
+    .storefront-v1 .sf-sidebar { position: sticky; top: 80px; }
+    .storefront-v1 .sf-card {
+      background: var(--sf-card);
+      border-radius: var(--sf-radius);
+      padding: 1.375rem;
+      border: 1px solid #e5e7eb;
+      margin-bottom: 1.25rem;
+      box-shadow: var(--sf-shadow);
     }
     .storefront-v1 .sf-card h3 {
-      font-size: 1.25rem;
+      font-size: 1rem;
       font-weight: 800;
       color: var(--sf-text);
       margin-bottom: 1rem;
       display: flex;
       align-items: center;
       gap: 0.5rem;
+      letter-spacing: -0.01em;
     }
     .storefront-v1 .sf-card h3 i { color: var(--sf-primary); }
 
+    /* Contact list */
     .storefront-v1 .sf-info-list { list-style: none; padding: 0; margin: 0; }
     .storefront-v1 .sf-info-list li {
-      padding: 0.75rem 0;
+      padding: 0.7rem 0;
       border-bottom: 1px solid #f1f5f9;
       display: flex;
       align-items: flex-start;
-      gap: 0.75rem;
-      font-size: 0.9375rem;
+      gap: 0.7rem;
+      font-size: 0.9rem;
     }
     .storefront-v1 .sf-info-list li:last-child { border-bottom: none; padding-bottom: 0; }
-    .storefront-v1 .sf-info-list i { color: var(--sf-primary); margin-top: 2px; flex-shrink: 0; width: 20px; }
+    .storefront-v1 .sf-info-list i { color: var(--sf-primary); margin-top: 2px; flex-shrink: 0; width: 18px; }
     .storefront-v1 .sf-info-list a { color: inherit; text-decoration: none; }
     .storefront-v1 .sf-info-list a:hover { color: var(--sf-primary); }
 
-    /* HOURS */
+    /* Opening hours */
     .storefront-v1 .sf-hours { list-style: none; padding: 0; margin: 0; }
     .storefront-v1 .sf-hours-item {
       display: flex;
       justify-content: space-between;
-      padding: 0.625rem 0;
-      font-size: 0.9375rem;
+      padding: 0.55rem 0;
+      font-size: 0.875rem;
       border-bottom: 1px solid #f8fafc;
     }
     .storefront-v1 .sf-hours-item:last-child { border-bottom: none; }
     .storefront-v1 .sf-hours-day { font-weight: 700; color: var(--sf-text); }
     .storefront-v1 .sf-hours-time { color: #64748b; }
     .storefront-v1 .sf-hours-item.sf-today {
-      background: linear-gradient(90deg, rgba(37, 99, 235, 0.08), transparent);
-      padding: 0.75rem;
+      background: linear-gradient(90deg, rgba(37,99,235,0.08), transparent);
+      padding: 0.65rem 0.5rem;
       border-radius: 8px;
-      margin: 0.25rem -0.5rem;
+      margin: 0 -0.5rem;
       border-bottom: none;
     }
     .storefront-v1 .sf-hours-item.sf-today .sf-hours-day,
     .storefront-v1 .sf-hours-item.sf-today .sf-hours-time { color: var(--sf-primary); font-weight: 800; }
-    .storefront-v1 .sf-hours-item.sf-closed .sf-hours-time { color: #ef4444; font-weight: 800; }
+    .storefront-v1 .sf-hours-item.sf-closed .sf-hours-time { color: #ef4444; font-weight: 700; }
 
-    /* SOCIAL */
-    .storefront-v1 .sf-social { display: flex; gap: 0.75rem; margin-top: 1rem; }
+    /* Social */
+    .storefront-v1 .sf-social { display: flex; gap: 0.625rem; margin-top: 0.875rem; flex-wrap: wrap; }
     .storefront-v1 .sf-social-btn {
-      width: 44px; height: 44px;
+      width: 42px; height: 42px;
       border-radius: 50%;
       display: flex; align-items: center; justify-content: center;
       border: 1px solid #e2e8f0;
       color: var(--sf-text);
       transition: all 0.2s;
       text-decoration: none;
-      font-size: 1.125rem;
+      font-size: 1.0625rem;
     }
     .storefront-v1 .sf-social-btn:hover {
       background: var(--sf-primary);
@@ -514,45 +942,45 @@
       transform: translateY(-2px);
     }
 
-    /* REFERRAL */
+    /* Referral */
     .storefront-v1 .sf-referral {
-      background: linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(99, 102, 241, 0.08));
-      padding: 1.5rem;
+      background: linear-gradient(135deg, rgba(37,99,235,0.07), rgba(99,102,241,0.07));
+      padding: 1.25rem;
       border-radius: 12px;
-      border: 1px solid rgba(37, 99, 235, 0.2);
+      border: 1px solid rgba(37,99,235,0.18);
     }
     .storefront-v1 .sf-referral h4 {
-      font-size: 1.125rem;
+      font-size: 1rem;
       font-weight: 900;
       color: var(--sf-primary);
-      margin-bottom: 0.75rem;
+      margin-bottom: 0.625rem;
       display: flex;
       align-items: center;
       gap: 0.5rem;
     }
     .storefront-v1 .sf-referral-text {
-      font-size: 0.875rem;
+      font-size: 0.8125rem;
       color: #64748b;
-      margin-bottom: 1rem;
+      margin-bottom: 0.875rem;
       line-height: 1.6;
     }
     .storefront-v1 .sf-referral-code {
       background: #fff;
-      padding: 1rem;
+      padding: 0.875rem;
       border-radius: 8px;
       border: 2px dashed var(--sf-primary);
       font-family: 'Courier New', monospace;
-      font-size: 1.1rem;
+      font-size: 1.05rem;
       font-weight: 900;
       text-align: center;
-      margin-bottom: 1rem;
+      margin-bottom: 0.875rem;
       color: var(--sf-primary);
       letter-spacing: 2px;
       user-select: all;
     }
     .storefront-v1 .sf-copy-btn {
       width: 100%;
-      padding: 0.875rem;
+      padding: 0.75rem;
       background: var(--sf-primary);
       color: #fff;
       border: none;
@@ -564,67 +992,70 @@
       align-items: center;
       justify-content: center;
       gap: 0.5rem;
+      font-size: 0.875rem;
     }
-    .storefront-v1 .sf-copy-btn:hover { background: var(--sf-secondary); transform: translateY(-2px); }
+    .storefront-v1 .sf-copy-btn:hover { opacity: 0.88; transform: translateY(-1px); }
 
-    /* REVIEWS / ABOUT (kept but scoped) */
+    /* ── REVIEWS / ABOUT ────────────────────────────────────── */
     .storefront-v1 .sf-block {
-      background: #fff;
-      border-radius: 16px;
-      padding: 2rem;
-      border: 1px solid #e2e8f0;
-      margin-bottom: 2rem;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      background: var(--sf-card);
+      border-radius: var(--sf-radius);
+      padding: 1.75rem;
+      border: 1px solid #e5e7eb;
+      margin-bottom: 1.75rem;
+      box-shadow: var(--sf-shadow);
     }
     .storefront-v1 .sf-review-item {
-      padding: 1.5rem;
+      padding: 1.25rem;
       background: #f8fafc;
-      border-radius: 12px;
-      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      border: 1px solid #e5e7eb;
       margin-bottom: 1rem;
     }
     .storefront-v1 .sf-review-header {
-      display:flex; justify-content:space-between; align-items:flex-start;
-      margin-bottom:.75rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 0.625rem;
     }
-    .storefront-v1 .sf-reviewer { display:flex; align-items:center; gap:.75rem; }
+    .storefront-v1 .sf-reviewer { display: flex; align-items: center; gap: 0.7rem; }
     .storefront-v1 .sf-avatar {
-      width: 48px; height:48px; border-radius:50%;
+      width: 44px; height: 44px;
+      border-radius: 50%;
       background: linear-gradient(135deg, var(--sf-primary), var(--sf-secondary));
-      display:flex; align-items:center; justify-content:center;
-      color:#fff; font-weight:900; font-size:1.25rem;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-weight: 900; font-size: 1.125rem;
     }
-    .storefront-v1 .sf-review-text { color:#475569; line-height:1.7; font-size:0.9375rem; }
-    .storefront-v1 .sf-review-date { font-size:.875rem; color:#94a3b8; }
+    .storefront-v1 .sf-review-text { color: #475569; line-height: 1.7; font-size: 0.9rem; }
+    .storefront-v1 .sf-review-date { font-size: 0.8125rem; color: #94a3b8; }
 
-    /* Toasts */
+    /* ── TOAST ───────────────────────────────────────────────── */
     .storefront-v1 .sf-toast {
       position: fixed;
-      bottom: 2rem;
-      right: 2rem;
-      padding: 1rem 1.5rem;
+      bottom: 2rem; right: 2rem;
+      padding: 0.875rem 1.375rem;
       border-radius: 12px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.15);
-      z-index: 1000;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+      z-index: 9999;
       display: flex;
       align-items: center;
-      gap: 0.75rem;
-      min-width: 300px;
-      animation: sfSlideIn 0.3s;
-      color:#fff;
+      gap: 0.625rem;
+      min-width: 280px;
+      animation: sfSlideIn 0.28s ease;
+      color: #fff;
+      font-weight: 600;
     }
     @keyframes sfSlideIn {
-      from { opacity: 0; transform: translateX(100px); }
-      to { opacity: 1; transform: translateX(0); }
+      from { opacity:0; transform:translateX(60px); }
+      to   { opacity:1; transform:translateX(0); }
     }
     .storefront-v1 .sf-toast-success { background: #10b981; }
-    .storefront-v1 .sf-toast-error { background: #ef4444; }
-    .storefront-v1 .sf-toast-info { background: var(--sf-primary); }
+    .storefront-v1 .sf-toast-error   { background: #ef4444; }
+    .storefront-v1 .sf-toast-info    { background: var(--sf-primary); }
 
     .storefront-v1 .sf-loading {
       display: inline-block;
-      width: 18px;
-      height: 18px;
+      width: 16px; height: 16px;
       border: 2px solid currentColor;
       border-right-color: transparent;
       border-radius: 50%;
@@ -632,96 +1063,117 @@
     }
     @keyframes sfSpin { to { transform: rotate(360deg); } }
 
-    /* Responsive */
+    /* ── RESPONSIVE ─────────────────────────────────────────── */
     @media (max-width: 1024px) {
       .storefront-v1 .sf-grid { grid-template-columns: 1fr; }
       .storefront-v1 .sf-sidebar { position: static; }
     }
     @media (max-width: 768px) {
-      .storefront-v1 .sf-store-name { font-size: 2rem; }
-      .storefront-v1 .sf-hero-actions { flex-direction: column; width: 100%; }
-      .storefront-v1 .sf-btn { width: 100%; justify-content: center; }
-      .storefront-v1 .sf-products-grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
-      .storefront-v1 .sf-info-items { flex-direction: column; gap: 0.5rem; width: 100%; }
-      .storefront-v1 .sf-hero-stats { gap: 1.5rem; }
-      .storefront-v1 .sf-stat-number { font-size: 1.75rem; }
+      .storefront-v1 .sf-store-name  { font-size: 1.75rem; }
+      .storefront-v1 .sf-hero-inner  { flex-direction: column; align-items: flex-start; }
+      .storefront-v1 .sf-hero-stats  { gap: 1.5rem; }
+      .storefront-v1 .sf-stat-number { font-size: 1.625rem; }
+      .storefront-v1 .sf-products-grid { grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 10px; }
+      .storefront-v1 .sf-info-items  { flex-direction: column; gap: 0.5rem; }
     }
     @media (max-width: 480px) {
-      .storefront-v1 .sf-products-grid { grid-template-columns: 1fr; }
-      .storefront-v1 .sf-toast { right: 1rem; left: 1rem; min-width: auto; }
+      .storefront-v1 .sf-products-grid { grid-template-columns: repeat(2, 1fr); }
+      .storefront-v1 .sf-toast { right: 0.75rem; left: 0.75rem; min-width: auto; }
     }
   </style>
 
-  <!-- Hero Section -->
+  <!-- ──────────────────────────────────────────────────────────
+       HERO
+  ─────────────────────────────────────────────────────────── -->
   <section class="sf-hero">
-    <div class="sf-container">
-      <div class="sf-hero-content">
-        {% if store.logo %}
-          <img src="{{ store.logo.url }}" alt="{{ store.name }}" class="sf-store-logo" loading="eager">
-        {% endif %}
-
-        <h1 class="sf-store-name">{{ store.name }}</h1>
-
-        {% if store.description %}
-          <p class="sf-store-description">{{ store.description|truncatewords:40 }}</p>
-        {% endif %}
-
-        <div class="sf-hero-badges">
-          {% if store.is_verified %}
-            <span class="sf-badge"><i class="fas fa-check-circle"></i> Verified Store</span>
-          {% endif %}
-
-          {% if average_rating > 0 %}
-            <span class="sf-badge"><i class="fas fa-star"></i> {{ average_rating|floatformat:1 }} Rating</span>
-          {% endif %}
-
-          {% if followers_count > 0 %}
-            <span class="sf-badge"><i class="fas fa-users"></i> {{ followers_count }} Follower{{ followers_count|pluralize }}</span>
-          {% endif %}
-
-          <span class="sf-badge"><i class="fas fa-truck"></i> Fast Shipping</span>
-        </div>
-
-        <div class="sf-hero-stats">
-          <div class="sf-stat-item">
-            <span class="sf-stat-number">{{ products_count|default:0 }}</span>
-            <span class="sf-stat-label">Products</span>
-          </div>
-          <div class="sf-stat-item">
-            <span class="sf-stat-number">{{ review_count|default:0 }}</span>
-            <span class="sf-stat-label">Reviews</span>
-          </div>
-          <div class="sf-stat-item">
-            <span class="sf-stat-number" id="followersCount">{{ followers_count|default:0 }}</span>
-            <span class="sf-stat-label">Followers</span>
-          </div>
-        </div>
-
-        <div class="sf-hero-actions">
-          <a href="#products" class="sf-btn sf-btn-primary">
-            <i class="fas fa-shopping-bag"></i>
-            Shop Now
-          </a>
-
-          <button
-            class="sf-btn sf-btn-secondary {% if is_following %}sf-following{% endif %}"
-            onclick="toggleFollow()"
-            id="followBtn"
-            type="button"
-          >
-            <i class="fas fa-heart"></i>
-            <span id="followText">{% if is_following %}Following{% else %}Follow Store{% endif %}</span>
-          </button>
-        </div>
-      </div>
+    <!-- Banner / gradient background -->
+    <div class="sf-hero-banner"
+         {% if store.banner %}style="background-image: url('{{ store.banner.url }}');"{% endif %}>
     </div>
+    <div class="sf-hero-overlay"></div>
+    <!-- Animated orbs (only when no banner) -->
+    {% if not store.banner %}
+      <div class="sf-hero-orb"></div>
+      <div class="sf-hero-orb"></div>
+    {% endif %}
+
+    <div class="sf-hero-content">
+      <div class="sf-container">
+        <div class="sf-hero-inner">
+
+          {% if store.logo %}
+            <img src="{{ store.logo.url }}" alt="{{ store.name }}" class="sf-store-logo" loading="eager">
+          {% endif %}
+
+          <div class="sf-hero-text">
+            <h1 class="sf-store-name">{{ store.name }}</h1>
+
+            {% if store.description %}
+              <p class="sf-store-description">{{ store.description|striptags|truncatewords:40 }}</p>
+            {% endif %}
+
+            <!-- Badges -->
+            <div class="sf-hero-badges">
+              {% if store.is_verified %}
+                <span class="sf-badge"><i class="fas fa-check-circle"></i> Verified Store</span>
+              {% endif %}
+              {% if average_rating > 0 %}
+                <span class="sf-badge"><i class="fas fa-star"></i> {{ average_rating|floatformat:1 }} Rating</span>
+              {% endif %}
+              {% if followers_count > 0 %}
+                <span class="sf-badge"><i class="fas fa-users"></i> {{ followers_count }} Follower{{ followers_count|pluralize }}</span>
+              {% endif %}
+              <span class="sf-badge"><i class="fas fa-truck"></i> Fast Shipping</span>
+            </div>
+
+            <!-- Stats -->
+            {% if show_store_stats %}
+            <div class="sf-hero-stats">
+              <div class="sf-stat-item">
+                <span class="sf-stat-number">{{ products_count|default:0 }}</span>
+                <span class="sf-stat-label">Products</span>
+              </div>
+              <div class="sf-stat-item">
+                <span class="sf-stat-number">{{ review_count|default:0 }}</span>
+                <span class="sf-stat-label">Reviews</span>
+              </div>
+              <div class="sf-stat-item">
+                <span class="sf-stat-number" id="followersCount">{{ followers_count|default:0 }}</span>
+                <span class="sf-stat-label">Followers</span>
+              </div>
+            </div>
+            {% endif %}
+
+            <!-- Actions -->
+            <div class="sf-hero-actions">
+              <a href="#products" class="sf-btn sf-btn-primary">
+                <i class="fas fa-shopping-bag"></i> Shop Now
+              </a>
+              <button
+                class="sf-btn sf-btn-secondary {% if is_following %}sf-following{% endif %}"
+                onclick="toggleFollow()"
+                id="followBtn"
+                type="button"
+              >
+                <i class="fas fa-heart"></i>
+                <span id="followText">{% if is_following %}Following{% else %}Follow Store{% endif %}</span>
+              </button>
+            </div>
+          </div><!-- /.sf-hero-text -->
+
+        </div><!-- /.sf-hero-inner -->
+      </div>
+    </div><!-- /.sf-hero-content -->
   </section>
 
-  <!-- Info Bar -->
+  <!-- ──────────────────────────────────────────────────────────
+       STICKY INFO BAR
+  ─────────────────────────────────────────────────────────── -->
   <div class="sf-info-bar">
     <div class="sf-container">
       <div class="sf-info-bar-content">
         <div class="sf-info-items">
+
           {% if store.phone %}
             <div class="sf-info-item">
               <i class="fas fa-phone"></i>
@@ -739,457 +1191,795 @@
           {% if store.city %}
             <div class="sf-info-item">
               <i class="fas fa-map-marker-alt"></i>
-              <span><strong>Location:</strong> {{ store.city }}{% if store.region %}, {{ store.region }}{% endif %}</span>
+              <span>{{ store.city }}{% if store.region %}, {{ store.region }}{% endif %}</span>
             </div>
           {% endif %}
 
-          {% if store_hours %}
+          {% if store.minimum_order_amount %}
             <div class="sf-info-item">
-              <i class="fas fa-clock"></i>
-              <span>
-                <strong>Store:</strong>
-                <span class="sf-status-badge {% if is_open %}sf-status-open{% else %}sf-status-closed{% endif %}" id="storeStatus">
-                  {% if is_open %}Open Now{% else %}Closed{% endif %}
-                </span>
-              </span>
+              <i class="fas fa-shopping-cart"></i>
+              <span><strong>Min Order:</strong> D{{ store.minimum_order_amount }}</span>
             </div>
           {% endif %}
-        </div>
 
-        {% if store.minimum_order_amount %}
+          <!-- ✅ FIXED: Open / Closed status with pulsing dot -->
           <div class="sf-info-item">
-            <i class="fas fa-shopping-cart"></i>
-            <span><strong>Min Order:</strong> D{{ store.minimum_order_amount }}</span>
+            <i class="fas fa-clock"></i>
+            <span
+              class="sf-status-pill {% if is_open %}sf-status-open{% else %}sf-status-closed{% endif %}"
+              id="storeStatus"
+            >
+              <span class="sf-pulse-dot"></span>
+              {% if is_open %}Open Now{% else %}Closed{% endif %}
+            </span>
           </div>
-        {% endif %}
+
+        </div><!-- /.sf-info-items -->
+
+        <!-- store name mini brand (right side) -->
+        <span style="font-weight:800;color:var(--sf-primary);font-size:.9rem;white-space:nowrap;">
+          {{ store.name }}
+        </span>
       </div>
     </div>
   </div>
 
-  <!-- Main Content -->
+  <!-- ──────────────────────────────────────────────────────────
+       MAIN CONTENT
+  ─────────────────────────────────────────────────────────── -->
   <main class="sf-main">
     <div class="sf-container">
       <div class="sf-grid">
 
-        <!-- Products Section -->
+        <!-- ── PRODUCTS COLUMN ─────────────────────────────── -->
         <div id="products">
           <div class="sf-section-header">
             <h2 class="sf-section-title">Our Products</h2>
             <p class="sf-section-subtitle">Browse our collection of quality products</p>
           </div>
 
-        {% if products %}
-        <div class="sf-products-grid">
-          {% for product in products %}
-            <article class="sf-product-card">
-              <div class="sf-product-img">
-                <a href="{% url 'stores:product_detail' product.id %}">
-                  {# ✅ FIXED: Try multiple image sources with fallbacks #}
+          {% if products %}
+          <div class="sf-products-grid">
+            {% for product in products %}
+
+              <article class="sf-product-card"
+                       onclick="window.location.href='{% url 'stores:product_detail' product.id %}'">
+
+                <!-- Image area -->
+                <div class="sf-product-img">
+                  <!-- Image with multiple fallbacks -->
                   {% if product.images.first %}
-                    {# Product uses related images collection #}
                     <img src="{{ product.images.first.image.url }}"
                          alt="{{ product.name }}"
                          loading="lazy"
                          onerror="this.onerror=null; this.src='{% static 'images/placeholder.jpg' %}';">
                   {% elif product.image %}
-                    {# Product has direct image field #}
                     <img src="{{ product.image.url }}"
                          alt="{{ product.name }}"
                          loading="lazy"
                          onerror="this.onerror=null; this.src='{% static 'images/placeholder.jpg' %}';">
                   {% elif product.primary_image %}
-                    {# Product has primary_image field #}
                     <img src="{{ product.primary_image.url }}"
                          alt="{{ product.name }}"
                          loading="lazy"
                          onerror="this.onerror=null; this.src='{% static 'images/placeholder.jpg' %}';">
-                  {% elif product.thumbnail %}
-                    {# Product has thumbnail field #}
-                    <img src="{{ product.thumbnail.url }}"
-                         alt="{{ product.name }}"
-                         loading="lazy"
-                         onerror="this.onerror=null; this.src='{% static 'images/placeholder.jpg' %}';">
                   {% else %}
-                    {# No image found - use placeholder #}
                     <img src="{% static 'images/placeholder.jpg' %}"
                          alt="{{ product.name }}"
                          loading="lazy">
                   {% endif %}
-                </a>
 
-                <div class="sf-product-badges">
-                  {% if product.is_featured %}
-                    <span class="sf-product-badge sf-badge-featured">★ Featured</span>
-                  {% endif %}
-                  {% if product.is_new %}
-                    <span class="sf-product-badge sf-badge-new">New</span>
-                  {% endif %}
-                  {% if product.original_price and product.original_price > product.price %}
-                    {% widthratio product.original_price|add:0|floatformat:0 1 1 as orig %}
-                    {% widthratio product.price|add:0|floatformat:0 1 1 as curr %}
-                    {% widthratio orig|add:"-"|add:curr orig 100 as discount %}
-                    <span class="sf-product-badge sf-badge-sale">-{{ discount }}% OFF</span>
-                  {% endif %}
-                </div>
+                  <!-- Badges -->
+                  <div class="sf-product-badges">
+                    {% if product.is_featured %}
+                      <span class="sf-product-tag sf-tag-featured">★ Featured</span>
+                    {% endif %}
+                    {% if product.is_new %}
+                      <span class="sf-product-tag sf-tag-new">New</span>
+                    {% endif %}
+                    {% if product.original_price and product.original_price > product.price %}
+                      <span class="sf-product-tag sf-tag-sale">DEAL</span>
+                    {% endif %}
+                  </div>
 
-                {% if store.enable_wishlist %}
-                  <div class="sf-product-actions">
-                    <button class="sf-action-btn" onclick="addToWishlist({{ product.id }})" title="Add to Wishlist" type="button">
+                  <!-- Wishlist btn (top-right) -->
+                  {% if store.enable_wishlist %}
+                    <button class="sf-product-wish-btn"
+                            onclick="event.stopPropagation(); addToWishlist({{ product.id }})"
+                            title="Wishlist" type="button">
                       <i class="far fa-heart"></i>
                     </button>
-                  </div>
-                {% endif %}
-              </div>
+                  {% endif %}
 
-              <div class="sf-product-info">
-                {% if product.category %}
-                  <div class="sf-product-cat">{{ product.category.name }}</div>
-                {% endif %}
+                  <!-- Cart btn (bottom-right) -->
+                  <a href="{% url 'stores:product_detail' product.id %}"
+                     class="sf-product-cart-btn"
+                     onclick="event.stopPropagation()"
+                     title="View Product">
+                    <i class="fas fa-shopping-cart"></i>
+                  </a>
+                </div><!-- /.sf-product-img -->
 
-                <h3 class="sf-product-name">
-                  <a href="{% url 'stores:product_detail' product.id %}">{{ product.name }}</a>
-                </h3>
+                <!-- Body -->
+                <div class="sf-product-body">
+                  {% if product.category %}
+                    <div class="sf-product-cat">{{ product.category.name }}</div>
+                  {% endif %}
 
-                {% if product.description %}
-                  <p class="sf-product-desc">{{ product.description|striptags|truncatewords:18 }}</p>
-                {% else %}
-                  <p class="sf-product-desc">Quality product from {{ store.name }}.</p>
-                {% endif %}
+                  <h3 class="sf-product-name">{{ product.name }}</h3>
 
-                {% if show_product_ratings %}
-                  <div class="sf-product-meta">
-                    <div class="sf-product-rating">
-                      {% for i in "12345" %}
-                        <i class="{% if forloop.counter <= product.average_rating|default:5 %}fas{% else %}far{% endif %} fa-star"></i>
-                      {% endfor %}
-                      <span class="sf-rating-text">({{ product.review_count|default:0 }})</span>
-                    </div>
-
-                    {% if product.warehouse_qty is not None %}
-                      {% if product.warehouse_qty > 10 %}
-                        <span class="sf-stock-badge sf-stock-in">In Stock</span>
-                      {% elif product.warehouse_qty > 0 %}
-                        <span class="sf-stock-badge sf-stock-low">Low Stock</span>
-                      {% else %}
-                        <span class="sf-stock-badge sf-stock-out">Out of Stock</span>
-                      {% endif %}
+                  <p class="sf-product-desc">
+                    {% if product.description %}
+                      {{ product.description|striptags|truncatewords:14 }}
                     {% else %}
-                      {% if product.stock_quantity > 10 %}
+                      Quality product from {{ store.name }}.
+                    {% endif %}
+                  </p>
+
+                  <!-- Price -->
+                  <div class="sf-price-row">
+                    <span class="sf-price-current">{% display_money product.price %}</span>
+                    {% if product.original_price and product.original_price > product.price %}
+                      <span class="sf-price-original">{% display_money product.original_price %}</span>
+                      <span class="sf-price-save">SAVE</span>
+                    {% endif %}
+                  </div>
+
+                  <!-- Rating bar -->
+                  {% if show_product_ratings %}
+                  <div class="sf-rating-bar">
+                    <div class="sf-stars-row">
+                      {% with avg=product.average_rating|default:0 %}
+                        {% for i in "12345" %}
+                          {% if forloop.counter <= avg %}
+                            <i class="fas fa-star"></i>
+                          {% elif forloop.counter|add:"-1" < avg %}
+                            <i class="fas fa-star-half-alt"></i>
+                          {% else %}
+                            <i class="far fa-star"></i>
+                          {% endif %}
+                        {% endfor %}
+                      {% endwith %}
+                    </div>
+                    <span class="sf-rating-num">{{ product.average_rating|default:0|floatformat:1 }}</span>
+                    <span class="sf-rating-count">({{ product.review_count|default:0 }})</span>
+                  </div>
+                  {% endif %}
+
+                  <!-- Meta: stock -->
+                  <div class="sf-product-meta">
+                    <div>
+                      {% if product.warehouse_qty is not None %}
+                        {% if product.warehouse_qty > 10 %}
+                          <span class="sf-stock-badge sf-stock-in">In Stock</span>
+                        {% elif product.warehouse_qty > 0 %}
+                          <span class="sf-stock-badge sf-stock-low">Low Stock</span>
+                        {% else %}
+                          <span class="sf-stock-badge sf-stock-out">Out of Stock</span>
+                        {% endif %}
+                      {% elif product.stock_quantity > 10 %}
                         <span class="sf-stock-badge sf-stock-in">In Stock</span>
                       {% elif product.stock_quantity > 0 %}
                         <span class="sf-stock-badge sf-stock-low">Low Stock</span>
                       {% else %}
                         <span class="sf-stock-badge sf-stock-out">Out of Stock</span>
                       {% endif %}
-                    {% endif %}
+                    </div>
                   </div>
-                {% endif %}
 
-                <div class="sf-price">
-                  <span class="sf-price-current">D{{ product.price }}</span>
-                  {% if product.original_price and product.original_price > product.price %}
-                    <span class="sf-price-original">D{{ product.original_price }}</span>
-                    {% widthratio product.original_price|add:0|floatformat:0 1 1 as orig %}
-                    {% widthratio product.price|add:0|floatformat:0 1 1 as curr %}
-                    {% widthratio orig|add:"-"|add:curr orig 100 as save %}
-                    <span class="sf-price-save">Save {{ save }}%</span>
-                  {% endif %}
-                </div>
+                </div><!-- /.sf-product-body -->
+              </article>
 
-                <a href="{% url 'stores:product_detail' product.id %}" class="sf-cta">
-                  <i class="fas fa-shopping-cart"></i>
-                  View Details
-                </a>
-              </div>
-            </article>
-          {% endfor %}
-        </div>
-      {% else %}
-        <div class="sf-empty">
-          <i class="fas fa-box-open"></i>
-          <h3>No Products Yet</h3>
-          <p>This store hasn't added any products yet. Check back soon!</p>
-        </div>
-      {% endif %}
-       </div>
+            {% endfor %}
+          </div><!-- /.sf-products-grid -->
 
-        <!-- Sidebar -->
+          <!-- ── LOAD MORE ──────────────────────────────────── -->
+          {% if products.has_next %}
+          <div class="sf-load-more-wrap" id="loadMoreWrap">
+            <button class="sf-load-more-btn" id="loadMoreBtn" onclick="loadMoreProducts()">
+              <i class="fas fa-plus-circle"></i>
+              <span id="loadMoreText">Load More Products</span>
+              <span class="sf-lm-count" id="loadMoreCount">
+                ({{ products.paginator.count|add:"-"|add:products.end_index }} remaining)
+              </span>
+            </button>
+          </div>
+          {% endif %}
+
+          <!-- hidden metadata for JS -->
+          <span id="sfPageMeta"
+                data-current="{{ products.number }}"
+                data-total="{{ products.paginator.num_pages }}"
+                data-store="{{ store.slug }}"
+                style="display:none;"></span>
+
+          {% else %}
+          <div class="sf-empty">
+            <i class="fas fa-box-open"></i>
+            <h3>No Products Yet</h3>
+            <p>This store hasn't added any products yet. Check back soon!</p>
+          </div>
+          {% endif %}
+        </div><!-- /#products -->
+
+        <!-- ── SIDEBAR ──────────────────────────────────────── -->
         <aside class="sf-sidebar">
 
+          <!-- Contact Info -->
           {% if store.phone or store.email or store.website or store.address_line_1 %}
-            <div class="sf-card">
-              <h3><i class="fas fa-info-circle"></i> Contact Info</h3>
-              <ul class="sf-info-list">
-                {% if store.phone %}
-                  <li><i class="fas fa-phone"></i> <a href="tel:{{ store.phone }}">{{ store.phone }}</a></li>
-                {% endif %}
-                {% if store.email %}
-                  <li><i class="fas fa-envelope"></i> <a href="mailto:{{ store.email }}">{{ store.email }}</a></li>
-                {% endif %}
-                {% if store.website %}
-                  <li><i class="fas fa-globe"></i> <a href="{{ store.website }}" target="_blank" rel="noopener">Visit Website</a></li>
-                {% endif %}
-                {% if store.address_line_1 %}
-                  <li>
-                    <i class="fas fa-map-marker-alt"></i>
-                    <span>
-                      {{ store.address_line_1 }}
-                      {% if store.city %}<br>{{ store.city }}{% if store.region %}, {{ store.region }}{% endif %}{% endif %}
-                    </span>
-                  </li>
-                {% endif %}
-              </ul>
-            </div>
-          {% endif %}
-
-          {% if store_hours and show_operating_hours %}
-            <div class="sf-card">
-              <h3><i class="fas fa-clock"></i> Opening Hours</h3>
-              <ul class="sf-hours">
-                {% for hours in store_hours %}
-                  <li class="sf-hours-item {% if hours.is_today %}sf-today{% endif %} {% if hours.is_closed %}sf-closed{% endif %}">
-                    <span class="sf-hours-day">{{ hours.get_day_of_week_display }}</span>
-                    <span class="sf-hours-time">
-                      {% if hours.is_closed %}
-                        Closed
-                      {% else %}
-                        {{ hours.opening_time|time:"g:i A" }} - {{ hours.closing_time|time:"g:i A" }}
-                      {% endif %}
-                    </span>
-                  </li>
-                {% endfor %}
-              </ul>
-            </div>
-          {% endif %}
-
-          {% if show_social_links and store.facebook_url or store.twitter_url or store.instagram_url %}
-            <div class="sf-card">
-              <h3><i class="fas fa-share-alt"></i> Follow Us</h3>
-              <div class="sf-social">
-                {% if store.facebook_url %}
-                  <a href="{{ store.facebook_url }}" target="_blank" rel="noopener" class="sf-social-btn" title="Facebook">
-                    <i class="fab fa-facebook-f"></i>
-                  </a>
-                {% endif %}
-                {% if store.twitter_url %}
-                  <a href="{{ store.twitter_url }}" target="_blank" rel="noopener" class="sf-social-btn" title="Twitter">
-                    <i class="fab fa-twitter"></i>
-                  </a>
-                {% endif %}
-                {% if store.instagram_url %}
-                  <a href="{{ store.instagram_url }}" target="_blank" rel="noopener" class="sf-social-btn" title="Instagram">
-                    <i class="fab fa-instagram"></i>
-                  </a>
-                {% endif %}
-              </div>
-            </div>
-          {% endif %}
-
-          {% if store.allow_referrals and user.is_authenticated %}
-            <div class="sf-card">
-              <div class="sf-referral">
-                <h4><i class="fas fa-gift"></i> Refer & Earn</h4>
-                <p class="sf-referral-text">
-                  Share this store with friends and earn rewards when they make a purchase!
-                </p>
-                <div class="sf-referral-code" id="referralCode">
-                  {{ user.username|upper|slice:":3" }}{{ store.slug|upper|slice:":3" }}{{ user.id }}
-                </div>
-                <button class="sf-copy-btn" onclick="copyReferralCode()" type="button">
-                  <i class="fas fa-copy"></i> Copy Referral Link
-                </button>
-              </div>
-            </div>
-          {% endif %}
-
-        </aside>
-      </div>
-
-      <!-- Reviews Section -->
-      {% if review_count > 0 %}
-        <section class="sf-block" id="reviews">
-          <div class="sf-section-header">
-            <h2 class="sf-section-title">Customer Reviews</h2>
-            <p class="sf-section-subtitle">See what our customers are saying</p>
+          <div class="sf-card">
+            <h3><i class="fas fa-info-circle"></i> Contact Info</h3>
+            <ul class="sf-info-list">
+              {% if store.phone %}
+                <li><i class="fas fa-phone"></i> <a href="tel:{{ store.phone }}">{{ store.phone }}</a></li>
+              {% endif %}
+              {% if store.email %}
+                <li><i class="fas fa-envelope"></i> <a href="mailto:{{ store.email }}">{{ store.email }}</a></li>
+              {% endif %}
+              {% if store.website %}
+                <li><i class="fas fa-globe"></i> <a href="{{ store.website }}" target="_blank" rel="noopener">Visit Website</a></li>
+              {% endif %}
+              {% if store.address_line_1 %}
+                <li>
+                  <i class="fas fa-map-marker-alt"></i>
+                  <span>
+                    {{ store.address_line_1 }}
+                    {% if store.city %}<br>{{ store.city }}{% if store.region %}, {{ store.region }}{% endif %}{% endif %}
+                  </span>
+                </li>
+              {% endif %}
+            </ul>
           </div>
+          {% endif %}
 
-          {% if recent_reviews %}
-            {% for review in recent_reviews %}
-              <div class="sf-review-item">
-                <div class="sf-review-header">
-                  <div class="sf-reviewer">
-                    <div class="sf-avatar">
+          <!-- Opening Hours -->
+          {% if store_hours and show_operating_hours %}
+          <div class="sf-card">
+            <h3>
+              <i class="fas fa-clock"></i> Opening Hours
+              <span class="sf-status-pill {% if is_open %}sf-status-open{% else %}sf-status-closed{% endif %}"
+                    style="margin-left:auto;font-size:.7rem;">
+                <span class="sf-pulse-dot"></span>
+                {% if is_open %}Open{% else %}Closed{% endif %}
+              </span>
+            </h3>
+            <ul class="sf-hours">
+              {% for hours in store_hours %}
+                <li class="sf-hours-item {% if hours.is_today %}sf-today{% endif %} {% if hours.is_closed %}sf-closed{% endif %}">
+                  <span class="sf-hours-day">{{ hours.get_day_of_week_display }}</span>
+                  <span class="sf-hours-time">
+                    {% if hours.is_closed %}Closed
+                    {% else %}{{ hours.opening_time|time:"g:i A" }} – {{ hours.closing_time|time:"g:i A" }}
+                    {% endif %}
+                  </span>
+                </li>
+              {% endfor %}
+            </ul>
+          </div>
+          {% endif %}
+
+          <!-- Social Links -->
+          {% if show_social_links and store.facebook_url or store.twitter_url or store.instagram_url %}
+          <div class="sf-card">
+            <h3><i class="fas fa-share-alt"></i> Follow Us</h3>
+            <div class="sf-social">
+              {% if store.facebook_url %}
+                <a href="{{ store.facebook_url }}" target="_blank" rel="noopener" class="sf-social-btn" title="Facebook">
+                  <i class="fab fa-facebook-f"></i>
+                </a>
+              {% endif %}
+              {% if store.twitter_url %}
+                <a href="{{ store.twitter_url }}" target="_blank" rel="noopener" class="sf-social-btn" title="Twitter">
+                  <i class="fab fa-twitter"></i>
+                </a>
+              {% endif %}
+              {% if store.instagram_url %}
+                <a href="{{ store.instagram_url }}" target="_blank" rel="noopener" class="sf-social-btn" title="Instagram">
+                  <i class="fab fa-instagram"></i>
+                </a>
+              {% endif %}
+            </div>
+          </div>
+          {% endif %}
+
+          <!-- Referral -->
+          {% if store.allow_referrals and user.is_authenticated %}
+          <div class="sf-card">
+            <div class="sf-referral">
+              <h4><i class="fas fa-gift"></i> Refer &amp; Earn</h4>
+              <p class="sf-referral-text">
+                Share this store with friends and earn rewards when they make a purchase!
+              </p>
+              <div class="sf-referral-code" id="referralCode">
+                {{ user.username|upper|slice:":3" }}{{ store.slug|upper|slice:":3" }}{{ user.id }}
+              </div>
+              <button class="sf-copy-btn" onclick="copyReferralCode()" type="button">
+                <i class="fas fa-copy"></i> Copy Referral Link
+              </button>
+            </div>
+          </div>
+          {% endif %}
+
+        </aside><!-- /.sf-sidebar -->
+
+      </div><!-- /.sf-grid -->
+
+      <!-- ── Customer Reviews ───────────────────────────────── -->
+      {% if review_count > 0 %}
+      <section class="sf-block" id="reviews" style="margin-top:1rem;">
+        <div class="sf-section-header">
+          <h2 class="sf-section-title">Customer Reviews</h2>
+          <p class="sf-section-subtitle">
+            {{ review_count }} review{{ review_count|pluralize }} &mdash;
+            <span style="color:#f59e0b;font-weight:800;">
+              {% for i in "12345" %}
+                <i class="{% if forloop.counter <= average_rating %}fas{% else %}far{% endif %} fa-star" style="font-size:.875rem;"></i>
+              {% endfor %}
+            </span>
+            <strong>{{ average_rating|floatformat:1 }}</strong> avg
+          </p>
+        </div>
+
+        {% for review in recent_reviews %}
+          <div class="sf-review-item">
+            <div class="sf-review-layout">
+
+              <!-- Product thumbnail -->
+              {% if review.product %}
+                {% if review.product.images.first %}
+                  <img src="{{ review.product.images.first.image.url }}"
+                       alt="{{ review.product.name }}"
+                       class="sf-review-product-img"
+                       loading="lazy"
+                       onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+                  <div class="sf-review-product-placeholder" style="display:none;"><i class="fas fa-image"></i></div>
+                {% elif review.product.image %}
+                  <img src="{{ review.product.image.url }}"
+                       alt="{{ review.product.name }}"
+                       class="sf-review-product-img"
+                       loading="lazy"
+                       onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+                  <div class="sf-review-product-placeholder" style="display:none;"><i class="fas fa-image"></i></div>
+                {% else %}
+                  <div class="sf-review-product-placeholder"><i class="fas fa-box"></i></div>
+                {% endif %}
+              {% else %}
+                <div class="sf-review-product-placeholder"><i class="fas fa-store"></i></div>
+              {% endif %}
+
+              <!-- Review content -->
+              <div class="sf-review-main">
+                {% if review.product %}
+                  <div class="sf-review-product-label">Reviewing product</div>
+                  <div class="sf-review-product-name">{{ review.product.name }}</div>
+                {% endif %}
+
+                <div class="sf-review-header" style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.625rem;">
+                  <div class="sf-reviewer" style="display:flex;align-items:center;gap:.625rem;">
+                    <div class="sf-avatar" style="width:36px;height:36px;font-size:.9rem;border-radius:50%;background:linear-gradient(135deg,var(--sf-primary),var(--sf-secondary));display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;flex-shrink:0;">
                       {{ review.user.first_name|first|upper|default:review.user.username|first|upper }}
                     </div>
                     <div>
-                      <div style="font-weight:900;color:var(--sf-text);">
+                      <div style="font-weight:800;font-size:.875rem;color:var(--sf-text);">
                         {{ review.user.first_name|default:review.user.username }}
                       </div>
-                      <div>
+                      <div style="display:flex;align-items:center;gap:3px;">
                         {% for i in "12345" %}
-                          <i class="{% if forloop.counter <= review.rating %}fas{% else %}far{% endif %} fa-star" style="color:#fbbf24;font-size:.875rem;"></i>
+                          <i class="{% if forloop.counter <= review.rating %}fas{% else %}far{% endif %} fa-star"
+                             style="color:#fbbf24;font-size:.75rem;"></i>
                         {% endfor %}
+                        <span style="font-size:.75rem;color:#6b7280;margin-left:3px;">{{ review.rating }}/5</span>
                       </div>
                     </div>
                   </div>
-                  <div class="sf-review-date">{{ review.created_at|timesince }} ago</div>
+                  <div class="sf-review-date" style="font-size:.8125rem;color:#94a3b8;white-space:nowrap;">{{ review.created_at|timesince }} ago</div>
                 </div>
-                <p class="sf-review-text">{{ review.comment }}</p>
+
+                <p class="sf-review-text" style="color:#475569;line-height:1.7;font-size:.9rem;margin:0;">{{ review.comment }}</p>
+              </div><!-- /.sf-review-main -->
+
+            </div><!-- /.sf-review-layout -->
+          </div>
+        {% endfor %}
+      </section>
+      {% endif %}
+
+      <!-- ── Rate This Store ────────────────────────────────── -->
+      <section class="sf-rate-section" id="rate-store">
+
+        <!-- Header with aggregate score -->
+        <div class="sf-rate-header">
+          <div>
+            <h2 class="sf-section-title" style="color:#fff;margin:0 0 .25rem;">Rate This Store</h2>
+            <p style="font-size:.875rem;opacity:.88;margin:0;">Share your experience with {{ store.name }}</p>
+          </div>
+          {% if store_rating_count > 0 %}
+          <div class="sf-rate-agg">
+            <div class="sf-rate-big-num">{{ store_avg_rating|floatformat:1 }}</div>
+            <div>
+              <div class="sf-rate-agg-stars">
+                {% for i in "12345" %}
+                  <i class="{% if forloop.counter <= store_avg_rating %}fas{% else %}far{% endif %} fa-star"></i>
+                {% endfor %}
+              </div>
+              <div class="sf-rate-agg-label">{{ store_rating_count }} rating{{ store_rating_count|pluralize }}</div>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+
+        <div class="sf-rate-body">
+
+          <!-- Breakdown bars -->
+          {% if store_rating_count > 0 %}
+          <div class="sf-breakdown">
+            {% for item in store_rating_items %}
+              <div class="sf-breakdown-row">
+                <span class="sf-breakdown-label">{{ item.star }}</span>
+                <i class="fas fa-star" style="color:#fbbf24;font-size:.7rem;flex-shrink:0;"></i>
+                <div class="sf-breakdown-bar-wrap">
+                  <div class="sf-breakdown-bar" style="width:{{ item.pct }}%;"></div>
+                </div>
+                <span class="sf-breakdown-count">{{ item.count }}</span>
               </div>
             {% endfor %}
+          </div>
           {% endif %}
-        </section>
-      {% endif %}
+
+          <hr class="sf-rate-divider">
+
+          {% if user.is_authenticated %}
+
+            {% if user_store_rating %}
+              <!-- Already rated — show current rating with edit option -->
+              <div class="sf-rate-form-title">Your Rating</div>
+              <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:1rem;">
+                {% for i in "12345" %}
+                  <i class="{% if forloop.counter <= user_store_rating.rating %}fas{% else %}far{% endif %} fa-star"
+                     style="color:#fbbf24;font-size:1.75rem;"></i>
+                {% endfor %}
+                <span style="font-size:.9375rem;font-weight:800;color:#374151;margin-left:.375rem;">{{ user_store_rating.rating }}/5</span>
+              </div>
+              {% if user_store_rating.comment %}
+                <p style="color:#475569;font-size:.9375rem;line-height:1.7;background:#f8fafc;padding:.875rem 1rem;border-radius:10px;border:1px solid #e5e7eb;margin-bottom:1rem;">
+                  {{ user_store_rating.comment }}
+                </p>
+              {% endif %}
+              <button class="sf-rate-btn" onclick="openEditRating()" type="button" style="background:#f1f5f9;color:var(--sf-text);">
+                <i class="fas fa-pencil-alt"></i> Edit Your Rating
+              </button>
+            {% else %}
+              <!-- Rating form -->
+              <div class="sf-rate-form-title">Leave Your Rating</div>
+              <div class="sf-star-picker" id="starPicker">
+                {% for i in "12345" %}
+                  <label data-value="{{ forloop.counter }}" title="{{ forloop.counter }} star{{ forloop.counter|pluralize }}">
+                    <i class="far fa-star"></i>
+                  </label>
+                {% endfor %}
+                <span class="sf-star-hint" id="starHint">Click to rate</span>
+              </div>
+              <textarea class="sf-rate-textarea" id="storeComment" placeholder="Tell others about your experience with {{ store.name }}…" maxlength="1000"></textarea>
+              <div class="sf-rate-submit">
+                <button class="sf-rate-btn" id="submitRatingBtn" onclick="submitStoreRating()" type="button" disabled>
+                  <i class="fas fa-paper-plane"></i> Submit Rating
+                </button>
+                <span class="sf-rate-feedback" id="ratingFeedback"></span>
+              </div>
+            {% endif %}
+
+          {% else %}
+            <div class="sf-rate-login-note">
+              <i class="fas fa-lock" style="color:var(--sf-primary);"></i>
+              <span>
+                <a href="/accounts/login/?next={{ request.path }}#rate-store" style="color:var(--sf-primary);font-weight:800;">Log in</a>
+                to rate this store and help other shoppers.
+              </span>
+            </div>
+          {% endif %}
+
+        </div><!-- /.sf-rate-body -->
+      </section><!-- /.sf-rate-section -->
 
       <!-- About Section -->
       {% if store.description and show_store_description %}
-        <section class="sf-block" id="about">
-          <div class="sf-section-header">
-            <h2 class="sf-section-title">About {{ store.name }}</h2>
-          </div>
-          <div style="font-size:1.0625rem;line-height:1.8;color:#475569;">
-            {{ store.description|safe }}
-          </div>
-        </section>
+      <section class="sf-block" id="about">
+        <div class="sf-section-header">
+          <h2 class="sf-section-title">About {{ store.name }}</h2>
+        </div>
+        <div style="font-size:1rem;line-height:1.8;color:#475569;">
+          {{ store.description|safe }}
+        </div>
+      </section>
       {% endif %}
 
-    </div>
+    </div><!-- /.sf-container -->
   </main>
 
+  <!-- ──────────────────────────────────────────────────────────
+       JAVASCRIPT
+  ─────────────────────────────────────────────────────────── -->
   <script>
-    // Configuration
-    const csrfToken = document.querySelector('[name=csrf-token]').content;
-    const storeSlug = '{{ store.slug }}';
+    const csrfToken      = document.querySelector('[name=csrf-token]').content;
+    const storeSlug      = '{{ store.slug }}';
     const isAuthenticated = document.querySelector('[name=user-auth]').content === 'true';
-    let isFollowing = {{ is_following|yesno:"true,false" }};
+    let isFollowing      = {{ is_following|yesno:"true,false" }};
 
-    // Follow/Unfollow Store
+    /* ── Follow / Unfollow ──────────────────────────────────── */
     async function toggleFollow() {
       if (!isAuthenticated) {
         showToast('Please login to follow stores', 'error');
-        setTimeout(() => {
-          window.location.href = '/accounts/login/?next={{ request.path }}';
-        }, 1500);
+        setTimeout(() => { window.location.href = '/accounts/login/?next={{ request.path }}'; }, 1500);
         return;
       }
-
-      const btn = document.getElementById('followBtn');
+      const btn  = document.getElementById('followBtn');
       const text = document.getElementById('followText');
-      const count = document.getElementById('followersCount');
-      const originalText = text.textContent;
+      const cnt  = document.getElementById('followersCount');
+      const orig = text.textContent;
 
       text.innerHTML = '<span class="sf-loading"></span>';
       btn.disabled = true;
 
       try {
-        const response = await fetch(`/stores/${storeSlug}/follow/`, {
+        const res  = await fetch(`/stores/${storeSlug}/follow/`, {
           method: 'POST',
-          headers: {
-            'X-CSRFToken': csrfToken,
-            'Content-Type': 'application/json'
-          }
+          headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/json' }
         });
+        const data = await res.json();
 
-        const data = await response.json();
-
-        if (data.success || response.ok) {
+        if (data.success || res.ok) {
           isFollowing = data.is_following;
           text.textContent = isFollowing ? 'Following' : 'Follow Store';
-
-          if (data.followers_count !== undefined) {
-            count.textContent = data.followers_count;
-          }
-
-          // ✅ Updated class name
-          if (isFollowing) {
-            btn.classList.add('sf-following');
-          } else {
-            btn.classList.remove('sf-following');
-          }
-
+          if (data.followers_count !== undefined) cnt.textContent = data.followers_count;
+          isFollowing ? btn.classList.add('sf-following') : btn.classList.remove('sf-following');
           showToast(isFollowing ? '❤️ Following store!' : 'Unfollowed store', 'success');
         } else {
-          text.textContent = originalText;
+          text.textContent = orig;
           showToast(data.message || 'Something went wrong', 'error');
         }
-      } catch (error) {
-        console.error('Error:', error);
-        text.textContent = originalText;
+      } catch(e) {
+        text.textContent = orig;
         showToast('Network error. Please try again.', 'error');
       } finally {
         btn.disabled = false;
       }
     }
 
-    // Add to Wishlist
+    /* ── Add to Wishlist ───────────────────────────────────── */
     async function addToWishlist(productId) {
       if (!isAuthenticated) {
         showToast('Please login to add to wishlist', 'error');
-        setTimeout(() => {
-          window.location.href = '/accounts/login/?next={{ request.path }}';
-        }, 1500);
+        setTimeout(() => { window.location.href = '/accounts/login/?next={{ request.path }}'; }, 1500);
         return;
       }
-
       try {
-        const response = await fetch(`/products/${productId}/wishlist/`, {
+        const res  = await fetch(`/products/${productId}/wishlist/`, {
           method: 'POST',
-          headers: {
-            'X-CSRFToken': csrfToken,
-            'Content-Type': 'application/json'
-          }
+          headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/json' }
         });
-
-        const data = await response.json();
+        const data = await res.json();
         showToast(data.message || '❤️ Added to wishlist!', 'success');
-      } catch (error) {
-        console.error('Error:', error);
+      } catch(e) {
         showToast('Failed to add to wishlist', 'error');
       }
     }
 
-    // Copy Referral Code
+    /* ── Copy Referral ─────────────────────────────────────── */
     function copyReferralCode() {
       const code = document.getElementById('referralCode').textContent.trim();
-      const url = `${window.location.origin}{{ request.path }}?ref=${code}`;
-
-      navigator.clipboard.writeText(url).then(() => {
-        showToast('🎉 Referral link copied!', 'success');
-      }).catch(() => {
-        showToast('Failed to copy link', 'error');
-      });
+      const url  = `${window.location.origin}{{ request.path }}?ref=${code}`;
+      navigator.clipboard.writeText(url)
+        .then(() => showToast('🎉 Referral link copied!', 'success'))
+        .catch(() => showToast('Failed to copy link', 'error'));
     }
 
-    // Toast Notification (scoped classes)
+    /* ── Toast ─────────────────────────────────────────────── */
     function showToast(message, type = 'success') {
-      const toast = document.createElement('div');
-      toast.className = `sf-toast sf-toast-${type}`;
-      toast.innerHTML = `
-        <i class="fas fa-${type === 'error' ? 'exclamation-circle' : type === 'info' ? 'info-circle' : 'check-circle'}"></i>
-        <span>${message}</span>
-      `;
-      document.body.appendChild(toast);
-
+      const t = document.createElement('div');
+      t.className = `sf-toast sf-toast-${type}`;
+      t.innerHTML = `<i class="fas fa-${type === 'error' ? 'exclamation-circle' : 'check-circle'}"></i><span>${message}</span>`;
+      document.body.appendChild(t);
       setTimeout(() => {
-        toast.style.opacity = '0';
-        toast.style.transform = 'translateX(100px)';
-        toast.style.transition = 'all .25s ease';
-        setTimeout(() => toast.remove(), 250);
+        t.style.cssText = 'opacity:0;transform:translateX(60px);transition:all .25s ease';
+        setTimeout(() => t.remove(), 260);
       }, 3000);
     }
 
-    // Smooth Scroll
-    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-      anchor.addEventListener('click', function (e) {
+    /* ── Smooth Scroll ─────────────────────────────────────── */
+    document.querySelectorAll('a[href^="#"]').forEach(a => {
+      a.addEventListener('click', e => {
         e.preventDefault();
-        const target = document.querySelector(this.getAttribute('href'));
+        const target = document.querySelector(a.getAttribute('href'));
         if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
     });
 
-    console.log('%c🛍️ Welcome to {{ store.name }}!', 'font-size: 20px; font-weight: bold; color: var(--sf-primary);');
-    console.log('%cBuilt with ❤️ using Django', 'color: #10b981;');
+    /* ── Interactive Star Picker ───────────────────────────── */
+    let selectedRating = 0;
+    const starHints = ['', 'Poor', 'Fair', 'Good', 'Very Good', 'Excellent'];
+    const picker = document.getElementById('starPicker');
+    const submitBtn = document.getElementById('submitRatingBtn');
+    const starHintEl = document.getElementById('starHint');
+
+    if (picker) {
+      const labels = picker.querySelectorAll('label');
+
+      labels.forEach((lbl, idx) => {
+        const val = parseInt(lbl.dataset.value);
+
+        // Hover
+        lbl.addEventListener('mouseenter', () => {
+          labels.forEach((l, i) => {
+            l.querySelector('i').className = i < val ? 'fas fa-star' : 'far fa-star';
+            l.classList.toggle('hovered', i < val);
+          });
+          if (starHintEl) starHintEl.textContent = starHints[val] || '';
+        });
+
+        // Mouse leave — restore selected
+        lbl.addEventListener('mouseleave', () => {
+          labels.forEach((l, i) => {
+            const sel = i < selectedRating;
+            l.querySelector('i').className = sel ? 'fas fa-star' : 'far fa-star';
+            l.classList.toggle('selected', sel);
+            l.classList.remove('hovered');
+          });
+          if (starHintEl) starHintEl.textContent = selectedRating ? starHints[selectedRating] : 'Click to rate';
+        });
+
+        // Click
+        lbl.addEventListener('click', () => {
+          selectedRating = val;
+          labels.forEach((l, i) => {
+            const sel = i < selectedRating;
+            l.querySelector('i').className = sel ? 'fas fa-star' : 'far fa-star';
+            l.classList.toggle('selected', sel);
+          });
+          if (starHintEl) starHintEl.textContent = starHints[selectedRating];
+          if (submitBtn) submitBtn.disabled = false;
+        });
+      });
+    }
+
+    /* ── Submit Store Rating ───────────────────────────────── */
+    async function submitStoreRating() {
+      if (!selectedRating) { showToast('Please select a star rating first', 'error'); return; }
+      const comment = document.getElementById('storeComment')?.value?.trim() || '';
+      const btn = document.getElementById('submitRatingBtn');
+      const feedback = document.getElementById('ratingFeedback');
+
+      btn.disabled = true;
+      btn.innerHTML = '<span class="sf-loading"></span> Submitting…';
+      if (feedback) feedback.textContent = '';
+
+      try {
+        const res  = await fetch(`/stores/{{ store.slug }}/rate/`, {
+          method: 'POST',
+          headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rating: selectedRating, comment })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          showToast('⭐ Thank you for your rating!', 'success');
+          setTimeout(() => location.reload(), 1500);
+        } else {
+          if (feedback) feedback.textContent = data.message || 'Something went wrong.';
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Rating';
+        }
+      } catch(e) {
+        if (feedback) feedback.textContent = 'Network error. Please try again.';
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Rating';
+      }
+    }
+
+    /* ── Edit Rating (reload form) ─────────────────────────── */
+    function openEditRating() {
+      const section = document.getElementById('rate-store');
+      if (!section) return;
+      section.scrollIntoView({ behavior: 'smooth' });
+      showToast('You can re-submit to update your rating', 'info');
+    }
+
+    /* ── Load More Products ────────────────────────────────── */
+    let sfCurrentPage = parseInt(
+      document.getElementById('sfPageMeta')?.dataset.current || '1'
+    );
+    const sfTotalPages = parseInt(
+      document.getElementById('sfPageMeta')?.dataset.total || '1'
+    );
+    const sfStoreSlug = document.getElementById('sfPageMeta')?.dataset.store || '';
+    let sfLoading = false;
+
+    async function loadMoreProducts() {
+      if (sfLoading || sfCurrentPage >= sfTotalPages) return;
+
+      const btn      = document.getElementById('loadMoreBtn');
+      const btnText  = document.getElementById('loadMoreText');
+      const wrap     = document.getElementById('loadMoreWrap');
+      const grid     = document.querySelector('.sf-products-grid');
+
+      // Loading state
+      sfLoading = true;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="sf-lm-spinner"></span><span>Loading…</span>';
+
+      try {
+        const nextPage = sfCurrentPage + 1;
+        const url = `/${sfStoreSlug.startsWith('/') ? sfStoreSlug.slice(1) : sfStoreSlug}?page=${nextPage}&format=cards`;
+
+        // Try AJAX endpoint first; fall back to full page parse
+        const res  = await fetch(`/stores/${sfStoreSlug}/products/?page=${nextPage}&ajax=1`, {
+          headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+        });
+
+        if (res.ok && res.headers.get('content-type')?.includes('application/json')) {
+          // View returned JSON with rendered HTML cards
+          const data = await res.json();
+
+          if (data.html) {
+            const tmp = document.createElement('div');
+            tmp.innerHTML = data.html;
+            const cards = tmp.querySelectorAll('.sf-product-card');
+            cards.forEach((card, i) => {
+              card.classList.add('sf-card-new');
+              card.style.animationDelay = `${i * 40}ms`;
+              grid.appendChild(card);
+            });
+          }
+
+          sfCurrentPage = nextPage;
+
+          if (!data.has_next) {
+            wrap.remove();  // No more pages — hide button entirely
+          } else {
+            btn.disabled = false;
+            const remaining = data.total_count - data.end_index;
+            btn.innerHTML = `<i class="fas fa-plus-circle"></i><span id="loadMoreText">Load More Products</span><span class="sf-lm-count">(${remaining} remaining)</span>`;
+          }
+
+        } else {
+          // Fallback: parse the full page HTML and extract product cards
+          const text = await res.text();
+          const parser = new DOMParser();
+          const doc    = parser.parseFromString(text, 'text/html');
+          const cards  = doc.querySelectorAll('.sf-product-card');
+
+          if (cards.length === 0) {
+            wrap.remove();
+            showToast('All products loaded!', 'success');
+          } else {
+            cards.forEach((card, i) => {
+              card.classList.add('sf-card-new');
+              card.style.animationDelay = `${i * 40}ms`;
+              grid.appendChild(card);
+            });
+
+            sfCurrentPage = nextPage;
+
+            // Check if next page still exists by looking for load-more in parsed doc
+            const hasNext = doc.querySelector('#loadMoreWrap');
+            if (!hasNext) {
+              wrap.remove();
+              showToast('All products loaded!', 'success');
+            } else {
+              btn.disabled = false;
+              btn.innerHTML = '<i class="fas fa-plus-circle"></i><span>Load More Products</span>';
+            }
+          }
+        }
+
+      } catch (e) {
+        showToast('Failed to load products. Please try again.', 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-plus-circle"></i><span>Load More Products</span>';
+      } finally {
+        sfLoading = false;
+      }
+    }
   </script>
 
-</div>
+</div><!-- /.storefront-v1 -->
 {% endblock %}

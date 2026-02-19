@@ -689,7 +689,7 @@ class Store(models.Model):
         return OrderItem.objects.filter(product__store=self).count()
 
     def get_average_rating(self):
-        reviews = self.reviews.filter(is_approved=True)
+        reviews = self.store_reviews.filter(is_approved=True)
         return reviews.aggregate(avg_rating=Avg('rating'))['avg_rating'] or 0
 
     def get_total_sales(self):
@@ -1223,33 +1223,57 @@ class StoreHours(models.Model):
 
 
 class StoreReview(models.Model):
-    """Customer reviews for stores"""
+    """
+    A customer's star rating and optional comment for a whole Store.
+    Separate from product-level Review objects in reviews/models.py.
+    One review per user per store — enforced by unique_together.
+    """
 
     RATING_CHOICES = [
-        (1, '1 Star'),
-        (2, '2 Stars'),
-        (3, '3 Stars'),
-        (4, '4 Stars'),
-        (5, '5 Stars'),
+        (1, '1 — Poor'),
+        (2, '2 — Fair'),
+        (3, '3 — Good'),
+        (4, '4 — Very Good'),
+        (5, '5 — Excellent'),
     ]
 
-    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name='reviews')
-    customer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    rating = models.IntegerField(choices=RATING_CHOICES)
-    title = models.CharField(max_length=255)
-    comment = models.TextField()
-    is_approved = models.BooleanField(default=False)
+    store = models.ForeignKey(
+        Store,
+        on_delete=models.CASCADE,
+        related_name='store_reviews',
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='store_reviews_given',
+    )
+    rating = models.PositiveSmallIntegerField(
+        choices=RATING_CHOICES,
+        validators=[MinValueValidator(1), MaxValueValidator(5)],
+    )
+    comment = models.TextField(blank=True, default='')
+    is_approved = models.BooleanField(
+        default=True,
+        help_text='Approved store reviews are publicly visible.',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ['store', 'customer']
+        unique_together = ('store', 'user')
         ordering = ['-created_at']
         verbose_name = 'Store Review'
         verbose_name_plural = 'Store Reviews'
+        indexes = [
+            models.Index(fields=['store', 'rating']),
+            models.Index(fields=['user', 'created_at']),
+        ]
 
     def __str__(self):
-        return f"{self.store.name} - {self.rating} stars by {self.customer.username}"
+        return f"{self.user.username} → {self.store.name} ({self.rating}★)"
+
+    def get_rating_label(self):
+        return dict(self.RATING_CHOICES).get(self.rating, '')
 
 
 class StoreShippingZone(models.Model):

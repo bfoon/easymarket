@@ -285,11 +285,11 @@ class StoreHoursAdmin(admin.ModelAdmin):
 
 @admin.register(StoreReview)
 class StoreReviewAdmin(admin.ModelAdmin):
-    list_display = ("store", "customer", "rating", "is_approved", "created_at")
+    list_display = ("store", "user", "rating", "is_approved", "created_at")
     list_filter = ("rating", "is_approved", "created_at")
-    search_fields = ("store__name", "customer__username", "title", "comment")
+    search_fields = ("store__name", "user__username", "title", "comment")
     readonly_fields = ("created_at", "updated_at")
-    autocomplete_fields = ("store", "customer")
+    autocomplete_fields = ("store", "user")
 
     actions = ["approve_reviews", "reject_reviews"]
 
