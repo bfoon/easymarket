@@ -130,16 +130,16 @@ def login_view(request):
         ).strip()
         password = request.POST.get("password") or ""
 
-        # Resolve by username/email/telephone (telephone normalized to +220…)
+        # Resolve by username / email / telephone (telephone normalised to +220…)
         norm_phone = _normalize_phone(raw_identifier)
 
         # Build phone candidates to match legacy rows too (without +, with 220, plain local)
         digits = re.sub(r"\D+", "", raw_identifier or "")
         candidates = set()
         if norm_phone:
-            candidates.add(norm_phone)  # +2203930160
+            candidates.add(norm_phone)          # +2203930160
         if digits:
-            candidates.add(digits)  # 3930160
+            candidates.add(digits)              # 3930160
             if not digits.startswith("220"):
                 candidates.add(f"220{digits}")  # 2203930160
 
@@ -167,7 +167,7 @@ def login_view(request):
         if user is None:
             logger.warning(
                 "Auth failed for identifier=%r (resolved %s=%r). is_active=%s",
-                raw_identifier, user_obj.USERNAME_FIELD, login_identifier_value, user_obj.is_active
+                raw_identifier, user_obj.USERNAME_FIELD, login_identifier_value, user_obj.is_active,
             )
             messages.error(request, "Invalid username or password.")
             return render(request, "accounts/login.html")
@@ -191,36 +191,57 @@ def login_view(request):
         if not created:
             update_fields = []
             if getattr(device, "user_agent", None) != ua:
-                device.user_agent = ua; update_fields.append("user_agent")
+                device.user_agent = ua
+                update_fields.append("user_agent")
             if getattr(device, "ip", None) != ip:
-                device.ip = ip; update_fields.append("ip")
+                device.ip = ip
+                update_fields.append("ip")
             if update_fields:
                 device.save(update_fields=update_fields)
 
-        # Untrusted device => send OTP and redirect to verify (don't log in yet)
+        # ── UNTRUSTED DEVICE ────────────────────────────────────────────────
+        # Send OTP and redirect to verify — do NOT log in yet.
+        # We save the next URL so the OTP view can redirect correctly after
+        # merging the session cart.
         if not device.is_trusted:
             send_otp_async(user, device)
 
             request.session["pending_login_user_id"] = user.id
             request.session["pending_device_id"] = device.id
-            # Store the backend to use after OTP verification (multiple backends configured)
+            # Store the backend so OTP view can call login() with the right one
             backend = getattr(user, "backend", None) or settings.AUTHENTICATION_BACKENDS[0]
             request.session["pending_auth_backend"] = backend
+            # Preserve intended destination so OTP view can redirect correctly
+            next_url = request.POST.get("next") or request.GET.get("next") or "/"
+            request.session["pending_next_url"] = next_url
 
-            messages.info(request, "We sent a 6-digit code to your email and WhatsApp. Enter it to finish logging in.")
+            messages.info(
+                request,
+                "We sent a 6-digit code to your email and WhatsApp. Enter it to finish logging in.",
+            )
             resp = redirect("accounts:verify_login_otp")
             if new_cookie_needed:
                 _set_device_cookie(resp, token, request)
             return resp
 
-        # Trusted device: complete login normally (user.backend should be set by authenticate)
+        # ── TRUSTED DEVICE — complete login immediately ──────────────────────
         login(request, user)
-        if request.session.get("checkout_after_login"):
-            migrate_session_cart_to_user(request, user)
-            request.session.pop("checkout_after_login", None)
-            return redirect("orders:checkout_redirect")
 
-        resp = redirect("/")
+        # Always merge any guest session cart into the user's DB cart.
+        # This handles both normal logins and the checkout-after-login flow.
+        migrate_session_cart_to_user(request, user)
+
+        # If the user was sent here from the checkout flow, go straight there.
+        if request.session.pop("checkout_after_login", None):
+            resp = redirect("orders:checkout_redirect")
+        else:
+            next_url = request.POST.get("next") or request.GET.get("next") or "/"
+            # Safety: only allow relative URLs to prevent open-redirect attacks
+            from django.utils.http import url_has_allowed_host_and_scheme
+            if not url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}):
+                next_url = "/"
+            resp = redirect(next_url)
+
         if new_cookie_needed:
             _set_device_cookie(resp, token, request)
         messages.success(request, f"Welcome back, {user.username}!")

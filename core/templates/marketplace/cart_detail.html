@@ -138,8 +138,8 @@
 }
 /* Invite Code Box - Darker */
 .invite-code-box{
-  background: rgba(0, 0, 0, 0.55);          /* darker glass */
-  border: 1px solid rgba(255,255,255,0.18); /* subtle border */
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255,255,255,0.18);
   border-radius: 12px;
   padding: 1rem;
   backdrop-filter: blur(8px);
@@ -172,40 +172,33 @@
 }
 /* Mobile-specific fixes */
 @media (max-width: 767.98px) {
-  /* Ensure card header has proper padding on mobile */
   .card-header {
     padding: 1rem !important;
   }
 
-  /* Make badges wrap nicely */
   .card-header .badge {
     font-size: 0.75rem;
     padding: 0.25rem 0.5rem;
   }
 
-  /* Make buttons more touch-friendly */
   .btn-sm {
     padding: 0.375rem 0.75rem;
     font-size: 0.875rem;
   }
 
-  /* Ensure dropdowns don't overflow */
   .dropdown-menu {
     max-width: 90vw;
   }
 
-  /* Fix code display on mobile */
   code {
     font-size: 0.9rem;
     word-break: break-all;
   }
 
-  /* Social cart body spacing */
   #social-cart-body {
     min-height: 200px;
   }
 
-  /* Ensure table is responsive */
   .table-responsive {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
@@ -222,7 +215,6 @@
     font-size: 0.75rem;
   }
 
-  /* Stack action buttons vertically on very small screens */
   .card-header .d-flex.gap-2 {
     flex-direction: column;
     align-items: stretch !important;
@@ -339,6 +331,14 @@ code:hover {
 .avatar-color-6 { background: linear-gradient(135deg, #30cfd0 0%, #330867 100%); }
 .avatar-color-7 { background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); }
 .avatar-color-8 { background: linear-gradient(135deg, #ff9a56 0%, #ff6a88 100%); }
+
+/* Guest login prompt */
+.guest-login-prompt {
+  border-left: 4px solid #0d6efd;
+  background: #f0f5ff;
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+}
 </style>
 
 <link rel="stylesheet" type="text/css" href="{% static 'css/main.css' %}">
@@ -360,40 +360,44 @@ code:hover {
                 <span class="badge bg-primary rounded-pill ms-3" style="font-size: 0.9rem;">{{ cart_count }}</span>
               {% endif %}
             </h1>
-            <p class="text-muted mb-0">Manage your personal and social shopping</p>
+            <p class="text-muted mb-0">
+              {% if guest_mode %}
+                You're shopping as a guest — log in to place your order.
+              {% else %}
+                Manage your personal and social shopping
+              {% endif %}
+            </p>
           </div>
           <div class="d-flex gap-2 flex-wrap">
             <a href="{% url 'marketplace:all_products' %}" class="btn btn-outline-primary btn-touch">
               <i class="fas fa-plus me-2"></i>Add Items
             </a>
-            {% if not is_social_active %}
-                <!-- Show Rejoin button if user can rejoin -->
-              {% if can_rejoin_social_cart %}
-              <button class="btn btn-warning btn-touch" id="rejoinSocialCartBtn" type="button">
-                <i class="fas fa-undo me-2"></i>Rejoin Social Cart
+            {% if not guest_mode %}
+              {% if not is_social_active %}
+                {% if can_rejoin_social_cart %}
+                <button class="btn btn-warning btn-touch" id="rejoinSocialCartBtn" type="button">
+                  <i class="fas fa-undo me-2"></i>Rejoin Social Cart
+                </button>
+                {% endif %}
+                {% if not can_rejoin_social_cart %}
+                <button class="btn btn-success btn-touch" id="createSocialCartBtn" type="button">
+                  <i class="fas fa-users me-2"></i>Start Social Cart
+                </button>
+                {% endif %}
+              {% endif %}
+              {% if normal_items %}
+              <button class="btn btn-info btn-touch" data-bs-toggle="modal" data-bs-target="#shareCartModal">
+                <i class="fas fa-share-alt me-2"></i>Share Cart
               </button>
               {% endif %}
-
-              <!-- Show Start button if user cannot rejoin -->
-              {% if not can_rejoin_social_cart %}
-              <button class="btn btn-success btn-touch" id="createSocialCartBtn" type="button">
-                <i class="fas fa-users me-2"></i>Start Social Cart
-              </button>
-              {% endif %}
-
-            {% endif %}
-            {% if normal_items %}
-            <button class="btn btn-info btn-touch" data-bs-toggle="modal" data-bs-target="#shareCartModal">
-              <i class="fas fa-share-alt me-2"></i>Share Cart
-            </button>
             {% endif %}
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Social Cart Control Panel -->
-    {% if is_social_active %}
+    <!-- Social Cart Control Panel (authenticated only) -->
+    {% if not guest_mode and is_social_active %}
     <div class="row mb-4">
       <div class="col-12">
         <div class="social-control-panel shadow-sm">
@@ -475,20 +479,198 @@ code:hover {
                 {% endif %}
               </div>
             </div>
+
           </div>
 
           <!-- Members Preview -->
-            <div id="social-members-strip">
-              {% include "marketplace/partials/_social_members_strip.html" %}
-            </div>
+          <div id="social-members-strip">
+            {% include "marketplace/partials/_social_members_strip.html" %}
+          </div>
 
         </div>
       </div>
     </div>
     {% endif %}
 
-    <!-- Cart Items -->
-    {% if normal_items or social_items %}
+    <!-- ============================================================
+         GUEST CART
+         ============================================================ -->
+    {% if guest_mode %}
+    <div class="row g-4">
+      <!-- Guest Items -->
+      <div class="col-lg-8">
+        <div class="card cart-card shadow-sm border-0 mb-4">
+          <div class="card-header text-white py-3" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+              <h5 class="mb-0 fw-bold d-flex align-items-center">
+                <i class="fas fa-shopping-bag me-2"></i>
+                Your Cart
+                {% if cart_count %}
+                  <span class="badge bg-white text-dark ms-2">{{ cart_count }}</span>
+                {% endif %}
+              </h5>
+            </div>
+          </div>
+
+          <div class="card-body p-0">
+            {% if guest_items %}
+            <div class="table-responsive">
+              <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th class="border-0 ps-4">Product</th>
+                    <th class="border-0 text-center d-none d-md-table-cell">Price</th>
+                    <th class="border-0 text-center">Qty</th>
+                    <th class="border-0 text-center d-none d-lg-table-cell">Total</th>
+                    <th class="border-0 text-center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="normalCartItems">
+                  {% for item in guest_items %}
+                  {# item_type="session" tells cart.js to hit the session remove/update paths #}
+                  <tr class="cart-item"
+                      data-item-id="{{ item.session_key }}"
+                      data-remove-id="{{ item.session_key }}"
+                      data-product-id="{{ item.product.id }}"
+                      data-item-type="session">
+                    <td class="ps-4 py-3">
+                      <div class="d-flex align-items-center gap-3">
+                        <img src="{% if item.product.image %}{{ item.product.image.url }}{% else %}{% static 'img/placeholder.png' %}{% endif %}"
+                             alt="{{ item.product.name }}"
+                             class="rounded-3 shadow-sm"
+                             style="width:70px;height:70px;object-fit:cover;"
+                             onerror="this.src='{% static 'img/placeholder.png' %}'">
+                        <div class="flex-grow-1">
+                          <h6 class="mb-1 fw-semibold">{{ item.product.name }}</h6>
+                          <small class="text-muted d-block mb-1">{{ item.product.category }}</small>
+                          {% if item.features %}
+                          <div class="mt-1">
+                            {% for key, value in item.features.items %}
+                              <span class="badge bg-light text-dark border me-1 mb-1 variant-badge">
+                                {{ key|title }}: {{ value }}
+                              </span>
+                            {% endfor %}
+                          </div>
+                          {% endif %}
+                        </div>
+                      </div>
+                    </td>
+                    <td class="text-center d-none d-md-table-cell">
+                      <strong class="text-primary">{% display_money item.product.price %}</strong>
+                    </td>
+                    <td class="text-center">
+                      <div class="d-flex justify-content-center">
+                        <div class="btn-group btn-group-sm shadow-sm" role="group">
+                          <button class="btn btn-outline-secondary btn-touch quantity-btn"
+                                  data-action="decrease"
+                                  data-item-id="{{ item.session_key }}"
+                                  data-product-id="{{ item.product.id }}"
+                                  data-item-type="session">
+                            <i class="fas fa-minus"></i>
+                          </button>
+                          <input type="number"
+                                 class="form-control form-control-sm text-center quantity-input border-secondary"
+                                 value="{{ item.quantity }}"
+                                 min="1" max="99"
+                                 data-item-id="{{ item.session_key }}"
+                                 data-product-id="{{ item.product.id }}"
+                                 data-item-type="session"
+                                 style="width:60px;">
+                          <button class="btn btn-outline-secondary btn-touch quantity-btn"
+                                  data-action="increase"
+                                  data-item-id="{{ item.session_key }}"
+                                  data-product-id="{{ item.product.id }}"
+                                  data-item-type="session">
+                            <i class="fas fa-plus"></i>
+                          </button>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="text-center d-none d-lg-table-cell">
+                      <strong class="text-success fs-5 subtotal">{% display_money item.subtotal %}</strong>
+                    </td>
+                    <td class="text-center">
+                      <button class="btn btn-outline-danger btn-touch remove-item"
+                              data-item-id="{{ item.session_key }}"
+                              data-remove-id="{{ item.session_key }}"
+                              data-product-id="{{ item.product.id }}"
+                              data-item-type="session"
+                              title="Remove">
+                        <i class="fas fa-trash"></i>
+                      </button>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+              <i class="fas fa-shopping-bag fa-4x text-muted opacity-25 mb-3"></i>
+              <h5 class="text-muted">Your cart is empty</h5>
+              <p class="text-muted small mb-3">Browse our products and add items to get started</p>
+              <a href="{% url 'marketplace:all_products' %}" class="btn btn-primary">
+                <i class="fas fa-store me-2"></i>Start Shopping
+              </a>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <!-- Guest Sidebar -->
+      <div class="col-lg-4">
+        {% if guest_items %}
+        <div class="card cart-card shadow-sm border-0 mb-3 cart-sticky-summary">
+          <div class="card-header bg-primary text-white">
+            <h6 class="mb-0 fw-bold"><i class="fas fa-receipt me-2"></i>Order Summary</h6>
+          </div>
+          <div class="card-body">
+            <div class="d-flex justify-content-between mb-2">
+              <span class="text-muted">Items:</span>
+              <strong id="item-count">{{ cart_count }}</strong>
+            </div>
+            <div class="d-flex justify-content-between mb-2">
+              <span class="text-muted">Subtotal:</span>
+              <strong id="order-subtotal">{% display_money normal_subtotal %}</strong>
+            </div>
+            <div class="d-flex justify-content-between mb-2">
+              <span class="text-muted">Tax (0.0%):</span>
+              <strong>{% display_money normal_tax %}</strong>
+            </div>
+            <hr>
+            <div class="d-flex justify-content-between mb-3">
+              <span class="fw-bold">Total:</span>
+              <strong class="text-primary fs-5" id="total-price">{% display_money normal_total %}</strong>
+            </div>
+
+            <!-- Guest login prompt -->
+            <div class="guest-login-prompt mb-3">
+              <p class="mb-2 fw-semibold"><i class="fas fa-lock me-2 text-primary"></i>Ready to place your order?</p>
+              <p class="small text-muted mb-3">Your cart items will be saved when you log in or create an account.</p>
+              <a href="{% url 'accounts:sign_in' %}?next={{ request.path }}"
+                 class="btn btn-primary w-100 btn-lg btn-touch mb-2">
+                <i class="fas fa-sign-in-alt me-2"></i>Log In to Checkout
+              </a>
+              <a href="{% url 'accounts:register' %}?next={{ request.path }}"
+                 class="btn btn-outline-primary w-100 btn-touch">
+                <i class="fas fa-user-plus me-2"></i>Create an Account
+              </a>
+            </div>
+
+            <a href="{% url 'marketplace:all_products' %}" class="btn btn-outline-secondary w-100 btn-touch">
+              <i class="fas fa-arrow-left me-2"></i>Continue Shopping
+            </a>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- ============================================================
+         AUTHENTICATED CART
+         ============================================================ -->
+    {% elif normal_items or social_items %}
     <div class="row g-4">
       <!-- Main Cart Area -->
       <div class="col-lg-8">
@@ -498,7 +680,7 @@ code:hover {
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
               <h5 class="mb-0 fw-bold d-flex align-items-center text-dark">
                 <i class="fas fa-shopping-bag me-2"></i>
-                 Personal Cart
+                Personal Cart
                 {% if normal_count %}
                   <span class="badge bg-success ms-2">{{ normal_count }}</span>
                 {% endif %}
@@ -531,7 +713,12 @@ code:hover {
                 </thead>
                 <tbody id="normalCartItems">
                   {% for item in normal_items %}
-                  <tr class="cart-item" draggable="true" data-item-id="{{ item.id }}" data-cart-type="normal"
+                  <tr class="cart-item" draggable="true"
+                      data-item-id="{{ item.id }}"
+                      data-remove-id="{{ item.id }}"
+                      data-product-id="{{ item.product.id }}"
+                      data-item-type="db"
+                      data-cart-type="normal"
                       ondragstart="handleDragStart(event)" ondragend="handleDragEnd(event)">
                     <td class="ps-4 py-3">
                       <div class="d-flex align-items-center gap-3">
@@ -565,27 +752,44 @@ code:hover {
                     <td class="text-center">
                       <div class="d-flex justify-content-center">
                         <div class="btn-group btn-group-sm shadow-sm" role="group">
-                          <button class="btn btn-outline-secondary btn-touch quantity-btn" data-action="decrease" data-item-id="{{ item.id }}">
+                          <button class="btn btn-outline-secondary btn-touch quantity-btn"
+                                  data-action="decrease"
+                                  data-item-id="{{ item.id }}"
+                                  data-product-id="{{ item.product.id }}">
                             <i class="fas fa-minus"></i>
                           </button>
-                          <input type="number" class="form-control form-control-sm text-center quantity-input border-secondary"
-                                 value="{{ item.quantity }}" min="1" max="99" data-item-id="{{ item.id }}" style="width:60px;">
-                          <button class="btn btn-outline-secondary btn-touch quantity-btn" data-action="increase" data-item-id="{{ item.id }}">
+                          <input type="number"
+                                 class="form-control form-control-sm text-center quantity-input border-secondary"
+                                 value="{{ item.quantity }}" min="1" max="99"
+                                 data-item-id="{{ item.id }}"
+                                 data-product-id="{{ item.product.id }}"
+                                 style="width:60px;">
+                          <button class="btn btn-outline-secondary btn-touch quantity-btn"
+                                  data-action="increase"
+                                  data-item-id="{{ item.id }}"
+                                  data-product-id="{{ item.product.id }}">
                             <i class="fas fa-plus"></i>
                           </button>
                         </div>
                       </div>
                     </td>
                     <td class="text-center d-none d-lg-table-cell">
-                      <strong class="text-success fs-5">{% display_money item.subtotal %}</strong>
+                      <strong class="text-success fs-5 subtotal">{% display_money item.subtotal %}</strong>
                     </td>
                     <td class="text-center">
                       <div class="btn-group-vertical btn-group-sm">
-                        <button class="btn btn-outline-danger btn-touch remove-item mb-1" data-item-id="{{ item.id }}" title="Remove">
+                        <button class="btn btn-outline-danger btn-touch remove-item mb-1"
+                                data-item-id="{{ item.id }}"
+                                data-remove-id="{{ item.id }}"
+                                data-product-id="{{ item.product.id }}"
+                                data-item-type="db"
+                                title="Remove">
                           <i class="fas fa-trash"></i>
                         </button>
                         {% if is_social_active and not is_blocked %}
-                        <button class="btn btn-outline-info btn-touch move-to-social" data-item-id="{{ item.id }}" title="Move to Social">
+                        <button class="btn btn-outline-info btn-touch move-to-social"
+                                data-item-id="{{ item.id }}"
+                                title="Move to Social">
                           <i class="fas fa-arrow-right"></i>
                         </button>
                         {% endif %}
@@ -608,204 +812,167 @@ code:hover {
           </div>
         </div>
 
-{% if is_social_active %}
-<!-- Social Cart -->
-<div class="card cart-card shadow-sm border-0 mb-4 drop-zone" id="socialCartZone" data-cart-type="social">
+        {% if is_social_active %}
+        <!-- Social Cart -->
+        <div class="card cart-card shadow-sm border-0 mb-4 drop-zone" id="socialCartZone" data-cart-type="social">
 
-  <!-- ✅ FIXED: Mobile-Optimized Header with Proper Padding -->
-  <div class="card-header text-white py-3 px-3 px-md-4"
-       style="background: linear-gradient(135deg, {% if is_blocked %}#dc3545 0%, #c82333{% else %}#667eea 0%, #764ba2{% endif %} 100%);">
+          <div class="card-header text-white py-3 px-3 px-md-4"
+               style="background: linear-gradient(135deg, {% if is_blocked %}#dc3545 0%, #c82333{% else %}#667eea 0%, #764ba2{% endif %} 100%);">
 
-    <!-- Mobile-First Layout -->
-    <div class="row g-2 g-md-3 align-items-center">
+            <!-- Mobile-First Layout -->
+            <div class="row g-2 g-md-3 align-items-center">
 
-      <!-- Column 1: Title & Basic Info -->
-      <div class="col-12 col-md-6 col-lg-4">
-        <div class="d-flex align-items-center mb-2">
-          <h5 class="mb-0 fw-bold d-flex align-items-center flex-wrap">
-            <i class="fas fa-users me-2"></i>
-            <span>Social Cart</span>
+              <!-- Column 1: Title & Basic Info -->
+              <div class="col-12 col-md-6 col-lg-4">
+                <div class="d-flex align-items-center mb-2">
+                  <h5 class="mb-0 fw-bold d-flex align-items-center flex-wrap">
+                    <i class="fas fa-users me-2"></i>
+                    <span>Social Cart</span>
+                    {% if social_count %}
+                      <span class="badge bg-white bg-opacity-25 text-white ms-2">{{ social_count }}</span>
+                    {% endif %}
+                  </h5>
+                </div>
 
-            {% if social_count %}
-              <span class="badge bg-white bg-opacity-25 text-white ms-2">
-                {{ social_count }}
-              </span>
-            {% endif %}
-          </h5>
-        </div>
+                <div class="d-flex flex-wrap gap-2 small text-white-50">
+                  <span title="{{ social.access_type|title }}">
+                    <i class="fas fa-{% if social.access_type == 'invite_only' %}lock{% else %}globe{% endif %}"></i>
+                    {{ social.access_type|title|default:"Public" }}
+                  </span>
+                  {% if social.split_mode %}
+                  <span title="Split Mode">
+                    <i class="fas fa-{% if social.split_mode == 'by_items' %}box{% elif social.split_mode == 'by_percent' %}percent{% else %}user{% endif %}"></i>
+                    {% if social.split_mode == 'by_items' %}By Items
+                    {% elif social.split_mode == 'by_percent' %}By %
+                    {% elif social.split_mode == 'single_payer' %}Single
+                    {% endif %}
+                  </span>
+                  {% endif %}
+                  {% if social_members %}
+                  <span>
+                    <i class="fas fa-user-friends"></i>
+                    {{ social_members|length }}
+                  </span>
+                  {% endif %}
+                </div>
+              </div>
 
-        <!-- Info Row -->
-        <div class="d-flex flex-wrap gap-2 small text-white-50">
-          <!-- Cart Type -->
-          <span title="{{ social.access_type|title }}">
-            <i class="fas fa-{% if social.access_type == 'invite_only' %}lock{% else %}globe{% endif %}"></i>
-            {{ social.access_type|title|default:"Public" }}
-          </span>
+              <!-- Column 2: Badges -->
+              <div class="col-12 col-md-6 col-lg-4">
+                <div class="d-flex flex-wrap gap-2 justify-content-start justify-content-md-center">
+                  {% if is_owner %}
+                    <span class="badge bg-warning text-dark">
+                      <i class="fas fa-crown me-1"></i>Owner
+                    </span>
+                  {% endif %}
+                  {% if is_blocked %}
+                    <span class="badge bg-white text-danger">
+                      <i class="fas fa-ban me-1"></i>View Only
+                    </span>
+                  {% endif %}
+                  {% if social.is_live %}
+                    <span class="badge bg-danger pulse">
+                      <i class="fas fa-circle me-1" style="font-size: 0.5rem;"></i>LIVE
+                    </span>
+                  {% endif %}
+                  {% if social.scheduled_for %}
+                    <span class="badge bg-info text-dark">
+                      <i class="fas fa-clock me-1"></i>{{ social.scheduled_for|date:"M d, g:i A" }}
+                    </span>
+                  {% endif %}
+                </div>
+              </div>
 
-          <!-- Split Mode -->
-          {% if social.split_mode %}
-          <span title="Split Mode">
-            <i class="fas fa-{% if social.split_mode == 'by_items' %}box{% elif social.split_mode == 'by_percent' %}percent{% else %}user{% endif %}"></i>
-            {% if social.split_mode == 'by_items' %}By Items
-            {% elif social.split_mode == 'by_percent' %}By %
-            {% elif social.split_mode == 'single_payer' %}Single
-            {% endif %}
-          </span>
-          {% endif %}
+              <!-- Column 3: Actions -->
+              <div class="col-12 col-lg-4">
+                <div class="d-flex align-items-center justify-content-start justify-content-lg-end gap-2 flex-wrap">
 
-          <!-- Member Count -->
-          {% if social_members %}
-          <span>
-            <i class="fas fa-user-friends"></i>
-            {{ social_members|length }}
-          </span>
-          {% endif %}
-        </div>
-      </div>
+                  {% if is_owner and social.invite_code %}
+                  <div class="d-none d-lg-flex align-items-center bg-white bg-opacity-10 rounded px-2 py-1">
+                    <small class="text-white-50 me-2">Code:</small>
+                    <code class="text-white fw-bold user-select-all">{{ social.invite_code }}</code>
+                    <button class="btn btn-sm btn-link text-white p-1 ms-1" onclick="copyInviteCode()" title="Copy">
+                      <i class="fas fa-copy"></i>
+                    </button>
+                  </div>
+                  {% endif %}
 
-      <!-- Column 2: Badges (Mobile: Full Width, Desktop: Center) -->
-      <div class="col-12 col-md-6 col-lg-4">
-        <div class="d-flex flex-wrap gap-2 justify-content-start justify-content-md-center">
-          <!-- Owner Badge -->
-          {% if is_owner %}
-            <span class="badge bg-warning text-dark">
-              <i class="fas fa-crown me-1"></i>Owner
-            </span>
-          {% endif %}
+                  <button type="button" class="btn btn-sm btn-light" id="refreshSocialCartBtn" title="Refresh">
+                    <i class="fas fa-rotate"></i>
+                  </button>
 
-          <!-- Blocked Badge -->
-          {% if is_blocked %}
-            <span class="badge bg-white text-danger">
-              <i class="fas fa-ban me-1"></i>View Only
-            </span>
-          {% endif %}
+                  {% if is_owner %}
+                  <button type="button" class="btn btn-sm btn-light"
+                          data-bs-toggle="modal" data-bs-target="#manageMembersModal" title="Manage">
+                    <i class="fas fa-users-cog"></i>
+                  </button>
+                  {% endif %}
 
-          <!-- Live Badge -->
-          {% if social.is_live %}
-            <span class="badge bg-danger pulse">
-              <i class="fas fa-circle me-1" style="font-size: 0.5rem;"></i>LIVE
-            </span>
-          {% endif %}
+                  <div class="dropdown">
+                    <button class="btn btn-sm btn-light dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                      <i class="fas fa-ellipsis-v"></i>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                      {% if is_owner %}
+                        <li>
+                          <button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#splitModeModal">
+                            <i class="fas fa-sliders-h me-2 text-info"></i>Split Settings
+                          </button>
+                        </li>
+                        <li>
+                          <button class="dropdown-item" id="shareInviteBtn">
+                            <i class="fas fa-share-alt me-2 text-success"></i>Share Invite
+                          </button>
+                        </li>
+                        <li>
+                          <button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#socialQRModal">
+                            <i class="fas fa-qrcode me-2"></i>QR Code
+                          </button>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                          <button class="dropdown-item text-danger" id="leaveSocialCartBtn">
+                            <i class="fas fa-sign-out-alt me-2"></i>Leave Cart
+                          </button>
+                        </li>
+                      {% else %}
+                        <li>
+                          <button class="dropdown-item" id="shareInviteBtn">
+                            <i class="fas fa-share-alt me-2 text-success"></i>Share
+                          </button>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                          <button class="dropdown-item text-warning" id="leaveSocialCartBtn">
+                            <i class="fas fa-sign-out-alt me-2"></i>Leave Cart
+                          </button>
+                        </li>
+                      {% endif %}
+                    </ul>
+                  </div>
+                </div>
 
-          <!-- Scheduled Badge -->
-          {% if social.scheduled_for %}
-            <span class="badge bg-info text-dark">
-              <i class="fas fa-clock me-1"></i>{{ social.scheduled_for|date:"M d, g:i A" }}
-            </span>
-          {% endif %}
-        </div>
-      </div>
-
-      <!-- Column 3: Actions -->
-      <div class="col-12 col-lg-4">
-        <div class="d-flex align-items-center justify-content-start justify-content-lg-end gap-2 flex-wrap">
-
-          <!-- Invite Code (Desktop Only) -->
-          {% if is_owner and social.invite_code %}
-          <div class="d-none d-lg-flex align-items-center bg-white bg-opacity-10 rounded px-2 py-1">
-            <small class="text-white-50 me-2">Code:</small>
-            <code class="text-white fw-bold user-select-all">{{ social.invite_code }}</code>
-            <button class="btn btn-sm btn-link text-white p-1 ms-1" onclick="copyInviteCode()" title="Copy">
-              <i class="fas fa-copy"></i>
-            </button>
+                <!-- Mobile Invite Code -->
+                {% if is_owner and social.invite_code %}
+                <div class="d-lg-none mt-2 p-2 bg-white bg-opacity-10 rounded text-center">
+                  <small class="text-white-50 d-block mb-1">Invite Code</small>
+                  <div class="d-flex align-items-center justify-content-center gap-2">
+                    <code class="text-white fw-bold user-select-all fs-6">{{ social.invite_code }}</code>
+                    <button class="btn btn-sm btn-light" onclick="copyInviteCode()">
+                      <i class="fas fa-copy"></i>
+                    </button>
+                  </div>
+                </div>
+                {% endif %}
+              </div>
+            </div>
           </div>
-          {% endif %}
 
-          <!-- Refresh Button -->
-          <button
-            type="button"
-            class="btn btn-sm btn-light"
-            id="refreshSocialCartBtn"
-            title="Refresh"
-          >
-            <i class="fas fa-rotate"></i>
-          </button>
-
-          <!-- Manage Button (Owner Only) -->
-          {% if is_owner %}
-          <button
-            type="button"
-            class="btn btn-sm btn-light"
-            data-bs-toggle="modal"
-            data-bs-target="#manageMembersModal"
-            title="Manage"
-          >
-            <i class="fas fa-users-cog"></i>
-          </button>
-          {% endif %}
-
-          <!-- Menu Dropdown -->
-          <div class="dropdown">
-            <button class="btn btn-sm btn-light dropdown-toggle" type="button" data-bs-toggle="dropdown">
-              <i class="fas fa-ellipsis-v"></i>
-            </button>
-            <ul class="dropdown-menu dropdown-menu-end">
-              {% if is_owner %}
-                <li>
-                  <button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#splitModeModal">
-                    <i class="fas fa-sliders-h me-2 text-info"></i>Split Settings
-                  </button>
-                </li>
-                <li>
-                  <button class="dropdown-item" id="shareInviteBtn">
-                    <i class="fas fa-share-alt me-2 text-success"></i>Share Invite
-                  </button>
-                </li>
-                <li>
-                  <button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#socialQRModal">
-                    <i class="fas fa-qrcode me-2"></i>QR Code
-                  </button>
-                </li>
-                <li><hr class="dropdown-divider"></li>
-                <li>
-                  <button class="dropdown-item text-danger" id="leaveSocialCartBtn">
-                    <i class="fas fa-sign-out-alt me-2"></i>Leave Cart
-                  </button>
-                </li>
-              {% else %}
-                <li>
-                  <button class="dropdown-item" id="shareInviteBtn">
-                    <i class="fas fa-share-alt me-2 text-success"></i>Share
-                  </button>
-                </li>
-                <li><hr class="dropdown-divider"></li>
-                <li>
-                  <button class="dropdown-item text-warning" id="leaveSocialCartBtn">
-                    <i class="fas fa-sign-out-alt me-2"></i>Leave Cart
-                  </button>
-                </li>
-              {% endif %}
-            </ul>
+          <div class="card-body p-0" id="social-cart-body">
+            {% include "marketplace/partials/_social_cart_items.html" %}
           </div>
+
         </div>
-
-        <!-- Mobile Invite Code (Full Width) -->
-        {% if is_owner and social.invite_code %}
-        <div class="d-lg-none mt-2 p-2 bg-white bg-opacity-10 rounded text-center">
-          <small class="text-white-50 d-block mb-1">Invite Code</small>
-          <div class="d-flex align-items-center justify-content-center gap-2">
-            <code class="text-white fw-bold user-select-all fs-6">{{ social.invite_code }}</code>
-            <button class="btn btn-sm btn-light" onclick="copyInviteCode()">
-              <i class="fas fa-copy"></i>
-            </button>
-          </div>
-        </div>
-        {% endif %}
-      </div>
-    </div>
-  </div>
-
-  <!-- ✅ FIXED: Card Body with Proper Content Display -->
-  <div class="card-body p-0" id="social-cart-body">
-    <!-- Social cart items will be loaded here -->
-    {% include "marketplace/partials/_social_cart_items.html" %}
-  </div>
-
-</div>
-
-
-
-
 
         <!-- Live Chat -->
         <div class="social-chat card border-0 shadow-sm">
@@ -887,11 +1054,11 @@ code:hover {
             </div>
           </div>
         </div>
-        {% endif %}
-      </div>
-      {% endif %}
+        {% endif %}{# end is_social_active #}
 
-      <!-- Sidebar -->
+      </div>{# end col-lg-8 #}
+
+      <!-- Authenticated Sidebar -->
       <div class="col-lg-4">
         <!-- Personal Cart Summary -->
         {% if normal_items %}
@@ -902,11 +1069,11 @@ code:hover {
           <div class="card-body">
             <div class="d-flex justify-content-between mb-2">
               <span class="text-muted">Items:</span>
-              <strong>{{ normal_count }}</strong>
+              <strong id="item-count">{{ normal_count }}</strong>
             </div>
             <div class="d-flex justify-content-between mb-2">
               <span class="text-muted">Subtotal:</span>
-              <strong>{% display_money normal_subtotal %}</strong>
+              <strong id="order-subtotal">{% display_money normal_subtotal %}</strong>
             </div>
             <div class="d-flex justify-content-between mb-2">
               <span class="text-muted">Tax (0.0%):</span>
@@ -915,7 +1082,7 @@ code:hover {
             <hr>
             <div class="d-flex justify-content-between mb-3">
               <span class="fw-bold">Total:</span>
-              <strong class="text-primary fs-5">{% display_money normal_total %}</strong>
+              <strong class="text-primary fs-5" id="total-price">{% display_money normal_total %}</strong>
             </div>
             <a href="{% url 'orders:checkout_cart' %}" class="btn btn-primary w-100 btn-lg btn-touch mb-2">
               <i class="fas fa-lock me-2"></i>Checkout
@@ -973,20 +1140,44 @@ code:hover {
             <i class="fas fa-info-circle fa-3x text-primary mb-3"></i>
             <h6 class="fw-bold mb-2">Quick Tips</h6>
             <ul class="text-start small text-muted">
-              <li>Drag & drop items between carts</li>
+              <li>Drag &amp; drop items between carts</li>
               <li>Share your cart with QR codes</li>
               <li>Apply promo codes at checkout</li>
               <li>Split bills in social cart</li>
             </ul>
           </div>
         </div>
+        {% endif %}
+      </div>{# end col-lg-4 #}
+    </div>{# end row #}
+
+    <!-- ============================================================
+         COMPLETELY EMPTY (authenticated, no items at all)
+         ============================================================ -->
+    {% else %}
+    <div class="row">
+      <div class="col-12">
+        <div class="card border-0 shadow-sm">
+          <div class="card-body text-center py-5">
+            <i class="fas fa-shopping-cart fa-4x text-muted opacity-25 mb-3"></i>
+            <h4 class="text-muted mb-2">Your cart is empty</h4>
+            <p class="text-muted mb-4">Looks like you haven't added anything yet.</p>
+            <a href="{% url 'marketplace:all_products' %}" class="btn btn-primary btn-lg">
+              <i class="fas fa-store me-2"></i>Start Shopping
+            </a>
+          </div>
+        </div>
       </div>
     </div>
     {% endif %}
+
   </div>
 </section>
 
-<!-- MODALS -->
+<!-- ============================================================
+     MODALS (authenticated only)
+     ============================================================ -->
+{% if not guest_mode %}
 
 <!-- Share Normal Cart Modal -->
 <div class="modal fade" id="shareCartModal" tabindex="-1">
@@ -1248,93 +1439,91 @@ code:hover {
     </div>
   </div>
 </div>
+
+{% endif %}{# end not guest_mode #}
+
+<!-- Toast (always present) -->
+<div id="cartToast" class="toast align-items-center text-white border-0 shadow-lg bg-success position-fixed bottom-0 end-0 m-3"
+     role="alert" aria-live="assertive" aria-atomic="true" style="z-index:9999;">
+  <div class="d-flex">
+    <div class="toast-body fw-semibold"></div>
+    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+  </div>
+</div>
+
 <script>
+{% if not guest_mode %}
 function copyInviteCode() {
   const code = '{{ social.invite_code }}';
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(code)
       .then(() => {
-        if (window.showToast) {
-          window.showToast('✅ Invite code copied!', 'success');
-        }
+        if (window.showToast) window.showToast('✅ Invite code copied!', 'success');
       })
-      .catch(() => {
-        prompt('Copy invite code:', code);
-      });
+      .catch(() => { prompt('Copy invite code:', code); });
   } else {
     prompt('Copy invite code:', code);
   }
 }
 
-</script>
-<script>
-function clearCart(cartType) {
-  console.log('clearCart called with type:', cartType);
+function copyShareLink() {
+  const input = document.getElementById('shareCartLink');
+  if (!input) return;
+  navigator.clipboard?.writeText(input.value)
+    .then(() => window.showToast?.('Link copied!', 'success'))
+    .catch(() => { input.select(); document.execCommand('copy'); });
+}
 
+function copySocialLink() {
+  const input = document.getElementById('socialInviteLink');
+  if (!input) return;
+  navigator.clipboard?.writeText(input.value)
+    .then(() => window.showToast?.('Invite link copied!', 'success'))
+    .catch(() => { input.select(); document.execCommand('copy'); });
+}
+
+function shareViaWhatsApp() {
+  const link = document.getElementById('shareCartLink')?.value || '';
+  window.open('https://wa.me/?text=' + encodeURIComponent('Check out my cart: ' + link), '_blank');
+}
+
+function shareViaNative() {
+  const link = document.getElementById('shareCartLink')?.value || '';
+  if (navigator.share) {
+    navigator.share({ title: 'My Cart', url: link });
+  } else {
+    copyShareLink();
+  }
+}
+
+function clearCart(cartType) {
   if (!['normal', 'social'].includes(cartType)) {
-    console.error('Invalid cart type:', cartType);
     if (window.showToast) window.showToast('Invalid cart type', 'error');
     return;
   }
-
   const cartName = cartType === 'normal' ? 'personal cart' : 'social cart';
-  if (!confirm(`Clear entire ${cartName}? This cannot be undone.`)) {
-    console.log('User cancelled clear cart');
-    return;
-  }
+  if (!confirm(`Clear entire ${cartName}? This cannot be undone.`)) return;
 
-  // Get CSRF token
   const csrfToken = (function() {
-    const tokenInput = document.querySelector('[name=csrfmiddlewaretoken]');
-    if (tokenInput && tokenInput.value) {
-      console.log('CSRF token found in form input');
-      return tokenInput.value;
-    }
-
-    const tokenMeta = document.querySelector('meta[name="csrf-token"]');
-    if (tokenMeta) {
-      const content = tokenMeta.getAttribute('content');
-      if (content) {
-        console.log('CSRF token found in meta tag');
-        return content;
-      }
-    }
-
-    if (document.cookie && document.cookie !== '') {
-      const cookies = document.cookie.split(';');
-      for (let i = 0; i < cookies.length; i++) {
-        const cookie = cookies[i].trim();
-        if (cookie.substring(0, 10) === 'csrftoken=') {
-          console.log('CSRF token found in cookie');
-          return decodeURIComponent(cookie.substring(10));
-        }
-      }
-    }
-
-    console.error('CSRF token not found');
-    return null;
+    return document.querySelector('[name=csrfmiddlewaretoken]')?.value
+      || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+      || (document.cookie.split(';').find(c => c.trim().startsWith('csrftoken=')) || '').split('=')[1]
+      || null;
   })();
 
   if (!csrfToken) {
     const msg = 'Security token not found. Please refresh the page.';
-    if (window.showToast) {
-      window.showToast(msg, 'error');
-    } else {
-      alert(msg);
-    }
+    window.showToast ? window.showToast(msg, 'error') : alert(msg);
     return;
   }
 
-  // Show loading state
   const clearButtons = document.querySelectorAll(`button[onclick*="clearCart('${cartType}')"]`);
   const originalHTML = [];
-  clearButtons.forEach((btn, index) => {
-    originalHTML[index] = btn.innerHTML;
+  clearButtons.forEach((btn, i) => {
+    originalHTML[i] = btn.innerHTML;
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Clearing...';
   });
-
-  console.log('Sending clear cart request to /cart/clear/');
 
   fetch('/cart/clear/', {
     method: 'POST',
@@ -1343,100 +1532,47 @@ function clearCart(cartType) {
       'X-CSRFToken': csrfToken,
       'X-Requested-With': 'XMLHttpRequest'
     },
-    body: new URLSearchParams({cart_type: cartType})
+    body: new URLSearchParams({ cart_type: cartType })
   })
-  .then(response => {
-    console.log('Response status:', response.status);
-    console.log('Response ok:', response.ok);
-
-    // Clone the response so we can read it twice if needed
-    return response.clone().text().then(text => {
-      console.log('Raw response:', text);
-
-      // Try to parse as JSON
-      try {
-        const data = JSON.parse(text);
-        return { response, data };
-      } catch (e) {
-        console.error('Failed to parse JSON response:', e);
-        throw new Error('Server returned invalid JSON');
-      }
-    });
+  .then(async r => {
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.message || `HTTP ${r.status}`);
+    return data;
   })
-  .then(({ response, data }) => {
-    console.log('Parsed data:', data);
-
-    if (!response.ok) {
-      throw new Error(data.message || `HTTP ${response.status}`);
-    }
-
+  .then(data => {
     if (data.success) {
-      console.log('Cart cleared successfully:', data);
-
-      // Show success message
-      const successMsg = data.message || `${cartName} cleared successfully!`;
-      if (window.showToast) {
-        window.showToast(successMsg, 'success');
-      } else {
-        alert(successMsg);
-      }
-
-      // Update cart count badge
-      if (typeof data.cart_count !== 'undefined') {
-        console.log('Updating cart count to:', data.cart_count);
-        if (window.updateCartCount) {
-          window.updateCartCount(data.cart_count);
+      if (window.showToast) window.showToast(data.message || `${cartName} cleared!`, 'success');
+      document.querySelectorAll('.cart-badge, #cartCountBadge, [data-cart-count]').forEach(badge => {
+        if ((data.cart_count || 0) > 0) {
+          badge.textContent = data.cart_count;
+          badge.style.display = 'inline-block';
+        } else {
+          badge.style.display = 'none';
         }
-        // Also update any cart count badges directly
-        document.querySelectorAll('.cart-badge, #cartCountBadge, [data-cart-count]').forEach(badge => {
-          if (data.cart_count > 0) {
-            badge.textContent = data.cart_count;
-            badge.style.display = 'inline-block';
-          } else {
-            badge.style.display = 'none';
-          }
-        });
-      }
-
-      // Reload page after a short delay
-      console.log('Reloading page in 1 second...');
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
-
+      });
+      setTimeout(() => window.location.reload(), 1000);
     } else {
       throw new Error(data.message || 'Failed to clear cart');
     }
   })
   .catch(err => {
-    console.error('Clear cart error:', err);
-    console.error('Error stack:', err.stack);
-
-    // Reset buttons
-    clearButtons.forEach((btn, index) => {
+    clearButtons.forEach((btn, i) => {
       btn.disabled = false;
-      btn.innerHTML = originalHTML[index] || '<i class="fas fa-trash-alt"></i> Clear';
+      btn.innerHTML = originalHTML[i] || '<i class="fas fa-trash-alt"></i> Clear';
     });
-
-    // Show error message
-    const errorMsg = err.message || 'Failed to clear cart. Please try again.';
-    if (window.showToast) {
-      window.showToast(errorMsg, 'error');
-    } else {
-      alert('Error: ' + errorMsg);
-    }
+    window.showToast ? window.showToast(err.message || 'Failed to clear cart.', 'error')
+                     : alert('Error: ' + err.message);
   });
 }
-
-// Expose globally
 window.clearCart = clearCart;
-
-// Add debug info
-console.log('clearCart function loaded and available');
+{% endif %}{# end not guest_mode #}
 </script>
-<!-- JavaScript Configuration (SINGLE INSTANCE) -->
+
+<!-- JavaScript Configuration -->
 <script>
-  // Global configuration variables
+  window.GUEST_MODE = {{ guest_mode|yesno:"true,false" }};
+
+  {% if not guest_mode %}
   window.IS_BLOCKED = {{ is_blocked|yesno:"true,false" }};
   window.IS_SOCIAL_ACTIVE = {{ is_social_active|yesno:"true,false" }};
   window.IS_OWNER = {{ is_owner|yesno:"true,false" }};
@@ -1460,26 +1596,30 @@ console.log('clearCart function loaded and available');
   window.SET_CHECKOUT_MEMBERS_URL = "{% url 'marketplace:set_checkout_members' %}";
   window.SET_SPLIT_MODE_URL = "{% url 'marketplace:set_split_mode' %}";
 
-  // ✅ Member management (approve/reject already correct in your config)
   window.APPROVE_MEMBER_URL_TPL = "{% url 'marketplace:approve_social_member' member_id=0 %}";
   window.REJECT_MEMBER_URL_TPL  = "{% url 'marketplace:reject_social_member' member_id=0 %}";
-
-  // ✅ ADD THESE (remove/block)
   window.REMOVE_MEMBER_URL_TPL  = "{% url 'marketplace:remove_member' member_id=0 %}";
   window.BLOCK_MEMBER_URL_TPL   = "{% url 'marketplace:block_member' member_id=0 %}";
 
-  // Cart Item URLs
-  window.UPDATE_CART_QUANTITY_URL = "{% url 'marketplace:update_cart_quantity' %}";
-  window.REMOVE_CART_ITEM_URL = "{% url 'marketplace:remove_cart_item' %}";
-  window.MOVE_CART_ITEM_URL = "{% url 'marketplace:move_cart_item' %}";
-  window.SOCIAL_CART_ITEMS_FRAGMENT_URL = "{% url 'marketplace:social_cart_items_fragment' %}";
-
-  // Invites
   window.DELETE_INVITE_URL_TPL = "{% url 'marketplace:delete_cart_invite' invite_id=0 %}";
   window.CART_ACCESS_TYPE = "{{ social.access_type }}";
+  {% else %}
+  // Guest mode — social cart JS disabled
+  window.IS_BLOCKED = false;
+  window.IS_SOCIAL_ACTIVE = false;
+  window.IS_OWNER = false;
+  window.CURRENT_USER_ID = null;
+  {% endif %}
+
+  // Always available
+  window.UPDATE_CART_QUANTITY_URL = "{% url 'marketplace:update_cart_quantity' %}";
+  window.REMOVE_CART_ITEM_URL = "{% url 'marketplace:remove_cart_item' %}";
+  {% if not guest_mode %}
+  window.MOVE_CART_ITEM_URL = "{% url 'marketplace:move_cart_item' %}";
+  window.SOCIAL_CART_ITEMS_FRAGMENT_URL = "{% url 'marketplace:social_cart_items_fragment' %}";
+  {% endif %}
 </script>
 
-<!-- Include the corrected JavaScript -->
 <script src="{% static 'js/cart_page_CORRECTED.js' %}"></script>
 
 {% endblock %}

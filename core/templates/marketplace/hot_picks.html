@@ -2,6 +2,7 @@
 {% load custom_filters %}
 {% load static %}
 {% load currency_tags %}
+{% load humanize %}
 
 {% block content %}
 
@@ -9,822 +10,637 @@
 <link rel="stylesheet" href="{% static 'css/hot_pick.css' %}">
 
 <style>
-/* Temu/Alibaba Style Enhancements for Hot Picks Page */
+/* ── Shared design tokens (mirrors all_products.html) ─────────────────── */
 :root {
-    --temu-orange: #ff6b35;
-    --temu-red: #ff4757;
-    --temu-yellow: #ffc048;
-    --temu-green: #2ed573;
-    --temu-blue: #3742fa;
+  --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --secondary-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  --success-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  --accent-orange: #ff6b35;
+  --accent-red: #f5576c;
+  --accent-blue: #667eea;
+  --accent-green: #2ed573;
+  --text-primary: #1a202c;
+  --text-secondary: #4a5568;
+  --text-muted: #718096;
+  --border-color: #e2e8f0;
+  --bg-light: #f7fafc;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.1);
+  --shadow-lg: 0 10px 25px rgba(0,0,0,0.12);
+  --shadow-xl: 0 20px 40px rgba(0,0,0,0.15);
 }
 
-/* Hot Picks Section Styling */
-.temu-hot-picks-section {
-    background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
-    padding: 2rem 0;
+/* ── Page header ───────────────────────────────────────────────────────── */
+.hot-page-title {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 2rem;
+}
+.hot-page-title .fire-icon {
+  color: var(--accent-red);
+  animation: fire-pulse 2s ease-in-out infinite;
+}
+@keyframes fire-pulse {
+  0%, 100% { transform: scale(1); }
+  50%       { transform: scale(1.12); }
 }
 
-.temu-hot-picks-title {
-    font-size: 2rem;
-    font-weight: 800;
-    color: #2c2c54;
-    margin-bottom: 2rem;
-    text-align: center;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
+/* ── Category block (same proportions as all_products) ────────────────── */
+.pro-category-block {
+  background: white;
+  border-radius: 20px;
+  padding: 2rem;
+  margin-bottom: 2.5rem;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-color);
+  position: relative;
+  overflow: hidden;
+  transition: box-shadow 0.3s ease;
+}
+.pro-category-block::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--accent-orange), var(--accent-red), #ffc048);
+}
+.pro-category-block:hover { box-shadow: var(--shadow-lg); }
+
+.pro-category-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 2px solid var(--bg-light);
+}
+.pro-category-info { display: flex; align-items: center; gap: 1.25rem; }
+
+.pro-category-icon {
+  width: 64px; height: 64px;
+  background: linear-gradient(135deg, var(--accent-orange) 0%, var(--accent-red) 100%);
+  border-radius: 16px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.75rem; color: white;
+  box-shadow: 0 8px 20px rgba(255,107,53,0.3);
+  transition: transform 0.3s ease;
+  flex-shrink: 0;
+}
+.pro-category-block:hover .pro-category-icon { transform: scale(1.05) rotate(5deg); }
+
+.pro-category-title {
+  font-size: 1.4rem; font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 0.25rem;
+  letter-spacing: -0.02em;
+}
+.pro-category-subtitle { color: var(--text-muted); font-size: 0.9rem; margin: 0; }
+
+.pro-view-all-btn {
+  background: linear-gradient(135deg, var(--accent-orange) 0%, var(--accent-red) 100%);
+  color: white; border: none; border-radius: 12px;
+  padding: 12px 24px; font-weight: 600;
+  text-decoration: none; font-size: 0.9rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  box-shadow: 0 4px 12px rgba(255,107,53,0.3);
+  position: relative; overflow: hidden;
+}
+.pro-view-all-btn::before {
+  content: ''; position: absolute;
+  top: 0; left: -100%; width: 100%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  transition: left 0.5s ease;
+}
+.pro-view-all-btn:hover::before { left: 100%; }
+.pro-view-all-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(255,107,53,0.45);
+  color: white;
 }
 
-.temu-hot-picks-fire {
-    color: var(--temu-red);
-    animation: temu-fire-pulse 2s ease-in-out infinite;
+/* ── Scroll rail (identical to all_products) ───────────────────────────── */
+.pro-products-wrapper { position: relative; margin: 0 -0.5rem; }
+
+.pro-products-container {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  gap: 14px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-behavior: smooth;
+  padding: 10px 6px 16px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent-orange) var(--bg-light);
+  scroll-snap-type: x mandatory;
+}
+.pro-products-container > .tcard { scroll-snap-align: start; }
+
+.pro-products-container::-webkit-scrollbar { height: 8px; }
+.pro-products-container::-webkit-scrollbar-track { background: var(--bg-light); border-radius: 4px; }
+.pro-products-container::-webkit-scrollbar-thumb { background: var(--accent-orange); border-radius: 4px; }
+.pro-products-container::-webkit-scrollbar-thumb:hover { background: var(--accent-red); }
+
+/* ── Arrow buttons (identical to all_products) ─────────────────────────── */
+.pro-scroll-btn {
+  background: white;
+  border: 2px solid var(--accent-orange);
+  border-radius: 50%;
+  width: 48px; height: 48px;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: var(--shadow-md);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer; z-index: 10;
+  color: var(--accent-orange);
+  position: absolute;
+  top: 50%; transform: translateY(-50%);
+}
+.pro-scroll-btn.scroll-left  { left:  -24px; }
+.pro-scroll-btn.scroll-right { right: -24px; }
+.pro-scroll-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, var(--accent-orange), var(--accent-red));
+  color: white; border-color: transparent;
+  transform: translateY(-50%) scale(1.1);
+  box-shadow: var(--shadow-lg);
+}
+.pro-scroll-btn:disabled {
+  opacity: 0; pointer-events: none;
+  transform: translateY(-50%) scale(0.8);
 }
 
-@keyframes temu-fire-pulse {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.1); }
+/* ── tcard — IDENTICAL to all_products.html ────────────────────────────── */
+.tcard {
+  flex: 0 0 260px; width: 260px;
+  background: #fff;
+  border: 1px solid #eef2f7;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 2px 10px rgba(0,0,0,.06);
+  cursor: pointer;
+  display: flex; flex-direction: column;
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+.tcard:hover { transform: translateY(-3px); box-shadow: 0 10px 28px rgba(0,0,0,.12); }
+
+.tcard-media {
+  position: relative;
+  width: 100%; height: 170px;
+  background: #f6f7fb; overflow: hidden;
+}
+.tcard-img {
+  width: 100%; height: 100%;
+  object-fit: cover; display: block;
+  transition: transform .25s ease;
+}
+.tcard:hover .tcard-img { transform: scale(1.04); }
+
+/* Badges top-left */
+.tcard-badges {
+  position: absolute; top: 10px; left: 10px;
+  display: flex; flex-direction: column; gap: 6px; z-index: 2;
+}
+.tbadge { font-size: .72rem; font-weight: 800; padding: 4px 10px; border-radius: 8px; color: #111; background: #ffcc66; }
+.tbadge-hot  { background: #ffcc66; }
+.tbadge-deal { background: #ff4d5a; color: #fff; }
+.tbadge-new  { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: #fff; }
+
+/* Floating cart button bottom-right on image */
+.tcard-cart {
+  position: absolute; right: 10px; bottom: 10px;
+  width: 40px; height: 40px;
+  border-radius: 999px; border: 0;
+  background: #fff;
+  box-shadow: 0 10px 22px rgba(0,0,0,.18);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 3; cursor: pointer; color: #111;
+  font-size: 1rem;
+  transition: transform .18s ease, box-shadow .18s ease, background .18s ease, color .18s ease;
+}
+.tcard-cart:hover:not(:disabled) {
+  transform: scale(1.08);
+  background: #111827; color: #fff;
+  box-shadow: 0 16px 34px rgba(0,0,0,.28);
+}
+.tcard-cart:disabled { opacity: .45; cursor: not-allowed; }
+.tcard-cart.adding { background: var(--accent-blue); color: #fff; }
+.tcard-cart.added  { background: #16a34a; color: #fff; }
+
+/* Card body */
+.tcard-body { padding: 12px 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.tcard-title { font-weight: 800; font-size: .95rem; color: #0f172a; }
+.tcard-desc {
+  font-size: .82rem; color: #6b7280;
+  line-height: 1.25rem; min-height: 2.5rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.tcard-price { margin-top: 4px; font-weight: 900; color: #ff2e45; font-size: 1.05rem; }
+.tcard-old {
+  margin-left: 8px; font-weight: 700;
+  color: #9ca3af; text-decoration: line-through; font-size: .85rem;
+}
+.tcard-foot {
+  margin-top: 6px; display: flex;
+  align-items: center; justify-content: space-between; gap: 10px;
+}
+.tcard-stars { color: #f59e0b; font-size: .85rem; white-space: nowrap; display: flex; align-items: center; gap: 2px; }
+.tcard-rcount { color: #6b7280; font-size: .78rem; margin-left: 4px; }
+.tcard-sold {
+  font-size: .78rem; color: #6b7280;
+  background: #f3f4f6; border: 1px solid #e5e7eb;
+  padding: 4px 8px; border-radius: 999px; white-space: nowrap;
 }
 
-/* Category Block Styling */
-.temu-hot-picks-category-block {
-    background: white;
-    border-radius: 20px;
-    padding: 2rem;
-    margin-bottom: 2.5rem;
-    box-shadow: 0 6px 25px rgba(0,0,0,0.08);
-    border: 1px solid #e9ecef;
-    position: relative;
-    overflow: hidden;
+/* ── Empty state ───────────────────────────────────────────────────────── */
+.pro-empty-state {
+  text-align: center; padding: 4rem 2rem;
+  background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+  border-radius: 20px;
 }
+.pro-empty-icon { font-size: 5rem; color: var(--text-muted); margin-bottom: 1.5rem; opacity: .5; }
+.pro-empty-title { font-size: 1.5rem; color: var(--text-secondary); font-weight: 700; margin-bottom: .75rem; }
+.pro-empty-description { color: var(--text-muted); font-size: 1rem; }
 
-.temu-hot-picks-category-block::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 4px;
-    background: linear-gradient(90deg, var(--temu-orange), var(--temu-red), var(--temu-yellow));
+/* ── Responsive ────────────────────────────────────────────────────────── */
+@media (max-width: 992px) {
+  .pro-category-header { flex-direction: column; align-items: flex-start; gap: 1.25rem; }
+  .pro-scroll-btn { width: 40px; height: 40px; }
+  .pro-scroll-btn.scroll-left  { left:  -20px; }
+  .pro-scroll-btn.scroll-right { right: -20px; }
 }
-
-.temu-hot-picks-category-info {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    margin-bottom: 2rem;
-    padding-bottom: 1rem;
-    border-bottom: 2px solid #f8f9fa;
-}
-
-.temu-hot-picks-category-badge {
-    background: linear-gradient(45deg, var(--temu-orange), var(--temu-red));
-    color: white;
-    padding: 0.75rem 1.5rem;
-    border-radius: 25px;
-    font-weight: 700;
-    font-size: 0.9rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    box-shadow: 0 4px 15px rgba(255, 107, 53, 0.3);
-    flex-shrink: 0;
-}
-
-.temu-hot-picks-category-title {
-    font-size: 1.4rem;
-    font-weight: 700;
-    color: #2c2c54;
-    margin-bottom: 0.25rem;
-}
-
-.temu-hot-picks-category-subtitle {
-    color: #666;
-    font-size: 0.9rem;
-    margin: 0;
-}
-
-/* Products Container */
-.temu-hot-picks-products-container {
-    display: flex;
-    overflow-x: auto;
-    gap: 1rem;
-    padding: 1rem 0;
-    scroll-behavior: smooth;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-}
-
-.temu-hot-picks-products-container::-webkit-scrollbar {
-    display: none;
-}
-
-/* Scroll Buttons */
-.temu-hot-picks-scroll-btn {
-    background: white;
-    border: 2px solid var(--temu-orange);
-    border-radius: 50%;
-    width: 50px;
-    height: 50px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 6px 20px rgba(0,0,0,0.15);
-    transition: all 0.3s ease;
-    cursor: pointer;
-    z-index: 10;
-    color: var(--temu-orange);
-    font-size: 1.1rem;
-}
-
-.temu-hot-picks-scroll-btn:hover {
-    background: var(--temu-orange);
-    color: white;
-    transform: scale(1.15);
-    box-shadow: 0 8px 25px rgba(255, 107, 53, 0.4);
-}
-
-.temu-hot-picks-scroll-btn:disabled {
-    opacity: 0.3;
-    cursor: not-allowed;
-    transform: none;
-}
-
-/* Product Cards - Dense Temu Style */
-.temu-hot-picks-card {
-    flex: 0 0 220px;
-    background: white;
-    border-radius: 15px;
-    overflow: hidden;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-    transition: all 0.3s ease;
-    border: 1px solid #e9ecef;
-    cursor: pointer;
-    position: relative;
-    display: flex;
-    flex-direction: column;
-}
-
-.temu-hot-picks-card:hover {
-    transform: translateY(-8px);
-    box-shadow: 0 12px 35px rgba(0,0,0,0.15);
-    border-color: var(--temu-orange);
-}
-
-.temu-hot-picks-image-container {
-    position: relative;
-    width: 100%;
-    height: 200px;
-    overflow: hidden;
-}
-
-.temu-hot-picks-image {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    transition: transform 0.3s ease;
-}
-
-.temu-hot-picks-card:hover .temu-hot-picks-image {
-    transform: scale(1.08);
-}
-
-/* Product Badges */
-.temu-hot-picks-badge {
-    position: absolute;
-    top: 12px;
-    left: 12px;
-    padding: 6px 12px;
-    border-radius: 20px;
-    font-size: 0.75rem;
-    font-weight: 700;
-    z-index: 2;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-}
-
-.temu-hot-picks-badge-sale {
-    background: linear-gradient(45deg, #ff4757, #ff3742);
-    color: white;
-    box-shadow: 0 4px 15px rgba(255, 71, 87, 0.4);
-}
-
-.temu-hot-picks-badge-new {
-    background: linear-gradient(45deg, var(--temu-green), #26de81);
-    color: white;
-    box-shadow: 0 4px 15px rgba(46, 213, 115, 0.4);
-}
-
-.temu-hot-picks-badge-hot {
-    background: linear-gradient(45deg, var(--temu-yellow), #ffa726);
-    color: #2c2c54;
-    box-shadow: 0 4px 15px rgba(255, 192, 72, 0.4);
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-/* Quick Actions */
-.temu-hot-picks-quick-actions {
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-    z-index: 2;
-}
-
-.temu-hot-picks-card:hover .temu-hot-picks-quick-actions {
-    opacity: 1;
-}
-
-.temu-hot-picks-quick-actions .btn {
-    background: rgba(255, 255, 255, 0.95);
-    border: none;
-    border-radius: 50%;
-    width: 35px;
-    height: 35px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.9rem;
-    color: #2c2c54;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    backdrop-filter: blur(10px);
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-}
-
-.temu-hot-picks-quick-actions .btn:hover {
-    background: var(--temu-orange);
-    color: white;
-    transform: scale(1.1);
-}
-
-/* Product Content */
-.temu-hot-picks-card-body {
-    padding: 1.25rem;
-    flex-grow: 1;
-    display: flex;
-    flex-direction: column;
-}
-
-.temu-hot-picks-card-title {
-    font-size: 0.95rem;
-    font-weight: 600;
-    color: #2c2c54;
-    margin-bottom: 0.75rem;
-    line-height: 1.3;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    min-height: 2.6em;
-}
-
-.temu-hot-picks-card-title a {
-    color: inherit;
-    text-decoration: none;
-    transition: color 0.3s ease;
-}
-
-.temu-hot-picks-card-title a:hover {
-    color: var(--temu-orange);
-}
-
-.temu-hot-picks-rating {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    margin-bottom: 0.75rem;
-}
-
-.temu-hot-picks-rating .fa-star {
-    font-size: 0.85rem;
-}
-
-.temu-hot-picks-rating .text-warning {
-    color: var(--temu-yellow) !important;
-}
-
-.temu-hot-picks-price-container {
-    margin-bottom: 0.75rem;
-}
-
-.temu-hot-picks-price-tag {
-    font-size: 1.3rem;
-    font-weight: 800;
-    color: var(--temu-red);
-    display: block;
-    margin-bottom: 0.25rem;
-}
-
-.temu-hot-picks-original-price {
-    font-size: 0.9rem;
-    color: #999;
-    text-decoration: line-through;
-    margin-right: 0.5rem;
-}
-
-.temu-hot-picks-save-badge {
-    background: var(--temu-green);
-    color: white;
-    padding: 2px 8px;
-    border-radius: 12px;
-    font-size: 0.75rem;
-    font-weight: 600;
-}
-
-.temu-hot-picks-shipping {
-    color: var(--temu-green);
-    font-size: 0.85rem;
-    margin-bottom: 0.5rem;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    font-weight: 500;
-}
-
-.temu-hot-picks-stock-status {
-    font-size: 0.85rem;
-    margin-bottom: 1rem;
-}
-
-/* Add to Cart Button */
-.temu-hot-picks-add-to-cart {
-    width: 100%;
-    background: linear-gradient(45deg, var(--temu-orange), var(--temu-red));
-    border: none;
-    border-radius: 10px;
-    padding: 10px 16px;
-    color: white;
-    font-size: 0.85rem;
-    font-weight: 700;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    margin-top: auto;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-}
-
-.temu-hot-picks-add-to-cart:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(255, 107, 53, 0.4);
-}
-
-.temu-hot-picks-add-to-cart:disabled {
-    background: #6c757d;
-    cursor: not-allowed;
-    transform: none;
-}
-
-/* Empty State */
-.temu-hot-picks-empty-state {
-    background: #f8f9fa;
-    border-radius: 20px;
-    padding: 3rem;
-    text-align: center;
-    border: 2px dashed #ddd;
-}
-
-.temu-hot-picks-empty-icon {
-    color: #ccc;
-    margin-bottom: 1rem;
-}
-
-.temu-hot-picks-empty-title {
-    color: #666;
-    font-size: 1.3rem;
-    margin-bottom: 0.5rem;
-}
-
-.temu-hot-picks-empty-description {
-    color: #999;
-    font-size: 0.9rem;
-    margin-bottom: 1.5rem;
-}
-
-.temu-hot-picks-empty-btn {
-    background: linear-gradient(45deg, var(--temu-blue), #4834d4);
-    color: white;
-    border: none;
-    border-radius: 25px;
-    padding: 10px 20px;
-    font-weight: 600;
-    text-decoration: none;
-    transition: all 0.3s ease;
-}
-
-.temu-hot-picks-empty-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(72, 52, 212, 0.4);
-    color: white;
-}
-
-/* Responsive Design */
 @media (max-width: 768px) {
-    .temu-hot-picks-card {
-        flex: 0 0 180px;
-    }
-
-    .temu-hot-picks-image-container {
-        height: 160px;
-    }
-
-    .temu-hot-picks-category-info {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.75rem;
-    }
-
-    .temu-hot-picks-title {
-        font-size: 1.6rem;
-    }
+  .tcard { flex: 0 0 200px; width: 200px; }
+  .tcard-media { height: 150px; }
+  .pro-category-icon { width: 56px; height: 56px; font-size: 1.5rem; }
+  .pro-category-title { font-size: 1.2rem; }
 }
-
 @media (max-width: 576px) {
-    .temu-hot-picks-card {
-        flex: 0 0 160px;
-    }
-
-    .temu-hot-picks-image-container {
-        height: 140px;
-    }
-
-    .temu-hot-picks-card-body {
-        padding: 1rem;
-    }
-
-    .temu-hot-picks-category-block {
-        padding: 1.5rem;
-    }
+  .tcard { flex: 0 0 175px; width: 175px; }
+  .tcard-media { height: 130px; }
+  .tcard-body { padding: 10px; }
+  .pro-category-block { padding: 1.25rem; }
 }
 
-/* Loading Animation */
-@keyframes temu-hot-picks-loading {
-    0% { opacity: 1; }
-    50% { opacity: 0.5; }
-    100% { opacity: 1; }
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
-
-.temu-hot-picks-loading {
-    animation: temu-hot-picks-loading 1.5s ease-in-out infinite;
-}
+.animate-in { animation: fadeInUp 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
 </style>
 
-<!-- Hero Section (unchanged) -->
-<section class="hero-section text-white py-4" style="border-bottom: 3px solid var(--amazon-orange);">
-    <div class="container">
-        <div class="row align-items-center hero-content">
-            <div class="col-lg-9 mb-4 mb-lg-0">
-                <h1 class="fw-bold mb-2">SHOP SMART. PAY LESS. GET MORE.</h1>
-                <p class="mb-3 opacity-90">Billionaire Taste. Everyday Price. Because Blending In Was Never the Plan.</p>
-
-                <div class="d-flex flex-wrap gap-3 hero-features">
-                    <div class="hero-feature d-flex align-items-center text-white-50">
-                        <i class="fas fa-shipping-fast me-2 text-warning small"></i>
-                        <span class="small">FREE Shipping</span>
-                    </div>
-                    <div class="hero-feature d-flex align-items-center text-white-50">
-                        <i class="fas fa-shield-alt me-2 text-warning small"></i>
-                        <span class="small">100% Secure</span>
-                    </div>
-                    <div class="hero-feature d-flex align-items-center text-white-50">
-                        <i class="fas fa-undo me-2 text-warning small"></i>
-                        <span class="small">30-Day Returns</span>
-                    </div>
-                    <div class="hero-feature d-flex align-items-center text-white-50">
-                        <i class="fas fa-clock me-2 text-warning small"></i>
-                        <span class="small">24/7 Support</span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-lg-3 text-center">
-                <div class="hero-badge p-3 rounded-3 bg-dark bg-opacity-25">
-                    <i class="fas fa-bolt fa-3x text-warning"></i>
-                    <div class="mt-2 fw-bold text-warning">SHOP LIKE A BOSS</div>
-                </div>
-            </div>
+<!-- ── Hero ─────────────────────────────────────────────────────────────── -->
+<section class="hero-section text-white py-4" style="border-bottom: 3px solid var(--accent-orange);">
+  <div class="container">
+    <div class="row align-items-center hero-content">
+      <div class="col-lg-9 mb-4 mb-lg-0">
+        <h1 class="fw-bold mb-2">SHOP SMART. PAY LESS. GET MORE.</h1>
+        <p class="mb-3 opacity-90">Billionaire Taste. Everyday Price. Because Blending In Was Never the Plan.</p>
+        <div class="d-flex flex-wrap gap-3 hero-features">
+          <div class="hero-feature d-flex align-items-center text-white-50">
+            <i class="fas fa-shipping-fast me-2 text-warning small"></i>
+            <span class="small">FREE Shipping</span>
+          </div>
+          <div class="hero-feature d-flex align-items-center text-white-50">
+            <i class="fas fa-shield-alt me-2 text-warning small"></i>
+            <span class="small">100% Secure</span>
+          </div>
+          <div class="hero-feature d-flex align-items-center text-white-50">
+            <i class="fas fa-undo me-2 text-warning small"></i>
+            <span class="small">30-Day Returns</span>
+          </div>
+          <div class="hero-feature d-flex align-items-center text-white-50">
+            <i class="fas fa-clock me-2 text-warning small"></i>
+            <span class="small">24/7 Support</span>
+          </div>
         </div>
+      </div>
+      <div class="col-lg-3 text-center">
+        <div class="hero-badge p-3 rounded-3 bg-dark bg-opacity-25">
+          <i class="fas fa-bolt fa-3x text-warning"></i>
+          <div class="mt-2 fw-bold text-warning">SHOP LIKE A BOSS</div>
+        </div>
+      </div>
     </div>
+  </div>
 </section>
 
-<!-- Hot Picks Section - Enhanced Temu Style -->
-<section class="temu-hot-picks-section">
-    <div class="container">
-        <h2 class="temu-hot-picks-title">
-            <i class="fas fa-fire temu-hot-picks-fire"></i>
-            Today's Hot Picks
-        </h2>
+<!-- ── Hot Picks ─────────────────────────────────────────────────────────── -->
+<section class="py-4 bg-light">
+  <div class="container">
 
-        {% for block in hot_products_by_category %}
-        <div class="temu-hot-picks-category-block">
-            <div class="temu-hot-picks-category-info">
-                <span class="temu-hot-picks-category-badge">{{ block.category.name }}</span>
-                <div>
-                    <h5 class="temu-hot-picks-category-title">{{ block.category.name }} Collection</h5>
-                    <p class="temu-hot-picks-category-subtitle">Top picks from {{ block.category.name }} • {{ block.products|length }} hot item{{ block.products|length|pluralize }}</p>
-                </div>
-            </div>
+    <h2 class="hot-page-title">
+      <i class="fas fa-fire fire-icon"></i>
+      Today's Hot Picks
+    </h2>
 
-            {% if block.products %}
-            <div class="position-relative">
-                <button class="btn temu-hot-picks-scroll-btn position-absolute top-50 start-0 translate-middle-y scroll-left-{{ forloop.counter }}"
-                        data-target="hot-picks-products-container-{{ forloop.counter }}"
-                        style="margin-left: -30px; z-index: 10;">
-                    <i class="fas fa-chevron-left"></i>
-                </button>
-                <button class="btn temu-hot-picks-scroll-btn position-absolute top-50 end-0 translate-middle-y scroll-right-{{ forloop.counter }}"
-                        data-target="hot-picks-products-container-{{ forloop.counter }}"
-                        style="margin-right: -30px; z-index: 10;">
-                    <i class="fas fa-chevron-right"></i>
-                </button>
+    {% for block in hot_products_by_category %}
+    <article class="pro-category-block animate-in"
+             id="hot-category-{{ block.category.id }}"
+             data-category-id="{{ block.category.id }}"
+             style="animation-delay: {{ forloop.counter0 }}00ms;">
 
-                <div class="temu-hot-picks-products-container hot-picks-products-container-{{ forloop.counter }}">
-                    {% for product in block.products %}
-                    <div class="temu-hot-picks-card" data-product-id="{{ product.id }}" onclick="window.location.href='{% url 'marketplace:product_detail' product.id %}'">
-                        <div class="temu-hot-picks-image-container">
-                            {% if product.image %}
-                            <img src="{{ product.image.url }}"
-                                 class="temu-hot-picks-image"
-                                 alt="{{ product.name }}"
-                                 loading="lazy"
-                                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                            <div class="temu-hot-picks-image d-none" style="background: #f8f9fa; display: flex; align-items: center; justify-content: center; color: #999; flex-direction: column;">
-                                <i class="fas fa-image fa-2x"></i>
-                                <small>No image</small>
-                            </div>
-                            {% else %}
-                            <div class="temu-hot-picks-image" style="background: #f8f9fa; display: flex; align-items: center; justify-content: center; color: #999; flex-direction: column;">
-                                <i class="fas fa-image fa-2x"></i>
-                                <small>No image</small>
-                            </div>
-                            {% endif %}
-
-                            <!-- Product Badges -->
-                            {% if product.discount_percentage %}
-                                <span class="temu-hot-picks-badge temu-hot-picks-badge-sale">
-                                    {{ product.discount_percentage }}% OFF
-                                </span>
-                            {% elif product.is_new %}
-                                <span class="temu-hot-picks-badge temu-hot-picks-badge-new">NEW</span>
-                            {% else %}
-                                <span class="temu-hot-picks-badge temu-hot-picks-badge-hot">
-                                    <i class="fas fa-fire"></i>HOT
-                                </span>
-                            {% endif %}
-
-                            <!-- Quick Actions -->
-                            <div class="temu-hot-picks-quick-actions">
-                                <button class="btn"
-                                        onclick="event.stopPropagation(); addToWishlist({{ product.id }}, this)"
-                                        title="Add to wishlist"
-                                        aria-label="Add {{ product.name }} to wishlist">
-                                    <i class="far fa-heart"></i>
-                                </button>
-                                <button class="btn"
-                                        onclick="event.stopPropagation(); quickView({{ product.id }})"
-                                        title="Quick view"
-                                        aria-label="Quick view {{ product.name }}">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                            </div>
-                        </div>
-
-                        <div class="temu-hot-picks-card-body">
-                            <h6 class="temu-hot-picks-card-title">
-                                <a href="{% url 'marketplace:product_detail' product.id %}" title="{{ product.name }}">
-                                    {{ product.name|truncatechars:35 }}
-                                </a>
-                            </h6>
-
-                            {% if product.average_rating %}
-                            <div class="temu-hot-picks-rating">
-                                {% for i in "12345" %}
-                                    {% if forloop.counter <= product.average_rating %}
-                                        <i class="fas fa-star text-warning"></i>
-                                    {% else %}
-                                        <i class="far fa-star text-muted"></i>
-                                    {% endif %}
-                                {% endfor %}
-                                {% if product.review_count %}
-                                    <small class="text-muted ms-1">({{ product.review_count|floatformat:0 }})</small>
-                                {% endif %}
-                            </div>
-                            {% endif %}
-
-                            <div class="temu-hot-picks-price-container">
-                                {% if product.original_price and product.original_price != product.price %}
-                                    <div class="mb-1">
-                                        <span class="temu-hot-picks-original-price">{{ request.user.preferred_currency.symbol|default:"D" }}{{ product.original_price }}</span>
-                                        <span class="temu-hot-picks-save-badge">
-                                            Save {{ request.user.preferred_currency.symbol|default:"D" }}{{ product.amount_saved|floatformat:2 }}
-                                        </span>
-                                    </div>
-                                {% endif %}
-                                <div class="temu-hot-picks-price-tag">{% display_money product.price %}</div>
-                            </div>
-
-                            <div class="temu-hot-picks-shipping">
-                                <i class="fas fa-shipping-fast"></i> FREE Shipping by ShopSmart
-                            </div>
-
-                            <div class="temu-hot-picks-stock-status">
-                                {% if product.is_in_stock %}
-                                    <span class="text-success">In stock.</span>
-                                {% else %}
-                                    <span class="text-danger">Out of stock.</span>
-                                {% endif %}
-                            </div>
-
-                            <button class="temu-hot-picks-add-to-cart"
-                                    onclick="event.stopPropagation(); {% if product.is_in_stock %}addToCart({{ product.id }}, this){% else %}return false;{% endif %}"
-                                    data-product-id="{{ product.id }}"
-                                    data-stock="{{ product.stock.quantity|default:0 }}"
-                                    {% if not product.is_in_stock %} disabled {% endif %}
-                                    aria-label="{% if product.is_in_stock %}Add {{ product.name }} to cart{% else %}{{ product.name }} is out of stock{% endif %}"
-                                    type="button">
-                                <i class="fas {% if product.is_in_stock %}fa-cart-plus{% else %}fa-ban{% endif %} me-1"></i>
-                                <span class="btn-text">
-                                    {% if product.is_in_stock %}
-                                        Add to Cart
-                                    {% else %}
-                                        Out of Stock
-                                    {% endif %}
-                                </span>
-                            </button>
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-            {% else %}
-            <div class="temu-hot-picks-empty-state">
-                <i class="fas fa-fire fa-3x temu-hot-picks-empty-icon"></i>
-                <h5 class="temu-hot-picks-empty-title">No hot picks in this category</h5>
-                <p class="temu-hot-picks-empty-description">Check back soon for exciting deals!</p>
-                <a href="{% url 'marketplace:category_detail' block.category.id %}" class="temu-hot-picks-empty-btn">
-                    <i class="fas fa-tags me-1"></i> Browse {{ block.category.name }}
-                </a>
-            </div>
-            {% endif %}
+      <header class="pro-category-header">
+        <div class="pro-category-info">
+          <div class="pro-category-icon" aria-hidden="true">
+            <i class="fas fa-{{ block.category.icon|default:'fire' }}"></i>
+          </div>
+          <div>
+            <h3 class="pro-category-title">{{ block.category.name }}</h3>
+            <p class="pro-category-subtitle">
+              Top picks &bull; {{ block.products|length }} hot item{{ block.products|length|pluralize }}
+            </p>
+          </div>
         </div>
-        {% endfor %}
+        <a href="{% url 'marketplace:category_detail' block.category.id %}"
+           class="pro-view-all-btn">
+          View All <i class="fas fa-arrow-right"></i>
+        </a>
+      </header>
+
+      {% if block.products %}
+      <div class="pro-products-wrapper">
+
+        <button class="btn pro-scroll-btn scroll-left"
+                data-target="rail-hot-{{ block.category.id }}"
+                type="button" aria-label="Scroll left">
+          <i class="fas fa-chevron-left"></i>
+        </button>
+        <button class="btn pro-scroll-btn scroll-right"
+                data-target="rail-hot-{{ block.category.id }}"
+                type="button" aria-label="Scroll right">
+          <i class="fas fa-chevron-right"></i>
+        </button>
+
+        <div class="pro-products-container" id="rail-hot-{{ block.category.id }}">
+
+          {% for product in block.products %}
+          <div class="tcard"
+               role="article"
+               tabindex="0"
+               aria-label="{{ product.name }}"
+               onclick="window.location.href='{% url 'marketplace:product_detail' product.id %}'">
+
+            <div class="tcard-media">
+              <img class="tcard-img"
+                   src="{% if product.display_image_url %}{{ product.display_image_url }}{% elif product.image %}{{ product.image.url }}{% else %}{% static 'images/placeholder.png' %}{% endif %}"
+                   alt="{{ product.name }}"
+                   loading="lazy"
+                   onerror="this.onerror=null;this.src='{% static 'images/placeholder.png' %}'">
+
+              <!-- Badges -->
+              <div class="tcard-badges">
+                {% if product.discount_percentage %}
+                  <span class="tbadge tbadge-deal">{{ product.discount_percentage }}% OFF</span>
+                {% elif product.is_new %}
+                  <span class="tbadge tbadge-new">NEW</span>
+                {% else %}
+                  <span class="tbadge tbadge-hot">HOT 🔥</span>
+                {% endif %}
+                {% if product.is_featured %}
+                  <span class="tbadge tbadge-hot">HOT</span>
+                {% endif %}
+              </div>
+
+              <!-- Floating cart button -->
+              <button class="tcard-cart"
+                      type="button"
+                      data-product-id="{{ product.id }}"
+                      data-product-name="{{ product.name|escapejs }}"
+                      onclick="event.stopPropagation(); addToCart({{ product.id }}, this)"
+                      {% if not product.is_in_stock %}disabled title="Out of stock"{% endif %}
+                      aria-label="Add {{ product.name }} to cart">
+                <i class="fas fa-shopping-cart"></i>
+              </button>
+            </div>
+
+            <div class="tcard-body">
+              <div class="tcard-title">{{ product.name|truncatechars:30 }}</div>
+
+              <div class="tcard-desc">
+                {{ product.description|default:""|truncatechars:85 }}
+              </div>
+
+              <div class="tcard-price">
+                {% display_money product.price %}
+                {% if product.original_price and product.original_price != product.price %}
+                  <span class="tcard-old">{% display_money product.original_price %}</span>
+                {% endif %}
+              </div>
+
+              <div class="tcard-foot">
+                <div class="tcard-stars"
+                     aria-label="Rated {{ product.average_rating|default:0 }} out of 5">
+                  {% for i in "12345" %}
+                    {% if product.average_rating|default:0 >= forloop.counter %}
+                      <i class="fas fa-star"></i>
+                    {% else %}
+                      <i class="far fa-star"></i>
+                    {% endif %}
+                  {% endfor %}
+                  <span class="tcard-rcount">({{ product.review_count|default:0 }})</span>
+                </div>
+                <span class="tcard-sold">{{ product.sold_count|default:0 }} sold</span>
+              </div>
+            </div>
+
+          </div>{# /tcard #}
+          {% endfor %}
+
+        </div>{# /pro-products-container #}
+      </div>{# /pro-products-wrapper #}
+
+      {% else %}
+      <div class="pro-empty-state">
+        <i class="fas fa-fire fa-3x pro-empty-icon"></i>
+        <h5 class="pro-empty-title">No hot picks in {{ block.category.name }}</h5>
+        <p class="pro-empty-description">Check back soon for exciting deals!</p>
+      </div>
+      {% endif %}
+
+    </article>
+    {% empty %}
+    <div class="pro-empty-state">
+      <i class="fas fa-fire fa-3x pro-empty-icon"></i>
+      <h3 class="pro-empty-title">No Hot Picks Yet</h3>
+      <p class="pro-empty-description">We're curating the best deals — check back soon!</p>
     </div>
+    {% endfor %}
+
+  </div>
 </section>
+
+<!-- Toast -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+  <div id="cart-toast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="toast-header">
+      <i class="fas fa-shopping-cart me-2 text-primary"></i>
+      <strong class="me-auto">Cart</strong>
+      <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+    </div>
+    <div class="toast-body"></div>
+  </div>
+</div>
 
 <script src="{% static 'js/main.js' %}"></script>
 <script src="{% static 'js/hot_pick.js' %}"></script>
 
 <script>
-// Enhanced Hot Picks JavaScript with Temu-style interactions
 document.addEventListener('DOMContentLoaded', function () {
-    // Enhanced scroll functionality for hot picks with better animations
-    document.querySelectorAll('.temu-hot-picks-scroll-btn').forEach(button => {
-        button.addEventListener('click', function () {
-            const targetClass = this.getAttribute('data-target');
-            const container = document.querySelector('.' + targetClass);
-            const scrollAmount = container.offsetWidth * 0.8;
+  'use strict';
 
-            // Add click animation
-            this.style.transform = 'scale(0.9)';
-            setTimeout(() => {
-                this.style.transform = '';
-            }, 150);
+  /* ── CSRF helper ────────────────────────────────────────────────── */
+  function getCSRF() {
+    return document.querySelector('[name=csrfmiddlewaretoken]')?.value
+        || document.querySelector('meta[name="csrf-token"]')?.content
+        || (document.cookie.split(';').find(c => c.trim().startsWith('csrftoken=')) || '').split('=')[1]
+        || '';
+  }
 
-            if (
-                this.classList.contains('scroll-left-1') ||
-                this.classList.contains('scroll-left-2') ||
-                this.classList.contains('scroll-left-3') ||
-                this.classList.contains('scroll-left-4')
-            ) {
-                container.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
-            } else {
-                container.scrollBy({ left: scrollAmount, behavior: 'smooth' });
-            }
-        });
+  /* ── Debounce ───────────────────────────────────────────────────── */
+  function debounce(fn, ms) {
+    let t;
+    return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+  }
+
+  /* ── Scroll buttons — use data-target ID, same as all_products ─── */
+  function initScrollButtons() {
+    document.querySelectorAll('.pro-scroll-btn').forEach(btn => {
+      btn.addEventListener('click', function () {
+        const rail = document.getElementById(this.dataset.target);
+        if (!rail) return;
+        const step = Math.round(rail.clientWidth * 0.85);
+        rail.scrollBy({ left: this.classList.contains('scroll-left') ? -step : step, behavior: 'smooth' });
+        this.style.transform = (this.style.transform || '').replace('scale(1.1)', '') + ' scale(0.9)';
+        setTimeout(() => { this.style.transform = ''; }, 150);
+      });
     });
+  }
 
-    // Enhanced scroll button visibility with better states
-    document.querySelectorAll('.temu-hot-picks-products-container').forEach(container => {
-        container.addEventListener('scroll', function () {
-            const containerClass = container.className
-                .split(' ')
-                .find(cls => cls.startsWith('hot-picks-products-container-'));
-            const counter = containerClass?.split('-').pop();
-
-            const leftBtn = document.querySelector(`.scroll-left-${counter}`);
-            const rightBtn = document.querySelector(`.scroll-right-${counter}`);
-
-            if (leftBtn) {
-                leftBtn.style.opacity = container.scrollLeft > 0 ? '1' : '0.3';
-                leftBtn.disabled = container.scrollLeft <= 0;
-            }
-
-            if (rightBtn) {
-                const isAtEnd = container.scrollLeft >= (container.scrollWidth - container.clientWidth - 10);
-                rightBtn.style.opacity = isAtEnd ? '0.3' : '1';
-                rightBtn.disabled = isAtEnd;
-            }
-        });
-
-        // Initial button state
-        const containerClass = container.className
-            .split(' ')
-            .find(cls => cls.startsWith('hot-picks-products-container-'));
-        const counter = containerClass?.split('-').pop();
-        const leftBtn = document.querySelector(`.scroll-left-${counter}`);
-        if (leftBtn) {
-            leftBtn.style.opacity = '0.3';
-            leftBtn.disabled = true;
-        }
+  /* ── Arrow disabled states ──────────────────────────────────────── */
+  function updateScrollArrows() {
+    document.querySelectorAll('.pro-products-container').forEach(rail => {
+      const left  = document.querySelector(`[data-target="${rail.id}"].scroll-left`);
+      const right = document.querySelector(`[data-target="${rail.id}"].scroll-right`);
+      if (!left || !right) return;
+      left.disabled  = rail.scrollLeft <= 10;
+      right.disabled = rail.scrollLeft >= rail.scrollWidth - rail.clientWidth - 10;
     });
+  }
 
-    // Enhanced add to cart functionality with Temu-style animations
-    document.querySelectorAll('.temu-hot-picks-add-to-cart').forEach(button => {
-        button.addEventListener('click', function(e) {
-            e.stopPropagation();
-            if (this.disabled) return;
+  /* ── Lazy-fade cards ────────────────────────────────────────────── */
+  function initCardAnimations() {
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach((entry, i) => {
+        if (!entry.isIntersecting) return;
+        setTimeout(() => {
+          entry.target.style.opacity = '1';
+          entry.target.style.transform = 'translateY(0)';
+        }, i * 40);
+        obs.unobserve(entry.target);
+      });
+    }, { threshold: 0.08, rootMargin: '50px' });
 
-            const originalText = this.innerHTML;
-            this.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Adding...';
-            this.disabled = true;
-
-            // Add product card animation
-            const productCard = this.closest('.temu-hot-picks-card');
-            productCard.style.transform = 'translateY(-8px) scale(1.02)';
-            productCard.style.boxShadow = '0 15px 40px rgba(255, 107, 53, 0.3)';
-
-            // Simulate loading (your actual addToCart function will handle this)
-            setTimeout(() => {
-                this.innerHTML = '<i class="fas fa-check me-1"></i> Added!';
-                this.style.background = 'var(--temu-green)';
-
-                // Reset product card
-                setTimeout(() => {
-                    productCard.style.transform = '';
-                    productCard.style.boxShadow = '';
-                }, 200);
-
-                setTimeout(() => {
-                    this.innerHTML = originalText;
-                    this.style.background = '';
-                    this.disabled = false;
-                }, 1500);
-            }, 800);
-        });
+    document.querySelectorAll('.tcard').forEach(card => {
+      card.style.opacity = '0';
+      card.style.transform = 'translateY(20px)';
+      card.style.transition = 'opacity 0.45s ease, transform 0.45s ease';
+      obs.observe(card);
     });
+  }
 
-    // Enhanced product card interactions with premium hover effects
-    document.querySelectorAll('.temu-hot-picks-card').forEach(card => {
-        card.addEventListener('mouseenter', () => {
-            card.style.willChange = 'transform, box-shadow';
+  /* ── Real addToCart (identical to all_products.html) ────────────── */
+  window.addToCart = window.addToCart || function (productId, btn) {
+    if (!btn || btn.disabled) return;
+    const originalHTML = btn.innerHTML;
+    btn.disabled = true;
+    btn.classList.add('adding');
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+    fetch(`/add-to-cart/${productId}/`, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': getCSRF(),
+        'X-Requested-With': 'XMLHttpRequest',
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: 'quantity=1&cart_type=normal',
+    })
+    .then(async r => {
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.message || `HTTP ${r.status}`);
+      return data;
+    })
+    .then(data => {
+      if (data.success) {
+        btn.classList.remove('adding');
+        btn.classList.add('added');
+        btn.innerHTML = '<i class="fas fa-check"></i>';
+
+        const count = data.cart_count ?? data.normal_count ?? 0;
+        document.querySelectorAll('.cart-badge, #cartCountBadge, [data-cart-count]').forEach(badge => {
+          badge.textContent = count;
+          badge.style.display = count > 0 ? 'inline-block' : 'none';
         });
 
-        card.addEventListener('mouseleave', () => {
-            card.style.willChange = 'auto';
-        });
+        showToast(data.message || 'Added to cart!');
+
+        setTimeout(() => {
+          btn.classList.remove('added');
+          btn.innerHTML = originalHTML;
+          btn.disabled = false;
+        }, 1800);
+      } else {
+        throw new Error(data.message || 'Failed to add to cart');
+      }
+    })
+    .catch(err => {
+      btn.classList.remove('adding');
+      btn.innerHTML = originalHTML;
+      btn.disabled = false;
+      showToast(err.message || 'Could not add item. Please try again.', true);
     });
+  };
 
-    // Enhanced lazy loading animation for cards with stagger effect
-    const observer = new IntersectionObserver(entries => {
-        entries.forEach((entry, index) => {
-            if (entry.isIntersecting) {
-                setTimeout(() => {
-                    entry.target.style.opacity = '1';
-                    entry.target.style.transform = 'translateY(0)';
-                }, index * 100); // Stagger animation
-            }
-        });
-    }, { threshold: 0.1 });
-
-    document.querySelectorAll('.temu-hot-picks-card').forEach(card => {
-        card.style.opacity = '0';
-        card.style.transform = 'translateY(30px)';
-        card.style.transition = 'opacity 0.8s ease, transform 0.8s ease';
-        observer.observe(card);
-    });
-
-    // Add performance optimization for scroll events
-    let scrollTicking = false;
-
-    function updateScrollButtons() {
-        document.querySelectorAll('.temu-hot-picks-products-container').forEach(container => {
-            const event = new Event('scroll');
-            container.dispatchEvent(event);
-        });
-        scrollTicking = false;
+  /* ── Toast helper ───────────────────────────────────────────────── */
+  function showToast(message, isError = false) {
+    if (window.showToast && window.showToast !== showToast) {
+      return window.showToast(message, isError ? 'error' : 'success');
     }
+    const toast = document.getElementById('cart-toast');
+    if (!toast) return;
+    const body = toast.querySelector('.toast-body');
+    if (body) body.textContent = message;
+    toast.classList.toggle('text-bg-danger', isError);
+    if (window.bootstrap?.Toast) new bootstrap.Toast(toast, { autohide: true, delay: 3500 }).show();
+  }
 
-    window.addEventListener('resize', () => {
-        if (!scrollTicking) {
-            requestAnimationFrame(updateScrollButtons);
-            scrollTicking = true;
-        }
+  /* ── Keyboard nav on cards ──────────────────────────────────────── */
+  document.querySelectorAll('.tcard').forEach(card => {
+    card.addEventListener('keypress', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); card.click(); }
     });
+    card.addEventListener('mouseenter', () => { card.style.willChange = 'transform, box-shadow'; });
+    card.addEventListener('mouseleave', () => { card.style.willChange = 'auto'; });
+  });
+
+  /* ── Scroll listeners ───────────────────────────────────────────── */
+  document.querySelectorAll('.pro-products-container').forEach(rail => {
+    rail.addEventListener('scroll', debounce(updateScrollArrows, 60));
+  });
+  window.addEventListener('resize', debounce(updateScrollArrows, 250));
+
+  /* ── Init ───────────────────────────────────────────────────────── */
+  initScrollButtons();
+  updateScrollArrows();
+  initCardAnimations();
+
+  console.log('✅ hot_picks page initialised');
 });
 </script>
 

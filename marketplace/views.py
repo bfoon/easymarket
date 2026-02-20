@@ -87,6 +87,59 @@ def _track_cart_event(request, event: str):
     except Exception:
         pass
 
+# ============================================================
+# SESSION CART HELPERS
+# ============================================================
+
+def _session_cart_key(product_id: int, features: dict) -> str:
+    """Stable session-dict key for a product + feature combo."""
+    import json
+    feat_str = json.dumps(features, sort_keys=True) if features else ""
+    return f"{product_id}::{feat_str}"
+
+
+def _get_session_cart(request) -> dict:
+    return request.session.get("cart", {})
+
+
+def _save_session_cart(request, cart: dict):
+    request.session["cart"] = cart
+    request.session.modified = True
+
+
+def merge_session_cart_to_db(request, user):
+    """
+    Called right after a user logs in.
+    Moves every item from the session cart into the user's DB Cart,
+    then clears the session cart.
+    """
+    session_cart = _get_session_cart(request)
+    if not session_cart:
+        return
+
+    db_cart, _ = Cart.objects.get_or_create(user=user)
+
+    for key, item_data in session_cart.items():
+        try:
+            pid = int(key.split("::", 1)[0])
+            product = Product.objects.get(id=pid, is_active=True)
+            features = item_data.get("features", {})
+            qty = int(item_data.get("quantity", 1))
+
+            cart_item, created = CartItem.objects.get_or_create(
+                cart=db_cart,
+                product=product,
+                selected_features=features,
+                cart_type="normal",
+                defaults={"quantity": qty, "added_by": user},
+            )
+            if not created:
+                cart_item.quantity += qty
+                cart_item.save(update_fields=["quantity", "updated_at"])
+        except Exception as e:
+            logger.warning(f"merge_session_cart: skipping key={key}: {e}")
+
+    _save_session_cart(request, {})
 
 def all_products(request):
     """
@@ -2194,27 +2247,96 @@ def _collect_selected_features(request):
 
 def add_to_cart(request, product_id):
     """
-    FIXED: Add item to cart (normal or social) with feature/variant selection
+    Add item to cart — works for both guests (session) and logged-in users (DB).
+    Social-cart flow still requires authentication.
     """
     from analytics.services import track_event
 
     product = get_object_or_404(Product, id=product_id, is_active=True)
-    user_cart, _ = Cart.objects.get_or_create(user=request.user)
 
-    # Get cart type from request
+    # Validate cart type
     cart_type = request.POST.get('cart_type', 'normal')
-
     if cart_type not in ['normal', 'social']:
         return JsonResponse({
             'success': False,
             'message': 'Invalid cart type'
         }, status=400)
 
-    # If adding to social cart, find and verify access
+    # Social cart always requires login
+    if cart_type == 'social' and not request.user.is_authenticated:
+        return JsonResponse({
+            'success': False,
+            'message': 'Please log in to use a social cart',
+            'require_login': True
+        }, status=401)
+
+    # Parse quantity
+    try:
+        quantity = int(request.POST.get('quantity', 1))
+        if quantity < 1:
+            quantity = 1
+    except ValueError:
+        quantity = 1
+
+    # Parse selected features
+    selected_features = {}
+    features_json = request.POST.get('features', '')
+    if features_json:
+        try:
+            parsed_features = json.loads(features_json)
+            if isinstance(parsed_features, dict) and parsed_features:
+                selected_features = parsed_features
+                logger.info(f"✅ Parsed features: {selected_features}")
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.warning(f"Failed to parse 'features' JSON: {e}")
+
+    # ──────────────────────────────────────────────────────────────
+    # GUEST PATH — store in session
+    # ──────────────────────────────────────────────────────────────
+    if not request.user.is_authenticated:
+        _ensure_session(request)
+        sess = _get_session_cart(request)
+        key = _session_cart_key(product_id, selected_features)
+
+        if key in sess:
+            new_qty = min(99, sess[key]['quantity'] + quantity)
+            sess[key]['quantity'] = new_qty
+            message = 'Increased quantity in cart'
+        else:
+            sess[key] = {
+                'product_id': product_id,
+                'quantity': quantity,
+                'features': selected_features,
+            }
+            message = 'Added to cart'
+
+        _save_session_cart(request, sess)
+
+        cart_count = sum(int(v.get('quantity', 1)) for v in sess.values())
+
+        _track_cart_event(request, 'add')
+
+        return JsonResponse({
+            'success': True,
+            'message': message,
+            'cart_type': 'normal',
+            'cart_count': cart_count,
+            'normal_count': cart_count,
+            'social_count': 0,
+            'item_id': key,               # session key used as data-item-id in template
+            'selected_features': selected_features,
+            'quantity': sess[key]['quantity'],
+        })
+
+    # ──────────────────────────────────────────────────────────────
+    # AUTHENTICATED PATH — store in database
+    # ──────────────────────────────────────────────────────────────
+    user_cart, _ = Cart.objects.get_or_create(user=request.user)
+
     if cart_type == 'social':
         social = None
 
-        # Check if user owns a social cart
+        # Check if user owns an active social cart
         try:
             social = user_cart.social
             if not social or not social.is_active or social.status not in ('open', 'checkout'):
@@ -2222,7 +2344,7 @@ def add_to_cart(request, product_id):
         except (SocialCart.DoesNotExist, AttributeError):
             pass
 
-        # If not owner, check if member
+        # If not owner, check if user is a joined member
         if not social:
             try:
                 member = CartMember.objects.filter(
@@ -2235,14 +2357,13 @@ def add_to_cart(request, product_id):
             except Exception:
                 pass
 
-        # No accessible social cart found
         if not social:
             return JsonResponse({
                 'success': False,
                 'message': 'No active social cart available'
             }, status=403)
 
-        # Check if user can add items
+        # Verify member permission
         member = social.members.filter(user=request.user).first()
         if not member or member.status != 'joined':
             return JsonResponse({
@@ -2250,51 +2371,21 @@ def add_to_cart(request, product_id):
                 'message': 'You do not have permission to add items'
             }, status=403)
 
-        # Use the social cart's main cart
         target_cart = social.cart
     else:
         target_cart = user_cart
 
-    # Get quantity
-    try:
-        quantity = int(request.POST.get('quantity', 1))
-        if quantity < 1:
-            quantity = 1
-    except ValueError:
-        quantity = 1
-
-    # ✅ FIXED: Parse selected features - try ALL methods
-    selected_features = {}
-
-    # Method 1: From 'features' parameter (what your JS sends - line 550 in product_detail.js)
-    features_json = request.POST.get('features', '')
-    if features_json:
-        try:
-            import json
-            parsed_features = json.loads(features_json)
-            if isinstance(parsed_features, dict) and parsed_features:
-                selected_features = parsed_features
-                logger.info(f"✅ Parsed features from 'features' param: {selected_features}")
-        except (json.JSONDecodeError, ValueError) as e:
-            logger.warning(f"Failed to parse 'features' JSON: {e}")
-
-
-        if selected_features:
-            logger.info(f"✅ Parsed features from 'feature_' prefixed fields: {selected_features}")
-
-    # Log the selected features for debugging
-
     logger.info(
-        f"📦 Adding to cart - Product: {product.name}, Features: {selected_features}, Quantity: {quantity}, Cart Type: {cart_type}")
+        f"📦 Adding to cart - Product: {product.name}, "
+        f"Features: {selected_features}, Quantity: {quantity}, Cart Type: {cart_type}"
+    )
 
     # Add or update cart item
     with transaction.atomic():
-        # ✅ FIXED: Check for existing item with SAME features
-        # This ensures different variants are treated as different items
         cart_item, created = CartItem.objects.get_or_create(
             cart=target_cart,
             product=product,
-            selected_features=selected_features,  # ✅ Features included in lookup
+            selected_features=selected_features,
             cart_type=cart_type,
             defaults={
                 'quantity': quantity,
@@ -2303,16 +2394,15 @@ def add_to_cart(request, product_id):
         )
 
         if not created:
-            # Item with same features exists, increase quantity
             cart_item.quantity += quantity
             cart_item.save(update_fields=['quantity', 'updated_at'])
             message = f'Increased quantity in {cart_type} cart'
-            logger.info(f"✅ Updated existing cart item #{cart_item.id} - new quantity: {cart_item.quantity}")
+            logger.info(f"✅ Updated existing cart item #{cart_item.id} — new qty: {cart_item.quantity}")
         else:
             message = f'Added to {cart_type} cart'
             logger.info(f"✅ Created new cart item #{cart_item.id} with features: {selected_features}")
 
-        # Recalculate shares if social cart
+        # Recalculate payment shares if this is a social cart
         if cart_type == 'social' and 'social' in locals():
             try:
                 if social.split_mode == 'by_items':
@@ -2333,7 +2423,7 @@ def add_to_cart(request, product_id):
     except Exception as e:
         logger.warning(f"Analytics tracking failed: {e}")
 
-    # Get counts for response
+    # Build response counts
     normal_count = target_cart.items.filter(cart_type='normal').aggregate(
         total=Sum('quantity')
     )['total'] or 0
@@ -2342,7 +2432,6 @@ def add_to_cart(request, product_id):
         total=Sum('quantity')
     )['total'] or 0
 
-    # ✅ IMPROVED: Return more detailed response including features
     return JsonResponse({
         'success': True,
         'message': message,
@@ -2351,7 +2440,7 @@ def add_to_cart(request, product_id):
         'normal_count': normal_count,
         'social_count': social_count,
         'item_id': cart_item.id,
-        'selected_features': selected_features,  # ✅ Return selected features
+        'selected_features': selected_features,
         'quantity': cart_item.quantity,
     })
 
@@ -2369,6 +2458,53 @@ def cart_view(request):
     FIXED: Complete cart view with proper member visibility for social carts
     AND normal cart sharing functionality
     """
+    # ── GUEST PATH ──────────────────────────────────────────────
+    if not request.user.is_authenticated:
+        sess = _get_session_cart(request)
+        guest_items = []
+        subtotal = Decimal("0")
+
+        for key, item_data in sess.items():
+            try:
+                pid = int(key.split("::", 1)[0])
+                product = Product.objects.select_related("store", "category").get(id=pid, is_active=True)
+                qty = int(item_data.get("quantity", 1))
+                features = item_data.get("features", {})
+                line_total = product.price * qty
+                subtotal += line_total
+                guest_items.append({
+                    "session_key": key,
+                    "product": product,
+                    "quantity": qty,
+                    "features": features,
+                    "subtotal": line_total,
+                })
+            except (Product.DoesNotExist, Exception):
+                continue
+
+        CART_TAX_RATE = Decimal("0.000")
+        tax = subtotal * CART_TAX_RATE
+        total = subtotal + tax
+
+        return render(request, "marketplace/cart_detail.html", {
+            "guest_mode": True,
+            "guest_items": guest_items,
+            "normal_items": [],
+            "social_items": [],
+            "normal_subtotal": subtotal,
+            "normal_tax": tax,
+            "normal_total": total,
+            "social_subtotal": Decimal("0"),
+            "social_tax": Decimal("0"),
+            "social_total": Decimal("0"),
+            "normal_count": sum(i["quantity"] for i in guest_items),
+            "social_count": 0,
+            "cart_count": sum(i["quantity"] for i in guest_items),
+            "is_social_active": False,
+            "is_owner": False,
+        })
+
+    # ── AUTHENTICATED PATH ───────────────────────────────────────
     # Get or create user's cart
     user_cart, _ = Cart.objects.get_or_create(user=request.user)
 
@@ -3059,34 +3195,79 @@ def get_cart_context(request):
     return {"cart_count": cart_count, "cart_total": cart_total}
 
 
-@login_required
+
 @require_POST
 def update_cart_quantity(request):
     """
-    FIXED: Update cart item quantity with permission checks
+    Update cart item quantity — handles both session (guest) and DB (authenticated) items.
+    JS sends: cart_item_id, quantity, item_type ('db' | 'session')
     """
     cart_item_id = request.POST.get('cart_item_id')
-    quantity = request.POST.get('quantity')
+    quantity_raw = request.POST.get('quantity')
+    item_type = request.POST.get('item_type', 'db')
 
-    if not cart_item_id or not quantity:
+    if not cart_item_id or not quantity_raw:
         return JsonResponse({
             'success': False,
             'message': 'Missing required parameters'
         }, status=400)
 
     try:
-        quantity = int(quantity)
+        quantity = int(quantity_raw)
         if quantity < 1:
             return JsonResponse({
                 'success': False,
                 'message': 'Quantity must be at least 1'
             }, status=400)
+        quantity = min(quantity, 99)
     except ValueError:
         return JsonResponse({
             'success': False,
             'message': 'Invalid quantity'
         }, status=400)
 
+    # ── GUEST / SESSION ITEM ─────────────────────────────────────────────────
+    if not request.user.is_authenticated or item_type == 'session':
+        sess = _get_session_cart(request)
+        key = str(cart_item_id)
+
+        if key not in sess:
+            return JsonResponse({
+                'success': False,
+                'message': 'Item not found'
+            }, status=404)
+
+        sess[key]['quantity'] = quantity
+        _save_session_cart(request, sess)
+
+        # Recalculate totals from session
+        subtotal = Decimal('0')
+        cart_count = 0
+        item_subtotal = Decimal('0')
+
+        for k, item_data in sess.items():
+            try:
+                pid = int(k.split('::', 1)[0])
+                prod = Product.objects.get(id=pid, is_active=True)
+                qty = int(item_data.get('quantity', 1))
+                line = prod.price * qty
+                subtotal += line
+                cart_count += qty
+                if k == key:
+                    item_subtotal = line
+            except Product.DoesNotExist:
+                continue
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Quantity updated',
+            'quantity': quantity,
+            'subtotal': float(item_subtotal),
+            'total_price': f'{subtotal:.2f}',
+            'item_count': cart_count,
+        })
+
+    # ── AUTHENTICATED / DB ITEM ──────────────────────────────────────────────
     try:
         item = CartItem.objects.select_related(
             'cart', 'cart__user', 'product', 'added_by'
@@ -3094,21 +3275,16 @@ def update_cart_quantity(request):
 
         can_modify = False
 
-        # Permission check for normal cart
         if item.cart_type == 'normal' and item.cart.user == request.user:
             can_modify = True
 
-        # Permission check for social cart
         elif item.cart_type == 'social':
             try:
                 social = item.cart.social
                 member = social.members.filter(user=request.user).first()
-
                 if member:
-                    # Owner can modify any item
                     if social.owner == request.user:
                         can_modify = True
-                    # Non-blocked member can modify their own items
                     elif item.added_by == request.user and member.status == 'joined':
                         can_modify = True
             except (SocialCart.DoesNotExist, AttributeError):
@@ -3120,12 +3296,10 @@ def update_cart_quantity(request):
                 'message': 'You do not have permission to modify this item'
             }, status=403)
 
-        # Update quantity
         with transaction.atomic():
             item.quantity = quantity
             item.save(update_fields=['quantity', 'updated_at'])
 
-            # Recalculate shares for social cart
             if item.cart_type == 'social':
                 try:
                     social = item.cart.social
@@ -3134,11 +3308,19 @@ def update_cart_quantity(request):
                 except Exception as e:
                     logger.error(f"Error recalculating shares: {e}")
 
+        # Recalculate DB cart totals for response
+        user_cart = Cart.objects.filter(user=request.user).first()
+        db_items = CartItem.objects.filter(cart=user_cart) if user_cart else []
+        total_price = sum(i.product.price * i.quantity for i in db_items)
+        item_count = sum(i.quantity for i in db_items)
+
         return JsonResponse({
             'success': True,
             'message': 'Quantity updated',
-            'new_quantity': quantity,
-            'subtotal': float(item.product.price * quantity)
+            'quantity': quantity,
+            'subtotal': float(item.product.price * quantity),
+            'total_price': f'{total_price:.2f}',
+            'item_count': item_count,
         })
 
     except CartItem.DoesNotExist:
@@ -3154,74 +3336,137 @@ def update_cart_quantity(request):
         }, status=500)
 
 
-@login_required
 @require_POST
 def remove_cart_item(request):
     """
-    Remove cart item (accepts either FormData POST or JSON body).
+    Remove cart item — handles both session (guest) and DB (authenticated) items.
+    JS sends: item_type ('db' | 'session'), remove_id (session key or CartItem.id).
+    Also accepts legacy item_id / cart_item_id for backwards compatibility.
+    Accepts FormData POST or JSON body.
     """
-    item_id = request.POST.get("item_id") or request.POST.get("cart_item_id")
+    # --- Parse payload (FormData or JSON) -----------------------------------
+    item_type = request.POST.get('item_type', 'db')
+    remove_id = (
+        request.POST.get('remove_id')
+        or request.POST.get('item_id')
+        or request.POST.get('cart_item_id')
+    )
 
-    # If JSON was sent, request.POST will be empty
-    if not item_id and request.content_type and "application/json" in request.content_type:
+    if not remove_id and request.content_type and 'application/json' in request.content_type:
         try:
-            payload = json.loads(request.body.decode() or "{}")
+            payload = json.loads(request.body.decode() or '{}')
         except Exception:
             payload = {}
-        item_id = payload.get("item_id") or payload.get("cart_item_id")
+        item_type = payload.get('item_type', item_type)
+        remove_id = (
+            payload.get('remove_id')
+            or payload.get('item_id')
+            or payload.get('cart_item_id')
+        )
 
-    if not item_id:
-        return JsonResponse({"success": False, "message": "Invalid payload"}, status=400)
+    if not remove_id:
+        return JsonResponse({'success': False, 'message': 'Invalid payload'}, status=400)
+
+    # ── GUEST / SESSION ITEM ─────────────────────────────────────────────────
+    if not request.user.is_authenticated or item_type == 'session':
+        sess = _get_session_cart(request)
+        key = str(remove_id)
+
+        if key not in sess:
+            return JsonResponse({'success': False, 'message': 'Item not found'}, status=404)
+
+        del sess[key]
+        _save_session_cart(request, sess)
+
+        # Recalculate totals from remaining session items
+        subtotal = Decimal('0')
+        cart_count = 0
+
+        for k, item_data in sess.items():
+            try:
+                pid = int(k.split('::', 1)[0])
+                prod = Product.objects.get(id=pid, is_active=True)
+                qty = int(item_data.get('quantity', 1))
+                subtotal += prod.price * qty
+                cart_count += qty
+            except Product.DoesNotExist:
+                continue
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Item removed',
+            'item_count': cart_count,
+            'total_price': f'{subtotal:.2f}',
+        })
+
+    # ── AUTHENTICATED / DB ITEM ──────────────────────────────────────────────
+    try:
+        item_id = int(remove_id)
+    except (TypeError, ValueError):
+        return JsonResponse({'success': False, 'message': 'Invalid item id'}, status=400)
 
     try:
-        item_id = int(item_id)
-    except Exception:
-        return JsonResponse({"success": False, "message": "Invalid item id"}, status=400)
-
-    try:
-        item = CartItem.objects.select_related("cart", "cart__user", "product", "added_by").get(id=item_id)
+        item = CartItem.objects.select_related(
+            'cart', 'cart__user', 'product', 'added_by'
+        ).get(id=item_id)
 
         can_remove = False
 
-        if item.cart_type == "normal" and item.cart.user == request.user:
+        if item.cart_type == 'normal' and item.cart.user == request.user:
             can_remove = True
 
-        elif item.cart_type == "social":
+        elif item.cart_type == 'social':
             try:
                 social = item.cart.social
                 member = social.members.filter(user=request.user).first()
                 if member:
                     if social.owner == request.user:
                         can_remove = True
-                    elif item.added_by == request.user and member.status == "joined":
+                    elif item.added_by == request.user and member.status == 'joined':
                         can_remove = True
             except (SocialCart.DoesNotExist, AttributeError):
                 pass
 
         if not can_remove:
-            return JsonResponse({"success": False, "message": "You do not have permission to remove this item"}, status=403)
+            return JsonResponse({
+                'success': False,
+                'message': 'You do not have permission to remove this item'
+            }, status=403)
 
         with transaction.atomic():
-            cart_type = item.cart_type
-            cart_ref = item.cart  # keep ref before delete
+            cart_type_ref = item.cart_type
+            cart_ref = item.cart
             item.delete()
 
-            if cart_type == "social":
+            if cart_type_ref == 'social':
                 try:
                     social = cart_ref.social
-                    if social.split_mode == "by_items":
+                    if social.split_mode == 'by_items':
                         social.compute_shares_by_items()
                 except Exception as e:
-                    logger.error(f"Error recalculating shares: {e}")
+                    logger.error(f"Error recalculating shares after remove: {e}")
 
-        return JsonResponse({"success": True, "message": "Item removed successfully"})
+        # Recalculate DB cart totals for response
+        user_cart = Cart.objects.filter(user=request.user).first()
+        db_items = CartItem.objects.filter(cart=user_cart) if user_cart else []
+        total_price = sum(i.product.price * i.quantity for i in db_items)
+        item_count = sum(i.quantity for i in db_items)
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Item removed successfully',
+            'item_count': item_count,
+            'total_price': f'{total_price:.2f}',
+        })
 
     except CartItem.DoesNotExist:
-        return JsonResponse({"success": False, "message": "Item not found"}, status=404)
+        return JsonResponse({'success': False, 'message': 'Item not found'}, status=404)
     except Exception as e:
         logger.error(f"Error removing cart item: {str(e)}", exc_info=True)
-        return JsonResponse({"success": False, "message": "An error occurred while removing the item"}, status=500)
-
+        return JsonResponse({
+            'success': False,
+            'message': 'An error occurred while removing the item'
+        }, status=500)
 
 # ============================================================================
 # WISHLIST VIEWS WITH ANALYTICS
