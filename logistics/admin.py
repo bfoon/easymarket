@@ -7,6 +7,12 @@ from .models import (
     Shipment, ShipmentBox, BoxItem, WarehouseShipmentNotification
 )
 
+from .dispatch_models import (
+    DriverProfile, DriverDocument, DroneUnit,
+    PickupTask, PickupTaskEvent,
+    LastMileTask, LastMileTaskEvent,
+    DispatchBatch,
+)
 
 # ---------------------------------------------------------------------
 # Helpers (safe related_name handling)
@@ -365,3 +371,39 @@ class NotificationAdmin(admin.ModelAdmin):
         'store__name'
     ]
     readonly_fields = ['created_at', 'read_at']
+
+@admin.register(DriverProfile)
+class DriverProfileAdmin(admin.ModelAdmin):
+    list_display = ["user", "driver_type", "vetting_status", "availability", "phone", "employee_id"]
+    list_filter = ["driver_type", "vetting_status", "availability", "is_active"]
+    search_fields = ["user__first_name", "user__last_name", "user__email", "phone", "employee_id"]
+    readonly_fields = ["created_at", "updated_at", "vetting_date", "vetted_by"]
+
+@admin.register(DriverDocument)
+class DriverDocumentAdmin(admin.ModelAdmin):
+    list_display = ["driver", "doc_type", "is_verified", "expiry_date"]
+    list_filter = ["doc_type", "is_verified"]
+
+@admin.register(DroneUnit)
+class DroneUnitAdmin(admin.ModelAdmin):
+    list_display = ["drone_id", "model_name", "status", "battery_level", "max_payload_kg", "home_base"]
+    list_filter = ["status", "is_active"]
+
+@admin.register(PickupTask)
+class PickupTaskAdmin(admin.ModelAdmin):
+    list_display = ["task_number", "order_type", "status", "priority", "assigned_driver", "assigned_drone", "destination_warehouse"]
+    list_filter = ["status", "order_type", "pickup_method", "priority"]
+    search_fields = ["task_number", "pickup_address", "pickup_contact_name"]
+    readonly_fields = ["task_number", "created_at", "updated_at", "assigned_at"]
+
+@admin.register(LastMileTask)
+class LastMileTaskAdmin(admin.ModelAdmin):
+    list_display = ["task_number", "status", "priority", "recipient_name", "assigned_driver", "assigned_drone"]
+    list_filter = ["status", "delivery_method", "priority"]
+    search_fields = ["task_number", "recipient_name", "delivery_address"]
+    readonly_fields = ["task_number", "created_at", "updated_at"]
+
+@admin.register(DispatchBatch)
+class DispatchBatchAdmin(admin.ModelAdmin):
+    list_display = ["batch_number", "batch_type", "status", "assigned_driver", "assigned_drone", "total_tasks"]
+    list_filter = ["status", "batch_type"]

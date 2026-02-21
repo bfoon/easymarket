@@ -1,748 +1,504 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Driver Dashboard - {{ driver.user.get_full_name }}</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet"/>
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet"/>
-  <style>
-    :root {
-      --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      --success-gradient: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-      --info-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-      --warning-gradient: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
-      --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
-      --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.12);
-      --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.15);
-    }
-
-    body {
-      background: linear-gradient(to bottom, #f8f9fa 0%, #e9ecef 100%);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      min-height: 100vh;
-    }
-
-    /* Navigation */
-    .navbar {
-      background: var(--primary-gradient) !important;
-      box-shadow: var(--shadow-md);
-      padding: 1rem 0;
-    }
-
-    .navbar-brand {
-      font-weight: 700;
-      font-size: 1.5rem;
-      letter-spacing: -0.5px;
-    }
-
-    .navbar-brand i {
-      animation: pulse 2s ease-in-out infinite;
-    }
-
-    @keyframes pulse {
-      0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.1); }
-    }
-
-    .nav-link {
-      font-weight: 500;
-      transition: all 0.3s ease;
-      border-radius: 8px;
-      padding: 0.5rem 1rem !important;
-      margin: 0 0.25rem;
-    }
-
-    .nav-link:hover {
-      background: rgba(255, 255, 255, 0.2);
-      transform: translateY(-2px);
-    }
-
-    /* Header Section */
-    .dashboard-header {
-      background: white;
-      border-radius: 16px;
-      padding: 2rem;
-      box-shadow: var(--shadow-sm);
-      margin-bottom: 2rem;
-    }
-
-    .dashboard-header h2 {
-      font-weight: 700;
-      color: #2d3748;
-      margin-bottom: 0.5rem;
-    }
-
-    .dashboard-header .welcome-text {
-      color: #718096;
-      font-size: 1.1rem;
-    }
-
-    /* Stats Cards */
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 1.5rem;
-      margin-bottom: 2rem;
-    }
-
-    .stat-card {
-      background: white;
-      border-radius: 16px;
-      padding: 1.5rem;
-      box-shadow: var(--shadow-sm);
-      transition: all 0.3s ease;
-      border: 2px solid transparent;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .stat-card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 4px;
-      background: var(--primary-gradient);
-    }
-
-    .stat-card.total::before { background: var(--primary-gradient); }
-    .stat-card.shipped::before { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-    .stat-card.transit::before { background: var(--info-gradient); }
-    .stat-card.delivered::before { background: var(--success-gradient); }
-
-    .stat-card:hover {
-      transform: translateY(-4px);
-      box-shadow: var(--shadow-md);
-    }
-
-    .stat-card .stat-icon {
-      width: 56px;
-      height: 56px;
-      border-radius: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.5rem;
-      margin-bottom: 1rem;
-      background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
-      color: #667eea;
-    }
-
-    .stat-card.shipped .stat-icon {
-      background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
-      color: #667eea;
-    }
-
-    .stat-card.transit .stat-icon {
-      background: linear-gradient(135deg, rgba(79, 172, 254, 0.1) 0%, rgba(0, 242, 254, 0.1) 100%);
-      color: #4facfe;
-    }
-
-    .stat-card.delivered .stat-icon {
-      background: linear-gradient(135deg, rgba(17, 153, 142, 0.1) 0%, rgba(56, 239, 125, 0.1) 100%);
-      color: #11998e;
-    }
-
-    .stat-card .stat-value {
-      font-size: 2.5rem;
-      font-weight: 700;
-      color: #2d3748;
-      line-height: 1;
-      margin-bottom: 0.5rem;
-    }
-
-    .stat-card .stat-label {
-      color: #718096;
-      font-size: 0.95rem;
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    /* Tabs */
-    .custom-tabs {
-      background: white;
-      border-radius: 16px;
-      padding: 1rem;
-      box-shadow: var(--shadow-sm);
-      margin-bottom: 2rem;
-    }
-
-    .nav-pills {
-      gap: 0.5rem;
-    }
-
-    .nav-pills .nav-link {
-      border-radius: 12px;
-      padding: 0.75rem 1.5rem;
-      font-weight: 600;
-      color: #4a5568;
-      transition: all 0.3s ease;
-      border: 2px solid transparent;
-    }
-
-    .nav-pills .nav-link:hover {
-      background: #f7fafc;
-      color: #667eea;
-    }
-
-    .nav-pills .nav-link.active {
-      background: var(--primary-gradient);
-      color: white;
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-    }
-
-    .nav-pills .nav-link i {
-      margin-right: 0.5rem;
-    }
-
-    /* Shipment Cards */
-    .shipment-card {
-      background: white;
-      border-radius: 16px;
-      overflow: hidden;
-      box-shadow: var(--shadow-sm);
-      transition: all 0.3s ease;
-      border: none;
-      height: 100%;
-      position: relative;
-    }
-
-    .shipment-card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 4px;
-      height: 100%;
-      background: #cbd5e0;
-    }
-
-    .shipment-card.shipped::before { background: linear-gradient(to bottom, #667eea, #764ba2); }
-    .shipment-card.in_transit::before { background: linear-gradient(to bottom, #4facfe, #00f2fe); }
-    .shipment-card.delivered::before { background: linear-gradient(to bottom, #11998e, #38ef7d); }
-
-    .shipment-card:hover {
-      transform: translateY(-4px);
-      box-shadow: var(--shadow-md);
-    }
-
-    .shipment-card .card-body {
-      padding: 1.5rem;
-    }
-
-    .shipment-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: start;
-      margin-bottom: 1.25rem;
-      padding-bottom: 1rem;
-      border-bottom: 2px solid #f7fafc;
-    }
-
-    .shipment-id {
-      font-size: 1.1rem;
-      font-weight: 700;
-      color: #2d3748;
-      margin: 0;
-    }
-
-    .status-badge {
-      padding: 0.4rem 0.9rem;
-      border-radius: 20px;
-      font-size: 0.75rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    .status-badge.shipped {
-      background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%);
-      color: #667eea;
-    }
-
-    .status-badge.in_transit {
-      background: linear-gradient(135deg, rgba(79, 172, 254, 0.15) 0%, rgba(0, 242, 254, 0.15) 100%);
-      color: #0ea5e9;
-    }
-
-    .status-badge.delivered {
-      background: linear-gradient(135deg, rgba(17, 153, 142, 0.15) 0%, rgba(56, 239, 125, 0.15) 100%);
-      color: #059669;
-    }
-
-    .shipment-info {
-      margin-bottom: 1.25rem;
-    }
-
-    .info-row {
-      display: flex;
-      align-items: center;
-      padding: 0.5rem 0;
-      color: #4a5568;
-      font-size: 0.95rem;
-    }
-
-    .info-row i {
-      width: 20px;
-      color: #a0aec0;
-      margin-right: 0.75rem;
-    }
-
-    .info-row strong {
-      color: #2d3748;
-      font-weight: 600;
-    }
-
-    .delivery-time {
-      background: #fef3c7;
-      border-left: 3px solid #f59e0b;
-      padding: 0.75rem;
-      border-radius: 8px;
-      margin-bottom: 1rem;
-    }
-
-    .delivery-time i {
-      color: #f59e0b;
-      margin-right: 0.5rem;
-    }
-
-    .delivery-time .time {
-      font-weight: 600;
-      color: #92400e;
-    }
-
-    /* Action Buttons */
-    .action-buttons {
-      display: flex;
-      gap: 0.75rem;
-    }
-
-    .btn-custom {
-      flex: 1;
-      padding: 0.75rem;
-      border-radius: 10px;
-      font-weight: 600;
-      font-size: 0.9rem;
-      transition: all 0.3s ease;
-      border: none;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0.5rem;
-    }
-
-    .btn-primary-custom {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-    }
-
-    .btn-primary-custom:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
-    }
-
-    .btn-success-custom {
-      background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-      color: white;
-      padding: 0.75rem 1rem;
-    }
-
-    .btn-success-custom:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 16px rgba(17, 153, 142, 0.4);
-    }
-
-    .btn-outline-custom {
-      background: transparent;
-      border: 2px solid #e2e8f0;
-      color: #4a5568;
-    }
-
-    .btn-outline-custom:hover {
-      background: #f7fafc;
-      border-color: #cbd5e0;
-    }
-
-    /* Empty State */
-    .empty-state {
-      text-align: center;
-      padding: 4rem 2rem;
-      background: white;
-      border-radius: 16px;
-      box-shadow: var(--shadow-sm);
-    }
-
-    .empty-state i {
-      font-size: 4rem;
-      color: #cbd5e0;
-      margin-bottom: 1.5rem;
-      opacity: 0.5;
-    }
-
-    .empty-state h5 {
-      color: #718096;
-      font-weight: 600;
-      margin-bottom: 0.5rem;
-    }
-
-    .empty-state p {
-      color: #a0aec0;
-      margin: 0;
-    }
-
-    /* Modal Enhancements */
-    .modal-content {
-      border-radius: 16px;
-      border: none;
-      box-shadow: var(--shadow-lg);
-    }
-
-    .modal-header {
-      background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
-      border-bottom: 2px solid #e2e8f0;
-      border-radius: 16px 16px 0 0;
-      padding: 1.5rem;
-    }
-
-    .modal-title {
-      font-weight: 700;
-      color: #2d3748;
-    }
-
-    .modal-body {
-      padding: 2rem;
-    }
-
-    .modal-footer {
-      border-top: 2px solid #f7fafc;
-      padding: 1.5rem;
-    }
-
-    .form-control:focus {
-      border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-    }
-
-    /* Alert */
-    .custom-alert {
-      border-radius: 12px;
-      border: none;
-      box-shadow: var(--shadow-md);
-      padding: 1rem 1.5rem;
-      font-weight: 500;
-    }
-
-    /* Loading Animation */
-    .loading-spinner {
-      display: inline-block;
-      width: 14px;
-      height: 14px;
-      border: 2px solid rgba(255, 255, 255, 0.3);
-      border-top-color: white;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-      margin-left: 0.5rem;
-    }
-
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-
-    /* Responsive */
-    @media (max-width: 768px) {
-      .stats-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .dashboard-header {
-        padding: 1.5rem;
-      }
-
-      .nav-pills {
-        flex-direction: column;
-      }
-
-      .nav-pills .nav-link {
-        width: 100%;
-      }
-
-      .action-buttons {
-        flex-direction: column;
-      }
-    }
-  </style>
-</head>
-<body>
-<nav class="navbar navbar-expand-lg navbar-dark">
-  <div class="container">
-    <a class="navbar-brand" href="#">
-      <i class="fas fa-truck-fast"></i> Driver Portal
-    </a>
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-      <span class="navbar-toggler-icon"></span>
-    </button>
-    <div class="collapse navbar-collapse" id="navbarNav">
-      <div class="navbar-nav ms-auto">
-        <a class="nav-link" href="{% url 'logistics:driver_profile' %}">
-          <i class="fas fa-user-circle"></i> {{ driver.user.get_full_name }}
-        </a>
-        <a class="nav-link" href="{% url 'accounts:signoff' %}">
-          <i class="fas fa-right-from-bracket"></i> Logout
-        </a>
+{% extends 'logistics/driver_base.html' %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* Stats Cards */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .stat-card {
+    background: white;
+    border-radius: 16px;
+    padding: 1.5rem;
+    box-shadow: var(--shadow-sm);
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 4px;
+    background: var(--primary-gradient);
+  }
+
+  .stat-card.total::before   { background: var(--primary-gradient); }
+  .stat-card.shipped::before { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+  .stat-card.transit::before { background: var(--info-gradient); }
+  .stat-card.delivered::before { background: var(--success-gradient); }
+
+  .stat-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-md);
+  }
+
+  .stat-card .stat-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+    color: #667eea;
+  }
+
+  .stat-card.transit .stat-icon {
+    background: linear-gradient(135deg, rgba(79, 172, 254, 0.1) 0%, rgba(0, 242, 254, 0.1) 100%);
+    color: #4facfe;
+  }
+
+  .stat-card.delivered .stat-icon {
+    background: linear-gradient(135deg, rgba(17, 153, 142, 0.1) 0%, rgba(56, 239, 125, 0.1) 100%);
+    color: #11998e;
+  }
+
+  .stat-card .stat-value {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: #2d3748;
+    line-height: 1;
+    margin-bottom: 0.5rem;
+  }
+
+  .stat-card .stat-label {
+    color: #718096;
+    font-size: 0.95rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  /* Dashboard Header */
+  .dashboard-header {
+    background: white;
+    border-radius: 16px;
+    padding: 2rem;
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 2rem;
+  }
+
+  .dashboard-header h2 {
+    font-weight: 700;
+    color: #2d3748;
+    margin-bottom: 0.5rem;
+  }
+
+  .dashboard-header .welcome-text {
+    color: #718096;
+    font-size: 1.1rem;
+  }
+
+  /* Tabs */
+  .custom-tabs {
+    background: white;
+    border-radius: 16px;
+    padding: 1rem;
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 2rem;
+  }
+
+  .nav-pills { gap: 0.5rem; }
+
+  .nav-pills .nav-link {
+    border-radius: 12px;
+    padding: 0.75rem 1.5rem;
+    font-weight: 600;
+    color: #4a5568;
+    transition: all 0.3s ease;
+  }
+
+  .nav-pills .nav-link:hover  { background: #f7fafc; color: #667eea; }
+  .nav-pills .nav-link.active {
+    background: var(--primary-gradient);
+    color: white;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  }
+
+  .nav-pills .nav-link i { margin-right: 0.5rem; }
+
+  /* Shipment Cards */
+  .shipment-card {
+    background: white;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+    transition: all 0.3s ease;
+    border: none;
+    height: 100%;
+    position: relative;
+  }
+
+  .shipment-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: #cbd5e0;
+  }
+
+  .shipment-card.shipped::before    { background: linear-gradient(to bottom, #667eea, #764ba2); }
+  .shipment-card.in_transit::before { background: linear-gradient(to bottom, #4facfe, #00f2fe); }
+  .shipment-card.delivered::before  { background: linear-gradient(to bottom, #11998e, #38ef7d); }
+
+  .shipment-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-md);
+  }
+
+  .shipment-card .card-body { padding: 1.5rem; }
+
+  .shipment-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+  }
+
+  .shipment-id {
+    font-weight: 700;
+    color: #2d3748;
+    font-size: 1rem;
+    margin: 0;
+  }
+
+  .status-badge {
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .status-badge.shipped    { background: rgba(102, 126, 234, 0.1); color: #667eea; }
+  .status-badge.in_transit { background: rgba(79, 172, 254, 0.1);  color: #4facfe; }
+  .status-badge.delivered  { background: rgba(17, 153, 142, 0.1);  color: #11998e; }
+
+  .shipment-info { margin-bottom: 1rem; }
+
+  .info-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0;
+    font-size: 0.9rem;
+    color: #4a5568;
+    border-bottom: 1px solid #f7fafc;
+  }
+
+  .info-row:last-child  { border-bottom: none; }
+  .info-row i { color: #667eea; width: 16px; flex-shrink: 0; }
+
+  .delivery-time {
+    background: linear-gradient(135deg, #fff5f0 0%, #fff0e6 100%);
+    border-radius: 8px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.85rem;
+    color: #c05621;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .delivery-time .time { font-weight: 600; }
+
+  .action-buttons {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .btn-primary-custom {
+    background: var(--primary-gradient);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 0.5rem 1rem;
+    font-weight: 600;
+    font-size: 0.875rem;
+    transition: all 0.3s ease;
+    flex: 1;
+  }
+
+  .btn-primary-custom:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    color: white;
+  }
+
+  .btn-success-custom {
+    background: var(--success-gradient);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 0.5rem 1rem;
+    font-weight: 600;
+    font-size: 0.875rem;
+    transition: all 0.3s ease;
+    flex: 1;
+  }
+
+  .btn-success-custom:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(17, 153, 142, 0.4);
+    color: white;
+  }
+
+  .btn-outline-custom {
+    background: transparent;
+    color: #667eea;
+    border: 2px solid #667eea;
+    border-radius: 10px;
+    padding: 0.5rem 1rem;
+    font-weight: 600;
+    font-size: 0.875rem;
+    transition: all 0.3s ease;
+  }
+
+  .btn-outline-custom:hover {
+    background: #f7fafc;
+    border-color: #cbd5e0;
+    color: #2d3748;
+  }
+
+  .btn-custom { display: flex; align-items: center; justify-content: center; gap: 0.35rem; }
+
+  /* Empty State */
+  .empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    background: white;
+    border-radius: 16px;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .empty-state i      { font-size: 4rem; color: #cbd5e0; margin-bottom: 1.5rem; opacity: 0.5; }
+  .empty-state h5     { color: #718096; font-weight: 600; margin-bottom: 0.5rem; }
+  .empty-state p      { color: #a0aec0; margin: 0; }
+
+  @media (max-width: 768px) {
+    .stats-grid   { grid-template-columns: 1fr; }
+    .nav-pills    { flex-direction: column; }
+    .nav-pills .nav-link { width: 100%; }
+    .action-buttons { flex-direction: column; }
+    .btn-custom   { width: 100%; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Dashboard Header -->
+<div class="dashboard-header">
+  <div class="d-flex justify-content-between align-items-center">
+    <div>
+      <h2><i class="fas fa-gauge-high"></i> Dashboard</h2>
+      <p class="welcome-text mb-0">Welcome back, {{ driver.user.get_full_name }}! Here's your delivery overview.</p>
+    </div>
+    <div class="d-none d-md-block">
+      <div class="text-end">
+        <small class="text-muted d-block">Last updated</small>
+        <strong class="text-primary" id="lastUpdate"></strong>
       </div>
     </div>
   </div>
-</nav>
+</div>
 
-<div class="container my-4">
-  <!-- Dashboard Header -->
-  <div class="dashboard-header">
-    <div class="d-flex justify-content-between align-items-center">
-      <div>
-        <h2><i class="fas fa-gauge-high"></i> Dashboard</h2>
-        <p class="welcome-text mb-0">Welcome back, {{ driver.user.get_full_name }}! Here's your delivery overview.</p>
-      </div>
-      <div class="d-none d-md-block">
-        <div class="text-end">
-          <small class="text-muted d-block">Last updated</small>
-          <strong class="text-primary" id="lastUpdate"></strong>
-        </div>
-      </div>
-    </div>
+<!-- Stats Grid -->
+<div class="stats-grid">
+  <div class="stat-card total">
+    <div class="stat-icon"><i class="fas fa-boxes-stacked"></i></div>
+    <div class="stat-value">{{ total_shipments }}</div>
+    <div class="stat-label">Total Shipments</div>
   </div>
 
-  <!-- Stats Grid -->
-  <div class="stats-grid">
-    <div class="stat-card total">
-      <div class="stat-icon">
-        <i class="fas fa-boxes-stacked"></i>
-      </div>
-      <div class="stat-value">{{ total_shipments }}</div>
-      <div class="stat-label">Total Shipments</div>
-    </div>
-
-    <div class="stat-card shipped">
-      <div class="stat-icon">
-        <i class="fas fa-truck-loading"></i>
-      </div>
-      <div class="stat-value">{{ shipped_shipments.count }}</div>
-      <div class="stat-label">Shipped</div>
-    </div>
-
-    <div class="stat-card transit">
-      <div class="stat-icon">
-        <i class="fas fa-route"></i>
-      </div>
-      <div class="stat-value">{{ in_transit_shipments.count }}</div>
-      <div class="stat-label">In Transit</div>
-    </div>
-
-    <div class="stat-card delivered">
-      <div class="stat-icon">
-        <i class="fas fa-circle-check"></i>
-      </div>
-      <div class="stat-value">{{ delivered_shipments.count }}</div>
-      <div class="stat-label">Delivered</div>
-    </div>
+  <div class="stat-card shipped">
+    <div class="stat-icon"><i class="fas fa-truck-loading"></i></div>
+    <div class="stat-value">{{ shipped_shipments.count }}</div>
+    <div class="stat-label">Shipped</div>
   </div>
 
-  <!-- Tabs -->
-  <div class="custom-tabs">
-    <ul class="nav nav-pills" id="shipment-tabs" role="tablist">
-      <li class="nav-item" role="presentation">
-        <button class="nav-link active" id="shipped-tab" data-bs-toggle="pill" data-bs-target="#shipped" type="button" role="tab" onclick="saveActiveTab('shipped')">
-          <i class="fas fa-truck-loading"></i> Shipped
-          <span class="badge bg-light text-dark ms-2">{{ shipped_shipments.count }}</span>
-        </button>
-      </li>
-      <li class="nav-item" role="presentation">
-        <button class="nav-link" id="transit-tab" data-bs-toggle="pill" data-bs-target="#transit" type="button" role="tab" onclick="saveActiveTab('transit')">
-          <i class="fas fa-route"></i> In Transit
-          <span class="badge bg-light text-dark ms-2">{{ in_transit_shipments.count }}</span>
-        </button>
-      </li>
-      <li class="nav-item" role="presentation">
-        <button class="nav-link" id="delivered-tab" data-bs-toggle="pill" data-bs-target="#delivered" type="button" role="tab" onclick="saveActiveTab('delivered')">
-          <i class="fas fa-circle-check"></i> Delivered
-          <span class="badge bg-light text-dark ms-2">{{ delivered_shipments.count }}</span>
-        </button>
-      </li>
-    </ul>
+  <div class="stat-card transit">
+    <div class="stat-icon"><i class="fas fa-route"></i></div>
+    <div class="stat-value">{{ in_transit_shipments.count }}</div>
+    <div class="stat-label">In Transit</div>
   </div>
 
-  <!-- Tab Content -->
-  <div class="tab-content" id="shipment-content">
-    <!-- Shipped Tab -->
-    <div class="tab-pane fade show active" id="shipped" role="tabpanel">
-      {% if shipped_shipments %}
-        <div class="row g-4">
-          {% for shipment in shipped_shipments %}
-            <div class="col-md-6 col-lg-4">
-              <div class="shipment-card shipped">
-                <div class="card-body">
-                  <div class="shipment-header">
-                    <h6 class="shipment-id">Shipment #{{ shipment.id }}</h6>
-                    <span class="status-badge shipped">{{ shipment.get_status_display }}</span>
-                  </div>
+  <div class="stat-card delivered">
+    <div class="stat-icon"><i class="fas fa-circle-check"></i></div>
+    <div class="stat-value">{{ delivered_shipments.count }}</div>
+    <div class="stat-label">Delivered</div>
+  </div>
+</div>
 
-                  <div class="shipment-info">
-                    <div class="info-row">
-                      <i class="fas fa-user"></i>
-                      <strong>{{ shipment.shipping_address.full_name }}</strong>
-                    </div>
-                    <div class="info-row">
-                      <i class="fas fa-location-dot"></i>
-                      <span>{{ shipment.shipping_address.city }}, {{ shipment.shipping_address.region }}</span>
-                    </div>
-                    <div class="info-row">
-                      <i class="fas fa-phone"></i>
-                      <span>{{ shipment.shipping_address.phone_number }}</span>
-                    </div>
-                    <div class="info-row">
-                      <i class="fas fa-weight-hanging"></i>
-                      <span>{{ shipment.weight_kg }} kg</span>
-                    </div>
-                  </div>
+<!-- Tabs -->
+<div class="custom-tabs">
+  <ul class="nav nav-pills" id="shipment-tabs" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="shipped-tab" data-bs-toggle="pill" data-bs-target="#shipped"
+              type="button" role="tab" onclick="saveActiveTab('shipped')">
+        <i class="fas fa-truck-loading"></i> Shipped
+        <span class="badge bg-light text-dark ms-2">{{ shipped_shipments.count }}</span>
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="transit-tab" data-bs-toggle="pill" data-bs-target="#transit"
+              type="button" role="tab" onclick="saveActiveTab('transit')">
+        <i class="fas fa-route"></i> In Transit
+        <span class="badge bg-light text-dark ms-2">{{ in_transit_shipments.count }}</span>
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="delivered-tab" data-bs-toggle="pill" data-bs-target="#delivered"
+              type="button" role="tab" onclick="saveActiveTab('delivered')">
+        <i class="fas fa-circle-check"></i> Delivered
+        <span class="badge bg-light text-dark ms-2">{{ delivered_shipments.count }}</span>
+      </button>
+    </li>
+  </ul>
+</div>
 
-                  {% if shipment.estimated_dropoff_time %}
-                    <div class="delivery-time">
-                      <i class="fas fa-clock"></i>
-                      <span>Est. Delivery:</span>
-                      <span class="time">{{ shipment.estimated_dropoff_time|date:"M d, H:i" }}</span>
-                    </div>
-                  {% endif %}
+<!-- Tab Content -->
+<div class="tab-content" id="shipment-content">
 
-                  <div class="action-buttons">
-                    <a href="{% url 'logistics:shipment_detail_map' shipment.id %}" class="btn btn-primary-custom btn-custom">
-                      <i class="fas fa-map-location-dot"></i> View Map
-                    </a>
-                   <button type="button"
-        class="btn btn-success btn-sm"
-        onclick="openStartDeliveryModal({{ shipment.id }})">
-  <i class="fas fa-play-circle me-1"></i> Start
-</button>
-
-                  </div>
+  <!-- Shipped Tab -->
+  <div class="tab-pane fade show active" id="shipped" role="tabpanel">
+    {% if shipped_shipments %}
+      <div class="row g-4">
+        {% for shipment in shipped_shipments %}
+          <div class="col-md-6 col-lg-4">
+            <div class="shipment-card shipped">
+              <div class="card-body">
+                <div class="shipment-header">
+                  <h6 class="shipment-id">Shipment #{{ shipment.id }}</h6>
+                  <span class="status-badge shipped">{{ shipment.get_status_display }}</span>
                 </div>
-              </div>
-            </div>
-          {% endfor %}
-        </div>
-      {% else %}
-        <div class="empty-state">
-          <i class="fas fa-truck-loading"></i>
-          <h5>No Shipped Shipments</h5>
-          <p>You don't have any shipments ready to deliver at the moment.</p>
-        </div>
-      {% endif %}
-    </div>
-
-    <!-- In Transit Tab -->
-    <div class="tab-pane fade" id="transit" role="tabpanel">
-      {% if in_transit_shipments %}
-        <div class="row g-4">
-          {% for shipment in in_transit_shipments %}
-            <div class="col-md-6 col-lg-4">
-              <div class="shipment-card in_transit">
-                <div class="card-body">
-                  <div class="shipment-header">
-                    <h6 class="shipment-id">Shipment #{{ shipment.id }}</h6>
-                    <span class="status-badge in_transit">{{ shipment.get_status_display }}</span>
-                  </div>
-
-                  <div class="shipment-info">
-                    <div class="info-row">
-                      <i class="fas fa-user"></i>
-                      <strong>{{ shipment.shipping_address.full_name }}</strong>
-                    </div>
-                    <div class="info-row">
-                      <i class="fas fa-location-dot"></i>
-                      <span>{{ shipment.shipping_address.city }}, {{ shipment.shipping_address.region }}</span>
-                    </div>
-                    <div class="info-row">
-                      <i class="fas fa-phone"></i>
-                      <span>{{ shipment.shipping_address.phone_number }}</span>
-                    </div>
-                    <div class="info-row">
-                      <i class="fas fa-weight-hanging"></i>
-                      <span>{{ shipment.weight_kg }} kg</span>
-                    </div>
-                  </div>
-
-                  <div class="action-buttons">
-                    <a href="{% url 'logistics:shipment_detail_map' shipment.id %}" class="btn btn-primary-custom btn-custom">
-                      <i class="fas fa-map-location-dot"></i> View Map
-                    </a>
-                    <button class="btn btn-success-custom btn-custom" onclick="markDelivered({{ shipment.id }})">
-                      <i class="fas fa-circle-check"></i> Delivered
-                    </button>
-                  </div>
+                <div class="shipment-info">
+                  <div class="info-row"><i class="fas fa-user"></i><strong>{{ shipment.shipping_address.full_name }}</strong></div>
+                  <div class="info-row"><i class="fas fa-location-dot"></i><span>{{ shipment.shipping_address.city }}, {{ shipment.shipping_address.region }}</span></div>
+                  <div class="info-row"><i class="fas fa-phone"></i><span>{{ shipment.shipping_address.phone_number }}</span></div>
+                  <div class="info-row"><i class="fas fa-weight-hanging"></i><span>{{ shipment.weight_kg }} kg</span></div>
                 </div>
-              </div>
-            </div>
-          {% endfor %}
-        </div>
-      {% else %}
-        <div class="empty-state">
-          <i class="fas fa-route"></i>
-          <h5>No Shipments In Transit</h5>
-          <p>Start a delivery from the Shipped tab to see it here.</p>
-        </div>
-      {% endif %}
-    </div>
-
-    <!-- Delivered Tab -->
-    <div class="tab-pane fade" id="delivered" role="tabpanel">
-      {% if delivered_shipments %}
-        <div class="row g-4">
-          {% for shipment in delivered_shipments %}
-            <div class="col-md-6 col-lg-4">
-              <div class="shipment-card delivered">
-                <div class="card-body">
-                  <div class="shipment-header">
-                    <h6 class="shipment-id">Shipment #{{ shipment.id }}</h6>
-                    <span class="status-badge delivered">Delivered</span>
+                {% if shipment.estimated_dropoff_time %}
+                  <div class="delivery-time">
+                    <i class="fas fa-clock"></i>
+                    <span>Est. Delivery:</span>
+                    <span class="time">{{ shipment.estimated_dropoff_time|date:"M d, H:i" }}</span>
                   </div>
-
-                  <div class="shipment-info">
-                    <div class="info-row">
-                      <i class="fas fa-user"></i>
-                      <strong>{{ shipment.shipping_address.full_name }}</strong>
-                    </div>
-                    <div class="info-row">
-                      <i class="fas fa-location-dot"></i>
-                      <span>{{ shipment.shipping_address.city }}, {{ shipment.shipping_address.region }}</span>
-                    </div>
-                    <div class="info-row">
-                      <i class="fas fa-phone"></i>
-                      <span>{{ shipment.shipping_address.phone_number }}</span>
-                    </div>
-                    <div class="info-row">
-                      <i class="fas fa-weight-hanging"></i>
-                      <span>{{ shipment.weight_kg }} kg</span>
-                    </div>
-                  </div>
-
-                  <a href="{% url 'logistics:shipment_detail_map' shipment.id %}" class="btn btn-outline-custom btn-custom w-100">
-                    <i class="fas fa-eye"></i> View Details
+                {% endif %}
+                <div class="action-buttons">
+                  <a href="{% url 'logistics:shipment_detail_map' shipment.id %}" class="btn btn-primary-custom btn-custom">
+                    <i class="fas fa-map-location-dot"></i> View Map
                   </a>
+                  <button type="button" class="btn btn-success btn-sm btn-custom"
+                          onclick="openStartDeliveryModal({{ shipment.id }})">
+                    <i class="fas fa-play-circle me-1"></i> Start
+                  </button>
                 </div>
               </div>
             </div>
-          {% endfor %}
-        </div>
-      {% else %}
-        <div class="empty-state">
-          <i class="fas fa-circle-check"></i>
-          <h5>No Delivered Shipments</h5>
-          <p>Completed deliveries will appear here.</p>
-        </div>
-      {% endif %}
-    </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty-state">
+        <i class="fas fa-truck-loading"></i>
+        <h5>No Shipped Shipments</h5>
+        <p>You don't have any shipments ready to deliver at the moment.</p>
+      </div>
+    {% endif %}
   </div>
+
+  <!-- In Transit Tab -->
+  <div class="tab-pane fade" id="transit" role="tabpanel">
+    {% if in_transit_shipments %}
+      <div class="row g-4">
+        {% for shipment in in_transit_shipments %}
+          <div class="col-md-6 col-lg-4">
+            <div class="shipment-card in_transit">
+              <div class="card-body">
+                <div class="shipment-header">
+                  <h6 class="shipment-id">Shipment #{{ shipment.id }}</h6>
+                  <span class="status-badge in_transit">{{ shipment.get_status_display }}</span>
+                </div>
+                <div class="shipment-info">
+                  <div class="info-row"><i class="fas fa-user"></i><strong>{{ shipment.shipping_address.full_name }}</strong></div>
+                  <div class="info-row"><i class="fas fa-location-dot"></i><span>{{ shipment.shipping_address.city }}, {{ shipment.shipping_address.region }}</span></div>
+                  <div class="info-row"><i class="fas fa-phone"></i><span>{{ shipment.shipping_address.phone_number }}</span></div>
+                  <div class="info-row"><i class="fas fa-weight-hanging"></i><span>{{ shipment.weight_kg }} kg</span></div>
+                </div>
+                <div class="action-buttons">
+                  <a href="{% url 'logistics:shipment_detail_map' shipment.id %}" class="btn btn-primary-custom btn-custom">
+                    <i class="fas fa-map-location-dot"></i> View Map
+                  </a>
+                  <button class="btn btn-success-custom btn-custom" onclick="markDelivered({{ shipment.id }})">
+                    <i class="fas fa-circle-check"></i> Delivered
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty-state">
+        <i class="fas fa-route"></i>
+        <h5>No Shipments In Transit</h5>
+        <p>Start a delivery from the Shipped tab to see it here.</p>
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- Delivered Tab -->
+  <div class="tab-pane fade" id="delivered" role="tabpanel">
+    {% if delivered_shipments %}
+      <div class="row g-4">
+        {% for shipment in delivered_shipments %}
+          <div class="col-md-6 col-lg-4">
+            <div class="shipment-card delivered">
+              <div class="card-body">
+                <div class="shipment-header">
+                  <h6 class="shipment-id">Shipment #{{ shipment.id }}</h6>
+                  <span class="status-badge delivered">Delivered</span>
+                </div>
+                <div class="shipment-info">
+                  <div class="info-row"><i class="fas fa-user"></i><strong>{{ shipment.shipping_address.full_name }}</strong></div>
+                  <div class="info-row"><i class="fas fa-location-dot"></i><span>{{ shipment.shipping_address.city }}, {{ shipment.shipping_address.region }}</span></div>
+                  <div class="info-row"><i class="fas fa-phone"></i><span>{{ shipment.shipping_address.phone_number }}</span></div>
+                  <div class="info-row"><i class="fas fa-weight-hanging"></i><span>{{ shipment.weight_kg }} kg</span></div>
+                </div>
+                <a href="{% url 'logistics:shipment_detail_map' shipment.id %}" class="btn btn-outline-custom btn-custom w-100">
+                  <i class="fas fa-eye"></i> View Details
+                </a>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty-state">
+        <i class="fas fa-circle-check"></i>
+        <h5>No Delivered Shipments</h5>
+        <p>Completed deliveries will appear here.</p>
+      </div>
+    {% endif %}
+  </div>
+
 </div>
 
 <!-- Start Delivery Modal -->
@@ -759,10 +515,10 @@
         <p class="mb-0">Are you ready to start this delivery? The shipment status will be updated to "In Transit".</p>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-outline-custom" data-bs-dismiss="modal" aria-label="Close">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
           <i class="fas fa-times"></i> Cancel
         </button>
-        <button type="button" class="btn btn-success-custom" id="confirmStartBtn">
+        <button type="button" class="btn btn-success" id="confirmStartBtn">
           <i class="fas fa-circle-check"></i> Confirm Start
         </button>
       </div>
@@ -780,7 +536,6 @@
         </h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
-
       <div class="modal-body">
         <div class="alert alert-warning d-flex align-items-start gap-2" role="alert">
           <i class="fas fa-camera mt-1"></i>
@@ -789,183 +544,155 @@
             <div class="small">Take or upload a clear photo (package at destination / receiver / drop-off point).</div>
           </div>
         </div>
-
         <div class="row g-3">
           <div class="col-md-6">
             <label class="form-label fw-semibold">Delivery Photo <span class="text-danger">*</span></label>
-            <input type="file"
-                   id="deliveryPhoto"
-                   class="form-control"
-                   accept="image/*"
-                   capture="environment" />
-            <div class="form-text">
-              On mobile, this opens the camera. On desktop, choose an image.
-            </div>
+            <input type="file" id="deliveryPhoto" class="form-control" accept="image/*" capture="environment" />
+            <div class="form-text">On mobile, this opens the camera. On desktop, choose an image.</div>
           </div>
-
           <div class="col-md-6">
             <label class="form-label fw-semibold">Preview</label>
             <div class="border rounded-3 p-2 bg-light" style="min-height: 160px;">
               <img id="deliveryPhotoPreview" src="" alt="Preview"
                    style="max-width:100%; max-height:220px; display:none; border-radius:12px;" />
-              <div id="deliveryPhotoEmpty" class="text-muted small">
-                No photo selected yet.
-              </div>
+              <div id="deliveryPhotoEmpty" class="text-muted small">No photo selected yet.</div>
             </div>
           </div>
-
           <div class="col-12">
             <label class="form-label fw-semibold">Delivery Notes (optional)</label>
             <textarea id="deliveryNotes" class="form-control" rows="3"
                       placeholder="Receiver name, exact location, any issues..."></textarea>
           </div>
         </div>
-
         <div id="deliveryModalError" class="mt-3 text-danger small" style="display:none;"></div>
       </div>
-
       <div class="modal-footer">
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
           <i class="fas fa-times"></i> Cancel
         </button>
-
-        <button type="button" id="confirmDeliveredBtn" class="btn btn-success"
-                onclick="confirmDelivery()">
+        <button type="button" id="confirmDeliveredBtn" class="btn btn-success" onclick="confirmDelivery()">
           <i class="fas fa-circle-check"></i> Confirm Delivered
         </button>
       </div>
     </div>
   </div>
 </div>
+{% endblock %}
 
-
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+{% block extra_js %}
 <script>
-let currentShipmentId = null;
-
-// Open modal
-function markDelivered(shipmentId) {
-  currentShipmentId = shipmentId;
-
-  const el = document.getElementById('deliveryModal');
-  if (!el) {
-    console.error('deliveryModal not found');
-    alert('Delivery modal missing.');
-    return;
-  }
-
-  // reset fields
-  document.getElementById('deliveryNotes').value = '';
-  const fileInput = document.getElementById('deliveryPhoto');
-  fileInput.value = '';
-  resetDeliveryPreview();
-  hideDeliveryError();
-
-  new bootstrap.Modal(el).show();
+// ── Tab persistence ──────────────────────────────────────────────────────────
+function saveActiveTab(tabId) {
+  try { localStorage.setItem('driverDashboardActiveTab', tabId); } catch(e) {}
 }
 
-// Preview handler
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', function () {
+  // Restore saved tab
+  const savedTab = localStorage.getItem('driverDashboardActiveTab');
+  if (savedTab) {
+    const trigger = document.querySelector(`[data-bs-target="#${savedTab}"]`);
+    if (trigger) new bootstrap.Tab(trigger).show();
+  }
+
+  // Set last-updated time
+  const el = document.getElementById('lastUpdate');
+  if (el) el.textContent = new Date().toLocaleTimeString();
+
+  // Photo preview
   const input = document.getElementById('deliveryPhoto');
-  if (!input) return;
-
-  input.addEventListener('change', () => {
-    const file = input.files && input.files[0];
-    if (!file) {
-      resetDeliveryPreview();
-      return;
-    }
-
-    // basic validation (optional)
-    if (!file.type.startsWith('image/')) {
-      showDeliveryError('Please select an image file.');
-      input.value = '';
-      resetDeliveryPreview();
-      return;
-    }
-
-    const url = URL.createObjectURL(file);
-    const img = document.getElementById('deliveryPhotoPreview');
-    const empty = document.getElementById('deliveryPhotoEmpty');
-
-    img.src = url;
-    img.style.display = 'block';
-    empty.style.display = 'none';
-    hideDeliveryError();
-  });
+  if (input) {
+    input.addEventListener('change', () => {
+      const file = input.files && input.files[0];
+      if (!file) { resetDeliveryPreview(); return; }
+      if (!file.type.startsWith('image/')) {
+        showDeliveryError('Please select an image file.');
+        input.value = '';
+        resetDeliveryPreview();
+        return;
+      }
+      const img   = document.getElementById('deliveryPhotoPreview');
+      const empty = document.getElementById('deliveryPhotoEmpty');
+      img.src = URL.createObjectURL(file);
+      img.style.display   = 'block';
+      empty.style.display = 'none';
+      hideDeliveryError();
+    });
+  }
 });
 
-function resetDeliveryPreview() {
-  const img = document.getElementById('deliveryPhotoPreview');
-  const empty = document.getElementById('deliveryPhotoEmpty');
+// ── Start Delivery ────────────────────────────────────────────────────────────
+let currentStartShipmentId = null;
 
-  if (img) {
-    img.src = '';
-    img.style.display = 'none';
+function openStartDeliveryModal(shipmentId) {
+  currentStartShipmentId = shipmentId;
+  const modalEl = document.getElementById('startDeliveryModal');
+  const confirmBtn = document.getElementById('confirmStartBtn');
+  if (confirmBtn) confirmBtn.onclick = confirmStartDelivery;
+  new bootstrap.Modal(modalEl).show();
+}
+
+async function confirmStartDelivery() {
+  if (!currentStartShipmentId) return;
+  const btn     = document.getElementById('confirmStartBtn');
+  const modalEl = document.getElementById('startDeliveryModal');
+  try {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Starting...';
+    const res  = await fetch(`/logistics/driver/shipment/${currentStartShipmentId}/start/`, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': getCookie('csrftoken'), 'Accept': 'application/json' }
+    });
+    let data = null;
+    try { data = await res.json(); } catch(e) {}
+    if (!res.ok || !data?.success) { alert(data?.error || `Failed (HTTP ${res.status})`); return; }
+    bootstrap.Modal.getInstance(modalEl)?.hide();
+    window.location.reload();
+  } catch(err) {
+    console.error(err);
+    alert('Network error. Please try again.');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-circle-check"></i> Confirm Start';
   }
-  if (empty) empty.style.display = 'block';
 }
 
-function showDeliveryError(msg) {
-  const el = document.getElementById('deliveryModalError');
-  if (!el) return;
-  el.textContent = msg;
-  el.style.display = 'block';
-}
+// ── Mark Delivered ────────────────────────────────────────────────────────────
+let currentShipmentId = null;
 
-function hideDeliveryError() {
-  const el = document.getElementById('deliveryModalError');
-  if (!el) return;
-  el.textContent = '';
-  el.style.display = 'none';
+function markDelivered(shipmentId) {
+  currentShipmentId = shipmentId;
+  document.getElementById('deliveryNotes').value = '';
+  document.getElementById('deliveryPhoto').value = '';
+  resetDeliveryPreview();
+  hideDeliveryError();
+  new bootstrap.Modal(document.getElementById('deliveryModal')).show();
 }
 
 async function confirmDelivery() {
   if (!currentShipmentId) return;
-
-  const btn = document.getElementById('confirmDeliveredBtn');
+  const btn   = document.getElementById('confirmDeliveredBtn');
   const notes = document.getElementById('deliveryNotes').value;
-  const photoInput = document.getElementById('deliveryPhoto');
-  const file = photoInput.files && photoInput.files[0];
+  const file  = document.getElementById('deliveryPhoto').files?.[0];
+  if (!file) { showDeliveryError('Delivery photo is required.'); return; }
 
-  if (!file) {
-    showDeliveryError('Delivery photo is required.');
-    return;
-  }
-
-  const formData = new FormData();
-  formData.append('notes', notes);
-  formData.append('delivery_photo', file);
+  const fd = new FormData();
+  fd.append('notes', notes);
+  fd.append('delivery_photo', file);
 
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
-
   try {
     const res = await fetch(`/logistics/driver/shipment/${currentShipmentId}/delivered/`, {
-
       method: 'POST',
       headers: { 'X-CSRFToken': getCookie('csrftoken') },
-      body: formData
+      body: fd
     });
-
     let payload = null;
     try { payload = await res.json(); } catch(e) {}
-
-    if (!res.ok || !payload?.success) {
-      const msg = payload?.error || `Failed (HTTP ${res.status})`;
-      showDeliveryError(msg);
-      return;
-    }
-
-    // close modal
-    const modalEl = document.getElementById('deliveryModal');
-    bootstrap.Modal.getInstance(modalEl)?.hide();
-
-    // reload / update UI
+    if (!res.ok || !payload?.success) { showDeliveryError(payload?.error || `Failed (HTTP ${res.status})`); return; }
+    bootstrap.Modal.getInstance(document.getElementById('deliveryModal'))?.hide();
     window.location.reload();
-
-  } catch (e) {
+  } catch(e) {
     console.error(e);
     showDeliveryError('Network error. Please try again.');
   } finally {
@@ -973,134 +700,22 @@ async function confirmDelivery() {
     btn.innerHTML = '<i class="fas fa-circle-check"></i> Confirm Delivered';
   }
 }
-</script>
-<script>
-/**
- * Persist active tab so reload keeps same view
- */
-function saveActiveTab(tabId) {
-  try {
-    localStorage.setItem('driverDashboardActiveTab', tabId);
-  } catch (e) {
-    console.warn('Could not save active tab', e);
-  }
+
+function resetDeliveryPreview() {
+  const img   = document.getElementById('deliveryPhotoPreview');
+  const empty = document.getElementById('deliveryPhotoEmpty');
+  if (img)   { img.src = ''; img.style.display = 'none'; }
+  if (empty) empty.style.display = 'block';
 }
 
-/**
- * Restore active tab on load
- */
-document.addEventListener('DOMContentLoaded', function () {
-  const savedTab = localStorage.getItem('driverDashboardActiveTab');
-  if (!savedTab) return;
+function showDeliveryError(msg) {
+  const el = document.getElementById('deliveryModalError');
+  if (el) { el.textContent = msg; el.style.display = 'block'; }
+}
 
-  const tabTrigger = document.querySelector(`[data-bs-target="${savedTab}"], [href="${savedTab}"]`);
-  if (tabTrigger) {
-    new bootstrap.Tab(tabTrigger).show();
-  }
-});
-</script>
-<script>
-/**
- * Get cookie value by name (Django CSRF helper)
- */
-function getCookie(name) {
-  let cookieValue = null;
-  if (document.cookie && document.cookie !== '') {
-    const cookies = document.cookie.split(';');
-    for (let i = 0; i < cookies.length; i++) {
-      const cookie = cookies[i].trim();
-      if (cookie.substring(0, name.length + 1) === (name + '=')) {
-        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-        break;
-      }
-    }
-  }
-  return cookieValue;
+function hideDeliveryError() {
+  const el = document.getElementById('deliveryModalError');
+  if (el) { el.textContent = ''; el.style.display = 'none'; }
 }
 </script>
-<script>
-let currentStartShipmentId = null;
-
-function openStartDeliveryModal(shipmentId) {
-  currentStartShipmentId = shipmentId;
-
-  const modalEl = document.getElementById('startDeliveryModal');
-  if (!modalEl) {
-    console.error('startDeliveryModal not found in DOM');
-    alert('Start modal is missing on this page.');
-    return;
-  }
-
-  // Ensure button works
-  const confirmBtn = document.getElementById('confirmStartBtn');
-  if (confirmBtn) {
-    confirmBtn.onclick = confirmStartDelivery;
-  }
-
-  // Show modal
-  const modal = new bootstrap.Modal(modalEl);
-  modal.show();
-}
-
-async function confirmStartDelivery() {
-  if (!currentStartShipmentId) return;
-
-  const confirmBtn = document.getElementById('confirmStartBtn');
-  const modalEl = document.getElementById('startDeliveryModal');
-
-  try {
-    confirmBtn.disabled = true;
-    confirmBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Starting...';
-
-    const res = await fetch(`/logistics/driver/shipment/${currentStartShipmentId}/start/`, {
-      method: 'POST',
-      headers: {
-        'X-CSRFToken': getCookie('csrftoken'),
-        'Accept': 'application/json'
-      }
-    });
-
-    let data = null;
-    try { data = await res.json(); } catch(e) {}
-
-    if (!res.ok || !data?.success) {
-      const msg = data?.error || `Failed (HTTP ${res.status})`;
-      alert(msg);
-      return;
-    }
-
-    // Close modal
-    bootstrap.Modal.getInstance(modalEl)?.hide();
-
-    // Refresh UI
-    window.location.reload();
-
-  } catch (err) {
-    console.error(err);
-    alert('Network error. Please try again.');
-  } finally {
-    confirmBtn.disabled = false;
-    confirmBtn.innerHTML = '<i class="fas fa-circle-check"></i> Confirm Start';
-  }
-}
-
-// CSRF helper (make sure it exists once on the page)
-function getCookie(name) {
-  let cookieValue = null;
-  if (document.cookie && document.cookie !== '') {
-    const cookies = document.cookie.split(';');
-    for (let i = 0; i < cookies.length; i++) {
-      const cookie = cookies[i].trim();
-      if (cookie.substring(0, name.length + 1) === (name + '=')) {
-        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-        break;
-      }
-    }
-  }
-  return cookieValue;
-}
-</script>
-
-
-</body>
-</html>
+{% endblock %}

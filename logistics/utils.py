@@ -26,6 +26,7 @@ from django.db.models import Count, Q, Avg, F
 from .models import Shipment, Driver, Vehicle, Warehouse
 from orders.models import Order, OrderStatusHistory
 
+
 logger = logging.getLogger(__name__)
 
 

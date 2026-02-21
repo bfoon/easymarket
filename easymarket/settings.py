@@ -171,6 +171,7 @@ TEMPLATES = [
                 "logistics.context_processors.logistics_nav_counts",
                 "logistics.context_processors.notification_context",
                 "logistics.context_processors.nav_counts",
+                "logistics.context_processors.dispatch_nav_counts",
                 "accounts.context_processors.currency_context",
             ],
         },

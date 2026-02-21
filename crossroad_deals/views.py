@@ -13,6 +13,8 @@ from django.core.paginator import Paginator
 from decimal import Decimal
 from django.views.decorators.csrf import csrf_exempt
 from .tasks import send_crossroad_email, send_crossroad_whatsapp
+from logistics.dispatch_services import DispatchService
+from logistics.dispatch_models import PickupTask
 
 
 from .models import (
