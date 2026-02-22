@@ -343,7 +343,7 @@ def store_list(request):
     # Base queryset with annotations
     stores = Store.objects.select_related('owner').annotate(
         products_count=Count('products', distinct=True),
-        avg_rating=Avg('reviews__rating')
+        avg_rating=Avg('store_reviews__rating')
     ).filter(status='active')
 
     # Search functionality
@@ -412,7 +412,7 @@ def my_favorite_stores(request):
     # Get user's favorite stores
     favorite_stores = Store.objects.select_related('owner').annotate(
         products_count=Count('products', distinct=True),
-        avg_rating=Avg('reviews__rating')
+        avg_rating=Avg('store_reviews__rating')
     ).filter(
         storefavorite__user=request.user,
         status='active'
