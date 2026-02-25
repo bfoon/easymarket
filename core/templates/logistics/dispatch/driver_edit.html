@@ -1,10 +1,143 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Title</title>
-</head>
-<body>
+{% extends 'logistics/base.html' %}
+{% block title %}Edit Driver — {{ driver.user.get_full_name }}{% endblock %}
+{% block extra_css %}{% include 'logistics/dispatch/_shared_styles.html' %}{% endblock %}
 
-</body>
-</html>
+{% block content %}
+<div class="dispatch-page-header">
+  <div>
+    <h1><i class="fas fa-user-pen me-2" style="color:var(--primary-color)"></i>Edit Driver</h1>
+    <p>{{ driver.user.get_full_name }}</p>
+  </div>
+  <a href="{% url 'logistics:dispatch_driver_detail' driver.pk %}" class="btn btn-outline-secondary"><i class="fas fa-arrow-left me-1"></i>Back to Profile</a>
+</div>
+
+{% if messages %}{% for msg in messages %}
+  <div class="alert alert-{{ msg.tags }} alert-dismissible fade show">{{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
+{% endfor %}{% endif %}
+
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header"><i class="fas fa-pen me-2 text-primary"></i>Update Driver Profile</div>
+      <div class="card-body">
+        <form method="post" enctype="multipart/form-data" class="dispatch-form">
+          {% csrf_token %}
+          {% if form.non_field_errors %}
+            <div class="alert alert-danger">{% for e in form.non_field_errors %}<div>{{ e }}</div>{% endfor %}</div>
+          {% endif %}
+
+          {# ── Personal ──────────────────────────────────────────────────── #}
+          <div class="form-section">
+            <div class="form-section-title">Personal Information</div>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">{{ form.full_name.label }}</label>
+                {{ form.full_name }}
+                {% if form.full_name.help_text %}<div class="form-text">{{ form.full_name.help_text }}</div>{% endif %}
+                {% if form.full_name.errors %}<div class="invalid-feedback d-block">{{ form.full_name.errors.0 }}</div>{% endif %}
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">{{ form.phone_number.label }} <span class="text-danger">*</span></label>
+                {{ form.phone_number }}
+                {% if form.phone_number.errors %}<div class="invalid-feedback d-block">{{ form.phone_number.errors.0 }}</div>{% endif %}
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">{{ form.email.label }}</label>
+                {{ form.email }}
+                {% if form.email.help_text %}<div class="form-text">{{ form.email.help_text }}</div>{% endif %}
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">{{ form.national_id.label }}</label>
+                {{ form.national_id }}
+                {% if form.national_id.errors %}<div class="invalid-feedback d-block">{{ form.national_id.errors.0 }}</div>{% endif %}
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">{{ form.date_of_birth.label }}</label>
+                {{ form.date_of_birth }}
+                {% if form.date_of_birth.errors %}<div class="invalid-feedback d-block">{{ form.date_of_birth.errors.0 }}</div>{% endif %}
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">{{ form.photo.label }}</label>
+                {% if driver.photo %}
+                  <div class="mb-2">
+                    <img src="{{ driver.photo.url }}" style="width:60px;height:60px;object-fit:cover;border-radius:50%;border:2px solid var(--border-color)">
+                    <small class="text-muted ms-2">Current photo</small>
+                  </div>
+                {% endif %}
+                {{ form.photo }}
+                {% if form.photo.help_text %}<div class="form-text">{{ form.photo.help_text }}</div>{% endif %}
+                {% if form.photo.errors %}<div class="invalid-feedback d-block">{{ form.photo.errors.0 }}</div>{% endif %}
+              </div>
+            </div>
+          </div>
+
+          {# ── Licence ────────────────────────────────────────────────────── #}
+          <div class="form-section">
+            <div class="form-section-title">Licence</div>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">{{ form.license_number.label }}</label>
+                {{ form.license_number }}
+                {% if form.license_number.errors %}<div class="invalid-feedback d-block">{{ form.license_number.errors.0 }}</div>{% endif %}
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">{{ form.license_category.label }}</label>
+                {{ form.license_category }}
+                {% if form.license_category.errors %}<div class="invalid-feedback d-block">{{ form.license_category.errors.0 }}</div>{% endif %}
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">{{ form.license_expiry.label }}</label>
+                {{ form.license_expiry }}
+                {% if form.license_expiry.errors %}<div class="invalid-feedback d-block">{{ form.license_expiry.errors.0 }}</div>{% endif %}
+              </div>
+            </div>
+          </div>
+
+          {# ── Availability (staff only) ──────────────────────────────────── #}
+          {% if request.user.is_staff %}
+          <div class="form-section">
+            <div class="form-section-title">Availability</div>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">{{ form.availability.label }}</label>
+                {{ form.availability }}
+                {% if form.availability.errors %}<div class="invalid-feedback d-block">{{ form.availability.errors.0 }}</div>{% endif %}
+              </div>
+            </div>
+          </div>
+          {% endif %}
+
+          {# ── Emergency Contact ─────────────────────────────────────────── #}
+          <div class="form-section">
+            <div class="form-section-title">Emergency Contact</div>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">{{ form.emergency_contact_name.label }}</label>
+                {{ form.emergency_contact_name }}
+                {% if form.emergency_contact_name.errors %}<div class="invalid-feedback d-block">{{ form.emergency_contact_name.errors.0 }}</div>{% endif %}
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">{{ form.emergency_contact_phone.label }}</label>
+                {{ form.emergency_contact_phone }}
+                {% if form.emergency_contact_phone.errors %}<div class="invalid-feedback d-block">{{ form.emergency_contact_phone.errors.0 }}</div>{% endif %}
+              </div>
+            </div>
+          </div>
+
+          {# ── Notes ─────────────────────────────────────────────────────── #}
+          <div class="form-section mb-0">
+            <div class="form-section-title">Notes</div>
+            {{ form.notes }}
+            {% if form.notes.errors %}<div class="invalid-feedback d-block">{{ form.notes.errors.0 }}</div>{% endif %}
+          </div>
+
+          <div class="d-flex justify-content-end gap-2 pt-4 border-top mt-4">
+            <a href="{% url 'logistics:dispatch_driver_detail' driver.pk %}" class="btn btn-outline-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-save me-1"></i>Save Changes</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

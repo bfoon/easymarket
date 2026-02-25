@@ -1,10 +1,141 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Title</title>
-</head>
-<body>
+{% extends 'logistics/base.html' %}
+{% block title %}Driver Roster{% endblock %}
+{% block extra_css %}{% include 'logistics/dispatch/_shared_styles.html' %}{% endblock %}
 
-</body>
-</html>
+{% block content %}
+<div class="dispatch-page-header">
+  <div>
+    <h1><i class="fas fa-id-badge me-2" style="color:var(--primary-color)"></i>Driver Roster</h1>
+    <p>{{ drivers|length }} dispatch driver{% if drivers|length != 1 %}s{% endif %} registered</p>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{% url 'logistics:dispatch_vetting_queue' %}" class="btn btn-outline-warning">
+      <i class="fas fa-user-shield me-1"></i>Vetting Queue
+      {% if pending_vetting_count > 0 %}<span class="badge bg-danger ms-1">{{ pending_vetting_count }}</span>{% endif %}
+    </a>
+    <a href="{% url 'logistics:dispatch_driver_register' %}" class="btn btn-primary">
+      <i class="fas fa-user-plus me-1"></i>Register Driver
+    </a>
+  </div>
+</div>
+
+{% if messages %}
+  {% for msg in messages %}<div class="alert alert-{{ msg.tags }} alert-dismissible fade show"><i class="fas fa-info-circle me-2"></i>{{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>{% endfor %}
+{% endif %}
+
+<!-- Filters -->
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="get" class="row g-3">
+      <div class="col-md-4">
+        <input type="search" name="q" class="form-control" placeholder="Search by name, phone, license…" value="{{ request.GET.q }}">
+      </div>
+      <div class="col-md-2">
+        <select name="status" class="form-select">
+          <option value="">All Statuses</option>
+          <option value="active" {% if request.GET.status == 'active' %}selected{% endif %}>Active</option>
+          <option value="pending_vetting" {% if request.GET.status == 'pending_vetting' %}selected{% endif %}>Pending Vetting</option>
+          <option value="suspended" {% if request.GET.status == 'suspended' %}selected{% endif %}>Suspended</option>
+          <option value="rejected" {% if request.GET.status == 'rejected' %}selected{% endif %}>Rejected</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <select name="availability" class="form-select">
+          <option value="">All Availability</option>
+          <option value="available" {% if request.GET.availability == 'available' %}selected{% endif %}>Available</option>
+          <option value="on_trip" {% if request.GET.availability == 'on_trip' %}selected{% endif %}>On Trip</option>
+          <option value="offline" {% if request.GET.availability == 'offline' %}selected{% endif %}>Offline</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <button type="submit" class="btn btn-primary w-100"><i class="fas fa-search me-1"></i>Filter</button>
+      </div>
+      {% if request.GET.q or request.GET.status or request.GET.availability %}
+      <div class="col-md-2">
+        <a href="{% url 'logistics:dispatch_driver_roster' %}" class="btn btn-outline-secondary w-100"><i class="fas fa-times me-1"></i>Clear</a>
+      </div>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
+<!-- Table -->
+<div class="card">
+  <div class="card-body p-0">
+    {% if drivers %}
+      <table class="dispatch-table table mb-0">
+        <thead>
+          <tr>
+            <th>Driver</th>
+            <th>Phone</th>
+            <th>License</th>
+            <th>Status</th>
+            <th>Availability</th>
+            <th>Tasks</th>
+            <th>Joined</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for driver in drivers %}
+          <tr>
+            <td>
+              <div class="d-flex align-items-center gap-3">
+                <div class="driver-avatar">
+                  {% if driver.photo %}<img src="{{ driver.photo.url }}" alt="">{% else %}{{ driver.full_name|slice:":2"|upper }}{% endif %}
+                </div>
+                <div>
+                  <a href="{% url 'logistics:dispatch_driver_detail' driver.pk %}" class="fw-semibold text-decoration-none text-dark">{{ driver.full_name }}</a>
+                  <div class="text-muted" style="font-size:.8rem">{{ driver.vehicle_type|default:"Ground" }}</div>
+                </div>
+              </div>
+            </td>
+            <td style="font-size:.9rem">{{ driver.phone_number }}</td>
+            <td><span class="font-monospace" style="font-size:.85rem">{{ driver.license_number }}</span></td>
+            <td><span class="status-badge status-{{ driver.status }}">{{ driver.get_status_display }}</span></td>
+            <td><span class="status-badge status-{{ driver.availability }}">{{ driver.get_availability_display }}</span></td>
+            <td>
+              <span class="text-muted" style="font-size:.85rem">
+                {{ driver.active_tasks_count|default:0 }} active
+              </span>
+            </td>
+            <td style="font-size:.85rem;color:var(--text-secondary)">{{ driver.created_at|date:"d M Y" }}</td>
+            <td>
+              <div class="d-flex gap-1">
+                <a href="{% url 'logistics:dispatch_driver_detail' driver.pk %}" class="btn btn-sm btn-outline-primary py-0 px-2" title="View"><i class="fas fa-eye"></i></a>
+                <a href="{% url 'logistics:dispatch_driver_edit' driver.pk %}" class="btn btn-sm btn-outline-secondary py-0 px-2" title="Edit"><i class="fas fa-edit"></i></a>
+                {% if driver.status == 'active' %}
+                  <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2" title="Suspend" onclick="confirmAction('{% url 'logistics:dispatch_driver_suspend' driver.pk %}','Suspend {{ driver.full_name }}?')"><i class="fas fa-ban"></i></button>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if is_paginated %}
+        <div class="d-flex justify-content-center py-3">
+          <nav><ul class="pagination pagination-sm mb-0">
+            {% if page_obj.has_previous %}<li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}">Prev</a></li>{% endif %}
+            <li class="page-item active"><span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span></li>
+            {% if page_obj.has_next %}<li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}{% if request.GET.q %}&q={{ request.GET.q }}{% endif %}">Next</a></li>{% endif %}
+          </ul></nav>
+        </div>
+      {% endif %}
+    {% else %}
+      <div class="empty-state"><i class="fas fa-id-badge"></i><h5>No Drivers Found</h5><p>Try adjusting your filters or register a new driver.</p><a href="{% url 'logistics:dispatch_driver_register' %}" class="btn btn-primary mt-2"><i class="fas fa-user-plus me-1"></i>Register Driver</a></div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+function confirmAction(url, msg) {
+  if (confirm(msg)) {
+    fetch(url, { method: 'POST', headers: { 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || '' } })
+      .then(r => r.ok ? location.reload() : alert('Action failed'));
+  }
+}
+</script>
+{% csrf_token %}
+{% endblock %}

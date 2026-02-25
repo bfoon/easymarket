@@ -73,6 +73,13 @@ from .dispatch_services import (
     DriverQueryService,
     DriverVettingService,
 )
+from .forms import (
+    BatchDispatchForm,
+    DispatchDriverEditForm,
+    DispatchDriverRegistrationForm,
+    LastMileTaskForm,
+    PickupTaskForm,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -219,72 +226,50 @@ class DriverRegistrationView(LogisticsRequiredMixin, View):
     """Register a new driver (Easy Move or external) with photo & documents."""
     template_name = "logistics/dispatch/driver_register.html"
 
-    def get(self, request):
-        context = {
+    def _base_context(self, form):
+        return {
             "page_title": "Register New Driver",
-            "driver_type_choices": DriverProfile.DriverType.choices,
+            "form": form,
             "doc_type_choices": DriverDocument.DocType.choices,
         }
-        return render(request, self.template_name, context)
+
+    def get(self, request):
+        form = DispatchDriverRegistrationForm()
+        return render(request, self.template_name, self._base_context(form))
 
     def post(self, request):
-        data = request.POST
-        files = request.FILES
+        form = DispatchDriverRegistrationForm(request.POST, request.FILES)
 
-        # Validate required user linkage
-        user_id = data.get("user_id")
-        if not user_id:
-            messages.error(request, "Please select a user account for this driver.")
-            return redirect(request.path)
-
-        from django.contrib.auth import get_user_model
-        User = get_user_model()
-        try:
-            user = User.objects.get(pk=user_id)
-        except User.DoesNotExist:
-            messages.error(request, "User account not found.")
-            return redirect(request.path)
-
-        if hasattr(user, "dispatch_driver_profile"):
-            messages.error(request, f"A driver profile already exists for {user}.")
-            return redirect("logistics:dispatch_driver_detail", pk=user.dispatch_driver_profile.pk)
+        if not form.is_valid():
+            return render(request, self.template_name, self._base_context(form))
 
         try:
-            profile = DriverProfile.objects.create(
-                user=user,
-                driver_type=data.get("driver_type", DriverProfile.DriverType.EXTERNAL),
-                phone=data.get("phone", ""),
-                national_id_number=data.get("national_id_number", ""),
-                license_number=data.get("license_number", ""),
-                license_category=data.get("license_category", ""),
-                license_expiry=data.get("license_expiry") or None,
-                date_of_birth=data.get("date_of_birth") or None,
-                emergency_contact_name=data.get("emergency_contact_name", ""),
-                emergency_contact_phone=data.get("emergency_contact_phone", ""),
-                photo=files.get("photo"),
-                vetting_status=DriverProfile.VettingStatus.PENDING,
-            )
+            profile = form.save(created_by=request.user)
 
-            # Attach license document if provided
-            if files.get("license_document"):
+            # Attach license document if uploaded separately
+            license_doc = request.FILES.get("license_document")
+            if license_doc:
                 DriverDocument.objects.create(
                     driver=profile,
                     doc_type=DriverDocument.DocType.LICENSE,
-                    file=files["license_document"],
-                    expiry_date=data.get("license_expiry") or None,
+                    file=license_doc,
+                    expiry_date=form.cleaned_data.get("license_expiry") or None,
                 )
 
-            # Auto-submit for review if admin-created
+            # Auto-submit for review if created by staff
             if request.user.is_staff:
                 DriverVettingService.submit_for_review(profile)
 
-            messages.success(request, f"Driver profile created for {user.get_full_name()}.")
+            messages.success(
+                request,
+                f"Driver profile created for {profile.user.get_full_name() or profile.user.username}."
+            )
             return redirect("logistics:dispatch_driver_detail", pk=profile.pk)
 
         except Exception as e:
             logger.exception("Error creating driver profile")
             messages.error(request, f"Error creating driver profile: {e}")
-            return redirect(request.path)
+            return render(request, self.template_name, self._base_context(form))
 
 
 class DriverProfileView(LogisticsRequiredMixin, DetailView):
@@ -313,49 +298,28 @@ class DriverProfileView(LogisticsRequiredMixin, DetailView):
 class DriverEditView(LogisticsRequiredMixin, View):
     template_name = "logistics/dispatch/driver_edit.html"
 
+    def _base_context(self, driver, form):
+        return {
+            "driver": driver,
+            "form": form,
+            "page_title": f"Edit Driver — {driver.user.get_full_name()}",
+            "availability_choices": DriverProfile.Availability.choices,
+        }
+
     def get(self, request, pk):
         driver = get_object_or_404(DriverProfile, pk=pk)
-        return render(request, self.template_name, {
-            "driver": driver,
-            "page_title": f"Edit Driver — {driver.user.get_full_name()}",
-            "driver_type_choices": DriverProfile.DriverType.choices,
-            "availability_choices": DriverProfile.Availability.choices,
-        })
+        form = DispatchDriverEditForm(driver=driver)
+        return render(request, self.template_name, self._base_context(driver, form))
 
     def post(self, request, pk):
         driver = get_object_or_404(DriverProfile, pk=pk)
-        data = request.POST
-        files = request.FILES
+        form = DispatchDriverEditForm(request.POST, request.FILES, driver=driver)
 
-        fields_to_save = []
-        for field in [
-            "phone", "national_id_number", "license_number", "license_category",
-            "emergency_contact_name", "emergency_contact_phone", "notes",
-        ]:
-            if field in data:
-                setattr(driver, field, data[field])
-                fields_to_save.append(field)
+        if not form.is_valid():
+            return render(request, self.template_name, self._base_context(driver, form))
 
-        for date_field in ["license_expiry", "date_of_birth", "date_hired"]:
-            if data.get(date_field):
-                setattr(driver, date_field, data[date_field])
-                fields_to_save.append(date_field)
-
-        if "availability" in data and request.user.is_staff:
-            driver.availability = data["availability"]
-            fields_to_save.append("availability")
-
-        if files.get("photo"):
-            driver.photo = files["photo"]
-            fields_to_save.append("photo")
-
-        if fields_to_save:
-            fields_to_save.append("updated_at")
-            driver.save(update_fields=fields_to_save)
-            messages.success(request, "Driver profile updated.")
-        else:
-            messages.info(request, "No changes detected.")
-
+        form.apply_to_driver(driver, files=request.FILES, is_staff=request.user.is_staff)
+        messages.success(request, "Driver profile updated.")
         return redirect("logistics:dispatch_driver_detail", pk=driver.pk)
 
 
@@ -524,29 +488,33 @@ class CreatePickupTaskView(LogisticsRequiredMixin, View):
     """Create a pickup task for any order type."""
     template_name = "logistics/dispatch/pickup_task_create.html"
 
-    def get(self, request):
-        from logistics.models import Warehouse
-        context = {
+    def _base_context(self, form):
+        return {
             "page_title": "Create Pickup Task",
-            "order_type_choices": PickupTask.OrderType.choices,
-            "priority_choices": PickupTask.Priority.choices,
-            "warehouses": Warehouse.objects.filter(is_active=True).order_by("name"),
+            "form": form,
         }
-        return render(request, self.template_name, context)
+
+    def get(self, request):
+        form = PickupTaskForm()
+        return render(request, self.template_name, self._base_context(form))
 
     def post(self, request):
-        from logistics.models import Warehouse
-        data = request.POST
+        form = PickupTaskForm(request.POST)
+
+        if not form.is_valid():
+            return render(request, self.template_name, self._base_context(form))
+
+        data = form.cleaned_data
         order_type = data.get("order_type")
         order_id = data.get("order_id")
-        warehouse_id = data.get("warehouse_id")
+        warehouse = data.get("warehouse_id")        # already a Warehouse instance
 
-        # Load the order
+        # Load the order object for the selected type
         try:
-            order, warehouse = _load_order_and_warehouse(order_type, order_id, warehouse_id)
+            order, _wh = _load_order_and_warehouse(order_type, order_id, str(warehouse.pk))
         except (ValueError, Exception) as e:
-            messages.error(request, str(e))
-            return redirect(request.path + f"?order_type={order_type}")
+            form.add_error("order_id", str(e))
+            return render(request, self.template_name, self._base_context(form))
 
         try:
             task = DispatchService.create_pickup_task_for_order(
@@ -555,7 +523,7 @@ class CreatePickupTaskView(LogisticsRequiredMixin, View):
                 destination_warehouse=warehouse,
                 pickup_address=data.get("pickup_address", ""),
                 packages_count=int(data.get("packages_count", 1)),
-                priority=int(data.get("priority", PickupTask.Priority.NORMAL)),
+                priority=int(data.get("priority", 2)),
                 pickup_contact_name=data.get("pickup_contact_name", ""),
                 pickup_contact_phone=data.get("pickup_contact_phone", ""),
                 special_instructions=data.get("special_instructions", ""),
@@ -566,7 +534,7 @@ class CreatePickupTaskView(LogisticsRequiredMixin, View):
             return redirect("logistics:dispatch_pickup_task_detail", pk=task.pk)
         except ValidationError as e:
             messages.error(request, str(e))
-            return redirect(request.path)
+            return render(request, self.template_name, self._base_context(form))
 
 
 class AssignPickupTaskView(LogisticsRequiredMixin, View):
@@ -840,33 +808,25 @@ class AssignLastMileTaskView(LogisticsRequiredMixin, View):
 class CreateLastMileTaskView(LogisticsRequiredMixin, View):
     template_name = "logistics/dispatch/last_mile_create.html"
 
-    def get(self, request):
-        from logistics.models import Warehouse, Shipment
-        # Only shipments at warehouse that don't have a last-mile task yet
-        eligible_shipments = Shipment.objects.filter(
-            status__in=["in_transit", "shipped"],
-        ).exclude(last_mile_task__isnull=False)
-
-        context = {
+    def _base_context(self, form):
+        return {
             "page_title": "Create Last Mile Delivery Task",
-            "shipments": eligible_shipments.order_by("-created_at")[:100],
-            "warehouses": Warehouse.objects.filter(is_active=True),
-            "priority_choices": LastMileTask.Priority.choices,
+            "form": form,
         }
-        return render(request, self.template_name, context)
+
+    def get(self, request):
+        form = LastMileTaskForm()
+        return render(request, self.template_name, self._base_context(form))
 
     def post(self, request):
-        from logistics.models import Warehouse, Shipment
-        data = request.POST
-        shipment_id = data.get("shipment_id")
-        warehouse_id = data.get("warehouse_id")
+        form = LastMileTaskForm(request.POST)
 
-        try:
-            shipment = Shipment.objects.get(pk=shipment_id)
-            warehouse = Warehouse.objects.get(pk=warehouse_id)
-        except Exception as e:
-            messages.error(request, f"Invalid shipment or warehouse: {e}")
-            return redirect(request.path)
+        if not form.is_valid():
+            return render(request, self.template_name, self._base_context(form))
+
+        data = form.cleaned_data
+        shipment = data.get("shipment_id")      # already a Shipment instance
+        warehouse = data.get("warehouse_id")    # already a Warehouse instance
 
         try:
             task = DispatchService.create_last_mile_task(
@@ -876,7 +836,7 @@ class CreateLastMileTaskView(LogisticsRequiredMixin, View):
                 recipient_phone=data.get("recipient_phone", ""),
                 delivery_address=data.get("delivery_address", ""),
                 scheduled_delivery_time=data.get("scheduled_delivery_time") or None,
-                priority=int(data.get("priority", LastMileTask.Priority.NORMAL)),
+                priority=int(data.get("priority", 2)),
                 special_instructions=data.get("special_instructions", ""),
                 created_by=request.user,
             )
@@ -884,7 +844,7 @@ class CreateLastMileTaskView(LogisticsRequiredMixin, View):
             return redirect("logistics:dispatch_last_mile_detail", pk=task.pk)
         except ValidationError as e:
             messages.error(request, str(e))
-            return redirect(request.path)
+            return render(request, self.template_name, self._base_context(form))
 
 
 # ===========================================================================
@@ -913,9 +873,10 @@ class DroneListView(LogisticsRequiredMixin, View):
 class DispatchBatchCreateView(LogisticsRequiredMixin, View):
     template_name = "logistics/dispatch/batch_create.html"
 
-    def get(self, request):
-        context = {
+    def _base_context(self, form):
+        return {
             "page_title": "Create Dispatch Batch",
+            "form": form,
             "available_drivers": DriverQueryService.get_available_drivers(),
             "available_drones": DriverQueryService.get_available_drones(),
             "pending_pickup_tasks": PickupTask.objects.filter(
@@ -926,17 +887,23 @@ class DispatchBatchCreateView(LogisticsRequiredMixin, View):
             ).order_by("-priority", "-created_at"),
             "batch_type_choices": DispatchBatch.BatchType.choices,
         }
-        return render(request, self.template_name, context)
+
+    def get(self, request):
+        form = BatchDispatchForm()
+        return render(request, self.template_name, self._base_context(form))
 
     def post(self, request):
-        data = request.POST
-        driver_id = data.get("driver_id")
-        drone_id = data.get("drone_id")
-        pickup_task_ids = request.POST.getlist("pickup_tasks")
-        last_mile_task_ids = request.POST.getlist("last_mile_tasks")
+        form = BatchDispatchForm(request.POST)
 
-        driver = DriverProfile.objects.filter(pk=driver_id).first() if driver_id else None
-        drone = DroneUnit.objects.filter(pk=drone_id).first() if drone_id else None
+        if not form.is_valid():
+            return render(request, self.template_name, self._base_context(form))
+
+        data = form.cleaned_data
+        driver = data.get("driver_id")   # DriverProfile instance or None
+        drone  = data.get("drone_id")    # DroneUnit instance or None
+
+        pickup_task_ids  = request.POST.getlist("pickup_tasks")
+        last_mile_task_ids = request.POST.getlist("last_mile_tasks")
 
         try:
             batch = DispatchService.create_dispatch_batch(
@@ -949,11 +916,14 @@ class DispatchBatchCreateView(LogisticsRequiredMixin, View):
                 planned_start_time=data.get("planned_start_time") or None,
                 notes=data.get("notes", ""),
             )
-            messages.success(request, f"Dispatch batch {batch.batch_number} created with {batch.total_tasks} tasks.")
+            messages.success(
+                request,
+                f"Dispatch batch {batch.batch_number} created with {batch.total_tasks} tasks."
+            )
             return redirect("logistics:dispatch_dashboard")
         except ValidationError as e:
             messages.error(request, str(e))
-            return redirect(request.path)
+            return render(request, self.template_name, self._base_context(form))
 
 
 # ===========================================================================

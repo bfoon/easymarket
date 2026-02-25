@@ -1,10 +1,107 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Title</title>
-</head>
-<body>
+{% extends 'logistics/base.html' %}
+{% block title %}Create Pickup Task{% endblock %}
+{% block extra_css %}{% include 'logistics/dispatch/_shared_styles.html' %}{% endblock %}
 
-</body>
-</html>
+{% block content %}
+<div class="dispatch-page-header">
+  <div>
+    <h1><i class="fas fa-box-open me-2" style="color:var(--primary-color)"></i>Create Pickup Task</h1>
+    <p>Dispatch a driver or drone to collect a package from the seller and deliver it to the warehouse.</p>
+  </div>
+  <a href="{% url 'logistics:dispatch_pickup_task_list' %}" class="btn btn-outline-secondary"><i class="fas fa-arrow-left me-1"></i>Back</a>
+</div>
+
+{% if messages %}{% for msg in messages %}
+  <div class="alert alert-{{ msg.tags }} alert-dismissible fade show">{{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
+{% endfor %}{% endif %}
+
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header"><i class="fas fa-plus me-2 text-primary"></i>New Pickup Task</div>
+      <div class="card-body">
+        <form method="post" class="dispatch-form">
+          {% csrf_token %}
+          {% if form.non_field_errors %}
+            <div class="alert alert-danger">{% for e in form.non_field_errors %}<div>{{ e }}</div>{% endfor %}</div>
+          {% endif %}
+
+          {# ── Order Reference ────────────────────────────────────────────── #}
+          <div class="form-section">
+            <div class="form-section-title">Order Reference</div>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">{{ form.order_type.label }} <span class="text-danger">*</span></label>
+                {{ form.order_type }}
+                {% if form.order_type.help_text %}<div class="form-text">{{ form.order_type.help_text }}</div>{% endif %}
+                {% if form.order_type.errors %}<div class="invalid-feedback d-block">{{ form.order_type.errors.0 }}</div>{% endif %}
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">{{ form.order_id.label }} <span class="text-danger">*</span></label>
+                {{ form.order_id }}
+                {% if form.order_id.help_text %}<div class="form-text">{{ form.order_id.help_text }}</div>{% endif %}
+                {% if form.order_id.errors %}<div class="invalid-feedback d-block">{{ form.order_id.errors.0 }}</div>{% endif %}
+              </div>
+              <div class="col-12">
+                <label class="form-label">{{ form.warehouse_id.label }} <span class="text-danger">*</span></label>
+                {{ form.warehouse_id }}
+                {% if form.warehouse_id.help_text %}<div class="form-text">{{ form.warehouse_id.help_text }}</div>{% endif %}
+                {% if form.warehouse_id.errors %}<div class="invalid-feedback d-block">{{ form.warehouse_id.errors.0 }}</div>{% endif %}
+              </div>
+            </div>
+          </div>
+
+          {# ── Pickup Details ─────────────────────────────────────────────── #}
+          <div class="form-section">
+            <div class="form-section-title">Pickup Details</div>
+            <div class="row g-3">
+              <div class="col-12">
+                <label class="form-label">{{ form.pickup_address.label }} <span class="text-danger">*</span></label>
+                {{ form.pickup_address }}
+                {% if form.pickup_address.errors %}<div class="invalid-feedback d-block">{{ form.pickup_address.errors.0 }}</div>{% endif %}
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">{{ form.pickup_contact_name.label }}</label>
+                {{ form.pickup_contact_name }}
+                {% if form.pickup_contact_name.errors %}<div class="invalid-feedback d-block">{{ form.pickup_contact_name.errors.0 }}</div>{% endif %}
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">{{ form.pickup_contact_phone.label }}</label>
+                {{ form.pickup_contact_phone }}
+                {% if form.pickup_contact_phone.errors %}<div class="invalid-feedback d-block">{{ form.pickup_contact_phone.errors.0 }}</div>{% endif %}
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">{{ form.packages_count.label }}</label>
+                {{ form.packages_count }}
+                {% if form.packages_count.errors %}<div class="invalid-feedback d-block">{{ form.packages_count.errors.0 }}</div>{% endif %}
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">{{ form.priority.label }}</label>
+                {{ form.priority }}
+                {% if form.priority.errors %}<div class="invalid-feedback d-block">{{ form.priority.errors.0 }}</div>{% endif %}
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">{{ form.scheduled_pickup_time.label }}</label>
+                {{ form.scheduled_pickup_time }}
+                {% if form.scheduled_pickup_time.errors %}<div class="invalid-feedback d-block">{{ form.scheduled_pickup_time.errors.0 }}</div>{% endif %}
+              </div>
+            </div>
+          </div>
+
+          {# ── Special Instructions ───────────────────────────────────────── #}
+          <div class="form-section mb-0">
+            <div class="form-section-title">Special Instructions</div>
+            {{ form.special_instructions }}
+            {% if form.special_instructions.errors %}<div class="invalid-feedback d-block">{{ form.special_instructions.errors.0 }}</div>{% endif %}
+          </div>
+
+          <div class="d-flex justify-content-end gap-2 pt-4 border-top mt-4">
+            <a href="{% url 'logistics:dispatch_pickup_task_list' %}" class="btn btn-outline-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-save me-1"></i>Create Pickup Task</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

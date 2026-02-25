@@ -1,10 +1,200 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Title</title>
-</head>
-<body>
+{% extends 'logistics/base.html' %}
+{% block title %}Batch Dispatch{% endblock %}
+{% block extra_css %}{% include 'logistics/dispatch/_shared_styles.html' %}
+<style>
+.batch-item { background: var(--bg-secondary); border-radius: 12px; padding: 1rem 1.25rem; margin-bottom: .75rem; border: 1px solid var(--border-color); position: relative; }
+.batch-item .remove-btn { position: absolute; top: .75rem; right: .75rem; }
+.add-task-btn { border: 2px dashed var(--border-color); border-radius: 12px; padding: .875rem; text-align: center; cursor: pointer; color: var(--text-secondary); transition: all .2s; background: transparent; width: 100%; }
+.add-task-btn:hover { border-color: var(--primary-color); color: var(--primary-color); background: rgba(102,126,234,.04); }
+.task-counter { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: var(--primary-gradient); color: white; font-size: .8rem; font-weight: 700; flex-shrink: 0; }
+</style>
+{% endblock %}
 
-</body>
-</html>
+{% block content %}
+<div class="dispatch-page-header">
+  <div>
+    <h1><i class="fas fa-layer-group me-2" style="color:var(--primary-color)"></i>Batch Dispatch</h1>
+    <p>Create multiple pickup or delivery tasks at once</p>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{% url 'logistics:dispatch_pickup_task_list' %}" class="btn btn-outline-secondary">Pickups</a>
+    <a href="{% url 'logistics:dispatch_last_mile_list' %}" class="btn btn-outline-secondary">Deliveries</a>
+  </div>
+</div>
+
+<div class="row g-4">
+  <!-- Batch form -->
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header"><i class="fas fa-layer-group me-2 text-primary"></i>Batch Configuration</div>
+      <div class="card-body">
+        <form method="post" id="batchForm" class="dispatch-form">
+          {% csrf_token %}
+
+          {% if form.non_field_errors %}
+            <div class="alert alert-danger">{% for e in form.non_field_errors %}{{ e }}{% endfor %}</div>
+          {% endif %}
+
+          <div class="form-section">
+            <div class="form-section-title">Batch Settings</div>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">{{ form.batch_type.label }} <span class="text-danger">*</span></label>
+                <select name="batch_type" id="taskTypeField" class="form-select" required>
+                  {% for val, label in form.batch_type.field.choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}
+                </select>
+                {% if form.batch_type.errors %}<div class="invalid-feedback d-block">{{ form.batch_type.errors.0 }}</div>{% endif %}
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">{{ form.planned_start_time.label }}</label>
+                {{ form.planned_start_time }}
+                <div class="form-text">Applied to tasks without their own scheduled time.</div>
+                {% if form.planned_start_time.errors %}<div class="invalid-feedback d-block">{{ form.planned_start_time.errors.0 }}</div>{% endif %}
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">{{ form.driver_id.label }}</label>
+                {{ form.driver_id }}
+                {% if form.driver_id.errors %}<div class="invalid-feedback d-block">{{ form.driver_id.errors.0 }}</div>{% endif %}
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">{{ form.drone_id.label }}</label>
+                {{ form.drone_id }}
+                {% if form.drone_id.errors %}<div class="invalid-feedback d-block">{{ form.drone_id.errors.0 }}</div>{% endif %}
+              </div>
+            </div>
+          </div>
+
+          <!-- Dynamic task rows -->
+          <div class="form-section">
+            <div class="form-section-title">Tasks (<span id="taskCount">1</span>)</div>
+            <div id="taskContainer">
+              <!-- Task rows injected by JS below -->
+            </div>
+            <button type="button" class="add-task-btn mt-2" onclick="addTask()">
+              <i class="fas fa-plus me-2"></i>Add Another Task
+            </button>
+          </div>
+
+          <div class="d-flex justify-content-end gap-2 pt-4 border-top mt-2">
+            <a href="{% url 'logistics:dispatch_dashboard' %}" class="btn btn-outline-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary" id="submitBtn">
+              <i class="fas fa-paper-plane me-1"></i>Dispatch Batch (<span id="submitCount">1</span> tasks)
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tips sidebar -->
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header"><i class="fas fa-lightbulb me-2 text-warning"></i>Batch Dispatch Tips</div>
+      <div class="card-body" style="font-size:.9rem">
+        <p class="text-muted mb-3">Use batch dispatch to create many tasks efficiently:</p>
+        <ul class="list-unstyled" style="color:var(--text-secondary)">
+          <li class="mb-2"><i class="fas fa-check-circle me-2 text-success"></i>Set a default driver to bulk-assign all tasks.</li>
+          <li class="mb-2"><i class="fas fa-check-circle me-2 text-success"></i>Leave the driver blank for auto-assignment based on availability.</li>
+          <li class="mb-2"><i class="fas fa-check-circle me-2 text-success"></i>Each task can override the default scheduled time.</li>
+          <li class="mb-2"><i class="fas fa-check-circle me-2 text-success"></i>Up to 50 tasks per batch.</li>
+        </ul>
+        <hr>
+        <div class="text-muted">
+          <strong>Available Drivers:</strong>
+          <div id="driverCount" class="fw-semibold text-success mt-1">{{ available_drivers|length }} available</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let taskIndex = 0;
+
+function getTaskType() {
+  return document.getElementById('taskTypeField').value;
+}
+
+function addTask(data = {}) {
+  const type = getTaskType();
+  const i = taskIndex++;
+  const container = document.getElementById('taskContainer');
+  const addrLabel = type === 'pickup' ? 'Pickup Address' : 'Delivery Address';
+  const addrName = type === 'pickup' ? 'pickup_address' : 'delivery_address';
+
+  const div = document.createElement('div');
+  div.className = 'batch-item';
+  div.id = `task-${i}`;
+  div.innerHTML = `
+    <div class="d-flex align-items-center gap-2 mb-3">
+      <div class="task-counter">${container.children.length + 1}</div>
+      <strong style="font-size:.9rem">Task ${container.children.length + 1}</strong>
+      <button type="button" class="btn btn-sm btn-outline-danger remove-btn py-0 px-2" onclick="removeTask('task-${i}')"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="row g-2">
+      <div class="col-12">
+        <label class="form-label" style="font-size:.82rem">${addrLabel} <span class="text-danger">*</span></label>
+        <input type="text" name="tasks-${i}-${addrName}" class="form-control form-control-sm" placeholder="${addrLabel}…" value="${data.address || ''}" required>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" style="font-size:.82rem">Scheduled Time</label>
+        <input type="datetime-local" name="tasks-${i}-scheduled_time" class="form-control form-control-sm" value="${data.scheduled_time || ''}">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label" style="font-size:.82rem">Override Driver</label>
+        <select name="tasks-${i}-driver" class="form-select form-select-sm">
+          <option value="">Use default</option>
+          {% for driver in available_drivers %}
+            <option value="{{ driver.pk }}">{{ driver.user.get_full_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-12">
+        <label class="form-label" style="font-size:.82rem">Notes</label>
+        <input type="text" name="tasks-${i}-notes" class="form-control form-control-sm" placeholder="Optional notes…" value="${data.notes || ''}">
+      </div>
+    </div>
+  `;
+  container.appendChild(div);
+  updateCounts();
+}
+
+function removeTask(id) {
+  const el = document.getElementById(id);
+  if (el && document.getElementById('taskContainer').children.length > 1) {
+    el.remove();
+    renumberTasks();
+    updateCounts();
+  } else {
+    alert('You need at least one task.');
+  }
+}
+
+function renumberTasks() {
+  document.querySelectorAll('.batch-item .task-counter').forEach((el, i) => { el.textContent = i + 1; });
+  document.querySelectorAll('.batch-item strong').forEach((el, i) => { el.textContent = `Task ${i + 1}`; });
+}
+
+function updateCounts() {
+  const n = document.getElementById('taskContainer').children.length;
+  document.getElementById('taskCount').textContent = n;
+  document.getElementById('submitCount').textContent = n;
+}
+
+document.getElementById('taskTypeField').addEventListener('change', () => {
+  document.getElementById('taskContainer').innerHTML = '';
+  taskIndex = 0;
+  addTask();
+});
+
+// Initialise with one task row
+addTask();
+
+document.getElementById('batchForm').addEventListener('submit', e => {
+  const n = document.getElementById('taskContainer').children.length;
+  if (!confirm(`Submit batch of ${n} task${n===1?'':'s'}?`)) e.preventDefault();
+});
+</script>
+{% endblock %}

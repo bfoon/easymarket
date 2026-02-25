@@ -1,10 +1,81 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Title</title>
-</head>
-<body>
+{% extends 'logistics/base.html' %}
+{% block title %}Driver Vetting Queue{% endblock %}
+{% block extra_css %}{% include 'logistics/dispatch/_shared_styles.html' %}{% endblock %}
 
-</body>
-</html>
+{% block content %}
+<div class="dispatch-page-header">
+  <div>
+    <h1><i class="fas fa-user-shield me-2" style="color:var(--warning-color)"></i>Vetting Queue</h1>
+    <p>{{ drivers|length }} driver{% if drivers|length != 1 %}s{% endif %} pending review</p>
+  </div>
+  <a href="{% url 'logistics:dispatch_driver_roster' %}" class="btn btn-outline-secondary"><i class="fas fa-arrow-left me-1"></i>Back to Roster</a>
+</div>
+
+{% if messages %}{% for msg in messages %}<div class="alert alert-{{ msg.tags }} alert-dismissible fade show">{{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>{% endfor %}{% endif %}
+
+{% if drivers %}
+  <div class="row g-4">
+    {% for driver in drivers %}
+    <div class="col-md-6 col-xl-4">
+      <div class="card h-100">
+        <div class="card-body">
+          <!-- Header -->
+          <div class="d-flex align-items-center gap-3 mb-3">
+            <div class="driver-avatar-lg flex-shrink-0" style="width:56px;height:56px;font-size:1.1rem">
+              {% if driver.photo %}<img src="{{ driver.photo.url }}" alt="">{% else %}{{ driver.full_name|slice:":2"|upper }}{% endif %}
+            </div>
+            <div>
+              <h6 class="mb-0">{{ driver.full_name }}</h6>
+              <small class="text-muted">Submitted {{ driver.created_at|timesince }} ago</small>
+            </div>
+            <span class="status-badge status-pending_vetting ms-auto">Pending</span>
+          </div>
+
+          <!-- Details -->
+          <div class="mb-3" style="font-size:.88rem">
+            <div class="d-flex justify-content-between py-1 border-bottom"><span class="text-muted">Phone</span><span>{{ driver.phone_number }}</span></div>
+            <div class="d-flex justify-content-between py-1 border-bottom"><span class="text-muted">License</span><span class="font-monospace">{{ driver.license_number }}</span></div>
+            <div class="d-flex justify-content-between py-1 border-bottom"><span class="text-muted">Expiry</span>
+              <span {% if driver.license_expiry_soon %}class="text-danger"{% endif %}>{{ driver.license_expiry|date:"d M Y"|default:"—" }}</span>
+            </div>
+            <div class="d-flex justify-content-between py-1"><span class="text-muted">Vehicle Type</span><span>{{ driver.vehicle_type|default:"—" }}</span></div>
+          </div>
+
+          {% if driver.notes %}
+            <div class="alert alert-light py-2 mb-3" style="font-size:.85rem">
+              <i class="fas fa-sticky-note me-1 text-muted"></i>{{ driver.notes|truncatechars:120 }}
+            </div>
+          {% endif %}
+
+          <!-- Actions -->
+          <div class="d-flex gap-2 mt-auto">
+            <a href="{% url 'logistics:dispatch_driver_detail' driver.pk %}" class="btn btn-outline-secondary btn-sm flex-fill"><i class="fas fa-eye me-1"></i>View</a>
+            <form method="post" action="{% url 'logistics:dispatch_driver_approve' driver.pk %}" class="flex-fill">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-success btn-sm w-100" onclick="return confirm('Approve {{ driver.full_name }}?')">
+                <i class="fas fa-check me-1"></i>Approve
+              </button>
+            </form>
+            <form method="post" action="{% url 'logistics:dispatch_driver_reject' driver.pk %}" class="flex-fill">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-danger btn-sm w-100" onclick="return confirm('Reject {{ driver.full_name }}? This cannot be undone.')">
+                <i class="fas fa-times me-1"></i>Reject
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="card"><div class="card-body">
+    <div class="empty-state py-5">
+      <i class="fas fa-user-check"></i>
+      <h5>Vetting Queue is Empty</h5>
+      <p>All pending drivers have been reviewed. New registrations will appear here.</p>
+      <a href="{% url 'logistics:dispatch_driver_register' %}" class="btn btn-primary mt-2"><i class="fas fa-user-plus me-1"></i>Register Driver</a>
+    </div>
+  </div></div>
+{% endif %}
+{% endblock %}

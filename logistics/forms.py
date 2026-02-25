@@ -884,3 +884,783 @@ class VehicleReassignmentForm(forms.Form):
                 )
 
         return new_driver
+
+# =============================================================================
+# DISPATCH CENTRE FORMS
+# Fields named to match templates; save()/clean() methods map to model fields.
+# =============================================================================
+
+class DispatchDriverRegistrationForm(forms.Form):
+    """
+    Register a new dispatch driver profile.
+
+    Two creation modes (same form):
+      A) Select an existing system user via the `user` field.
+      B) Leave `user` blank → new User is created from first_name/email.
+
+    On save() a DriverProfile is created and (for staff creators) auto-submitted
+    for vetting review.
+
+    Template: dispatch/driver_register.html
+    View:     DriverRegistrationView
+    """
+
+    # ── Select existing user OR create new ───────────────────────────────────
+    user = forms.ModelChoiceField(
+        queryset=None,            # set in __init__
+        required=False,
+        empty_label="— Create a new user account —",
+        label="Existing User Account",
+        widget=forms.Select(attrs={'class': 'form-select'}),
+        help_text="Select a user who already has a system account, or leave blank to create one below.",
+    )
+
+    DRIVER_TYPE_CHOICES = [('', '— Select driver type —')] + list([
+        ("easy_move", "Easy Move (Easy Market Staff)"),
+        ("external", "External / Partner Driver"),
+        ("drone_operator", "Drone Operator"),
+    ])
+    driver_type = forms.ChoiceField(
+        choices=DRIVER_TYPE_CHOICES,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+
+    # ── Personal info (used to create User if no existing user selected) ─────
+    full_name = forms.CharField(
+        max_length=150,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Full legal name',
+        }),
+        help_text="Required only when creating a new user account.",
+    )
+    phone_number = forms.CharField(
+        max_length=20,
+        label="Mobile Phone",
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': '+220 000 0000',
+            'type': 'tel',
+        }),
+    )
+    email = forms.EmailField(
+        required=False,
+        widget=forms.EmailInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'driver@example.com',
+        }),
+        help_text="Required when creating a new user account.",
+    )
+    national_id = forms.CharField(
+        max_length=50,
+        required=False,
+        label="National ID / Passport",
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'ID or passport number',
+        }),
+    )
+    date_of_birth = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+    )
+    photo = forms.ImageField(
+        required=False,
+        widget=forms.FileInput(attrs={'class': 'form-control'}),
+    )
+
+    # ── Licence ──────────────────────────────────────────────────────────────
+    license_number = forms.CharField(
+        max_length=50,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'DL-123456',
+        }),
+    )
+    LICENSE_CATEGORY_CHOICES = [
+        ('', '— Select —'),
+        ('B', 'B — Car'),
+        ('C1', 'C1 — Light Truck'),
+        ('C', 'C — Heavy Truck'),
+        ('D', 'D — Bus'),
+        ('A', 'A — Motorcycle'),
+        ('drone', 'Drone Operator'),
+    ]
+    license_category = forms.ChoiceField(
+        choices=LICENSE_CATEGORY_CHOICES,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    license_expiry = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+    )
+    license_document = forms.FileField(
+        required=False,
+        label="License Document (scan/photo)",
+        widget=forms.FileInput(attrs={'class': 'form-control'}),
+    )
+
+    # ── Emergency contact ────────────────────────────────────────────────────
+    emergency_contact_name = forms.CharField(
+        max_length=100,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Contact person full name',
+        }),
+    )
+    emergency_contact_phone = forms.CharField(
+        max_length=20,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': '+220 000 0000',
+            'type': 'tel',
+        }),
+    )
+
+    # ── Notes ────────────────────────────────────────────────────────────────
+    notes = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'rows': 3,
+            'placeholder': 'Any additional notes about this driver…',
+        }),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from django.contrib.auth import get_user_model
+        UserModel = get_user_model()
+        # Only users that don't yet have a DriverProfile
+        from .dispatch_models import DriverProfile
+        taken_ids = DriverProfile.objects.values_list('user_id', flat=True)
+        self.fields['user'].queryset = (
+            UserModel.objects.exclude(id__in=taken_ids)
+            .order_by('first_name', 'last_name', 'username')
+        )
+        self.fields['user'].label_from_instance = lambda u: (
+            f"{u.get_full_name() or u.username} <{u.email}>"
+        )
+
+    # ─────────────────────────── validation ──────────────────────────────────
+
+    def clean(self):
+        cleaned = super().clean()
+        selected_user = cleaned.get('user')
+        email = (cleaned.get('email') or '').strip().lower()
+        full_name = (cleaned.get('full_name') or '').strip()
+
+        if not selected_user:
+            # Creating a new user — need at least full_name and email
+            if not full_name:
+                self.add_error('full_name', "Full name is required when creating a new user account.")
+            if not email:
+                self.add_error('email', "Email is required when creating a new user account.")
+
+        return cleaned
+
+    def clean_email(self):
+        from django.contrib.auth import get_user_model
+        UserModel = get_user_model()
+        email = (self.cleaned_data.get('email') or '').strip().lower()
+        if email and self.cleaned_data.get('user') is None:
+            if UserModel.objects.filter(email__iexact=email).exists():
+                raise ValidationError("A user with this email already exists.")
+        return email
+
+    def clean_phone_number(self):
+        from .dispatch_models import DriverProfile
+        phone = (self.cleaned_data.get('phone_number') or '').strip()
+        if phone and DriverProfile.objects.filter(phone=phone).exists():
+            raise ValidationError("A driver profile with this phone number already exists.")
+        return phone
+
+    def clean_license_number(self):
+        from .dispatch_models import DriverProfile
+        license_number = (self.cleaned_data.get('license_number') or '').strip().upper()
+        if license_number and DriverProfile.objects.filter(license_number__iexact=license_number).exists():
+            raise ValidationError("A driver with this license number already exists.")
+        return license_number
+
+    def get_name_parts(self):
+        """Split `full_name` into (first_name, last_name)."""
+        full = (self.cleaned_data.get('full_name') or '').strip()
+        parts = full.split(' ', 1)
+        return parts[0], (parts[1] if len(parts) > 1 else '')
+
+    def save(self, created_by=None, commit=True):
+        """
+        Create the User (if needed) and DriverProfile.
+        Returns the DriverProfile instance.
+        """
+        from django.contrib.auth import get_user_model
+        from .dispatch_models import DriverProfile
+        UserModel = get_user_model()
+
+        data = self.cleaned_data
+        selected_user = data.get('user')
+
+        if selected_user:
+            user = selected_user
+        else:
+            # Create a new user from full_name + email
+            first_name, last_name = self.get_name_parts()
+            email = data['email'].lower()
+            user = UserModel.objects.create_user(
+                username=email,
+                email=email,
+                first_name=first_name,
+                last_name=last_name,
+            )
+            if hasattr(user, 'is_driver'):
+                user.is_driver = True
+                user.save(update_fields=['is_driver'])
+
+        profile = DriverProfile(
+            user=user,
+            driver_type=data.get('driver_type', DriverProfile.DriverType.EXTERNAL),
+            phone=data.get('phone_number', ''),
+            national_id_number=data.get('national_id', ''),
+            date_of_birth=data.get('date_of_birth') or None,
+            license_number=data.get('license_number', ''),
+            license_category=data.get('license_category', ''),
+            license_expiry=data.get('license_expiry') or None,
+            emergency_contact_name=data.get('emergency_contact_name', ''),
+            emergency_contact_phone=data.get('emergency_contact_phone', ''),
+            notes=data.get('notes', ''),
+            vetting_status=DriverProfile.VettingStatus.PENDING,
+        )
+        if data.get('photo'):
+            profile.photo = data['photo']
+
+        if commit:
+            profile.save()
+
+        return profile
+
+
+class DispatchDriverEditForm(forms.Form):
+    """
+    Edit an existing DriverProfile.
+    Field names mirror the driver_edit.html template;
+    view maps cleaned_data back to model fields.
+
+    Template: dispatch/driver_edit.html
+    View:     DriverEditView
+    """
+
+    # ── Personal ─────────────────────────────────────────────────────────────
+    full_name = forms.CharField(
+        max_length=150,
+        required=False,
+        label="Full Name",
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+        help_text="Updates the linked User account's first/last name.",
+    )
+    phone_number = forms.CharField(
+        max_length=20,
+        label="Mobile Phone",
+        widget=forms.TextInput(attrs={'class': 'form-control', 'type': 'tel'}),
+    )
+    email = forms.EmailField(
+        required=False,
+        disabled=True,                    # email cannot be changed after creation
+        widget=forms.EmailInput(attrs={'class': 'form-control'}),
+        help_text="Email cannot be changed after account creation.",
+    )
+    national_id = forms.CharField(
+        max_length=50,
+        required=False,
+        label="National ID / Passport",
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+    )
+    date_of_birth = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+    )
+    photo = forms.ImageField(
+        required=False,
+        widget=forms.FileInput(attrs={'class': 'form-control'}),
+        help_text="Leave blank to keep the current photo.",
+    )
+
+    # ── Licence ──────────────────────────────────────────────────────────────
+    license_number = forms.CharField(
+        max_length=50,
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+    )
+    LICENSE_CATEGORY_CHOICES = [
+        ('', '— Select —'),
+        ('B', 'B — Car'), ('C1', 'C1 — Light Truck'), ('C', 'C — Heavy Truck'),
+        ('D', 'D — Bus'), ('A', 'A — Motorcycle'), ('drone', 'Drone Operator'),
+    ]
+    license_category = forms.ChoiceField(
+        choices=LICENSE_CATEGORY_CHOICES,
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    license_expiry = forms.DateField(
+        required=False,
+        widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+    )
+
+    # ── Availability (staff only) ────────────────────────────────────────────
+    AVAILABILITY_CHOICES = [
+        ('available', 'Available'),
+        ('on_trip', 'On Trip'),
+        ('offline', 'Offline'),
+        ('on_leave', 'On Leave'),
+    ]
+    availability = forms.ChoiceField(
+        choices=AVAILABILITY_CHOICES,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+
+    # ── Emergency contact ────────────────────────────────────────────────────
+    emergency_contact_name = forms.CharField(
+        max_length=100, required=False,
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+    )
+    emergency_contact_phone = forms.CharField(
+        max_length=20, required=False,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'type': 'tel'}),
+    )
+
+    # ── Notes ────────────────────────────────────────────────────────────────
+    notes = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+    )
+
+    def __init__(self, *args, driver=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._driver = driver
+        # Pre-populate from driver object on GET (no POST data)
+        if driver and not self.is_bound:
+            user = getattr(driver, 'user', None)
+            self.fields['full_name'].initial = (
+                user.get_full_name() if user else ''
+            )
+            self.fields['phone_number'].initial = getattr(driver, 'phone', '')
+            self.fields['email'].initial = user.email if user else ''
+            self.fields['national_id'].initial = getattr(driver, 'national_id_number', '')
+            self.fields['date_of_birth'].initial = getattr(driver, 'date_of_birth', None)
+            self.fields['license_number'].initial = getattr(driver, 'license_number', '')
+            self.fields['license_category'].initial = getattr(driver, 'license_category', '')
+            self.fields['license_expiry'].initial = getattr(driver, 'license_expiry', None)
+            self.fields['availability'].initial = getattr(driver, 'availability', 'available')
+            self.fields['emergency_contact_name'].initial = getattr(driver, 'emergency_contact_name', '')
+            self.fields['emergency_contact_phone'].initial = getattr(driver, 'emergency_contact_phone', '')
+            self.fields['notes'].initial = getattr(driver, 'notes', '')
+
+    def clean_phone_number(self):
+        from .dispatch_models import DriverProfile
+        phone = (self.cleaned_data.get('phone_number') or '').strip()
+        qs = DriverProfile.objects.filter(phone=phone)
+        if self._driver and getattr(self._driver, 'pk', None):
+            qs = qs.exclude(pk=self._driver.pk)
+        if qs.exists():
+            raise ValidationError("Another driver with this phone number already exists.")
+        return phone
+
+    def clean_license_number(self):
+        from .dispatch_models import DriverProfile
+        license_number = (self.cleaned_data.get('license_number') or '').strip().upper()
+        if not license_number:
+            return license_number
+        qs = DriverProfile.objects.filter(license_number__iexact=license_number)
+        if self._driver and getattr(self._driver, 'pk', None):
+            qs = qs.exclude(pk=self._driver.pk)
+        if qs.exists():
+            raise ValidationError("A driver with this license number already exists.")
+        return license_number
+
+    def get_name_parts(self):
+        full = (self.cleaned_data.get('full_name') or '').strip()
+        parts = full.split(' ', 1)
+        return parts[0], (parts[1] if len(parts) > 1 else '')
+
+    def apply_to_driver(self, driver, files=None, is_staff=False):
+        """
+        Apply validated form data to an existing DriverProfile and its linked User.
+        The caller is responsible for driver.save().
+        """
+        data = self.cleaned_data
+
+        # Update User name
+        user = driver.user
+        first_name, last_name = self.get_name_parts()
+        if first_name:
+            user.first_name = first_name
+            user.last_name = last_name
+            user.save(update_fields=['first_name', 'last_name'])
+
+        # Map form fields → model fields
+        field_map = {
+            'phone_number':         'phone',
+            'national_id':          'national_id_number',
+            'license_number':       'license_number',
+            'license_category':     'license_category',
+            'license_expiry':       'license_expiry',
+            'date_of_birth':        'date_of_birth',
+            'emergency_contact_name':  'emergency_contact_name',
+            'emergency_contact_phone': 'emergency_contact_phone',
+            'notes':                'notes',
+        }
+        fields_saved = []
+        for form_key, model_field in field_map.items():
+            value = data.get(form_key)
+            if value is not None and value != '':
+                setattr(driver, model_field, value)
+                fields_saved.append(model_field)
+
+        if is_staff and data.get('availability'):
+            driver.availability = data['availability']
+            fields_saved.append('availability')
+
+        if files and files.get('photo'):
+            driver.photo = files['photo']
+            fields_saved.append('photo')
+
+        if fields_saved:
+            fields_saved.append('updated_at')
+            driver.save(update_fields=fields_saved)
+
+        return driver
+
+
+class PickupTaskForm(forms.Form):
+    """
+    Create a new Pickup Task.
+
+    Field names match BOTH the pickup_task_create.html template AND the names
+    that CreatePickupTaskView reads from POST, so the view can use
+    form.cleaned_data directly.
+
+    Template: dispatch/pickup_task_create.html
+    View:     CreatePickupTaskView
+    """
+
+    ORDER_TYPE_CHOICES = [
+        ('', '— Select order type —'),
+        ('regular', 'Regular Marketplace Order'),
+        ('b2b',     'B2B Order'),
+        ('crossroad', 'Black Market / Crossroad Order'),
+    ]
+    order_type = forms.ChoiceField(
+        choices=ORDER_TYPE_CHOICES,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+        help_text="The type of order this pickup is for.",
+    )
+    order_id = forms.CharField(
+        max_length=100,
+        label="Order ID",
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'e.g. 1042 or UUID for B2B / Crossroad',
+        }),
+        help_text="The ID of the order to create a pickup task for.",
+    )
+    warehouse_id = forms.ModelChoiceField(
+        queryset=None,           # set in __init__
+        label="Destination Warehouse",
+        widget=forms.Select(attrs={'class': 'form-select'}),
+        help_text="Easy Market warehouse where the package will be delivered.",
+    )
+    pickup_address = forms.CharField(
+        max_length=500,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': '123 Kairaba Avenue, Banjul',
+        }),
+    )
+    packages_count = forms.IntegerField(
+        min_value=1,
+        initial=1,
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'min': '1'}),
+    )
+    PRIORITY_CHOICES = [
+        (1, 'Low'),
+        (2, 'Normal'),
+        (3, 'High'),
+        (4, 'Urgent'),
+        (5, 'Critical'),
+    ]
+    priority = forms.ChoiceField(
+        choices=PRIORITY_CHOICES,
+        initial=2,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    scheduled_pickup_time = forms.DateTimeField(
+        required=False,
+        label="Scheduled Pickup Time",
+        widget=forms.DateTimeInput(attrs={
+            'class': 'form-control',
+            'type': 'datetime-local',
+        }),
+    )
+    pickup_contact_name = forms.CharField(
+        max_length=150,
+        required=False,
+        label="Contact Name at Pickup",
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Seller / contact person name',
+        }),
+    )
+    pickup_contact_phone = forms.CharField(
+        max_length=20,
+        required=False,
+        label="Contact Phone at Pickup",
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': '+220 000 0000',
+            'type': 'tel',
+        }),
+    )
+    special_instructions = forms.CharField(
+        required=False,
+        label="Special Instructions",
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'rows': 3,
+            'placeholder': 'Fragile items, call before arrival, gate code, etc.',
+        }),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from .models import Warehouse
+        self.fields['warehouse_id'].queryset = (
+            Warehouse.objects.filter(is_active=True).order_by('name')
+        )
+        self.fields['warehouse_id'].label_from_instance = lambda w: w.name
+
+    def clean_scheduled_pickup_time(self):
+        t = self.cleaned_data.get('scheduled_pickup_time')
+        if t and t < timezone.now():
+            raise ValidationError("Scheduled pickup time cannot be in the past.")
+        return t
+
+    def get_post_data(self):
+        """
+        Return a dict that matches what CreatePickupTaskView expects from request.POST.
+        Views can call this directly to feed into DispatchService.
+        """
+        data = self.cleaned_data
+        warehouse = data.get('warehouse_id')
+        return {
+            'order_type':          data.get('order_type', ''),
+            'order_id':            data.get('order_id', ''),
+            'warehouse_id':        str(warehouse.pk) if warehouse else '',
+            'pickup_address':      data.get('pickup_address', ''),
+            'packages_count':      str(data.get('packages_count', 1)),
+            'priority':            str(data.get('priority', 2)),
+            'pickup_contact_name': data.get('pickup_contact_name', ''),
+            'pickup_contact_phone': data.get('pickup_contact_phone', ''),
+            'special_instructions': data.get('special_instructions', ''),
+            'scheduled_pickup_time': (
+                data['scheduled_pickup_time'].strftime('%Y-%m-%dT%H:%M')
+                if data.get('scheduled_pickup_time') else ''
+            ),
+        }
+
+
+class LastMileTaskForm(forms.Form):
+    """
+    Create a new Last-Mile Delivery Task.
+
+    Field names match BOTH the last_mile_create.html template AND the names
+    CreateLastMileTaskView reads from POST.
+
+    Template: dispatch/last_mile_create.html
+    View:     CreateLastMileTaskView
+    """
+
+    shipment_id = forms.ModelChoiceField(
+        queryset=None,           # set in __init__
+        label="Shipment",
+        widget=forms.Select(attrs={'class': 'form-select'}),
+        help_text="Select the shipment that needs last-mile delivery.",
+    )
+    warehouse_id = forms.ModelChoiceField(
+        queryset=None,           # set in __init__
+        label="Origin Warehouse",
+        widget=forms.Select(attrs={'class': 'form-select'}),
+        help_text="Warehouse from which the package will be dispatched.",
+    )
+    delivery_address = forms.CharField(
+        max_length=500,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': '45 Independence Drive, Banjul',
+        }),
+        help_text="Leave blank to auto-fill from shipment address.",
+        required=False,
+    )
+    recipient_name = forms.CharField(
+        max_length=150,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Recipient full name',
+        }),
+    )
+    recipient_phone = forms.CharField(
+        max_length=20,
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': '+220 000 0000',
+            'type': 'tel',
+        }),
+    )
+    scheduled_delivery_time = forms.DateTimeField(
+        required=False,
+        label="Scheduled Delivery Time",
+        widget=forms.DateTimeInput(attrs={
+            'class': 'form-control',
+            'type': 'datetime-local',
+        }),
+    )
+    PRIORITY_CHOICES = [
+        (1, 'Low'),
+        (2, 'Normal'),
+        (3, 'High'),
+        (4, 'Urgent'),
+        (5, 'Critical'),
+    ]
+    priority = forms.ChoiceField(
+        choices=PRIORITY_CHOICES,
+        initial=2,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    special_instructions = forms.CharField(
+        required=False,
+        label="Special Instructions / Notes",
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'rows': 3,
+            'placeholder': 'Gate codes, floor numbers, call before delivery, etc.',
+        }),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from .models import Warehouse, Shipment
+        # Only shipments that are in-transit/shipped and don't yet have a last-mile task
+        self.fields['shipment_id'].queryset = (
+            Shipment.objects
+            .filter(status__in=['in_transit', 'shipped'])
+            .exclude(last_mile_task__isnull=False)
+            .order_by('-created_at')
+            .select_related('order')[:200]
+        )
+        self.fields['shipment_id'].label_from_instance = lambda s: (
+            f"#{s.tracking_number}" if hasattr(s, 'tracking_number') else str(s)
+        )
+        self.fields['warehouse_id'].queryset = (
+            Warehouse.objects.filter(is_active=True).order_by('name')
+        )
+        self.fields['warehouse_id'].label_from_instance = lambda w: w.name
+
+    def clean_scheduled_delivery_time(self):
+        t = self.cleaned_data.get('scheduled_delivery_time')
+        if t and t < timezone.now():
+            raise ValidationError("Scheduled delivery time cannot be in the past.")
+        return t
+
+
+class BatchDispatchForm(forms.Form):
+    """
+    Top-level settings for a batch dispatch run.
+    Individual task rows are submitted as tasks-{i}-* and handled by
+    DispatchBatchCreateView.post() / DispatchService.create_dispatch_batch().
+
+    Template: dispatch/batch_create.html
+    View:     DispatchBatchCreateView
+    """
+
+    BATCH_TYPE_CHOICES = [
+        ('pickup',   'Pickup Run'),
+        ('delivery', 'Delivery Run'),
+        ('mixed',    'Mixed (Pickup + Delivery)'),
+    ]
+    batch_type = forms.ChoiceField(
+        choices=BATCH_TYPE_CHOICES,
+        initial='mixed',
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+
+    driver_id = forms.ModelChoiceField(
+        queryset=None,
+        required=False,
+        label="Assign Driver",
+        empty_label="— No driver (drone-only batch) —",
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    drone_id = forms.ModelChoiceField(
+        queryset=None,
+        required=False,
+        label="Assign Drone",
+        empty_label="— No drone —",
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+
+    planned_start_time = forms.DateTimeField(
+        required=False,
+        label="Planned Start Time",
+        widget=forms.DateTimeInput(attrs={
+            'class': 'form-control',
+            'type': 'datetime-local',
+        }),
+    )
+    notes = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from .dispatch_models import DriverProfile, DroneUnit
+
+        self.fields['driver_id'].queryset = (
+            DriverProfile.objects
+            .filter(
+                is_active=True,
+                vetting_status=DriverProfile.VettingStatus.APPROVED,
+                availability=DriverProfile.Availability.AVAILABLE,
+            )
+            .select_related('user')
+            .order_by('user__first_name', 'user__last_name')
+        )
+        self.fields['driver_id'].label_from_instance = lambda d: (
+            d.user.get_full_name() or d.user.username
+        )
+
+        self.fields['drone_id'].queryset = (
+            DroneUnit.objects
+            .filter(is_active=True, status=DroneUnit.DroneStatus.AVAILABLE, battery_level__gte=30)
+            .order_by('drone_id')
+        )
+        self.fields['drone_id'].label_from_instance = lambda d: (
+            f"{d.drone_id} ({d.battery_level}%)"
+        )
+
+    def clean(self):
+        cleaned = super().clean()
+        if not cleaned.get('driver_id') and not cleaned.get('drone_id'):
+            raise ValidationError("A batch must be assigned to either a driver or a drone.")
+        return cleaned
+
+    def clean_planned_start_time(self):
+        t = self.cleaned_data.get('planned_start_time')
+        if t and t < timezone.now():
+            raise ValidationError("Planned start time cannot be in the past.")
+        return t

@@ -1,10 +1,145 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Title</title>
-</head>
-<body>
+{% extends 'logistics/base.html' %}
+{% block title %}{{ driver.full_name }} — Driver Profile{% endblock %}
+{% block extra_css %}{% include 'logistics/dispatch/_shared_styles.html' %}{% endblock %}
 
-</body>
-</html>
+{% block content %}
+<div class="dispatch-page-header">
+  <div>
+    <h1>{{ driver.full_name }}</h1>
+    <p>
+      <span class="status-badge status-{{ driver.status }}">{{ driver.get_status_display }}</span>
+      <span class="status-badge status-{{ driver.availability }} ms-1">{{ driver.get_availability_display }}</span>
+    </p>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    {% if driver.status == 'pending_vetting' %}
+      <form method="post" action="{% url 'logistics:dispatch_driver_approve' driver.pk %}" class="d-inline">{% csrf_token %}
+        <button class="btn btn-success"><i class="fas fa-check me-1"></i>Approve</button>
+      </form>
+      <form method="post" action="{% url 'logistics:dispatch_driver_reject' driver.pk %}" class="d-inline">{% csrf_token %}
+        <button class="btn btn-danger"><i class="fas fa-times me-1"></i>Reject</button>
+      </form>
+    {% elif driver.status == 'active' %}
+      <form method="post" action="{% url 'logistics:dispatch_driver_suspend' driver.pk %}" class="d-inline">{% csrf_token %}
+        <button class="btn btn-warning"><i class="fas fa-ban me-1"></i>Suspend</button>
+      </form>
+    {% elif driver.status == 'suspended' %}
+      <form method="post" action="{% url 'logistics:dispatch_driver_approve' driver.pk %}" class="d-inline">{% csrf_token %}
+        <button class="btn btn-success"><i class="fas fa-undo me-1"></i>Reinstate</button>
+      </form>
+    {% endif %}
+    <a href="{% url 'logistics:dispatch_driver_edit' driver.pk %}" class="btn btn-outline-secondary"><i class="fas fa-edit me-1"></i>Edit</a>
+    <a href="{% url 'logistics:dispatch_driver_roster' %}" class="btn btn-outline-secondary"><i class="fas fa-arrow-left me-1"></i>Roster</a>
+  </div>
+</div>
+
+{% if messages %}{% for msg in messages %}<div class="alert alert-{{ msg.tags }} alert-dismissible fade show">{{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>{% endfor %}{% endif %}
+
+<div class="row g-4">
+  <!-- Profile card -->
+  <div class="col-lg-4">
+    <div class="card text-center mb-4">
+      <div class="card-body py-4">
+        <div class="driver-avatar-lg mx-auto mb-3">
+          {% if driver.photo %}<img src="{{ driver.photo.url }}" alt="">{% else %}{{ driver.full_name|slice:":2"|upper }}{% endif %}
+        </div>
+        <h5 class="mb-1">{{ driver.full_name }}</h5>
+        <p class="text-muted mb-3" style="font-size:.9rem">{{ driver.vehicle_type|default:"Ground Driver" }}</p>
+        <div class="d-flex justify-content-center gap-2 flex-wrap mb-3">
+          <span class="status-badge status-{{ driver.status }}">{{ driver.get_status_display }}</span>
+          <span class="status-badge status-{{ driver.availability }}">{{ driver.get_availability_display }}</span>
+        </div>
+        <hr>
+        <div class="text-start">
+          <div class="mb-2"><small class="text-muted d-block">Phone</small><span>{{ driver.phone_number }}</span></div>
+          {% if driver.email %}<div class="mb-2"><small class="text-muted d-block">Email</small><span>{{ driver.email }}</span></div>{% endif %}
+          <div class="mb-2"><small class="text-muted d-block">License</small><span class="font-monospace">{{ driver.license_number }}</span></div>
+          <div class="mb-2"><small class="text-muted d-block">License Expiry</small>
+            <span {% if driver.license_expiry_soon %}class="text-danger fw-semibold"{% endif %}>{{ driver.license_expiry|date:"d M Y"|default:"—" }}</span>
+          </div>
+          {% if driver.emergency_contact_name %}
+          <div class="mb-0"><small class="text-muted d-block">Emergency Contact</small><span>{{ driver.emergency_contact_name }} — {{ driver.emergency_contact_phone }}</span></div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="card">
+      <div class="card-header"><i class="fas fa-chart-bar me-2 text-primary"></i>Task Summary</div>
+      <div class="card-body p-0">
+        <table class="table table-borderless mb-0" style="font-size:.9rem">
+          <tr><td class="text-muted ps-3">Total Tasks</td><td class="fw-semibold text-end pe-3">{{ task_stats.total|default:0 }}</td></tr>
+          <tr><td class="text-muted ps-3">Completed</td><td class="fw-semibold text-success text-end pe-3">{{ task_stats.completed|default:0 }}</td></tr>
+          <tr><td class="text-muted ps-3">Active</td><td class="fw-semibold text-info text-end pe-3">{{ task_stats.active|default:0 }}</td></tr>
+          <tr><td class="text-muted ps-3">Pickups</td><td class="fw-semibold text-end pe-3">{{ task_stats.pickups|default:0 }}</td></tr>
+          <tr><td class="text-muted ps-3">Deliveries</td><td class="fw-semibold text-end pe-3">{{ task_stats.deliveries|default:0 }}</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right column -->
+  <div class="col-lg-8">
+    <!-- Assigned tasks -->
+    <div class="card mb-4">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="fas fa-clipboard-list me-2 text-primary"></i>Assigned Tasks</span>
+        <div class="d-flex gap-1">
+          <a href="{% url 'logistics:dispatch_pickup_task_create' %}?driver={{ driver.pk }}" class="btn btn-sm btn-outline-primary"><i class="fas fa-plus me-1"></i>Pickup</a>
+          <a href="{% url 'logistics:dispatch_last_mile_create' %}?driver={{ driver.pk }}" class="btn btn-sm btn-outline-success"><i class="fas fa-plus me-1"></i>Delivery</a>
+        </div>
+      </div>
+      <div class="card-body p-0">
+        {% if active_tasks %}
+          <table class="dispatch-table table mb-0">
+            <thead><tr><th>Type</th><th>Task ID</th><th>Scheduled</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              {% for task in active_tasks %}
+              <tr>
+                <td>
+                  {% if task.task_type == 'pickup' %}
+                    <span class="badge bg-primary-subtle text-primary"><i class="fas fa-hand-holding-box me-1"></i>Pickup</span>
+                  {% else %}
+                    <span class="badge bg-success-subtle text-success"><i class="fas fa-person-walking-arrow-right me-1"></i>Delivery</span>
+                  {% endif %}
+                </td>
+                <td class="font-monospace" style="font-size:.82rem">#{{ task.id|stringformat:"s"|slice:":12" }}</td>
+                <td style="font-size:.85rem">{{ task.scheduled_time|date:"d M, H:i" }}</td>
+                <td><span class="status-badge status-{{ task.status }}">{{ task.get_status_display }}</span></td>
+                <td>
+                  {% if task.task_type == 'pickup' %}
+                    <a href="{% url 'logistics:dispatch_pickup_task_detail' task.pk %}" class="btn btn-sm btn-outline-primary py-0 px-2"><i class="fas fa-eye"></i></a>
+                  {% else %}
+                    <a href="{% url 'logistics:dispatch_last_mile_detail' task.pk %}" class="btn btn-sm btn-outline-primary py-0 px-2"><i class="fas fa-eye"></i></a>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <div class="empty-state py-4"><i class="fas fa-clipboard-list"></i><h5>No Active Tasks</h5><p>This driver has no active assignments.</p></div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Vetting notes / history -->
+    {% if driver.vetting_notes or driver.status == 'pending_vetting' %}
+    <div class="card">
+      <div class="card-header"><i class="fas fa-user-shield me-2 text-warning"></i>Vetting Information</div>
+      <div class="card-body">
+        {% if driver.vetting_notes %}
+          <p style="font-size:.9rem">{{ driver.vetting_notes }}</p>
+        {% endif %}
+        {% if driver.status == 'pending_vetting' %}
+          <div class="alert alert-warning mb-0" style="font-size:.9rem">
+            <i class="fas fa-clock me-2"></i>Awaiting review. Use the Approve / Reject buttons above to action this driver.
+          </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

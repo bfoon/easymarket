@@ -1,10 +1,97 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Title</title>
-</head>
-<body>
+{% extends 'logistics/base.html' %}
+{% block title %}Create Last Mile Delivery Task{% endblock %}
+{% block extra_css %}{% include 'logistics/dispatch/_shared_styles.html' %}{% endblock %}
 
-</body>
-</html>
+{% block content %}
+<div class="dispatch-page-header">
+  <div>
+    <h1><i class="fas fa-person-walking-arrow-right me-2" style="color:var(--primary-color)"></i>Create Delivery Task</h1>
+    <p>Schedule a last-mile delivery from the warehouse to the end customer.</p>
+  </div>
+  <a href="{% url 'logistics:dispatch_last_mile_list' %}" class="btn btn-outline-secondary"><i class="fas fa-arrow-left me-1"></i>Back</a>
+</div>
+
+{% if messages %}{% for msg in messages %}
+  <div class="alert alert-{{ msg.tags }} alert-dismissible fade show">{{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
+{% endfor %}{% endif %}
+
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header"><i class="fas fa-plus me-2 text-primary"></i>New Delivery Task</div>
+      <div class="card-body">
+        <form method="post" class="dispatch-form">
+          {% csrf_token %}
+          {% if form.non_field_errors %}
+            <div class="alert alert-danger">{% for e in form.non_field_errors %}<div>{{ e }}</div>{% endfor %}</div>
+          {% endif %}
+
+          {# ── Shipment & Warehouse ───────────────────────────────────────── #}
+          <div class="form-section">
+            <div class="form-section-title">Shipment &amp; Origin</div>
+            <div class="row g-3">
+              <div class="col-12">
+                <label class="form-label">{{ form.shipment_id.label }} <span class="text-danger">*</span></label>
+                {{ form.shipment_id }}
+                {% if form.shipment_id.help_text %}<div class="form-text">{{ form.shipment_id.help_text }}</div>{% endif %}
+                {% if form.shipment_id.errors %}<div class="invalid-feedback d-block">{{ form.shipment_id.errors.0 }}</div>{% endif %}
+              </div>
+              <div class="col-12">
+                <label class="form-label">{{ form.warehouse_id.label }} <span class="text-danger">*</span></label>
+                {{ form.warehouse_id }}
+                {% if form.warehouse_id.help_text %}<div class="form-text">{{ form.warehouse_id.help_text }}</div>{% endif %}
+                {% if form.warehouse_id.errors %}<div class="invalid-feedback d-block">{{ form.warehouse_id.errors.0 }}</div>{% endif %}
+              </div>
+            </div>
+          </div>
+
+          {# ── Delivery Details ───────────────────────────────────────────── #}
+          <div class="form-section">
+            <div class="form-section-title">Delivery Details</div>
+            <div class="row g-3">
+              <div class="col-12">
+                <label class="form-label">{{ form.delivery_address.label }}</label>
+                {{ form.delivery_address }}
+                {% if form.delivery_address.help_text %}<div class="form-text">{{ form.delivery_address.help_text }}</div>{% endif %}
+                {% if form.delivery_address.errors %}<div class="invalid-feedback d-block">{{ form.delivery_address.errors.0 }}</div>{% endif %}
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">{{ form.recipient_name.label }}</label>
+                {{ form.recipient_name }}
+                {% if form.recipient_name.errors %}<div class="invalid-feedback d-block">{{ form.recipient_name.errors.0 }}</div>{% endif %}
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">{{ form.recipient_phone.label }}</label>
+                {{ form.recipient_phone }}
+                {% if form.recipient_phone.errors %}<div class="invalid-feedback d-block">{{ form.recipient_phone.errors.0 }}</div>{% endif %}
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">{{ form.scheduled_delivery_time.label }}</label>
+                {{ form.scheduled_delivery_time }}
+                {% if form.scheduled_delivery_time.errors %}<div class="invalid-feedback d-block">{{ form.scheduled_delivery_time.errors.0 }}</div>{% endif %}
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">{{ form.priority.label }}</label>
+                {{ form.priority }}
+                {% if form.priority.errors %}<div class="invalid-feedback d-block">{{ form.priority.errors.0 }}</div>{% endif %}
+              </div>
+            </div>
+          </div>
+
+          {# ── Instructions ──────────────────────────────────────────────── #}
+          <div class="form-section mb-0">
+            <div class="form-section-title">{{ form.special_instructions.label }}</div>
+            {{ form.special_instructions }}
+            {% if form.special_instructions.errors %}<div class="invalid-feedback d-block">{{ form.special_instructions.errors.0 }}</div>{% endif %}
+          </div>
+
+          <div class="d-flex justify-content-end gap-2 pt-4 border-top mt-4">
+            <a href="{% url 'logistics:dispatch_last_mile_list' %}" class="btn btn-outline-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-save me-1"></i>Create Delivery Task</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

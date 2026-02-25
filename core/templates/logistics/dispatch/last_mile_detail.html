@@ -1,10 +1,234 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Title</title>
-</head>
-<body>
+{% extends 'logistics/base.html' %}
+{% block title %}Delivery Task — #{{ task.id|stringformat:"s"|slice:":12" }}{% endblock %}
+{% block extra_css %}{% include 'logistics/dispatch/_shared_styles.html' %}{% endblock %}
 
-</body>
-</html>
+{% block content %}
+<div class="dispatch-page-header">
+  <div>
+    <h1><i class="fas fa-person-walking-arrow-right me-2" style="color:var(--primary-color)"></i>Delivery Task</h1>
+    <p class="font-monospace" style="font-size:.9rem">#{{ task.id }}</p>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    {% if task.status == 'pending' or task.status == 'assigned' %}
+      <a href="#" class="btn btn-info" onclick="return confirm('Start delivery task?')"><i class="fas fa-play me-1"></i>Start</a>
+    {% elif task.status == 'in_progress' %}
+      <a href="#" class="btn btn-success" onclick="return confirm('Mark as delivered?')"><i class="fas fa-check me-1"></i>Complete</a>
+      <a href="#" class="btn btn-outline-danger" onclick="return confirm('Mark as failed?')"><i class="fas fa-times-circle me-1"></i>Mark Failed</a>
+    {% endif %}
+    {% if task.status not in 'completed,cancelled,failed' and not task.driver and not task.drone %}
+      <button class="btn btn-warning" onclick="openAssignModal()"><i class="fas fa-user-plus me-1"></i>Assign</button>
+    {% endif %}
+    {% if task.status not in 'completed,cancelled' %}
+      <a href="#" class="btn btn-outline-danger" onclick="return confirm('Cancel this delivery task?')"><i class="fas fa-ban me-1"></i>Cancel</a>
+    {% endif %}
+    <a href="{% url 'logistics:dispatch_last_mile_list' %}" class="btn btn-outline-secondary"><i class="fas fa-arrow-left me-1"></i>Back</a>
+  </div>
+</div>
+
+{% if messages %}{% for msg in messages %}<div class="alert alert-{{ msg.tags }} alert-dismissible fade show">{{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>{% endfor %}{% endif %}
+
+<div class="row g-4">
+  <!-- Main details -->
+  <div class="col-lg-8">
+    <div class="card mb-4">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="fas fa-clipboard-list me-2 text-primary"></i>Delivery Details</span>
+        <div class="d-flex gap-2 align-items-center">
+          {% if task.delivery_type == 'express' %}<span class="badge bg-warning-subtle text-warning"><i class="fas fa-bolt me-1"></i>Express</span>{% endif %}
+          {% if task.delivery_type == 'drone' %}<span class="badge bg-primary-subtle text-primary"><i class="fas fa-drone me-1"></i>Drone</span>{% endif %}
+          <span class="status-badge status-{{ task.status }}">{{ task.get_status_display }}</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="row g-3" style="font-size:.9rem">
+          <div class="col-md-6">
+            <div class="text-muted mb-1 text-uppercase" style="font-size:.75rem;letter-spacing:.5px">Delivery Address</div>
+            <div class="fw-semibold">{{ task.delivery_address }}</div>
+          </div>
+          {% if task.recipient_name %}
+          <div class="col-md-6">
+            <div class="text-muted mb-1 text-uppercase" style="font-size:.75rem;letter-spacing:.5px">Recipient</div>
+            <div class="fw-semibold">{{ task.recipient_name }}</div>
+            {% if task.recipient_phone %}<div class="text-muted">{{ task.recipient_phone }}</div>{% endif %}
+          </div>
+          {% endif %}
+          <div class="col-md-6">
+            <div class="text-muted mb-1 text-uppercase" style="font-size:.75rem;letter-spacing:.5px">Scheduled Time</div>
+            <div class="fw-semibold">{{ task.scheduled_time|date:"D, d M Y — H:i" }}</div>
+          </div>
+          {% if task.shipment %}
+          <div class="col-md-6">
+            <div class="text-muted mb-1 text-uppercase" style="font-size:.75rem;letter-spacing:.5px">Linked Shipment</div>
+            <a href="{% url 'logistics:shipment_detail' task.shipment.pk %}" class="fw-semibold text-decoration-none">#{{ task.shipment.pk }}</a>
+          </div>
+          {% endif %}
+          {% if task.notes %}
+          <div class="col-12">
+            <div class="text-muted mb-1 text-uppercase" style="font-size:.75rem;letter-spacing:.5px">Notes</div>
+            <div style="background:var(--bg-secondary);padding:.875rem;border-radius:10px">{{ task.notes }}</div>
+          </div>
+          {% endif %}
+          {% if task.delivery_proof %}
+          <div class="col-12">
+            <div class="text-muted mb-1 text-uppercase" style="font-size:.75rem;letter-spacing:.5px">Proof of Delivery</div>
+            <img src="{{ task.delivery_proof.url }}" style="max-height:200px;border-radius:10px" alt="Proof of delivery">
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Timeline -->
+    <div class="card">
+      <div class="card-header"><i class="fas fa-timeline me-2 text-primary"></i>Status History</div>
+      <div class="card-body">
+        <div class="timeline">
+          <div class="timeline-item">
+            <div class="timeline-dot primary"></div>
+            <div class="timeline-time">{{ task.created_at|date:"d M Y, H:i" }}</div>
+            <div class="timeline-text fw-semibold">Task Created</div>
+          </div>
+          {% if task.assigned_at %}
+          <div class="timeline-item">
+            <div class="timeline-dot primary"></div>
+            <div class="timeline-time">{{ task.assigned_at|date:"d M Y, H:i" }}</div>
+            <div class="timeline-text fw-semibold">Assigned — {{ task.driver.full_name|default:task.drone.drone_id }}</div>
+          </div>
+          {% endif %}
+          {% if task.started_at %}
+          <div class="timeline-item">
+            <div class="timeline-dot warning"></div>
+            <div class="timeline-time">{{ task.started_at|date:"d M Y, H:i" }}</div>
+            <div class="timeline-text fw-semibold">Out for Delivery</div>
+          </div>
+          {% endif %}
+          {% if task.completed_at %}
+          <div class="timeline-item">
+            <div class="timeline-dot success"></div>
+            <div class="timeline-time">{{ task.completed_at|date:"d M Y, H:i" }}</div>
+            <div class="timeline-text fw-semibold">Delivered Successfully</div>
+          </div>
+          {% endif %}
+          {% if task.status == 'failed' %}
+          <div class="timeline-item">
+            <div class="timeline-dot danger"></div>
+            <div class="timeline-time">{{ task.updated_at|date:"d M Y, H:i" }}</div>
+            <div class="timeline-text fw-semibold text-danger">Delivery Failed</div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <div class="col-lg-4">
+    <!-- Driver / Drone card -->
+    <div class="card mb-4">
+      <div class="card-header"><i class="fas fa-id-badge me-2 text-primary"></i>Assigned To</div>
+      <div class="card-body">
+        {% if task.driver %}
+          <div class="d-flex align-items-center gap-3 mb-3">
+            <div class="driver-avatar-lg" style="width:56px;height:56px;font-size:1rem">
+              {% if task.driver.photo %}<img src="{{ task.driver.photo.url }}" alt="">{% else %}{{ task.driver.full_name|slice:":2"|upper }}{% endif %}
+            </div>
+            <div>
+              <a href="{% url 'logistics:dispatch_driver_detail' task.driver.pk %}" class="fw-semibold text-decoration-none text-dark">{{ task.driver.full_name }}</a>
+              <div><span class="status-badge status-{{ task.driver.availability }}" style="font-size:.7rem">{{ task.driver.get_availability_display }}</span></div>
+            </div>
+          </div>
+          <div style="font-size:.88rem">
+            <div class="d-flex justify-content-between py-1"><span class="text-muted">Phone</span><span>{{ task.driver.phone_number }}</span></div>
+          </div>
+        {% elif task.drone %}
+          <div class="d-flex align-items-center gap-3 mb-3">
+            <div style="width:52px;height:52px;border-radius:12px;background:rgba(102,126,234,.1);color:#667eea;display:flex;align-items:center;justify-content:center;font-size:1.4rem"><i class="fas fa-drone"></i></div>
+            <div>
+              <div class="fw-semibold">{{ task.drone.drone_id }}</div>
+              <div class="text-muted" style="font-size:.85rem">{{ task.drone.model }}</div>
+            </div>
+          </div>
+          <div class="mb-2">
+            <div class="d-flex justify-content-between mb-1" style="font-size:.85rem"><span class="text-muted">Battery</span><span>{{ task.drone.battery_level }}%</span></div>
+            <div class="battery-bar"><div class="battery-fill {% if task.drone.battery_level >= 60 %}high{% elif task.drone.battery_level >= 30 %}medium{% else %}low{% endif %}" style="width:{{ task.drone.battery_level }}%"></div></div>
+          </div>
+        {% else %}
+          <div class="empty-state py-3"><i class="fas fa-user-slash"></i><p class="mb-0">Not yet assigned.</p></div>
+          <button class="btn btn-warning w-100 mt-2" onclick="openAssignModal()"><i class="fas fa-user-plus me-1"></i>Assign Now</button>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Quick actions -->
+    {% if task.status not in 'completed,cancelled,failed' %}
+    <div class="card">
+      <div class="card-header"><i class="fas fa-bolt me-2 text-warning"></i>Quick Actions</div>
+      <div class="card-body d-flex flex-column gap-2">
+        {% if not task.driver and not task.drone %}
+          <button class="btn btn-warning" onclick="openAssignModal()"><i class="fas fa-user-plus me-1"></i>Assign Driver / Drone</button>
+        {% endif %}
+        {% if task.status in 'pending,assigned' %}
+          <a href="#" class="btn btn-info" onclick="return confirm('Start task?')"><i class="fas fa-play me-1"></i>Start Delivery</a>
+        {% endif %}
+        {% if task.status == 'in_progress' %}
+          <a href="#" class="btn btn-success" onclick="return confirm('Mark delivered?')"><i class="fas fa-check me-1"></i>Mark Delivered</a>
+          <a href="#" class="btn btn-outline-danger" onclick="return confirm('Mark failed?')"><i class="fas fa-times-circle me-1"></i>Mark Failed</a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Assign modal -->
+<div class="modal fade" id="assignModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Assign Driver / Drone</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <ul class="nav nav-tabs mb-3" id="assignTabs">
+          <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tDriver">Driver</button></li>
+          <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tDrone">Drone</button></li>
+        </ul>
+        <div class="tab-content">
+          <div class="tab-pane fade show active" id="tDriver"><select id="driverSel" class="form-select"><option>Loading…</option></select></div>
+          <div class="tab-pane fade" id="tDrone"><select id="droneSel" class="form-select"><option>Loading…</option></select></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary" onclick="submitAssign()"><i class="fas fa-save me-1"></i>Assign</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% csrf_token %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function openAssignModal() {
+  Promise.all([
+    fetch('{% url "logistics:dispatch_api_available_drivers" %}').then(r=>r.json()),
+    fetch('{% url "logistics:dispatch_api_available_drones" %}').then(r=>r.json())
+  ]).then(([d,dr]) => {
+    const ds = document.getElementById('driverSel'), drs = document.getElementById('droneSel');
+    ds.innerHTML = '<option value="">— Choose driver —</option>';
+    (d.drivers||[]).forEach(x => ds.appendChild(new Option(x.full_name, x.id)));
+    drs.innerHTML = '<option value="">— Choose drone —</option>';
+    (dr.drones||[]).forEach(x => drs.appendChild(new Option(x.drone_id+' ('+x.status+')', x.id)));
+  });
+  new bootstrap.Modal(document.getElementById('assignModal')).show();
+}
+function submitAssign() {
+  const active = document.querySelector('#assignTabs .nav-link.active').dataset.bsTarget;
+  const isDriver = active === '#tDriver';
+  const val = isDriver ? document.getElementById('driverSel').value : document.getElementById('droneSel').value;
+  if (!val) { alert('Select a '+(isDriver?'driver':'drone')+'.'); return; }
+  fetch('{% url "logistics:dispatch_last_mile_assign" task.pk %}', {
+    method:'POST', headers:{'X-CSRFToken':document.querySelector('[name=csrfmiddlewaretoken]').value,'Content-Type':'application/json'},
+    body: JSON.stringify(isDriver ? {driver_id:val} : {drone_id:val})
+  }).then(r=>r.json()).then(d=>{if(d.success)location.reload();else alert(d.message||'Failed.');}).catch(()=>alert('Network error.'));
+}
+</script>
+{% endblock %}

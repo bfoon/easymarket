@@ -1,10 +1,183 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Title</title>
-</head>
-<body>
+{% extends 'logistics/base.html' %}
+{% block title %}Pickup Tasks{% endblock %}
+{% block extra_css %}{% include 'logistics/dispatch/_shared_styles.html' %}{% endblock %}
 
-</body>
-</html>
+{% block content %}
+<div class="dispatch-page-header">
+  <div>
+    <h1><i class="fas fa-hand-holding-box me-2" style="color:var(--primary-color)"></i>Pickup Tasks</h1>
+    <p>Manage and track all pickup assignments</p>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{% url 'logistics:dispatch_batch_create' %}" class="btn btn-outline-secondary"><i class="fas fa-layer-group me-1"></i>Batch</a>
+    <a href="{% url 'logistics:dispatch_pickup_task_create' %}" class="btn btn-primary"><i class="fas fa-plus me-1"></i>New Pickup Task</a>
+  </div>
+</div>
+
+{% if messages %}{% for msg in messages %}<div class="alert alert-{{ msg.tags }} alert-dismissible fade show">{{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>{% endfor %}{% endif %}
+
+<!-- Filters -->
+<div class="card mb-4">
+  <div class="card-body">
+    <form method="get" class="row g-3">
+      <div class="col-md-4">
+        <input type="search" name="q" class="form-control" placeholder="Search by address, driver, task ID…" value="{{ request.GET.q }}">
+      </div>
+      <div class="col-md-2">
+        <select name="status" class="form-select">
+          <option value="">All Statuses</option>
+          <option value="pending"     {% if request.GET.status == 'pending' %}selected{% endif %}>Pending</option>
+          <option value="assigned"    {% if request.GET.status == 'assigned' %}selected{% endif %}>Assigned</option>
+          <option value="in_progress" {% if request.GET.status == 'in_progress' %}selected{% endif %}>In Progress</option>
+          <option value="completed"   {% if request.GET.status == 'completed' %}selected{% endif %}>Completed</option>
+          <option value="cancelled"   {% if request.GET.status == 'cancelled' %}selected{% endif %}>Cancelled</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <input type="date" name="date" class="form-control" value="{{ request.GET.date }}" title="Filter by scheduled date">
+      </div>
+      <div class="col-md-2">
+        <button type="submit" class="btn btn-primary w-100"><i class="fas fa-search me-1"></i>Filter</button>
+      </div>
+      {% if request.GET.q or request.GET.status or request.GET.date %}
+      <div class="col-md-2">
+        <a href="{% url 'logistics:dispatch_pickup_task_list' %}" class="btn btn-outline-secondary w-100"><i class="fas fa-times me-1"></i>Clear</a>
+      </div>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
+<!-- Task list -->
+<div class="card">
+  <div class="card-body p-0">
+    {% if pickup_tasks %}
+      <table class="dispatch-table table mb-0">
+        <thead>
+          <tr>
+            <th>Task ID</th>
+            <th>Pickup Address</th>
+            <th>Driver</th>
+            <th>Scheduled</th>
+            <th>Status</th>
+            <th>Shipment</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for task in pickup_tasks %}
+          <tr>
+            <td class="font-monospace" style="font-size:.82rem">#{{ task.id|stringformat:"s"|slice:":12" }}</td>
+            <td>
+              <div style="font-size:.9rem">{{ task.pickup_address|truncatechars:45 }}</div>
+              {% if task.notes %}<small class="text-muted">{{ task.notes|truncatechars:40 }}</small>{% endif %}
+            </td>
+            <td>
+              {% if task.driver %}
+                <div class="d-flex align-items-center gap-2">
+                  <div class="driver-avatar" style="width:30px;height:30px;font-size:.65rem">{{ task.driver.full_name|slice:":2"|upper }}</div>
+                  <a href="{% url 'logistics:dispatch_driver_detail' task.driver.pk %}" class="text-decoration-none text-dark" style="font-size:.88rem">{{ task.driver.full_name }}</a>
+                </div>
+              {% else %}
+                <button class="btn btn-sm btn-outline-warning py-0 px-2" onclick="openAssignModal('{{ task.pk }}', 'pickup')" title="Assign driver">
+                  <i class="fas fa-user-plus me-1"></i>Assign
+                </button>
+              {% endif %}
+            </td>
+            <td style="font-size:.88rem;white-space:nowrap">
+              {{ task.scheduled_time|date:"d M Y" }}<br>
+              <small class="text-muted">{{ task.scheduled_time|date:"H:i" }}</small>
+            </td>
+            <td><span class="status-badge status-{{ task.status }}">{{ task.get_status_display }}</span></td>
+            <td>
+              {% if task.shipment %}
+                <a href="{% url 'logistics:shipment_detail' task.shipment.pk %}" class="text-decoration-none" style="font-size:.85rem">
+                  #{{ task.shipment.pk }}
+                </a>
+              {% else %}
+                <span class="text-muted" style="font-size:.85rem">—</span>
+              {% endif %}
+            </td>
+            <td>
+              <div class="d-flex gap-1">
+                <a href="{% url 'logistics:dispatch_pickup_task_detail' task.pk %}" class="btn btn-sm btn-outline-primary py-0 px-2"><i class="fas fa-eye"></i></a>
+                {% if task.status == 'pending' %}
+                  <a href="{% url 'logistics:dispatch_pickup_task_status' task.pk 'start' %}" class="btn btn-sm btn-outline-success py-0 px-2" title="Start task" onclick="return confirm('Mark as In Progress?')"><i class="fas fa-play"></i></a>
+                {% elif task.status == 'in_progress' %}
+                  <a href="{% url 'logistics:dispatch_pickup_task_status' task.pk 'complete' %}" class="btn btn-sm btn-outline-success py-0 px-2" title="Complete task" onclick="return confirm('Mark as Completed?')"><i class="fas fa-check"></i></a>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if is_paginated %}
+        <div class="d-flex justify-content-center py-3">
+          <nav><ul class="pagination pagination-sm mb-0">
+            {% if page_obj.has_previous %}<li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}">Prev</a></li>{% endif %}
+            <li class="page-item active"><span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span></li>
+            {% if page_obj.has_next %}<li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a></li>{% endif %}
+          </ul></nav>
+        </div>
+      {% endif %}
+    {% else %}
+      <div class="empty-state py-5"><i class="fas fa-hand-holding-box"></i><h5>No Pickup Tasks</h5><p>Create a task or adjust your filters.</p><a href="{% url 'logistics:dispatch_pickup_task_create' %}" class="btn btn-primary mt-2"><i class="fas fa-plus me-1"></i>New Pickup Task</a></div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Assign driver modal -->
+<div class="modal fade" id="assignModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title"><i class="fas fa-user-plus me-2 text-primary"></i>Assign Driver</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <input type="hidden" id="assignTaskId">
+        <input type="hidden" id="assignTaskType">
+        <label class="form-label fw-semibold">Select Driver</label>
+        <select id="assignDriverSelect" class="form-select"><option value="">Loading…</option></select>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="submitAssign()"><i class="fas fa-save me-1"></i>Assign</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% csrf_token %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function openAssignModal(taskId, type) {
+  document.getElementById('assignTaskId').value = taskId;
+  document.getElementById('assignTaskType').value = type;
+  const sel = document.getElementById('assignDriverSelect');
+  sel.innerHTML = '<option>Loading…</option>';
+  fetch('{% url "logistics:dispatch_api_available_drivers" %}')
+    .then(r => r.json())
+    .then(data => {
+      sel.innerHTML = '<option value="">— Choose driver —</option>';
+      (data.drivers || []).forEach(d => {
+        const o = document.createElement('option');
+        o.value = d.id; o.textContent = d.full_name + ' (' + (d.availability_display || d.availability) + ')';
+        sel.appendChild(o);
+      });
+    }).catch(() => { sel.innerHTML = '<option>Error loading drivers</option>'; });
+  new bootstrap.Modal(document.getElementById('assignModal')).show();
+}
+
+function submitAssign() {
+  const taskId = document.getElementById('assignTaskId').value;
+  const driverId = document.getElementById('assignDriverSelect').value;
+  if (!driverId) { alert('Please select a driver.'); return; }
+  const csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
+  fetch(`/logistics/dispatch/pickup/${taskId}/assign/`, {
+    method: 'POST', headers: { 'X-CSRFToken': csrf, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ driver_id: driverId })
+  }).then(r => r.json()).then(d => { if (d.success) location.reload(); else alert(d.message || 'Assignment failed.'); })
+    .catch(() => alert('Network error.'));
+}
+</script>
+{% endblock %}

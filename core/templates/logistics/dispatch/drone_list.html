@@ -1,10 +1,88 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Title</title>
-</head>
-<body>
+{% extends 'logistics/base.html' %}
+{% block title %}Drone Fleet{% endblock %}
+{% block extra_css %}{% include 'logistics/dispatch/_shared_styles.html' %}
+<style>
+  .drone-card { border: 1px solid var(--border-color); border-radius: 16px; padding: 1.25rem; background: white; transition: all .25s; }
+  .drone-card:hover { border-color: var(--primary-color); box-shadow: var(--shadow-sm); }
+  .drone-icon { width: 56px; height: 56px; border-radius: 12px; background: rgba(102,126,234,.1); color: #667eea; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; }
+</style>
+{% endblock %}
 
-</body>
-</html>
+{% block content %}
+<div class="dispatch-page-header">
+  <div>
+    <h1><i class="fas fa-drone me-2" style="color:var(--primary-color)"></i>Drone Fleet</h1>
+    <p>{{ drones|length }} drone{% if drones|length != 1 %}s{% endif %} registered &mdash; {{ available_count }} available</p>
+  </div>
+</div>
+
+{% if messages %}{% for msg in messages %}<div class="alert alert-{{ msg.tags }} alert-dismissible fade show">{{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>{% endfor %}{% endif %}
+
+<!-- Fleet summary bar -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3"><div class="metric-card success"><div class="metric-icon success"><i class="fas fa-circle-check"></i></div><div class="metric-value">{{ available_count|default:0 }}</div><div class="metric-label">Available</div></div></div>
+  <div class="col-6 col-md-3"><div class="metric-card info"><div class="metric-icon info"><i class="fas fa-paper-plane"></i></div><div class="metric-value">{{ on_mission_count|default:0 }}</div><div class="metric-label">On Mission</div></div></div>
+  <div class="col-6 col-md-3"><div class="metric-card warning"><div class="metric-icon warning"><i class="fas fa-battery-half"></i></div><div class="metric-value">{{ charging_count|default:0 }}</div><div class="metric-label">Charging</div></div></div>
+  <div class="col-6 col-md-3"><div class="metric-card danger"><div class="metric-icon danger"><i class="fas fa-wrench"></i></div><div class="metric-value">{{ maintenance_count|default:0 }}</div><div class="metric-label">Maintenance</div></div></div>
+</div>
+
+{% if drones %}
+  <div class="row g-3">
+    {% for drone in drones %}
+    <div class="col-md-6 col-xl-4">
+      <div class="drone-card">
+        <div class="d-flex align-items-start justify-content-between mb-3">
+          <div class="d-flex align-items-center gap-3">
+            <div class="drone-icon"><i class="fas fa-drone"></i></div>
+            <div>
+              <h6 class="mb-0">{{ drone.drone_id }}</h6>
+              <small class="text-muted">{{ drone.model }}</small>
+            </div>
+          </div>
+          <span class="status-badge status-{{ drone.status }}">{{ drone.get_status_display }}</span>
+        </div>
+
+        <!-- Battery -->
+        <div class="mb-3">
+          <div class="d-flex justify-content-between mb-1">
+            <small class="text-muted">Battery</small>
+            <small class="fw-semibold {% if drone.battery_level < 30 %}text-danger{% elif drone.battery_level < 60 %}text-warning{% else %}text-success{% endif %}">{{ drone.battery_level }}%</small>
+          </div>
+          <div class="battery-bar">
+            <div class="battery-fill {% if drone.battery_level >= 60 %}high{% elif drone.battery_level >= 30 %}medium{% else %}low{% endif %}" style="width:{{ drone.battery_level }}%"></div>
+          </div>
+        </div>
+
+        <!-- Specs -->
+        <div class="row g-2 text-center mb-3" style="font-size:.82rem">
+          <div class="col-4">
+            <div class="fw-semibold">{{ drone.max_payload_kg|default:"—" }}</div>
+            <div class="text-muted">Max kg</div>
+          </div>
+          <div class="col-4">
+            <div class="fw-semibold">{{ drone.range_km|default:"—" }}</div>
+            <div class="text-muted">Range km</div>
+          </div>
+          <div class="col-4">
+            <div class="fw-semibold">{{ drone.total_missions|default:0 }}</div>
+            <div class="text-muted">Missions</div>
+          </div>
+        </div>
+
+        {% if drone.last_mission_time %}
+          <div style="font-size:.8rem;color:var(--text-tertiary)"><i class="fas fa-clock me-1"></i>Last mission {{ drone.last_mission_time|timesince }} ago</div>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="card"><div class="card-body">
+    <div class="empty-state py-5">
+      <i class="fas fa-drone"></i>
+      <h5>No Drones Registered</h5>
+      <p>Your drone fleet will appear here once added to the system.</p>
+    </div>
+  </div></div>
+{% endif %}
+{% endblock %}

@@ -1,10 +1,186 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Title</title>
-</head>
-<body>
+{% extends 'logistics/base.html' %}
 
-</body>
-</html>
+{% block title %}Dispatch Centre — Dashboard{% endblock %}
+
+{% block extra_css %}
+{% include 'logistics/dispatch/_shared_styles.html' %}
+<style>
+  .live-pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #10b981; margin-right: 6px; animation: lp 1.4s ease-in-out infinite; }
+  @keyframes lp { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.5)} }
+  .activity-feed { max-height: 420px; overflow-y: auto; }
+  .activity-item { display: flex; align-items: flex-start; gap: .875rem; padding: .875rem 1.5rem; border-bottom: 1px solid var(--border-color); }
+  .activity-item:last-child { border-bottom: none; }
+  .activity-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 0.85rem; }
+  .activity-time { font-size: 0.75rem; color: var(--text-tertiary); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dispatch-page-header">
+  <div>
+    <h1><i class="fas fa-broadcast-tower me-2" style="color:var(--primary-color)"></i>Dispatch Centre</h1>
+    <p><span class="live-pulse"></span>Live operations &mdash; {{ current_time|date:"D, d M Y H:i" }}</p>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="{% url 'logistics:dispatch_pickup_task_create' %}" class="btn btn-primary"><i class="fas fa-plus me-1"></i>New Pickup</a>
+    <a href="{% url 'logistics:dispatch_last_mile_create' %}" class="btn btn-success"><i class="fas fa-plus me-1"></i>New Delivery</a>
+    <a href="{% url 'logistics:dispatch_batch_create' %}" class="btn btn-outline-secondary"><i class="fas fa-layer-group me-1"></i>Batch</a>
+  </div>
+</div>
+
+<!-- Row 1 metrics -->
+<div class="row g-3 mb-3">
+  <div class="col-6 col-md-3"><div class="metric-card primary"><div class="metric-icon primary"><i class="fas fa-hand-holding-box"></i></div><div class="metric-value">{{ stats.pending_pickups|default:0 }}</div><div class="metric-label">Pending Pickups</div></div></div>
+  <div class="col-6 col-md-3"><div class="metric-card info"><div class="metric-icon info"><i class="fas fa-person-walking-arrow-right"></i></div><div class="metric-value">{{ stats.active_deliveries|default:0 }}</div><div class="metric-label">Active Deliveries</div></div></div>
+  <div class="col-6 col-md-3"><div class="metric-card success"><div class="metric-icon success"><i class="fas fa-circle-check"></i></div><div class="metric-value">{{ stats.completed_today|default:0 }}</div><div class="metric-label">Completed Today</div></div></div>
+  <div class="col-6 col-md-3"><div class="metric-card danger"><div class="metric-icon danger"><i class="fas fa-triangle-exclamation"></i></div><div class="metric-value">{{ stats.urgent_tasks|default:0 }}</div><div class="metric-label">Urgent Tasks</div></div></div>
+</div>
+<!-- Row 2 metrics -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3"><div class="metric-card success"><div class="metric-icon success"><i class="fas fa-id-badge"></i></div><div class="metric-value">{{ stats.available_drivers|default:0 }}</div><div class="metric-label">Available Drivers</div></div></div>
+  <div class="col-6 col-md-3"><div class="metric-card info"><div class="metric-icon info"><i class="fas fa-route"></i></div><div class="metric-value">{{ stats.on_trip_drivers|default:0 }}</div><div class="metric-label">On Trip</div></div></div>
+  <div class="col-6 col-md-3"><div class="metric-card primary"><div class="metric-icon primary"><i class="fas fa-drone"></i></div><div class="metric-value">{{ stats.available_drones|default:0 }}</div><div class="metric-label">Drones Available</div></div></div>
+  <div class="col-6 col-md-3"><div class="metric-card warning"><div class="metric-icon warning"><i class="fas fa-user-shield"></i></div><div class="metric-value">{{ stats.vetting_queue|default:0 }}</div><div class="metric-label">Vetting Queue</div></div></div>
+</div>
+
+<div class="row g-4">
+  <!-- Active Pickups -->
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="fas fa-hand-holding-box me-2 text-primary"></i>Active Pickups</span>
+        <a href="{% url 'logistics:dispatch_pickup_task_list' %}" class="btn btn-sm btn-outline-secondary">View All</a>
+      </div>
+      <div class="card-body p-0">
+        {% if active_pickups %}
+          <table class="dispatch-table table mb-0">
+            <thead><tr><th>Task</th><th>Driver</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              {% for task in active_pickups %}
+              <tr>
+                <td><div class="fw-semibold" style="font-size:.9rem">#{{ task.id|stringformat:"s"|slice:":8" }}</div><small class="text-muted">{{ task.scheduled_time|date:"d M, H:i" }}</small></td>
+                <td>{% if task.driver %}<div class="d-flex align-items-center gap-2"><div class="driver-avatar" style="width:28px;height:28px;font-size:.65rem">{{ task.driver.full_name|slice:":2"|upper }}</div><small>{{ task.driver.full_name }}</small></div>{% else %}<span class="text-muted fst-italic" style="font-size:.85rem">Unassigned</span>{% endif %}</td>
+                <td><span class="status-badge status-{{ task.status }}">{{ task.get_status_display }}</span></td>
+                <td><a href="{% url 'logistics:dispatch_pickup_task_detail' task.pk %}" class="btn btn-sm btn-outline-primary py-0 px-2"><i class="fas fa-eye"></i></a></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <div class="empty-state py-4"><i class="fas fa-hand-holding-box"></i><h5>No Active Pickups</h5><p>Create one to get started.</p></div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Active Deliveries -->
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="fas fa-person-walking-arrow-right me-2 text-info"></i>Active Deliveries</span>
+        <a href="{% url 'logistics:dispatch_last_mile_list' %}" class="btn btn-sm btn-outline-secondary">View All</a>
+      </div>
+      <div class="card-body p-0">
+        {% if active_deliveries %}
+          <table class="dispatch-table table mb-0">
+            <thead><tr><th>Task</th><th>Driver</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              {% for task in active_deliveries %}
+              <tr>
+                <td><div class="fw-semibold" style="font-size:.9rem">#{{ task.id|stringformat:"s"|slice:":8" }}</div><small class="text-muted">{{ task.scheduled_time|date:"d M, H:i" }}</small></td>
+                <td>{% if task.driver %}<div class="d-flex align-items-center gap-2"><div class="driver-avatar" style="width:28px;height:28px;font-size:.65rem">{{ task.driver.full_name|slice:":2"|upper }}</div><small>{{ task.driver.full_name }}</small></div>{% else %}<span class="text-muted fst-italic" style="font-size:.85rem">Unassigned</span>{% endif %}</td>
+                <td><span class="status-badge status-{{ task.status }}">{{ task.get_status_display }}</span></td>
+                <td><a href="{% url 'logistics:dispatch_last_mile_detail' task.pk %}" class="btn btn-sm btn-outline-primary py-0 px-2"><i class="fas fa-eye"></i></a></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <div class="empty-state py-4"><i class="fas fa-person-walking-arrow-right"></i><h5>No Active Deliveries</h5><p>All last-mile tasks are idle.</p></div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Driver Availability -->
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="fas fa-users me-2 text-success"></i>Driver Availability</span>
+        <a href="{% url 'logistics:dispatch_driver_roster' %}" class="btn btn-sm btn-outline-secondary">Roster</a>
+      </div>
+      <div class="card-body">
+        {% if driver_availability %}
+          {% for drv in driver_availability %}
+            <div class="d-flex align-items-center justify-content-between mb-3">
+              <div class="d-flex align-items-center gap-2">
+                <div class="driver-avatar">{% if drv.photo %}<img src="{{ drv.photo.url }}" alt="">{% else %}{{ drv.full_name|slice:":2"|upper }}{% endif %}</div>
+                <div><div class="fw-semibold" style="font-size:.9rem">{{ drv.full_name }}</div><small class="text-muted">{{ drv.vehicle_type|default:"Ground" }}</small></div>
+              </div>
+              <span class="status-badge status-{{ drv.availability }}">{{ drv.get_availability_display }}</span>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="empty-state py-3"><i class="fas fa-users"></i><p class="mb-0">No drivers on roster.</p></div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Drone Status -->
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="fas fa-drone me-2 text-primary"></i>Drone Fleet</span>
+        <a href="{% url 'logistics:dispatch_drone_list' %}" class="btn btn-sm btn-outline-secondary">Fleet</a>
+      </div>
+      <div class="card-body">
+        {% if drones %}
+          {% for drone in drones %}
+            <div class="mb-3">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <span class="fw-semibold" style="font-size:.9rem">{{ drone.drone_id }} <small class="text-muted fw-normal">{{ drone.model }}</small></span>
+                <span class="status-badge status-{{ drone.status }}">{{ drone.get_status_display }}</span>
+              </div>
+              <div class="d-flex align-items-center gap-2">
+                <div class="battery-bar flex-grow-1"><div class="battery-fill {% if drone.battery_level >= 60 %}high{% elif drone.battery_level >= 30 %}medium{% else %}low{% endif %}" style="width:{{ drone.battery_level }}%"></div></div>
+                <small class="text-muted">{{ drone.battery_level }}%</small>
+              </div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="empty-state py-3"><i class="fas fa-drone"></i><p class="mb-0">No drones registered.</p></div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent Activity -->
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header"><i class="fas fa-bolt me-2 text-warning"></i>Recent Activity</div>
+      <div class="card-body p-0 activity-feed">
+        {% if recent_activity %}
+          {% for event in recent_activity %}
+            <div class="activity-item">
+              <div class="activity-icon" style="background:rgba(102,126,234,.1);color:#667eea"><i class="fas fa-{{ event.icon|default:'circle-dot' }}"></i></div>
+              <div class="flex-grow-1"><div style="font-size:.9rem;font-weight:500">{{ event.message }}</div><div class="activity-time">{{ event.timestamp|timesince }} ago</div></div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="empty-state py-4"><i class="fas fa-bolt"></i><p class="mb-0">No recent activity.</p></div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+setInterval(() => {
+  fetch('{% url "logistics:dispatch_api_stats" %}')
+    .then(r => r.json()).then(d => console.log('Stats refreshed', d)).catch(() => {});
+}, 60000);
+</script>
+{% endblock %}
