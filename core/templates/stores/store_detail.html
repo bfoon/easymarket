@@ -804,7 +804,60 @@
     }
     .storefront-v1 .sf-empty i { font-size: 3.5rem; margin-bottom: 1rem; opacity: 0.28; display: block; }
     .storefront-v1 .sf-empty h3 { font-size: 1.375rem; font-weight: 800; color: #64748b; margin-bottom: 0.5rem; }
+  /* Review header responsive fix */
+.storefront-v1 .sf-review-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 0.625rem;
+  flex-wrap: wrap; /* allow wrapping */
+}
 
+.storefront-v1 .sf-review-date {
+  font-size: 0.8125rem;
+  color: #94a3b8;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+/* Discount badge (top-right) */
+.storefront-v1 .sf-discount-badge{
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 4;
+  padding: 6px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 900;
+  line-height: 1;
+  color: #fff;
+  background: linear-gradient(135deg, #ef4444, #f97316);
+  box-shadow: 0 10px 25px rgba(0,0,0,0.18);
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+
+/* 🔥 On small screens move date below reviewer */
+@media (max-width: 576px) {
+  .storefront-v1 .sf-review-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .storefront-v1 .sf-review-date {
+    margin-top: 4px;
+  }
+  .storefront-v1 .sf-discount-badge .sf-off-text {
+    display: none;
+    }
+    .storefront-v1 .sf-featured-text {
+    display: none;
+  }
+   .storefront-v1 .sf-deal-badge {
+    display: none !important;
+  }
+}
     /* ── LOAD MORE ──────────────────────────────────────────── */
     .storefront-v1 .sf-load-more-wrap {
       grid-column: 1 / -1;
@@ -1244,7 +1297,11 @@
 
               <article class="sf-product-card"
                        onclick="window.location.href='{% url 'stores:product_detail' product.id %}'">
-
+              {% if product.discount_percentage %}
+                  <div class="sf-discount-badge">
+                    -{{ product.discount_percentage }}% <span class="sf-off-text">OFF</span>
+                  </div>
+                {% endif %}
                 <!-- Image area -->
                 <div class="sf-product-img">
                   <!-- Image with multiple fallbacks -->
@@ -1272,13 +1329,16 @@
                   <!-- Badges -->
                   <div class="sf-product-badges">
                     {% if product.is_featured %}
-                      <span class="sf-product-tag sf-tag-featured">★ Featured</span>
+                      <span class="sf-product-tag sf-tag-featured">
+                        <span class="sf-featured-star">★</span>
+                        <span class="sf-featured-text">Featured</span>
+                      </span>
                     {% endif %}
                     {% if product.is_new %}
                       <span class="sf-product-tag sf-tag-new">New</span>
                     {% endif %}
                     {% if product.original_price and product.original_price > product.price %}
-                      <span class="sf-product-tag sf-tag-sale">DEAL</span>
+                      <span class="sf-product-tag sf-tag-sale sf-deal-badge">DEAL</span>
                     {% endif %}
                   </div>
 
@@ -1554,7 +1614,7 @@
                   <div class="sf-review-product-name">{{ review.product.name }}</div>
                 {% endif %}
 
-                <div class="sf-review-header" style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.625rem;">
+                <div class="sf-review-header">
                   <div class="sf-reviewer" style="display:flex;align-items:center;gap:.625rem;">
                     <div class="sf-avatar" style="width:36px;height:36px;font-size:.9rem;border-radius:50%;background:linear-gradient(135deg,var(--sf-primary),var(--sf-secondary));display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;flex-shrink:0;">
                       {{ review.user.first_name|first|upper|default:review.user.username|first|upper }}
@@ -1672,7 +1732,7 @@
             <div class="sf-rate-login-note">
               <i class="fas fa-lock" style="color:var(--sf-primary);"></i>
               <span>
-                <a href="/accounts/login/?next={{ request.path }}#rate-store" style="color:var(--sf-primary);font-weight:800;">Log in</a>
+                <a href="/accounts/sign_in/?next={{ request.path }}#rate-store" style="color:var(--sf-primary);font-weight:800;">Log in</a>
                 to rate this store and help other shoppers.
               </span>
             </div>
@@ -1709,7 +1769,7 @@
     async function toggleFollow() {
       if (!isAuthenticated) {
         showToast('Please login to follow stores', 'error');
-        setTimeout(() => { window.location.href = '/accounts/login/?next={{ request.path }}'; }, 1500);
+        setTimeout(() => { window.location.href = '/accounts/sign_in/?next={{ request.path }}'; }, 1500);
         return;
       }
       const btn  = document.getElementById('followBtn');
@@ -1749,7 +1809,7 @@
     async function addToWishlist(productId) {
       if (!isAuthenticated) {
         showToast('Please login to add to wishlist', 'error');
-        setTimeout(() => { window.location.href = '/accounts/login/?next={{ request.path }}'; }, 1500);
+        setTimeout(() => { window.location.href = '/accounts/sign_in/?next={{ request.path }}'; }, 1500);
         return;
       }
       try {
