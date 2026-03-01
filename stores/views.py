@@ -17,6 +17,7 @@ from django.http import HttpResponseRedirect
 from django.utils.text import slugify
 from django.db.models import  Q, Avg, F, FloatField, DecimalField, ExpressionWrapper, Case, When, Max, Q
 from django.db.models.functions import TruncDate, TruncMonth, Coalesce
+from django.db.models.functions import Cast
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.http import JsonResponse, HttpResponseBadRequest
 from django.views.decorators.http import require_POST, require_GET
@@ -51,7 +52,7 @@ from django.views.decorators.csrf import csrf_exempt
 from .signals import add_initial_stock
 from operator import attrgetter
 from django.apps import apps
-
+from analytics.models import StoreDailySummary
 from .models import (
     Store, StoreHours, StoreShippingZone, StoreReturnSettings,
     StoreInventoryTracking, StoreMetrics, StoreReferral, PromotionPlan,
@@ -2976,6 +2977,19 @@ def store_dashboard(request, store_id):
         social_cart__is_active=True
     ).exclude(sender=store.owner).count()
 
+    # ----------------------------
+    # ✅ Store Reviews (Store-level)
+    # ----------------------------
+    store_reviews_qs = StoreReview.objects.filter(store=store).select_related('user').order_by('-created_at')
+
+    store_review_count = store_reviews_qs.count()
+    store_avg_rating = store_reviews_qs.aggregate(avg=Avg('rating'))['avg'] or 0
+    store_avg_rating = round(store_avg_rating, 1)
+
+    latest_store_review = store_reviews_qs.first()
+
+    store_rating_breakdown = {i: store_reviews_qs.filter(rating=i).count() for i in range(1, 6)}
+
     try:
         user_products = Product.objects.filter(seller=store.owner)
         total_products = user_products.count()
@@ -3096,6 +3110,120 @@ def store_dashboard(request, store_id):
 
     store_health_score = max(0, min(100, int(store_health_score)))
 
+    # ----------------------------
+    # ✅ Category revenue + top category + revenue share
+    # ----------------------------
+    category_revenue_qs = seller_order_items.values(
+        'product__category__name'
+    ).annotate(
+        total_revenue=Coalesce(
+            Sum(
+                ExpressionWrapper(
+                    F('quantity') * F('price_at_time'),
+                    output_field=FloatField()
+                )
+            ),
+            0.0
+        )
+    ).order_by('-total_revenue')
+
+    # Build chart data from revenue (not product count)
+    top_categories = list(category_revenue_qs[:6])
+
+    category_labels = [
+        (c['product__category__name'] or 'Uncategorized') for c in top_categories
+    ] if top_categories else ['No Products']
+
+    category_counts = [
+        float(c['total_revenue'] or 0) for c in top_categories
+    ] if top_categories else [1]
+
+    # Best performing category + revenue share
+    if top_categories and float(total_revenue) > 0:
+        top_cat = top_categories[0]
+        top_name = top_cat['product__category__name'] or 'Uncategorized'
+        top_rev = float(top_cat['total_revenue'] or 0)
+        top_percentage = round((top_rev / float(total_revenue)) * 100, 1)
+    else:
+        top_name = "N/A"
+        top_percentage = 0
+
+    # ----------------------------
+    # ✅ Performance Indicators (last 30 days)
+    # ----------------------------
+    store_kpis = {
+        "page_views": 0,
+        "unique_visitors": 0,
+        "conversion_rate": 0.0,
+        "bounce_rate": 0.0,
+        "return_customers": 0.0,
+        "cart_abandonment": 0.0,
+    }
+
+    today = timezone.localdate()
+    start_date = today - timedelta(days=29)
+
+    StoreDailySummary = None
+    for app_label in ["analytics", "stores", "marketplace", "core"]:
+        try:
+            StoreDailySummary = apps.get_model(app_label, "StoreDailySummary")
+            break
+        except LookupError:
+            continue
+
+    if StoreDailySummary:
+        qs = StoreDailySummary.objects.filter(store=store, date__range=(start_date, today))
+
+        # Force all KPI rates into Decimal consistently (prevents DecimalField vs FloatField clash)
+        dec_rate = DecimalField(max_digits=7, decimal_places=2)
+
+        agg = qs.aggregate(
+            page_views=Coalesce(Sum("page_views"), 0),
+            unique_visitors=Coalesce(Sum("unique_visitors"), 0),
+            returning_visitors=Coalesce(Sum("returning_visitors"), 0),
+            add_to_cart=Coalesce(Sum("add_to_cart"), 0),
+            paid=Coalesce(Sum("paid"), 0),
+
+            # ✅ Cast to Decimal, and default to Decimal not float
+            avg_conversion=Coalesce(Avg(Cast("conversion_rate", output_field=dec_rate)), Decimal("0.00")),
+            avg_bounce=Coalesce(Avg(Cast("bounce_rate", output_field=dec_rate)), Decimal("0.00")),
+            avg_cart_abandonment=Coalesce(Avg(Cast("cart_abandonment", output_field=dec_rate)), Decimal("0.00")),
+        )
+
+        page_views = int(agg["page_views"] or 0)
+        unique_visitors = int(agg["unique_visitors"] or 0)
+        returning_visitors = int(agg["returning_visitors"] or 0)
+        add_to_cart = int(agg["add_to_cart"] or 0)
+        paid = int(agg["paid"] or 0)
+
+        # Get Decimal rates and convert to float at the end (for template display)
+        conversion_rate = agg["avg_conversion"] or Decimal("0.00")
+        bounce_rate = agg["avg_bounce"] or Decimal("0.00")
+        cart_abandonment = agg["avg_cart_abandonment"] or Decimal("0.00")
+
+        # If stored conversion rate is 0, compute from totals as fallback
+        if unique_visitors > 0 and conversion_rate == Decimal("0.00"):
+            conversion_rate = (Decimal(paid) / Decimal(unique_visitors)) * Decimal("100")
+
+        return_customers = Decimal("0.00")
+        if unique_visitors > 0:
+            return_customers = (Decimal(returning_visitors) / Decimal(unique_visitors)) * Decimal("100")
+
+        # If stored abandonment is 0, compute fallback from totals
+        if cart_abandonment == Decimal("0.00") and add_to_cart > 0:
+            cart_abandonment = ((Decimal(add_to_cart) - Decimal(paid)) / Decimal(add_to_cart)) * Decimal("100")
+
+        store_kpis = {
+            "page_views": page_views,
+            "unique_visitors": unique_visitors,
+            "conversion_rate": float(conversion_rate.quantize(Decimal("0.1"))),
+            "bounce_rate": float(bounce_rate.quantize(Decimal("0.1"))),
+            "return_customers": float(return_customers.quantize(Decimal("0.1"))),
+            "cart_abandonment": float(cart_abandonment.quantize(Decimal("0.1"))),
+        }
+
+    top_category = {"name": top_name, "percentage": top_percentage}
+
     context = {
         'store': store,
         'total_products': total_products,
@@ -3121,6 +3249,12 @@ def store_dashboard(request, store_id):
         "low_stock_products": low_stock_products,
         "unread_messages": unread_messages,
         'unread_seller_chats': unread_seller_chats,
+        'store_review_count': store_review_count,
+        'store_avg_rating': store_avg_rating,
+        'latest_store_review': latest_store_review,
+        'store_rating_breakdown': store_rating_breakdown,
+        'top_category': top_category,
+        "store_kpis": store_kpis,
 
     }
 
