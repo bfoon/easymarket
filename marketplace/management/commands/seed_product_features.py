@@ -210,6 +210,96 @@ DEFAULT_FEATURES = {
     "Fragrance": ["Unscented", "Lavender", "Rose", "Vanilla", "Citrus", "Fresh", "Woody", "Floral"],
     "Flavor": ["Original", "Chocolate", "Vanilla", "Strawberry", "Mint", "Coffee", "Caramel"],
     "Ingredients": ["Organic", "Natural", "Vegan", "Gluten-Free", "Sugar-Free", "Dairy-Free"],
+
+    # ==============================
+    # 🚗 AUTOMOTIVE FEATURES
+    # ==============================
+
+    "Vehicle Brand": [
+        "Toyota", "Nissan", "Honda", "Hyundai", "Kia",
+        "Mercedes-Benz", "BMW", "Ford", "Chevrolet",
+        "Mitsubishi", "Mazda", "Volkswagen", "Peugeot",
+        "Suzuki", "Lexus", "Range Rover"
+    ],
+
+    "Vehicle Model": [
+        "Corolla", "Camry", "Yaris", "Hilux",
+        "X-Trail", "Navara", "Elantra", "Sonata",
+        "C-Class", "E-Class", "3 Series", "5 Series",
+        "RAV4", "CR-V", "Outlander"
+    ],
+
+    "Model Year": [
+        "2000-2005", "2006-2010", "2011-2015",
+        "2016-2020", "2021-2024"
+    ],
+
+    "Position": [
+        "Front", "Rear", "Left", "Right",
+        "Front Left", "Front Right",
+        "Rear Left", "Rear Right"
+    ],
+
+    "Side": [
+        "Driver Side", "Passenger Side", "Both Sides"
+    ],
+
+    "Engine Type": [
+        "Petrol", "Diesel", "Hybrid", "Electric"
+    ],
+
+    "Engine Capacity": [
+        "1.0L", "1.3L", "1.5L", "1.6L", "1.8L",
+        "2.0L", "2.4L", "3.0L", "3.5L"
+    ],
+
+    "Transmission Type": [
+        "Manual", "Automatic", "CVT", "Dual Clutch"
+    ],
+
+    "Brake Type": [
+        "Ceramic", "Semi-Metallic", "Organic"
+    ],
+
+    "Shock Type": [
+        "Gas Filled", "Oil Filled", "Hydraulic"
+    ],
+
+    "Battery Capacity": [
+        "45Ah", "60Ah", "70Ah", "75Ah", "100Ah"
+    ],
+
+    "Oil Grade": [
+        "5W-30", "10W-40", "15W-40", "20W-50", "ATF"
+    ],
+
+    "Tire Size": [
+        "185/65R14",
+        "195/65R15",
+        "205/55R16",
+        "215/60R16",
+        "225/45R17"
+    ],
+
+    "Rim Size": [
+        "14 inch", "15 inch", "16 inch", "17 inch", "18 inch"
+    ],
+
+    "Part Type": [
+        "OEM", "Aftermarket", "Genuine", "Replacement"
+    ],
+
+    "Installation Type": [
+        "Bolt-On", "Plug & Play", "Professional Installation Required"
+    ],
+
+    "Compatibility": [
+        "Universal Fit", "Vehicle Specific"
+    ],
+
+    "Fuel Type": [
+        "Petrol", "Diesel", "Electric", "Hybrid"
+    ],
 }
 
 

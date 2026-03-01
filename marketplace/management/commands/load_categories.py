@@ -164,16 +164,130 @@ DEFAULT_CATEGORIES = [
             {"name": "Sports Equipment"},
         ],
     },
+
+    # ✅ UPDATED AUTOMOTIVE TREE (AUTO PARTS + ACCESSORIES)
     {
         "name": "Automotive",
         "icon": "fa-solid fa-car",
         "children": [
-            {"name": "Car Accessories"},
-            {"name": "Motorbike Accessories"},
-            {"name": "Oils & Fluids"},
-            {"name": "Car Electronics"},
+            {
+                "name": "Auto Parts",
+                "children": [
+                    {"name": "Engine & Mechanical", "children": [
+                        {"name": "Oil Filters"},
+                        {"name": "Air Filters"},
+                        {"name": "Fuel Filters"},
+                        {"name": "Spark Plugs"},
+                        {"name": "Timing Belt Kits"},
+                        {"name": "Engine Mounts"},
+                        {"name": "Gaskets"},
+                        {"name": "Radiators"},
+                        {"name": "Water Pumps"},
+                        {"name": "Thermostats"},
+                    ]},
+                    {"name": "Brake System", "children": [
+                        {"name": "Brake Pads"},
+                        {"name": "Brake Discs & Rotors"},
+                        {"name": "Brake Shoes"},
+                        {"name": "Brake Calipers"},
+                        {"name": "Brake Master Cylinders"},
+                        {"name": "ABS Sensors"},
+                        {"name": "Brake Fluid"},
+                    ]},
+                    {"name": "Electrical", "children": [
+                        {"name": "Batteries"},
+                        {"name": "Alternators"},
+                        {"name": "Starter Motors"},
+                        {"name": "Headlights & Bulbs"},
+                        {"name": "Tail Lights"},
+                        {"name": "Ignition Coils"},
+                        {"name": "Fuses & Relays"},
+                        {"name": "Switches"},
+                        {"name": "Horns"},
+                    ]},
+                    {"name": "Suspension & Steering", "children": [
+                        {"name": "Shock Absorbers"},
+                        {"name": "Struts"},
+                        {"name": "Control Arms"},
+                        {"name": "Ball Joints"},
+                        {"name": "Tie Rod Ends"},
+                        {"name": "Steering Racks"},
+                        {"name": "Wheel Bearings"},
+                    ]},
+                    {"name": "Wheels & Tires", "children": [
+                        {"name": "Tires"},
+                        {"name": "Alloy Rims"},
+                        {"name": "Wheel Caps"},
+                        {"name": "Wheel Nuts"},
+                        {"name": "Tire Pressure Tools"},
+                    ]},
+                    {"name": "Cooling & AC", "children": [
+                        {"name": "AC Compressors"},
+                        {"name": "Condensers"},
+                        {"name": "Cabin Filters"},
+                        {"name": "Radiator Fans"},
+                        {"name": "Coolant Tanks"},
+                    ]},
+                    {"name": "Body & Exterior Parts", "children": [
+                        {"name": "Bumpers"},
+                        {"name": "Side Mirrors"},
+                        {"name": "Door Handles"},
+                        {"name": "Wipers & Blades"},
+                        {"name": "Grilles"},
+                        {"name": "Locks"},
+                    ]},
+                ],
+            },
+            {
+                "name": "Car Accessories",
+                "children": [
+                    {"name": "Seat Covers"},
+                    {"name": "Floor Mats"},
+                    {"name": "Phone Holders"},
+                    {"name": "Dash Cameras"},
+                    {"name": "Reverse Cameras"},
+                    {"name": "Car Chargers"},
+                    {"name": "Car Air Fresheners"},
+                    {"name": "Roof Racks"},
+                ],
+            },
+            {
+                "name": "Car Electronics",
+                "children": [
+                    {"name": "Android Screens"},
+                    {"name": "Speakers"},
+                    {"name": "Amplifiers"},
+                    {"name": "Car Alarms"},
+                    {"name": "GPS Trackers"},
+                    {"name": "Parking Sensors"},
+                ],
+            },
+            {
+                "name": "Oils & Fluids",
+                "children": [
+                    {"name": "Engine Oil"},
+                    {"name": "Transmission Oil"},
+                    {"name": "Brake Fluid"},
+                    {"name": "Coolant"},
+                    {"name": "Power Steering Fluid"},
+                    {"name": "Car Shampoo & Care"},
+                    {"name": "Injector Cleaners"},
+                ],
+            },
+            {
+                "name": "Motorbike Accessories",
+                "children": [
+                    {"name": "Helmets"},
+                    {"name": "Bike Batteries"},
+                    {"name": "Bike Lights"},
+                    {"name": "Bike Oil"},
+                    {"name": "Chains & Sprockets"},
+                    {"name": "Brake Pads (Bike)"},
+                ],
+            },
         ],
     },
+
     {
         "name": "Health",
         "icon": "fa-solid fa-heart-pulse",
@@ -242,7 +356,9 @@ class Command(BaseCommand):
             }
 
             if dry_run:
-                self.stdout.write(f"[DRY-RUN] upsert: {name} (parent={parent.name if parent else 'ROOT'})")
+                self.stdout.write(
+                    f"[DRY-RUN] upsert: {name} (parent={parent.name if parent else 'ROOT'})"
+                )
                 category = None
             else:
                 category, created = Category.objects.update_or_create(
@@ -251,9 +367,13 @@ class Command(BaseCommand):
                     defaults=defaults,
                 )
                 self.stdout.write(
-                    self.style.SUCCESS(f"{'CREATED' if created else 'UPDATED'}: {category.get_full_name()}")
+                    self.style.SUCCESS(
+                        f"{'CREATED' if created else 'UPDATED'}: {category.get_full_name()}"
+                    )
                     if hasattr(category, "get_full_name")
-                    else self.style.SUCCESS(f"{'CREATED' if created else 'UPDATED'}: {category.name}")
+                    else self.style.SUCCESS(
+                        f"{'CREATED' if created else 'UPDATED'}: {category.name}"
+                    )
                 )
 
             # handle children
@@ -266,7 +386,9 @@ class Command(BaseCommand):
                     self.stdout.write("[DRY-RUN] would delete all categories")
                 else:
                     deleted_count, _ = Category.objects.all().delete()
-                    self.stdout.write(self.style.WARNING(f"Deleted {deleted_count} categories."))
+                    self.stdout.write(
+                        self.style.WARNING(f"Deleted {deleted_count} categories.")
+                    )
 
             for root in DEFAULT_CATEGORIES:
                 upsert_category(root, parent=None)
